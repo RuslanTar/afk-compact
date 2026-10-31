@@ -281,14 +281,17 @@ sub denied_enabled { return context_enabled() && skills::spec::lint_ids()->{bloc
 #   - a service word of an MCP tool's server or name (not one of %DENY_STOP) stands as a word
 #     (`mcp__…Atlassian…__editJiraIssue` names `atlassian`, `jira`), or
 #   - the call names no such token and shares an outward class with the approval (a denied bare
-#     `git push` covers every push approval).
+#     `git push` covers every push approval). A runner's words (`ssh prod-1`, `timeout 300`,
+#     `/bin/bash`; _deny_bash) are match-only tokens: they cover an approval they stand in, and
+#     never stop the class from covering (fail closed; review 6 finding 1).
 # Fail closed: a wrong match costs one re-ask in the next session.
 our %DENY_STOP = map { $_ => 1 } qw(mcp plugin claude server api app get set edit create update delete add remove write
     read list search find send post put patch fetch query run new the issue issues page pages comment comments
     message messages file files item items record records data info for and with tool tools);
 my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
 
-# _deny_bash(command) -> token text: a refused Bash command's words that name its outward step
+# _deny_bash(command) -> (token text, runner text): a refused Bash command's words that name its
+# outward step, and the words of what runs it (match-only, see above)
 # (reviewer info 3). Heredoc bodies are dropped (except the body of a heredoc a shell runs,
 # below), and quoted text holding a space (a commit message, a title) is masked; the rest splits
 # at `&&`, `||`, `;`, `|`, `&` and line ends, and tokens come only from the parts that are outward (an outward class or action word), and
@@ -302,7 +305,10 @@ my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
 # shell-run quote (`ssh prod-1 "kubectl delete pod web-1"` names `prod-1`, `docker exec api-3 sh
 # -c "…"` names `api-3`) and the runner of a heredoc a shell runs (review 5 finding 2: `bash
 # <<EOF`, `ssh prod-1 <<EOF`, `cat <<EOF | bash`; its body is read as the command, the same way;
-# a heredoc fed to anything else, or to `bash -c …`, stays dropped).
+# a heredoc fed to anything else, or to `bash -c …`, stays dropped). Those runner words, and the
+# words of an outward part before its outward command (`timeout 300 git push`, `env A=1 git
+# push`), are the runner text (review 6 finding 1): a shell path or a timeout value names nothing.
+# `bash -s arg… <<EOF` runs its heredoc too (review 6 finding 4).
 # A heredoc starts at a `<<` outside quoted text and outside shell arithmetic (`$((1<<4))`;
 # review 3 finding 3); quoted text may span lines, so a `<<` on a later line of a quoted message
 # starts none (review 5 finding 3).
@@ -320,10 +326,10 @@ my $DENY_SH_OPT = qr{(?:[-+]\w*o\s+\w+|--?[\w-]+)};
 # The text before a quoted command a shell runs, within its part: `[path/]sh -c`, `bash -lc`,
 # `zsh -c`, `sh -o pipefail -c`, `bash --norc -c`, `ssh [options] host`, `eval`.
 my $DENY_SHELL = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh\s+(?:$DENY_SH_OPT\s+)*-\w*c\w*\s+|(?:\S*/)?ssh\s.*|eval\s+)\z}s;
-# The text before a heredoc a shell runs, within its part: `[path/]bash`, `sh -s`, `bash -o
-# pipefail`, `ssh [options] host [command]`. A shell given a command (`bash -c "…" <<EOF`) is
-# none: the heredoc feeds that command.
-my $DENY_RUNNER = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh(?:\s+$DENY_SH_OPT)*|(?:\S*/)?ssh\s.*?)\s*\z}s;
+# The text before a heredoc a shell runs, within its part: `[path/]bash`, `sh -s`, `bash -s
+# arg…`, `bash -o pipefail`, `ssh [options] host [command]`. A shell given a command (`bash -c
+# "…" <<EOF`) is none: the heredoc feeds that command.
+my $DENY_RUNNER = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh(?:\s+$DENY_SH_OPT)*(?:\s+-[abd-z]*s[abd-z]*(?:\s+\S+)*)?|(?:\S*/)?ssh\s.*?)\s*\z}s;
 
 # _deny_mask(text) -> (masked text, [quoted texts]): quoted text holding a space becomes a
 # numbered mark; quoted text with none stays, unquoted.
@@ -378,7 +384,7 @@ sub _deny_bash {
     }
     my ($s, $q) = _deny_mask($whole);
     my @q = @$q;
-    my (@parts, @out);
+    my (@parts, @out, @run_words, $read);
     for my $p (grep { /\S/ } split /&&|\|\||[;|&\n]/, $s) {
         (my $bare = $p) =~ s/\x01\d+\x01/ /g;
         push @parts, $bare;
@@ -388,57 +394,60 @@ sub _deny_bash {
             my ($n, $pre) = @$m;
             $pre =~ s/\x01\d+\x01/ /g;
             next unless $pre =~ $DENY_SHELL && _deny_outward($q[$n]);
-            push @out, _deny_bash($q[$n]);
-            $ran = 1;
+            my ($t, $w) = _deny_bash($q[$n]);
+            push @out, $t;
+            push @run_words, $w;
+            $ran = $read = 1;
         }
-        push @out, $bare if $ran || _deny_outward($bare);
+        if ($ran) { push @run_words, $bare; next }
+        my $at = _deny_outward_at($bare);
+        next unless defined $at;
+        push @run_words, substr($bare, 0, $at);
+        push @out, substr($bare, $at);
+        $read = 1;
     }
     for my $r (@run) {
         my ($runner, $body) = @$r;
         next unless _deny_outward($body);
         (my $w = (_deny_mask($runner))[0]) =~ s/\x01\d+\x01/ /g;
-        push @out, _deny_bash($body), $w;
+        my ($t, $bw) = _deny_bash($body);
+        push @out, $t;
+        push @run_words, $bw, $w;
+        $read = 1;
     }
-    return join(' ', @out) if @out;
+    return (join(' ', @out), join(' ', @run_words)) if $read;
     # Outward only inside quotes no shell runs (a commit message, a title): no token, the class
     # covers (fail closed; review 4 finding 1).
-    return '' if _deny_outward($whole);
-    return join(' ', @parts);
+    return ('', '') if _deny_outward($whole);
+    return (join(' ', @parts), '');
 }
 
-sub _deny_outward {
+sub _deny_outward { return defined _deny_outward_at($_[0]) ? 1 : 0 }
+
+# _deny_outward_at(text) -> the offset of the word where the text's first outward command starts
+# (an outward class or action word), else undef.
+sub _deny_outward_at {
     my ($p) = @_;
-    for my $k (@{ (eval { skills::spec::outward_classes() }) || [] }) { return 1 if $p =~ $k->{re} }
-    for my $w (@ACTION_WORDS) { return 1 if $p =~ $w->[1] }
-    return 0;
+    my $at;
+    for my $re ((map { $_->{re} } @{ (eval { skills::spec::outward_classes() }) || [] }), (map { $_->[1] } @ACTION_WORDS)) {
+        next unless $p =~ $re;
+        $at = $-[0] if !defined $at || $-[0] < $at;
+    }
+    return undef unless defined $at;
+    # Back to the start of that word (`https://x/deploy` is one word).
+    substr($p, 0, $at) =~ /(\S*)\z/;
+    return $at - length $1;
 }
 
 sub _deny_keys {
     my ($c) = @_;
-    my (%tok, %word, %cls);
+    my (%tok, %run, %word, %cls);
     my $tool = $c->{tool} // '';
     # Classes read the whole command (fail closed: `bash -c "git push"` is still a push).
     my $ctext = $c->{text} // '';
-    my $text = $tool eq 'Bash' ? _deny_bash($ctext) : $ctext;
-    for my $t (split $DENY_TOKEN_SPLIT, $text) {
-        $t =~ s/[.:?]+\z//;
-        next if length($t) < 3 || $t =~ /\A-/;
-        # `\@` stays escaped: a bare `@_` in a class interpolates the sub's arguments (review
-        # finding 1: `HASH(0x…)` made plain words distinctive, by memory address).
-        next unless $t =~ /[A-Za-z0-9]{2}/ && $t =~ /[0-9\/.:#!\@_-]/;
-        $tok{$t} = 1;
-        # The file name of a path: copied out of $1 first, since the next match resets it
-        # (review finding 2).
-        if ($t =~ m{/([^/]{3,})\z}) {
-            my $base = $1;
-            $tok{$base} = 1 if $base =~ /[0-9.:#!\@_-]/ && $base =~ /[A-Za-z0-9]{2}/;
-        }
-        # The host of `user@host` (`ssh deploy@prod-1` names `prod-1`; review 5 finding 1).
-        if ($t =~ /\A[^\@\/]+\@([^\@\/]{3,})\z/) {
-            my $host = $1;
-            $tok{$host} = 1 if $host =~ /[0-9.:_-]/ && $host =~ /[A-Za-z0-9]{2}/;
-        }
-    }
+    my ($text, $runner) = $tool eq 'Bash' ? _deny_bash($ctext) : ($ctext, '');
+    $tok{$_} = 1 for _deny_tokens($text);
+    $run{$_} = 1 for grep { !$tok{$_} } _deny_tokens($runner);
     if ($tool =~ /\Amcp__(.+?)__(.+)\z/) {
         for my $w (map { lc } map { split /(?<=[a-z0-9])(?=[A-Z])|[^A-Za-z0-9]+/ } $1, $2) {
             $word{$w} = 1 if length($w) >= 3 && $w =~ /[a-z]/ && !$DENY_STOP{$w};
@@ -448,7 +457,33 @@ sub _deny_keys {
         $cls{ $k->{class} } = 1 if $tool =~ $k->{re} || ($tool eq 'Bash' && $ctext =~ $k->{re});
     }
     if ($tool eq 'Bash') { for my $w (@ACTION_WORDS) { $cls{ $w->[0] } = 1 if $ctext =~ $w->[1] } }
-    return { tok => [ sort keys %tok ], word => [ sort keys %word ], cls => \%cls };
+    return { tok => [ sort keys %tok ], run => [ sort keys %run ], word => [ sort keys %word ], cls => \%cls };
+}
+
+# _deny_tokens(text) -> the distinctive tokens of a text (see Denied actions above).
+sub _deny_tokens {
+    my ($text) = @_;
+    my @tok;
+    for my $t (split $DENY_TOKEN_SPLIT, $text // '') {
+        $t =~ s/[.:?]+\z//;
+        next if length($t) < 3 || $t =~ /\A-/;
+        # `\@` stays escaped: a bare `@_` in a class interpolates the sub's arguments (review
+        # finding 1: `HASH(0x…)` made plain words distinctive, by memory address).
+        next unless $t =~ /[A-Za-z0-9]{2}/ && $t =~ /[0-9\/.:#!\@_-]/;
+        push @tok, $t;
+        # The file name of a path: copied out of $1 first, since the next match resets it
+        # (review finding 2).
+        if ($t =~ m{/([^/]{3,})\z}) {
+            my $base = $1;
+            push @tok, $base if $base =~ /[0-9.:#!\@_-]/ && $base =~ /[A-Za-z0-9]{2}/;
+        }
+        # The host of `user@host` (`ssh deploy@prod-1` names `prod-1`; review 5 finding 1).
+        if ($t =~ /\A[^\@\/]+\@([^\@\/]{3,})\z/) {
+            my $host = $1;
+            push @tok, $host if $host =~ /[0-9.:_-]/ && $host =~ /[A-Za-z0-9]{2}/;
+        }
+    }
+    return @tok;
 }
 
 # _denied(entry, [deny keys…]) -> 1 when a denied call covers the approval (see above).
@@ -458,7 +493,7 @@ sub _denied {
     my $lc = lc $text;
     my $ecls;
     for my $k (@{ $keys || [] }) {
-        for my $t (@{ $k->{tok} }) { return 1 if $text =~ /(?<![\w.\/-])\Q$t\E(?![\w\/-]|\.\w)/ }
+        for my $t (@{ $k->{tok} }, @{ $k->{run} || [] }) { return 1 if $text =~ /(?<![\w.\/-])\Q$t\E(?![\w\/-]|\.\w)/ }
         for my $w (@{ $k->{word} }) { return 1 if $lc =~ /(?<![a-z0-9])\Q$w\E(?![a-z0-9])/ }
         next if @{ $k->{tok} } || !%{ $k->{cls} };
         $ecls //= do {
