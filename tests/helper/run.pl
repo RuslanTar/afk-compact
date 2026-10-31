@@ -3036,12 +3036,15 @@ sub builtin {
         # AT-RN-06 (HOME-GUARD): inside a case this runner's own HOME is the case's $HOME and no
         # CLAUDE_CONFIG_DIR is set; home_guard refuses, before the fork, a helper call (spawn) and
         # a command (run_cmd) whose environment could reach the real home or config folder: the
-        # real HOME, the account's home, a link to it, no HOME, an empty HOME, a HOME outside the
-        # temp folders, a CLAUDE_CONFIG_DIR at the real ~/.claude or not absolute; a declared home
+        # real HOME, the account's home, a link to it, no HOME, an empty HOME, a relative HOME, a
+        # HOME outside the temp folders, a HOME or CLAUDE_CONFIG_DIR through a link into the real
+        # home and `..` (the kernel applies it after the link), a temp HOME whose .claude or
+        # settings.json links to the real one, a CLAUDE_CONFIG_DIR at the real ~/.claude or not
+        # absolute; a declared home
         # (case_home) at the account's home; with TMPDIR at the account's home, a CLAUDE_CONFIG_DIR
         # at its .claude. The child is `true`, so a guard that lets one through starts nothing
         # that reads or writes a home. A temp HOME, with or without a CLAUDE_CONFIG_DIR under it,
-        # starts.
+        # or with its .claude and settings.json linked inside temp, starts.
         my $V = $_[3];
         my $tmp = $a->{tmp} // die "home_guard: no tmp\n";
         push @e, "runner HOME is " . ($ENV{HOME} // '(unset)') . ", want the case's $V->{HOME}" unless ($ENV{HOME} // '') eq $V->{HOME};
@@ -3051,14 +3054,36 @@ sub builtin {
         symlink($acct, "$tmp/link-home") or die "home_guard: symlink: $!\n" unless -l "$tmp/link-home";
         my $th = $V->{HOME};
         my $true = -x '/usr/bin/true' ? '/usr/bin/true' : '/bin/true';
+        # links for the round-2 rows: one into the real home (its ..: the home for a child, $tmp as
+        # text), a temp HOME whose .claude is the real one, one whose settings.json is the real one,
+        # and one whose .claude and settings.json link inside temp (taken)
+        my ($sub) = grep { -d "$acct/$_" && !-l "$acct/$_" } qw(.claude Library .config .local);
+        symlink("$acct/" . ($sub // '.'), "$tmp/link-in") or die "home_guard: symlink: $!\n" unless -l "$tmp/link-in";
+        util::mkdir_p("$tmp/$_") for qw(h-clink h-slink/.claude h-tlink cfg-in-temp);
+        symlink("$acct/.claude", "$tmp/h-clink/.claude") unless -l "$tmp/h-clink/.claude";
+        symlink("$acct/.claude/settings.json", "$tmp/h-slink/.claude/settings.json") unless -l "$tmp/h-slink/.claude/settings.json";
+        symlink("$tmp/cfg-in-temp", "$tmp/h-tlink/.claude") unless -l "$tmp/h-tlink/.claude";
+        write_text("$tmp/cfg-in-temp/real.json", "{}\n") unless -e "$tmp/cfg-in-temp/real.json";
+        symlink("$tmp/cfg-in-temp/real.json", "$tmp/cfg-in-temp/settings.json") unless -l "$tmp/cfg-in-temp/settings.json";
         my @bad = (["the account's home", { HOME => $acct }], ['a link to the account home', { HOME => "$tmp/link-home" }],
                    ['no HOME', { HOME => undef }], ['an empty HOME', { HOME => '' }],
                    ['a HOME outside the temp folders', { HOME => '/nonexistent-home-guard' }],
                    ['CLAUDE_CONFIG_DIR at the real ~/.claude', { HOME => $th, CLAUDE_CONFIG_DIR => "$acct/.claude" }],
-                   ['a relative CLAUDE_CONFIG_DIR', { HOME => $th, CLAUDE_CONFIG_DIR => 'cfg' }]);
+                   ['a relative CLAUDE_CONFIG_DIR', { HOME => $th, CLAUDE_CONFIG_DIR => 'cfg' }],
+                   ['a HOME through a link into the real home and ..', { HOME => "$tmp/link-in/.." }],
+                   ['a CLAUDE_CONFIG_DIR through a link into the real home and ..', { HOME => $th, CLAUDE_CONFIG_DIR => "$tmp/link-in/../.claude" }],
+                   ['a relative HOME (read from a temp working folder)', { HOME => 'home-guard-rel' }],
+                   ['a temp HOME whose .claude links to the real one', { HOME => "$tmp/h-clink" }],
+                   ['a temp HOME whose settings.json links to the real one', { HOME => "$tmp/h-slink" }]);
         unshift @bad, ['the real HOME', { HOME => $REAL_HOME }] if defined $REAL_HOME && $REAL_HOME =~ m{\A/} && $REAL_HOMES{ util::real_path($REAL_HOME) };
         my $n = 0;
-        for my $b (@bad, map { [$_->[0], $_->[1], 'ok'] } (['a temp HOME', { HOME => $th }], ['a CLAUDE_CONFIG_DIR under the temp HOME', { HOME => $th, CLAUDE_CONFIG_DIR => '~/.claude' }])) {
+        # the runner works in $tmp here, so a relative HOME read against it lies under temp: only
+        # the absolute rule refuses it (a child started in its step's folder reads it there)
+        require Cwd;
+        my $back = Cwd::getcwd();
+        chdir($tmp) or die "home_guard: chdir $tmp: $!\n";
+        for my $b (@bad, map { [$_->[0], $_->[1], 'ok'] } (['a temp HOME', { HOME => $th }], ['a CLAUDE_CONFIG_DIR under the temp HOME', { HOME => $th, CLAUDE_CONFIG_DIR => '~/.claude' }],
+                                                     ['a temp HOME whose .claude and settings.json link inside temp', { HOME => "$tmp/h-tlink" }])) {
             my ($what, $over, $ok) = @$b;
             my %env = (PATH => '/usr/bin:/bin', TMPDIR => "$tmp/tmpdir", %$over);
             delete $env{$_} for grep { !defined $env{$_} } keys %env;
@@ -3078,6 +3103,7 @@ sub builtin {
             push @e, "$what: the command ran (exit $r->{exit}), want HOME-GUARD" if $r;
             push @e, "$what: the command died with '$rerr', want HOME-GUARD" if !$r && $rerr !~ /\AHOME-GUARD: /;
         }
+        chdir($back) or die "home_guard: chdir $back: $!\n";
         # a runner started with TMPDIR=$HOME: the real ~/.claude lies under a "temp" folder and is
         # still refused (the temp folders put back after)
         {

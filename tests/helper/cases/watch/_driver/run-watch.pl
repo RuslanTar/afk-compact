@@ -17,10 +17,14 @@
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
 # HOME-GUARD (0.1.2; the guard is tests/helper/homeguard.pm, shared with the core case runner):
 # the driver itself runs with a temp HOME and no CLAUDE_CONFIG_DIR, each case with its own $HOME
-# (a `cli` step's env may set a CLAUDE_CONFIG_DIR of its own under a temp folder), and every
-# child it starts (a `cli` step, T::_git) and every in-process step is checked first: the real
-# HOME, the account's home or a CLAUDE_CONFIG_DIR at a real config folder or outside the temp
-# folders dies with a `HOME-GUARD:` line and nothing starts (AT-RN-07-watch-home-guard).
+# (a `cli` step's env may set a CLAUDE_CONFIG_DIR of its own under a temp folder). The driver
+# checks the environment before a `cli` step's child, a T::_git child, each in-process step and
+# each `expect` sub: the real HOME, the account's home or a CLAUDE_CONFIG_DIR at a real config
+# folder or outside the temp folders dies with a `HOME-GUARD:` line and nothing starts
+# (AT-RN-07-watch-home-guard). Code run when case.pl loads gets the driver's own temp HOME. A
+# child that step or expect code starts itself (backticks, system) is not checked one by one:
+# it inherits the environment checked before that step or sub, so only code that changes %ENV
+# itself could reach past it.
 #
 # This driver exists because the core case runner (tests/helper/run.*), the
 # core `hook` dispatcher and the shared watcher fixtures are other work
@@ -355,6 +359,8 @@ sub run_case {
         }
     }
     my $E = Checker->new(\%v, \@outputs);
+    # HOME-GUARD: an expect sub may start children of its own (the D-12 cases' git backticks)
+    homeguard::check(\%ENV, 'expect') if ref $case->{expect} eq 'CODE';
     $case->{expect}->($E) if ref $case->{expect} eq 'CODE';
     if (!$case->{allow_canary}) {
         my @hits = grep_tree($v{WATCH}, 'CANARY-TEXT');
