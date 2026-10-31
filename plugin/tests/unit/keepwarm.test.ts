@@ -1719,33 +1719,92 @@ for (const c of [
 }
 
 // The drop path guards both resumes as the throw path does: a store read in resumeIdle that
-// rejects leaves keep-warm's ping timer to resume all the same.
-test('AT-KW-54: a prompt a hook drops at 70 min while the compaction is held, and resumeIdle\'s store read rejects: keep-warm still resumes, pings at 100, at the cutoff it runs while warm', { options: ON }, async ($, on) => {
+// rejects leaves keep-warm's ping timer to resume all the same. The failure is armed at the
+// bottom, so only the reads after it (resumeIdle's) reject, once; the prompt is not replayed.
+for (const c of [
+  { name: 'a prompt a hook drops', how: (w: World, arm: () => void) => { w.dropIf = () => { arm(); return 'a peer dropped it' } } },
+  { name: 'a prompt whose submit throws', how: (w: World, arm: () => void) => { w.atSubmit = async () => { arm(); throw new Error('submit failed') } } },
+]) {
+  test(`AT-KW-54: ${c.name} at 70 min while the compaction is held, and resumeIdle's store read rejects: keep-warm still resumes, pings at 100, at the cutoff it runs while warm`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    const f = forks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w)
+    f.t0 = t0
+    await until(w, t0, 70)
+    // `reads` counts every read of the idle record once armed, `rejected` the rejections.
+    const n = { reads: 0, rejected: 0 }
+    c.how(w, () => {
+      w.storeGetFails = k => {
+        if (k !== KEY || n.reads++ > 0) return false
+        n.rejected++
+        return true
+      }
+    })
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never).catch(() => undefined)
+    await w.settle()
+    w.dropIf = undefined
+    w.atSubmit = undefined
+    w.storeGetFails = undefined
+    expect(n.rejected).toBe(1)
+    expect(w.submits.length).toBe(1)
+    await until(w, t0, 149)
+    expect(f.at).toEqual([50, 100])
+    expect(skips(w)).toEqual([['keep-warm', 'compact']])
+    expect(selfCompacts(w)).toBe(0)
+    await until(w, t0, 150)
+    expect(stops(w)).toEqual([['cutoff', true, 2]])
+    expect(ic(w).map(r => r.at)).toEqual(['timer'])
+    expect(selfCompacts(w)).toBe(1)
+    expect(refusals(w)).toEqual([])
+  })
+}
+
+// The awaits before `next` that may reject are guarded (round 9): the lane recheck of an open
+// idle episode reads the session id first. One that rejects adds no note; the prompt still goes
+// on once, and when a hook drops it both timers run again and no prompt stays counted entering
+// (the idle fire would read busy).
+test('AT-KW-54: a later gap of an idle episode, a prompt a hook drops at 30 min while the lane recheck\'s session id read rejects: it goes on once, pings at 50 and 100, at the cutoff it runs while warm', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w)
   await w.start($)
   const t0 = await humanTurn($, w)
   f.t0 = t0
-  await until(w, t0, 70)
-  let failed = 0
-  w.dropIf = () => {
-    // Armed at the bottom, so only the reads after the drop (resumeIdle's) reject, once.
-    w.storeGetFails = k => k === KEY && failed++ === 0
-    return 'a peer dropped it'
-  }
-  await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never).catch(() => undefined)
-  await w.settle()
-  w.dropIf = undefined
-  w.storeGetFails = undefined
-  expect(failed).toBeGreaterThan(0)
-  await until(w, t0, 149)
-  expect(f.at).toEqual([50, 100])
-  expect(skips(w)).toEqual([['keep-warm', 'compact']])
-  expect(selfCompacts(w)).toBe(0)
-  await until(w, t0, 150)
-  expect(stops(w)).toEqual([['cutoff', true, 2]])
-  expect(ic(w).map(r => r.at)).toEqual(['timer'])
+  await until(w, t0, 151)
   expect(selfCompacts(w)).toBe(1)
+  // A minute later a background result's turn takes the idle block (the episode stays open) and
+  // ends at 260K.
+  await w.userTurn($, 'A shell finished.', 'task-notification')
+  await $.prompt.context({ blocks: [] } as never)
+  w.tokens = 260000
+  await w.turnEnd($)
+  const t1 = w.clock.now()
+  f.t0 = t1
+  f.at.length = 0
+  await until(w, t1, 30)
+  // The recheck's read is the first of the submit; `reads` counts every read from here.
+  const n = { reads: 0, rejected: 0 }
+  w.sessionIdFails = () => {
+    if (n.reads++ > 0) return false
+    n.rejected++
+    return true
+  }
+  w.dropIf = () => 'a peer dropped it'
+  const r = await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' } } as never)
+  w.sessionIdFails = undefined
+  w.dropIf = undefined
+  expect(r.drop).toBe('a peer dropped it')
+  expect(n.rejected).toBe(1)
+  expect(w.submits.length).toBe(1)
+  await until(w, t1, 149)
+  expect(f.at).toEqual([50, 100])
+  expect(skips(w)).toEqual([['keep-warm', 'compact'], ['keep-warm', 'compact']])
+  expect(selfCompacts(w)).toBe(1)
+  await until(w, t1, 150)
+  expect(stops(w)).toEqual([['cutoff', true, 2], ['cutoff', true, 2]])
+  expect(ic(w).map(r => r.at)).toEqual(['timer', 'timer'])
+  expect(selfCompacts(w)).toBe(2)
+  expect(refusals(w)).toEqual([])
 })
 
 test('AT-KW-54: native on, a prompt a hook drops at 30 min: the 55.5-min check is held, and at the cutoff it compacts while warm (agents 1)', { options: ON }, async ($, on) => {
