@@ -281,7 +281,7 @@
    }
   },
   {
-   "name": "a gap no idle path could take over, after a warmed one: its stop row with no start row says so, stopped before its first ping: no-idle-path",
+   "name": "a gap no idle path could take over, after a warmed one: its stop row with no start row says so as the last refused gap (a newer gap may have an idle path and no ping yet), stopped before its first ping: no-idle-path",
    "setup": [
     {
      "write": "$WATCH/$SID.jsonl",
@@ -357,7 +357,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(stopped before its first ping: no-idle-path, no idle compaction or handoff turn would follow\\)$"
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last refused gap: stopped before its first ping: no-idle-path, no idle compaction or handoff turn to take it over\\)$"
     ],
     "stdout_lacks": [
      "last warmed gap"

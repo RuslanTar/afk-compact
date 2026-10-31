@@ -766,8 +766,9 @@ sub idle_lines {
 # Keep-warm (D-14, 2026-10-30; the mod's keepwarm.ts): on or off by keep_warm_hours (0 = off), and,
 # with a session id, this session's current idle gap from its last keep_warm_start, keep_warm_ping
 # and keep_warm_stop rows: warming with the pings that kept the cache warm so far, or not warming
-# (with the last warmed gap's pings and its stop reason), or refused before its first ping for want
-# of an idle path (`no-idle-path`, a stop row with no start row). A headless session never warms.
+# (with the last warmed gap's pings and its stop reason, or the last gap refused before its first
+# ping for want of an idle path: `no-idle-path`, a stop row with no start row; a newer gap with no
+# row yet reads as that one did, hence "the last"). A headless session never warms.
 sub keep_warm_lines {
     my ($headless, $sid, $mod) = @_;
     my ($h) = eval { settings::num_clamped('keep_warm_hours') };
@@ -787,7 +788,7 @@ sub keep_warm_lines {
     }
     my $n = $pings == 1 ? '1 ping' : "$pings pings";
     return ("$on · this gap: warming, $n so far") if $state eq 'warming';
-    return ("$on · this gap: not warming (stopped before its first ping: no-idle-path, no idle compaction or handoff turn would follow)")
+    return ("$on · this gap: not warming (the last refused gap: stopped before its first ping: no-idle-path, no idle compaction or handoff turn to take it over)")
         if $state eq 'refused';
     $why = 'other' unless defined $why && !ref $why && $why =~ /\A[a-z0-9-]{1,24}\z/;
     return ("$on · this gap: not warming (the last warmed gap: $n, stopped: $why)") if $state eq 'stopped';
