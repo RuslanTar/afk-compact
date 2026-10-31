@@ -508,7 +508,7 @@ sub _step1_same {
     $s1 =~ s/\s+\x{2014}\s+for\b.*\z//;
     $n1 =~ s/\s+\x{2014}\s+done when\b.*\z//;
     for my $t ($s1, $n1) {
-        next unless $t =~ /\s*(?:\||\x{2014})?\s*proposed(\s*\([^()]*\))?\s*\z/;
+        next unless $t =~ /\s*(?:\||\x{2014}|\bas)?\s*proposed(\s*\([^()]*\))?\s*\z/;
         my ($at, $note) = ($-[0], $1);
         next if defined $note && $cmd->($note);
         substr($t, $at) = '';
