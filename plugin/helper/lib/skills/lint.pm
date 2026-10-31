@@ -21,6 +21,8 @@ package skills::lint;
 #        session_id (rows of another session do not count) for the approval checks
 #        (skills::approvals); quote_floor [ok, epoch] (skills::approvals::quote_floor: a
 #        claimed session counts only rows after the claim).
+#      0.1.2 (D-8): approval_context_only (a stage bound to a plugin handoff turn): every own
+#        approval must be the context-only form (approval-plugin-turn).
 # The result also carries `acuity`: the rating found in Resume here, or undef; and
 # `approvals`: {checked => [U-n…], lines, unchecked, classes, origins} for the frontmatter, the row
 # and the line-hash record.
@@ -260,7 +262,8 @@ sub lint {
     # that has the section and the three ids.
     my $approvals = skills::approvals::lint(\@lines, prev_lines => \%prev_lines, tag_re => $tag_re, note => $note,
                                             chain => $in->{approval_chain}, transcript => $in->{transcript},
-                                            sid => $in->{session_id}, quote_floor => $in->{quote_floor});
+                                            sid => $in->{session_id}, quote_floor => $in->{quote_floor},
+                                            context_only => $in->{approval_context_only});
     push @block, @{ $approvals->{blocking} };
     push @adv, @{ $approvals->{advisory} };
 

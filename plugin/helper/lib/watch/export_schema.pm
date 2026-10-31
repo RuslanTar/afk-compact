@@ -185,7 +185,7 @@ our %SCHEMA = (
                          kind => 'word', writer => 'word', ht => 'hash',
                          attempt => 'int', template_rev => 'hex8', acuity => [enum => @ACUITY], acuity_floor => [enum => @ACUITY],
                          # AP-4 (2026-10-23): counts and outward class ids of the checked approvals, never a quote
-                         approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int', hashed => 'int' }], approval_classes => [list => 'word'] },
+                         approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int', hashed => 'int', context => 'int' }], approval_classes => [list => 'word'] },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
     # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was
@@ -313,7 +313,7 @@ our %SCHEMA = (
     # AP-5 (2026-10-23): approvals a measure found checked (handoff or summary); counts and class ids only;
     # origins (owner xxxxxxxx-12 "Count, log origin"): the carried ones by the origin kind of the row
     # their quote was found in
-    approvals_carry => { source => [enum => qw(handoff summary)], checked => 'int', gate => 'int', unchecked => 'int', unverified => 'int', classes => [list => 'word'],
+    approvals_carry => { source => [enum => qw(handoff summary)], checked => 'int', gate => 'int', unchecked => 'int', unverified => 'int', context => 'int', classes => [list => 'word'],
                          origins => [counts => [enum => qw(human composer bridge sdk none dialog unknown)]] },
     mod_outcome => { nonce => 'nonce', nudged => 'bool', continued => 'bool', halt => 'word', resume => 'word' },
     order_anomaly => { id6 => 'id6', nonce => 'nonce', uuid => 'hash', kind => 'word' },

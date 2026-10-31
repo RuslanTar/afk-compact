@@ -271,6 +271,7 @@ export const SPEC = {
     "own_previous_handoff",
     "imported_from",
     "approvals_checked",
+    "requested_by",
     "gsd"
   ],
   "frontmatter_keys_copy": [
@@ -405,11 +406,19 @@ export const SPEC = {
     },
     "approval-shape": {
       "why": "the next session can act on an approval only when it can check its scope",
-      "fix": "write the user's words, the action, each target with its state, once or standing, and not yet used or used <stamp>"
+      "fix": "write the user's words, any (answer to \"<question>\"), the action, each target with its state, once or standing, and not yet used or used <stamp>"
     },
     "approval-quote": {
       "why": "only the user's own words can approve an action",
       "fix": "quote the user exactly, or move the item to Open questions as ask user"
+    },
+    "approval-plugin-turn": {
+      "why": "the plugin asked for this handoff, not the user, so an approval in it must not read as usable",
+      "fix": "write each as U-n: approval \"<words>\" — action … · targets … ; context only, not valid here; re-ask (no once, state, question or note); Next step: ask user:"
+    },
+    "approval-denied": {
+      "why": "this session was refused that action, so a usable approval for it would steer the next session back to a denied step",
+      "fix": "write it as … · targets … ; context only, not valid here; re-ask · denied <by whom> <stamp>, and its Next step as ask user:"
     },
     "private-path": {
       "why": "in repo mode the path would reach git",
@@ -510,7 +519,9 @@ export const SPEC = {
       "secret-hard",
       "queue-off",
       "approval-shape",
-      "approval-quote"
+      "approval-quote",
+      "approval-plugin-turn",
+      "approval-denied"
     ],
     "advisory": [
       "size",
@@ -877,7 +888,8 @@ export const SPEC = {
     "protected-push"
   ],
   "protected_branch_re": "^(main|master|trunk|develop|development|stable|staging|gh-pages|prod|production|(prod|production)[/_-].+|releases?([/_-].+)?|hotfix/.+)$",
-  "approval_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+)\" — action (.+?) · targets (.+?) · (once|standing( \\([^)]*\\))?) · (not yet used|used [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4})( · given .+)?$",
+  "approval_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+?)\"(?: \\(answer to \".+\"\\))? — action (.+?) · targets (.+?) · (once|standing( \\([^)]*\\))?) · (not yet used|used [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4})( · given .+)?$",
+  "approval_context_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+?)\"( \\(answer to \".+\"\\))? — action (.+?) · targets (.+?) ; context only, not valid here; re-ask( · denied [^·]+?)?( · given .+)?$",
   "risk_classes": [
     {
       "id": "gate",

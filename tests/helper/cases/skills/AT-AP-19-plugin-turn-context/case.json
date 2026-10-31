@@ -1,0 +1,270 @@
+{
+ "id": "AT-AP-19 (plugin handoff turn)",
+ "needs": [
+  "nonroot"
+ ],
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.2 D-8 (probe B: the classifier blocked a usable approval in a handoff the plugin asked for; the context-only shape V3 passed 0/9; X-5: no denial note on a usable line): in a stage bound to a plugin handoff turn (handoff_ht) every own approval is `… · targets … ; context only, not valid here; re-ask`; a line with once/standing or a state word, a line without the note, both shapes of the incident, a context line that still holds once and a state (review finding 3), one with the question or a denial note (X-2), a second line with one id and a new approval line outside the section (review finding 4: never approval-shape here) are LINT approval-plugin-turn; the quote is still checked (approval-quote); publish writes no approvals_checked and no line-hash record, and marks the file requested_by: plugin (AC-4); measure lists the lines under Approvals (context only, re-ask) as (plugin handoff), never as checked",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"the suite is green, please push feat/x to origin when you are done\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"May I write spec v2 into the LAB-62 description?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "the plugin opens an idle handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "idle",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "name": "begin binds the handoff turn",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn.ht": "a1b2c3d4"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used · given 11111111 2026-10-21 13:00 +0300\n- U-3: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4\n- U-12: approval \"yes\" (answer to \"may I write spec v2 into the LAB-62 description?\") — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version · once · not yet used (attempt denied by the auto-mode classifier, see Guards) · given 11111111 2026-10-21\n- U-13: approval \"yes\" — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version · once · not yet used · given 11111111 2026-10-21 13:02 +0300\n- U-14: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used ; context only, not valid here; re-ask\n- U-15: approval \"yes\" (answer to \"May I write spec v2 into the LAB-62 description?\") — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version ; context only, not valid here; re-ask\n- U-16: approval \"yes\" — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version ; context only, not valid here; re-ask · denied by the auto-mode classifier 2026-10-21 13:10 +0300\n- U-17: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-17: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:00 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- U-18: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "a usable line, a line without the note, both incident shapes, a context line with a state, the question or a denial note, a second line with one id and a line outside the section are approval-plugin-turn",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-plugin-turn line 10$",
+     "^LINT approval-plugin-turn line 11$",
+     "^LINT approval-plugin-turn line 12$",
+     "^LINT approval-plugin-turn line 13$",
+     "^LINT approval-plugin-turn line 14$",
+     "^LINT approval-plugin-turn line 15$",
+     "^LINT approval-plugin-turn line 16$",
+     "^LINT approval-plugin-turn line 18$",
+     "^LINT approval-plugin-turn line 33$",
+     "^  why: the plugin asked for this handoff, not the user, so an approval in it must not read as usable · fix: write each as U-n: approval \"<words>\" — action … · targets … ; context only, not valid here; re-ask \\(no once, state, question or note\\); Next step: ask user:$",
+     "^REFUSED: lint \\(9 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-shape",
+     "approval-quote",
+     "approval-unchecked",
+     "approval-denied",
+     "LINT approval-plugin-turn line 17$"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push every branch to main right now\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n3. ask user: replace the LAB-62 Jira description (U-12)\n"
+  },
+  {
+   "name": "a context-only line still needs the user's own words",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-quote line 10$",
+     "^REFUSED: lint \\(1 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-plugin-turn",
+     "approval-shape"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:00 +0300\n- U-12: approval \"yes\" — action replace the LAB-62 Jira description with JIRA-DESCRIPTION-v2.md · targets LAB-62 description @ the 2026-10-23 v1 version ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:02 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n3. ask user: replace the LAB-62 Jira description (U-12)\n"
+  },
+  {
+   "name": "the context-only lines (the probe's V3 shape) publish with no approvals_checked and no line-hash record",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/approvals/$STEM.md",
+      "lacks": [
+       "approvals_checked"
+      ],
+      "has": [
+       "^- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask",
+       "^requested_by: plugin$"
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/approvals/*",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "ht": "a1b2c3d4",
+       "approvals": {
+        "lines": 2,
+        "checked": 0,
+        "unchecked": 0,
+        "context": 2
+       }
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "measure lists them as context only (plugin handoff), never checked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(plugin handoff\\), U-12 \\(plugin handoff\\)$"
+    ],
+    "stdout_lacks": [
+     "^Approvals \\(checked\\): U-"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "handoff",
+       "checked": 0,
+       "context": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "canary: no quote, action or target text in any watch row",
+   "expect": {
+    "files": [
+     {
+      "path": "$WATCH/*.jsonl",
+      "lacks": [
+       "push feat/x to origin",
+       "LAB-62",
+       "JIRA-DESCRIPTION"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

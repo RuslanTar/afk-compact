@@ -3,8 +3,9 @@ package skills::approvals;
 # §15 approval-shape / approval-quote / approval-unchecked; SPEC-DELTAS AP-4, AP-5). Owner:
 # WP-skills.
 #
-#   lint(\@lines, %a)          the three publish checks; returns the ids whose quote passed
-#   handoff_lines(doc, ctx, sid) the `Approvals (checked)` lines of `measure <handoff>`
+#   lint(\@lines, %a)          the publish checks; returns the ids whose quote passed
+#   handoff_lines(doc, ctx, sid) the `Approvals (checked)` lines of `measure <handoff>`, and the
+#                              `Approvals (context only, re-ask)` line
 #   summary_lines(text, path)  the same for a compaction summary's copy (`measure --compact --copy`)
 #   classes(entry)             the outward class ids an approval's action names, and its gate
 #
@@ -72,6 +73,25 @@ package skills::approvals;
 # with that id and the line's hash equals the record: an added line, an edited quote, action,
 # target or id, a file with no record (published before the hashes) or a record without the id
 # makes the line context only (re-ask).
+#
+# Plugin handoff turns (0.1.2 D-8): a handoff the plugin asked for (a stage bound to a handoff
+# turn, `handoff_ht`: reasons halt, precompact and idle) records every own approval as context
+# only, `U-n: approval "<words>" — action <what> · targets <…> ; context only, not valid here;
+# re-ask` (approval_context_re), and its Next step re-asks. The auto-mode classifier blocked the
+# Write of a usable approval in a handoff the user did not ask for (its carve-out for recording
+# at the user's request cannot apply), and passed this shape (probe B, V3 0/9 blocked; X-5: no
+# denial note on a usable line). lint(context_only => 1) blocks any other own line
+# (`approval-plugin-turn`, also for a second line with one id or a new approval line outside the
+# section: review finding 4) and still checks the quote; publish then lists no id in
+# approvals_checked, records no line hashes and writes `requested_by: plugin` (AC-4), so nothing
+# in the file can carry. The same context-only line is accepted in any stage (never checked,
+# never carried), and `measure` lists such lines as context only: `(plugin handoff)` in a file
+# marked requested_by: plugin, where no line carries at all, else `(written as context)`.
+#
+# The question (0.1.2 HL-2, X-2): after the words, `(answer to "<question>")` may keep the
+# question a short answer replies to; the quote check reads the words only. Only a handoff the
+# user asked for may hold it (a plugin handoff turn writes the bare V3 shape). Denied actions
+# (AC-2, mitigation 1): see _denied below; a denial note sits only on a context-only line (X-5).
 use strict;
 use warnings;
 use utf8;
@@ -200,6 +220,8 @@ our @ACTION_WORDS = (
 # The infra-write plain words other than the two tools _tool_read may exempt.
 my $INFRA_OTHER_RE = qr/\bterraform|\btofu\b|\bpulumi|\binfra(?:structure)?\b/i;
 my $LINE_RE = qr/\bU-[0-9]+:\s*approval\b/;
+# A scope or state field of approval_re, which a context-only line never holds.
+my $STATE_WORDS = qr/·[ \t]*(?:once|standing)\b|\bnot yet used\b|\bused[ \t]+[0-9]{4}-[0-9]{2}-[0-9]{2}\b/;
 # Loose form for compaction summaries (the summary writes several on one line or a list).
 my $LOOSE_RE = qr/U-([0-9]+):?[ \t]+approval[ \t]+"([^"]+)"[ \t]+—[ \t]+action[ \t]+(.+?)[ \t]+·[ \t]+targets[ \t]+(.+?)[ \t]+·[ \t]+(once|standing(?:[ \t]*\([^)]*\))?)[ \t]+·[ \t]+(not yet used|used[ \t]+[0-9]{4}-[0-9]{2}-[0-9]{2}[ \t]+[0-9]{2}:[0-9]{2}(?:[ \t]+[+-][0-9]{4})?)/;
 
@@ -222,6 +244,272 @@ sub parse_line {
     my %e = (n => $1, quote => $2, action => $3, targets_text => $4, scope => $5, state => $7);
     $e{id} = "U-$e{n}";
     return _finish(\%e);
+}
+
+# parse_context_line(line) -> {n, id, quote, action, targets => [..], targets_text, context => 1,
+# question => 0|1, denied => 0|1} for an own line in the spec's approval_context_re form (no
+# once/standing, no state; optionally the question the words answer and, in a handoff the user
+# asked for, a ` · denied <how> <stamp>` note), else undef. A line whose targets still hold a
+# scope or state word is no context line.
+sub parse_context_line {
+    my ($l) = @_;
+    my $re = skills::spec::regex_at('approval_context_re') or return undef;
+    return undef unless defined $l && $l =~ $re;
+    my %e = (n => $1, quote => $2, question => (defined $3 ? 1 : 0), action => $4, targets_text => $5,
+             denied => (defined $6 ? 1 : 0), scope => '', state => '', context => 1);
+    return undef if "$e{action} · $e{targets_text}" =~ $STATE_WORDS;
+    $e{id} = "U-$e{n}";
+    return _finish(\%e);
+}
+
+# 1 when the spec has the context-only form and its lint id (0.1.2; an older spec has neither).
+sub context_enabled {
+    return 0 unless enabled() && defined skills::spec::regex_at('approval_context_re');
+    return skills::spec::lint_ids()->{blocking}{'approval-plugin-turn'} ? 1 : 0;
+}
+
+# 1 when the spec has the denied-action rule (0.1.2 AC-2, mitigation 1).
+sub denied_enabled { return context_enabled() && skills::spec::lint_ids()->{blocking}{'approval-denied'} ? 1 : 0 }
+
+# Denied actions (0.1.2 AC-2, mitigation 1, in the owner's 0.1.2 scope of 2026-10-30): in a
+# handoff the user asked for, a usable approval whose action a call of this session (its subagents
+# and workflow agents included) was refused for (the classifier, a deny rule, a denied directory,
+# a built-in safety check, the permission mode or the user at the prompt, not a hook;
+# transcript::denied_calls) is
+# blocked (`approval-denied`): it is written context only with its denial note, and its Next
+# step asks.
+# A denied call covers an approval when, in the approval's action and targets,
+#   - a distinctive token of the call's input (a word with a digit or a `/ . : # ! @ _ -` inside:
+#     a ticket key, a branch with a slash, a path or its file name, the host of `user@host`, a
+#     URL; of a Bash command only its outward step, see _deny_bash) stands whole, or
+#   - a service word of an MCP tool's server or name (not one of %DENY_STOP) stands as a word
+#     (`mcp__…Atlassian…__editJiraIssue` names `atlassian`, `jira`), or
+#   - the call names no such token and shares an outward class with the approval (a denied bare
+#     `git push` covers every push approval). A runner's words (`ssh prod-1`, `timeout 300`,
+#     `/bin/bash`; _deny_bash) are match-only tokens: they cover an approval they stand in, and
+#     never stop the class from covering (fail closed; review 6 finding 1).
+# Fail closed: a wrong match costs one re-ask in the next session.
+our %DENY_STOP = map { $_ => 1 } qw(mcp plugin claude server api app get set edit create update delete add remove write
+    read list search find send post put patch fetch query run new the issue issues page pages comment comments
+    message messages file files item items record records data info for and with tool tools);
+my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
+
+# _deny_bash(command) -> (token text, runner text): a refused Bash command's words that name its
+# outward step, and the words of what runs it (match-only, see above)
+# (reviewer info 3). Heredoc bodies are dropped (except the body of a heredoc a shell runs,
+# below), and quoted text holding a space (a commit message, a title) is masked; the rest splits
+# at `&&`, `||`, `;`, `|`, `&` and line ends, and tokens come only from the parts that are outward (an outward class or action word), and
+# from a quoted command a shell runs (`bash -c "git push origin feat/x"`, `ssh host "kubectl
+# delete pod web-1"`, `eval "…"`; review 3 finding 1) when it is outward on its own, read the
+# same way. A quoted message is never read (review 4 finding 1): when the command is outward only
+# inside such quotes it names no token and covers by class; when it is not outward at all, tokens
+# come from every part. A refused `git commit -m "$(cat <<EOF … EOF)" && git push` names no
+# token, so it covers a push approval by class.
+# The runner's own words count with the command it runs (review 5 finding 1): the part of a
+# shell-run quote (`ssh prod-1 "kubectl delete pod web-1"` names `prod-1`, `docker exec api-3 sh
+# -c "…"` names `api-3`) and the runner of a heredoc a shell runs (review 5 finding 2: `bash
+# <<EOF`, `ssh prod-1 <<EOF`, `cat <<EOF | bash`; its body is read as the command, the same way;
+# a heredoc fed to anything else, or to `bash -c …`, stays dropped). Those runner words, and the
+# words of an outward part before its outward command (`timeout 300 git push`, `env A=1 git
+# push`), are the runner text (review 6 finding 1): a shell path or a timeout value names nothing.
+# `bash -s arg… <<EOF` runs its heredoc too (review 6 finding 4).
+# A heredoc starts at a `<<` outside quoted text and outside shell arithmetic (`$((1<<4))`;
+# review 3 finding 3); quoted text may span lines, so a `<<` on a later line of a quoted message
+# starts none (review 5 finding 3).
+my $DENY_HEREDOC_SCAN = qr/\G(?:
+    ( \$?\(\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)\)
+    | "(?:[^"\\]|\\.)*"
+    | '[^']*' )
+  | (?<!<)<<(?!<)(-?)[ \t]*(?:'(\w+)'|"(\w+)"|\\?(\w+))
+  | (\n)
+  | (&&|\|\||[;|&])
+  | (.)
+)/xs;
+# A shell's option: `-l`, `-o pipefail`, `--norc`.
+my $DENY_SH_OPT = qr{(?:[-+]\w*o\s+\w+|--?[\w-]+)};
+# The text before a quoted command a shell runs, within its part: `[path/]sh -c`, `bash -lc`,
+# `zsh -c`, `sh -o pipefail -c`, `bash --norc -c`, `ssh [options] host`, `eval`.
+my $DENY_SHELL = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh\s+(?:$DENY_SH_OPT\s+)*-\w*c\w*\s+|(?:\S*/)?ssh\s.*|eval\s+)\z}s;
+# The text before a heredoc a shell runs, within its part: `[path/]bash`, `sh -s`, `bash -s
+# arg…`, `bash -o pipefail`, `ssh [options] host [command]`. A shell given a command (`bash -c
+# "…" <<EOF`) is none: the heredoc feeds that command.
+my $DENY_RUNNER = qr{(?:\A|[\s(])(?:(?:\S*/)?(?:ba|z|k|da|fi)?sh(?:\s+$DENY_SH_OPT)*(?:\s+-[abd-z]*s[abd-z]*(?:\s+\S+)*)?|(?:\S*/)?ssh\s.*?)\s*\z}s;
+
+# _deny_mask(text) -> (masked text, [quoted texts]): quoted text holding a space becomes a
+# numbered mark; quoted text with none stays, unquoted.
+sub _deny_mask {
+    my ($text) = @_;
+    my @q;
+    $text =~ s{"((?:[^"\\]|\\.)*)"|'([^']*)'}{
+        my ($d, $sq) = ($1, $2);
+        my $q = defined $d ? $d =~ s/\\(.)/$1/gsr : $sq;
+        $q =~ /\s/ ? do { push @q, $q; " \x01" . $#q . "\x01 " } : " $q ";
+    }ge;
+    return ($text, \@q);
+}
+
+sub _deny_bash {
+    my ($cmd) = @_;
+    # Drop heredoc bodies; keep the body and runner of each heredoc a shell runs.
+    my ($whole, $part, @tags, @run) = ('', '');
+    pos($cmd) = 0;
+    while ($cmd =~ /$DENY_HEREDOC_SCAN/gc) {
+        my $hit = substr($cmd, $-[0], $+[0] - $-[0]);
+        if (defined($3 // $4 // $5)) {
+            push @tags, [ $3 // $4 // $5, $2, $part, length($whole) + length($hit) ];
+        } elsif (defined $6) {
+            my $at = pos $cmd;
+            for my $tg (@tags) {
+                my ($tag, $dash, $pre, $end) = @$tg;
+                my @lines = split /\n/, substr($cmd, $at), -1;
+                my ($k) = grep { ($dash ? $lines[$_] =~ s/\A\t+//r : $lines[$_]) eq $tag } 0 .. $#lines;
+                # No end line: the rest is its body, as in the shell (a cut command included).
+                my @body = defined $k ? @lines[0 .. $k - 1] : @lines;
+                $at = defined $k ? $at + length(join "\n", @lines[0 .. $k]) + 1 : length $cmd;
+                $at = length $cmd if $at > length $cmd;
+                # The shell is the heredoc's own command or the next step of its pipe.
+                my ($next) = substr($whole, $end) =~ /\A[^|&;]*\|(?!\|)([^|&;]*)/;
+                my $runner = $pre =~ $DENY_RUNNER ? $pre
+                    : defined $next && $next =~ $DENY_RUNNER ? $next : undef;
+                push @run, [ $runner, join "\n", @body ] if defined $runner;
+            }
+            @tags = ();
+            $part = '';
+            $whole .= $hit;
+            pos($cmd) = $at;
+            next;
+        } elsif (defined $7) {
+            $whole .= $hit;
+            $part = '';
+            next;
+        }
+        $whole .= $hit;
+        $part .= $hit;
+    }
+    my ($s, $q) = _deny_mask($whole);
+    my @q = @$q;
+    my (@parts, @out, @run_words);
+    for my $p (grep { /\S/ } split /&&|\|\||[;|&\n]/, $s) {
+        (my $bare = $p) =~ s/\x01\d+\x01/ /g;
+        push @parts, $bare;
+        my (@marks, $ran);
+        while ($p =~ /\x01(\d+)\x01/g) { push @marks, [ $1, substr($p, 0, $-[0]) ] }
+        for my $m (@marks) {
+            my ($n, $pre) = @$m;
+            $pre =~ s/\x01\d+\x01/ /g;
+            next unless $pre =~ $DENY_SHELL && _deny_outward($q[$n]);
+            my ($t, $w) = _deny_bash($q[$n]);
+            push @out, $t;
+            push @run_words, $w;
+            $ran = 1;
+        }
+        if ($ran) { push @run_words, $bare; next }
+        my $at = _deny_outward_at($bare);
+        next unless defined $at;
+        push @run_words, substr($bare, 0, $at);
+        push @out, substr($bare, $at);
+    }
+    for my $r (@run) {
+        my ($runner, $body) = @$r;
+        next unless _deny_outward($body);
+        (my $w = (_deny_mask($runner))[0]) =~ s/\x01\d+\x01/ /g;
+        my ($t, $bw) = _deny_bash($body);
+        push @out, $t;
+        push @run_words, $bw, $w;
+    }
+    return (join(' ', @out), join(' ', @run_words)) if @out;
+    # Outward only inside quotes no shell runs (a commit message, a title): no token, the class
+    # covers (fail closed; review 4 finding 1).
+    return ('', '') if _deny_outward($whole);
+    return (join(' ', @parts), '');
+}
+
+sub _deny_outward { return defined _deny_outward_at($_[0]) ? 1 : 0 }
+
+# _deny_outward_at(text) -> the offset of the word where the text's first outward command starts,
+# else undef: the first hit of an outward class (a command: `kubectl exec web-5 -- git push` and
+# `DEPLOY_ENV=st-3 npm publish` start at `git` and `npm`), else of an action word.
+sub _deny_outward_at {
+    my ($p) = @_;
+    my $at;
+    for my $set ([ map { $_->{re} } @{ (eval { skills::spec::outward_classes() }) || [] } ], [ map { $_->[1] } @ACTION_WORDS ]) {
+        for my $re (@$set) {
+            next unless $p =~ $re;
+            $at = $-[0] if !defined $at || $-[0] < $at;
+        }
+        last if defined $at;
+    }
+    return undef unless defined $at;
+    # Back to the start of that word (`https://x/deploy` is one word).
+    substr($p, 0, $at) =~ /(\S*)\z/;
+    return $at - length $1;
+}
+
+sub _deny_keys {
+    my ($c) = @_;
+    my (%tok, %run, %word, %cls);
+    my $tool = $c->{tool} // '';
+    # Classes read the whole command (fail closed: `bash -c "git push"` is still a push).
+    my $ctext = $c->{text} // '';
+    my ($text, $runner) = $tool eq 'Bash' ? _deny_bash($ctext) : ($ctext, '');
+    $tok{$_} = 1 for _deny_tokens($text);
+    $run{$_} = 1 for _deny_tokens($runner);
+    if ($tool =~ /\Amcp__(.+?)__(.+)\z/) {
+        for my $w (map { lc } map { split /(?<=[a-z0-9])(?=[A-Z])|[^A-Za-z0-9]+/ } $1, $2) {
+            $word{$w} = 1 if length($w) >= 3 && $w =~ /[a-z]/ && !$DENY_STOP{$w};
+        }
+    }
+    for my $k (@{ (eval { skills::spec::outward_classes() }) || [] }) {
+        $cls{ $k->{class} } = 1 if $tool =~ $k->{re} || ($tool eq 'Bash' && $ctext =~ $k->{re});
+    }
+    if ($tool eq 'Bash') { for my $w (@ACTION_WORDS) { $cls{ $w->[0] } = 1 if $ctext =~ $w->[1] } }
+    return { tok => [ sort keys %tok ], run => [ sort keys %run ], word => [ sort keys %word ], cls => \%cls };
+}
+
+# _deny_tokens(text) -> the distinctive tokens of a text (see Denied actions above).
+sub _deny_tokens {
+    my ($text) = @_;
+    my @tok;
+    for my $t (split $DENY_TOKEN_SPLIT, $text // '') {
+        $t =~ s/[.:?]+\z//;
+        next if length($t) < 3 || $t =~ /\A-/;
+        # `\@` stays escaped: a bare `@_` in a class interpolates the sub's arguments (review
+        # finding 1: `HASH(0x…)` made plain words distinctive, by memory address).
+        next unless $t =~ /[A-Za-z0-9]{2}/ && $t =~ /[0-9\/.:#!\@_-]/;
+        push @tok, $t;
+        # The file name of a path: copied out of $1 first, since the next match resets it
+        # (review finding 2).
+        if ($t =~ m{/([^/]{3,})\z}) {
+            my $base = $1;
+            push @tok, $base if $base =~ /[0-9.:#!\@_-]/ && $base =~ /[A-Za-z0-9]{2}/;
+        }
+        # The host of `user@host` (`ssh deploy@prod-1` names `prod-1`; review 5 finding 1).
+        if ($t =~ /\A[^\@\/]+\@([^\@\/]{3,})\z/) {
+            my $host = $1;
+            push @tok, $host if $host =~ /[0-9.:_-]/ && $host =~ /[A-Za-z0-9]{2}/;
+        }
+    }
+    return @tok;
+}
+
+# _denied(entry, [deny keys…]) -> 1 when a denied call covers the approval (see above).
+sub _denied {
+    my ($e, $keys) = @_;
+    my $text = "$e->{action} · $e->{targets_text}";
+    my $lc = lc $text;
+    my $ecls;
+    for my $k (@{ $keys || [] }) {
+        for my $t (@{ $k->{tok} }, @{ $k->{run} || [] }) { return 1 if $text =~ /(?<![\w.\/-])\Q$t\E(?![\w\/-]|\.\w)/ }
+        for my $w (@{ $k->{word} }) { return 1 if $lc =~ /(?<![a-z0-9])\Q$w\E(?![a-z0-9])/ }
+        next if @{ $k->{tok} } || !%{ $k->{cls} };
+        $ecls //= do {
+            my %h = map { $_ => 1 } @{ classes($e)->{outward} };
+            for my $w (@ACTION_WORDS) { $h{ $w->[0] } = 1 if $e->{action} =~ $w->[1] }
+            \%h;
+        };
+        return 1 if grep { $ecls->{$_} } keys %{ $k->{cls} };
+    }
+    return 0;
 }
 
 sub _finish {
@@ -526,16 +814,28 @@ sub _default_branches {
 
 # lint(\@lines, prev_lines => {line => 1}, tag_re => qr, note => text,
 #      chain => [{text, checked => {U-n => 1}}], transcript => path | undef,
-#      quote_floor => [quote_floor(ctx, sid)])
+#      quote_floor => [quote_floor(ctx, sid)], context_only => 1 | undef)
 #   -> {blocking => [[rule, where]…], advisory => [...], checked => [U-n…], lines => n,
-#       unchecked => n, classes => [outward ids of checked approvals],
+#       unchecked => n, context => n, classes => [outward ids of checked approvals],
 #       origins => {U-n => origin class word} for the checked ids (owner xxxxxxxx-12)}
+# context_only (a plugin handoff turn, 0.1.2 D-8): every own line must be the context-only form
+# (approval-plugin-turn otherwise); its quote is still checked (approval-quote), and no id is
+# returned as checked. Without it a context-only own line is accepted too, never checked, and a
+# usable line whose action this session was refused for is `approval-denied` (AC-2; the
+# transcript's denied calls, transcript::denied_calls, read in memory only).
 sub lint {
     my ($lines, %a) = @_;
-    my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, classes => [], origins => {});
+    my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, context => 0, classes => [], origins => {});
     return \%r unless enabled();
     my $in = section_lines($lines);
     my ($tag_re, $note) = ($a{tag_re}, $a{note} // '');
+    my $cx_ok = context_enabled();
+    my $cx_only = $a{context_only} && $cx_ok ? 1 : 0;
+    # In a plugin handoff turn every shape fault is reported as approval-plugin-turn, whose fix
+    # names the context-only form (review finding 4: approval-shape's fix asks for once or
+    # standing and a state, the opposite).
+    my $shape = $cx_only ? 'approval-plugin-turn' : 'approval-shape';
+    my $dn_ok = !$cx_only && denied_enabled();
     my @own;
     for my $i (0 .. $#$lines) {
         my $l = $lines->[$i];
@@ -544,26 +844,58 @@ sub lint {
         if (!$in->{$i}) {
             # An approval line outside the section: new ones are flagged; a line carried
             # byte-identical from the base or own file, or a tagged carried line, is context.
-            push @{ $r{blocking} }, [ 'approval-shape', $where ] if is_approval_line($l) && !$tagged && !$a{prev_lines}{$l};
+            push @{ $r{blocking} }, [ $shape, $where ] if is_approval_line($l) && !$tagged && !$a{prev_lines}{$l};
             next;
         }
         next unless $l =~ /\S/;
         $r{lines}++;
         if ($tagged) {
-            push @{ $r{blocking} }, [ 'approval-shape', $where ] unless $l =~ $LINE_RE && $l =~ /"[^"]+"/ && index($l, $note) >= 0;
+            # In a plugin handoff turn this is approval-plugin-turn too (review finding 7).
+            push @{ $r{blocking} }, [ $shape, $where ] unless $l =~ $LINE_RE && $l =~ /"[^"]+"/ && index($l, $note) >= 0;
             next;
         }
-        my $e = parse_line($l);
-        if (!$e) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
+        my $e;
+        if ($cx_only) {
+            # A plugin handoff turn: only the context-only form of the probe (V3): a usable line,
+            # one with a scope or state word, one without the note, and one with the question or
+            # a denial note are blocked (X-2: neither was probed on a plugin handoff).
+            $e = parse_context_line($l);
+            if (!$e || $e->{question} || $e->{denied}) { push @{ $r{blocking} }, [ 'approval-plugin-turn', $where ]; next }
+        } else {
+            $e = parse_line($l) // ($cx_ok ? parse_context_line($l) : undef);
+            # A denial note on a line that is no context line: the action was denied, so the
+            # line must be context only (X-5: never a denial note on a usable approval).
+            if (!$e) { push @{ $r{blocking} }, [ ($dn_ok && $l =~ /\bdenied\b/i ? 'approval-denied' : 'approval-shape'), $where ]; next }
+            # A usable line that parses with a denial note in its action, targets or after
+            # `given` (review finding 6; the user's words and the question are not read).
+            if ($dn_ok && !$e->{context}) {
+                my $at = index($l, " — action $e->{action} · targets ");
+                if ($at >= 0 && substr($l, $at) =~ /·\s*denied\b/i) { push @{ $r{blocking} }, [ 'approval-denied', $where ]; next }
+            }
+        }
         # One line per id (REVIEW-NIGHT-3 R3-05): approvals_checked lists ids, so a second line
         # with a checked line's id would ride on its check.
-        if (grep { $_->{id} eq $e->{id} } @own) { push @{ $r{blocking} }, [ 'approval-shape', $where ]; next }
+        if (grep { $_->{id} eq $e->{id} } @own) { push @{ $r{blocking} }, [ $shape, $where ]; next }
         $e->{where} = $where;
         push @own, $e;
     }
+    # AC-2: a usable line whose action this session was refused for (see _denied).
+    if ($dn_ok && grep { !$_->{context} } @own) {
+        my $calls = defined $a{transcript} && defined &transcript::denied_calls ? transcript::denied_calls($a{transcript}, $a{sid}) : undef;
+        my @keys = map { _deny_keys($_) } @{ $calls || [] };
+        if (@keys) {
+            my @keep;
+            for my $e (@own) {
+                if (!$e->{context} && _denied($e, \@keys)) { push @{ $r{blocking} }, [ 'approval-denied', $e->{where} ]; next }
+                push @keep, $e;
+            }
+            @own = @keep;
+        }
+    }
     my @ask;
     for my $e (@own) {
-        if (my $d = _carried($e, $a{chain})) { $e->{ok} = 1; $e->{origin} = _origin_word($d->{origins}{ $e->{id} }); next }
+        if ($e->{context}) { if (_carried_context($e, $a{chain})) { $e->{ok} = 1; next } }
+        elsif (my $d = _carried($e, $a{chain})) { $e->{ok} = 1; $e->{origin} = _origin_word($d->{origins}{ $e->{id} }); next }
         push @ask, $e;
     }
     if (@ask) {
@@ -580,7 +912,9 @@ sub lint {
         }
     }
     my %cls;
-    for my $e (grep { $_->{ok} } @own) {
+    # A context-only line is never checked: it grants nothing, here or after a resume.
+    $r{context} = scalar grep { $_->{context} } @own;
+    for my $e (grep { $_->{ok} && !$_->{context} } @own) {
         push @{ $r{checked} }, $e->{id};
         $r{origins}{ $e->{id} } = $e->{origin} // 'unknown';
         $cls{$_} = 1 for @{ classes($e)->{outward} };
@@ -619,6 +953,21 @@ sub _carried {
         }
     }
     return undef;
+}
+
+# A context-only line carried from an own-chain file: an own line of that file's `## Approvals`
+# (untagged: another session's words carried there are never this chain's), in either form, with
+# the same id, words, action and targets. Its quote was checked when that file was published,
+# and a context-only line grants nothing, so the file need not list the id as checked.
+sub _carried_context {
+    my ($e, $chain) = @_;
+    for my $d (@{ $chain || [] }) {
+        for my $p (@{ _section_entries($d->{text}, 1) }) {
+            return 1 if $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote} && $p->{action} eq $e->{action}
+                && $p->{targets_text} eq $e->{targets_text};
+        }
+    }
+    return 0;
 }
 
 # The ids of a frontmatter approvals_checked value.
@@ -677,16 +1026,17 @@ sub _found {
     return "$ctx->{root}/.sessions/$rel";
 }
 
-# The parsed, untagged lines of a body's `## Approvals`, each with its exact text.
+# The parsed, untagged lines of a body's `## Approvals`, each with its exact text (with
+# $context, the context-only own lines too).
 sub _section_entries {
-    my ($body) = @_;
+    my ($body, $context) = @_;
     my @lines = split /\n/, $body // '';
     my $in = section_lines(\@lines);
     my $tag_re = skills::spec::regex_at('carry.tag_re');
     my @out;
     for my $i (sort { $a <=> $b } keys %$in) {
         next if $tag_re && $lines[$i] =~ $tag_re;
-        my $e = parse_line($lines[$i]) or next;
+        my $e = parse_line($lines[$i]) // ($context && context_enabled() ? parse_context_line($lines[$i]) : undef) or next;
         $e->{line} = $lines[$i];
         push @out, $e;
     }
@@ -929,10 +1279,21 @@ sub handoff_lines {
     my @lines = split /\n/, $d->{body} // '';
     my $in = section_lines(\@lines);
     my $tag_re = skills::spec::regex_at('carry.tag_re');
-    my @e = grep { defined } map { parse_line($lines[$_]) } grep { !($tag_re && $lines[$_] =~ $tag_re) } sort { $a <=> $b } keys %$in;
+    my @own_idx = grep { !($tag_re && $lines[$_] =~ $tag_re) } sort { $a <=> $b } keys %$in;
+    my @e = grep { defined } map { parse_line($lines[$_]) } @own_idx;
+    # Context-only own lines (a plugin handoff turn, 0.1.2 D-8): never checked, listed as such.
+    # A file publish wrote in a plugin handoff turn (frontmatter `requested_by: plugin`, AC-4)
+    # names that reason, and none of its lines carries, whatever its approvals_checked says.
+    my %cx;
+    if (context_enabled()) {
+        my $plugin = ($d->{fm}{requested_by} // '') eq 'plugin';
+        my $label = $plugin ? 'plugin handoff' : 'written as context';
+        for my $c (grep { defined } map { parse_context_line($lines[$_]) } @own_idx) { $cx{ $c->{id} } //= $label }
+        if ($plugin) { $cx{ $_->{id} } //= $label for @e }
+    }
     my ($own, $why) = own_relation($d, $ctx, $sid);
     if (!$own) {
-        return ([ 'Approvals (checked): none (' . $why . ': context only)' ], { source => 'handoff', checked => 0, gate => 0, classes => [] }) if @e;
+        return ([ 'Approvals (checked): none (' . $why . ': context only)' ], { source => 'handoff', checked => 0, gate => 0, classes => [] }) if @e || %cx;
         return ([ 'Approvals (checked): none' ], { source => 'handoff', checked => 0, gate => 0, classes => [] });
     }
     # U3-01: a checked id carries only when its line matches the hash publish recorded.
@@ -942,11 +1303,14 @@ sub handoff_lines {
     $n{ $_->{id} }++ for @e;
     my $org = origins_of($ctx, $d);
     $_->{origin} = $org->{ $_->{id} } for @e;
-    my ($out, $row) = _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 } @e ], [], 'handoff');
-    my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %$unver;
+    # An id that also has a context-only line is no one's check either.
+    my ($out, $row) = _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 && !$cx{ $_->{id} } } @e ], [], 'handoff');
+    my %ctx_only = (%cx, map { $_ => $HASH_WHY{ $unver->{$_} } } keys %$unver);
+    my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %ctx_only;
     if (@bad) {
-        push @$out, 'Approvals (context only, re-ask): ' . join(', ', map { "$_ ($HASH_WHY{ $unver->{$_} })" } @bad);
-        $row->{unverified} = scalar @bad;
+        push @$out, 'Approvals (context only, re-ask): ' . join(', ', map { "$_ ($ctx_only{$_})" } @bad);
+        $row->{unverified} = scalar keys %$unver if %$unver;
+        $row->{context} = scalar keys %cx if %cx;
     }
     return ($out, $row);
 }

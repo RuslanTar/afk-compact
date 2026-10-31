@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "AP-5 (SPEC-DELTAS §3.1): measure <handoff> lists the own chain's checked, unused (or standing) non-gate approvals under Approvals (checked) and gate ones under Approvals (gate, re-ask); a used once approval is spent; a fork successor (O-12 interim) and another session (O-1) carry nothing. measure --compact --copy checks a summary's approvals against this session's transcript; a copy not saved yet prints not checked (copy pending); without --copy nothing is printed. --brief is one line <= 600 B for ID-3. Rows hold counts and class ids only (canary). Provisional: O-1, O-12; O-3 decided (owner xxxxxxxx-09, all four quote-source rules kept).; REVIEW-NIGHT-3: gates named in words beside a class hit, src:dst refspecs, a local merge into a protected branch and the remote default branch (R3-02; owner xxxxxxxx-10 \"Push names\": all four push readings kept); a fork link anywhere on the lineage path and a file outside the store carry nothing (R3-03); an id on two lines is not carried (R3-05); U3-01 (root ruling 2026-10-23 11:56): a checked line carries only when it matches the hash publish recorded in .sessions/approvals/<sid>.<nonce>.json; an added line, edited targets, an edited quote, an edited id, a file without a record and a record of another file are context only (re-ask)",
+ "note": "AP-5 (SPEC-DELTAS §3.1): measure <handoff> lists the own chain's checked, unused (or standing) non-gate approvals under Approvals (checked) and gate ones under Approvals (gate, re-ask); a used once approval is spent; a fork successor (O-12 interim) and another session (O-1) carry nothing. measure --compact --copy checks a summary's approvals against this session's transcript; a copy not saved yet prints not checked (copy pending); without --copy nothing is printed. --brief is one line <= 600 B for ID-3. Rows hold counts and class ids only (canary). Provisional: O-1, O-12; O-3 decided (owner xxxxxxxx-09, all four quote-source rules kept).; REVIEW-NIGHT-3: gates named in words beside a class hit, src:dst refspecs, a local merge into a protected branch and the remote default branch (R3-02; owner xxxxxxxx-10 \"Push names\": all four push readings kept); a fork link anywhere on the lineage path and a file outside the store carry nothing (R3-03); an id on two lines is not carried (R3-05); U3-01 (root ruling 2026-10-23 11:56): a checked line carries only when it matches the hash publish recorded in .sessions/approvals/<sid>.<nonce>.json; an added line, edited targets, an edited quote, an edited id, a file without a record and a record of another file are context only (re-ask); 0.1.2 D-8: context-only own lines (a plugin handoff turn) are listed under Approvals (context only, re-ask) as written as context, never checked, even when approvals_checked was edited to name them; 0.1.2 AC-4: a file marked requested_by: plugin (publish writes it in a plugin handoff turn) carries no approval, a hashed usable line included, and lists its lines as (plugin handoff)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -695,6 +695,86 @@
     ],
     "stdout_lacks": [
      "U-2 git push"
+    ]
+   }
+  },
+  {
+   "name": "D-8 setup: a plugin-turn handoff whose frontmatter was edited to list its context-only lines",
+   "setup": [
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-30-00_plugin-turn.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7e7e7e7e\ndate: 2026-10-21T14:30:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=7e7e7e7e s=manual⟫\n# LAB-9 — plugin handoff turn\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:03 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## Next steps\n1. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n⟪/$BRAND n=7e7e7e7e⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-31-00_both-forms.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7f7f7f7f\ndate: 2026-10-21T14:31:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2\n---\n⟪$BRAND v1 n=7f7f7f7f s=manual⟫\n# LAB-9 — one id in both forms\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=7f7f7f7f⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7f7f7f7f.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"},\"nonce\":\"7f7f7f7f\",\"session_id\":\"$SID\",\"v\":1}"
+    },
+    {
+     "write": "$ROOT/repo/approvals/2026-10-21_14-32-00_plugin-flag.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7d7d7d7d\ndate: 2026-10-21T14:32:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2\nrequested_by: plugin\n---\n⟪$BRAND v1 n=7d7d7d7d s=manual⟫\n# LAB-9 — a usable line in a plugin handoff\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=7d7d7d7d⟫\n"
+    },
+    {
+     "write": "$ROOT/.sessions/approvals/$SID.7d7d7d7d.json",
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\"},\"nonce\":\"7d7d7d7d\",\"session_id\":\"$SID\",\"v\":1}"
+    }
+   ]
+  },
+  {
+   "name": "D-8 a plugin-turn handoff's context-only lines are never checked, even with approvals_checked edited in",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-30-00_plugin-turn.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(written as context\\), U-5 \\(written as context\\)$"
+    ],
+    "stdout_lacks": [
+     "^Approvals \\(checked\\): U-",
+     "^Approvals \\(gate"
+    ]
+   }
+  },
+  {
+   "name": "D-8 an id with a hashed usable line and a context-only line is not carried",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-31-00_both-forms.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(written as context\\)$"
+    ]
+   }
+  },
+  {
+   "name": "AC-4 a file marked requested_by: plugin carries nothing, a hashed usable line included",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$ROOT/repo/approvals/2026-10-21_14-32-00_plugin-flag.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(plugin handoff\\)$"
     ]
    }
   },
