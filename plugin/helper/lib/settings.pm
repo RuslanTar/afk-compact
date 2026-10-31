@@ -123,6 +123,7 @@ our %SECTION = (
     idle_digest                 => [qw(idle common)],
     idle_handoff_min_tokens     => [qw(idle common)],
     idle_handoff_near_limit     => [qw(idle common)],
+    keep_warm_hours             => [qw(idle common)],
     handoff_root                => [qw(handoffs common)],
     log_dir                     => [qw(handoffs common)],
     disposable_root             => [qw(handoffs common)],

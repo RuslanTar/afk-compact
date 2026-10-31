@@ -227,7 +227,7 @@
     },
     "keep_warm_hours": {
       "type": "number",
-      "title": "Keep the cache warm while background jobs run (hours)",
+      "title": "Keep the cache warm while background jobs run (hours) [default 6]",
       "description": "How many hours the plugin keeps an idle session's one-hour prompt cache (the stored conversation that keeps the next request cheap) warm while one of that session's own background jobs (an agent, a workflow or a background shell) is still running: about every 50 minutes it sends one small hidden request that reads the cache and adds nothing to the conversation, so the turn the job's result opens does not read the whole conversation again at full price. When that time is up and a job is still running, the plugin compacts the session (or runs the handoff-when-idle turn) while the cache is still warm. It never runs while you are simply away with nothing running, nor with the five-minute cache, and stops when a usage limit reaches 90% or a turn starts. Default 6 (allowed 0 to 24); 0 turns it off, which saves those requests (each one counts toward your usage limits as a cached read of the conversation).",
       "default": 6,
       "min": 0,
