@@ -16,15 +16,17 @@
 # ...`, counted as not run, neither passed nor skipped; the run does not fail on it.
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
 # HOME-GUARD (0.1.2; the guard is tests/helper/homeguard.pm, shared with the core case runner):
-# the driver itself runs with a temp HOME and no CLAUDE_CONFIG_DIR, each case with its own $HOME
-# (a `cli` step's env may set a CLAUDE_CONFIG_DIR of its own under a temp folder). The driver
-# checks the environment before a `cli` step's child, a T::_git child, each in-process step and
-# each `expect` sub: the real HOME, the account's home or a CLAUDE_CONFIG_DIR at a real config
-# folder or outside the temp folders dies with a `HOME-GUARD:` line and nothing starts
-# (AT-RN-07-watch-home-guard). Code run when case.pl loads gets the driver's own temp HOME. A
-# child that step or expect code starts itself (backticks, system) is not checked one by one:
-# it inherits the environment checked before that step or sub, so only code that changes %ENV
-# itself could reach past it.
+# the driver itself runs in a fresh environment (none of the caller's Claude Code, XDG or helper
+# variables) with a temp HOME, each case with its own $HOME (a `cli` step's env may set a
+# CLAUDE_CONFIG_DIR or state folder of its own under a temp folder). The driver checks the
+# environment before a `cli` step's child, a T::_git child, each in-process step and each `expect`
+# sub: the real HOME, the account's home, a CLAUDE_CONFIG_DIR at a real config folder or outside
+# the temp folders, or a state folder (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA, a folder option, ...)
+# in a real config or state folder or outside the temp folders dies with a `HOME-GUARD:` line and
+# nothing starts (AT-RN-07-watch-home-guard). Code run when case.pl loads gets the driver's own
+# temp HOME. A child that step or expect code starts itself (backticks, system) inherits the
+# environment checked before that step or sub; code that changes %ENV before it starts one
+# checks again (homeguard::check(\%ENV, ...), as AT-WB-02-canary-install does).
 #
 # This driver exists because the core case runner (tests/helper/run.*), the
 # core `hook` dispatcher and the shared watcher fixtures are other work
@@ -51,14 +53,21 @@ use watch::json;
 use watch::io;
 use watch::alerts;
 
-# HOME-GUARD: the real HOME and config folder are read once, here, before anything is
-# localised; from here on the driver's own HOME is a temp folder and no CLAUDE_CONFIG_DIR is set.
+# HOME-GUARD: the real HOME, config folder and state folders are read once, here, before
+# anything is localised; from here on the driver runs in a fresh environment, as the core
+# runner's helper calls do (child_env): homeguard::fresh_env keeps PATH, TMPDIR, the locale, the
+# account names, the shell, the terminal and the perl library path, with HOME a temp folder of the
+# driver's own. No CLAUDE_CONFIG_DIR, CLAUDE_PLUGIN_DATA, CLAUDE_PLUGIN_OPTION_*, CLAUDE_CODE_*,
+# XDG_* or STORE_* of the caller's reaches the in-process steps or any child: a driver started
+# in a Claude Code session or a plugin hook (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA set) wrote the
+# cases' watch logs into the owner's state folders.
 require "$REPO/tests/helper/homeguard.pm";
 homeguard::init();
+# WATCH_CASE_DUMP: a debug switch the driver reads itself, kept for the driver only
+my $DUMP = $ENV{WATCH_CASE_DUMP};
 my $DRIVER_HOME = File::Temp::tempdir('watchdriver-XXXXXX', TMPDIR => 1, CLEANUP => 1) . '/home';
 watch::io::mkdir_p($DRIVER_HOME);
-$ENV{HOME} = $DRIVER_HOME;
-delete $ENV{CLAUDE_CONFIG_DIR};
+%ENV = %{ homeguard::fresh_env($DRIVER_HOME) };
 
 $ENV{TZ} = 'Etc/GMT-3';
 POSIX::tzset();
@@ -352,7 +361,7 @@ sub run_case {
         push @errs, "$label: stdout not empty (" . length($out) . " bytes)" if length($out // '') && $s->{call} ne 'status';
         push @errs, "$label: stderr not empty: $err" if length($err // '');
     }
-    if ($ENV{WATCH_CASE_DUMP}) {
+    if ($DUMP) {
         for my $f (sort(watch::io::list_dir($v{WATCH}))) {
             next unless $f =~ /\.jsonl\z/;
             print STDERR "== $f\n", watch::io::slurp("$v{WATCH}/$f");

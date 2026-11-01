@@ -8,6 +8,8 @@ my $calls = sub {
     my ($v, $path) = @_;
     my $f = "$v->{TMP}/trace-" . (scalar(keys %n) + 1) . '.log';
     local $ENV{STORE_TEST_TRACE} = $f;
+    # HOME-GUARD: %ENV changed since the driver checked it; the root check starts git with it
+    homeguard::check(\%ENV, q(check_path));
     my $r = roots::check_path($path);
     my $t = watch::io::slurp($f) // '';
     my $c = () = $t =~ /^git$/mg;

@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-06-inner-env",
+ "note": "run by AT-RN-06 only (discovery skips _ folders), whose child run of the runner starts with XDG_STATE_HOME, XDG_CACHE_HOME, CLAUDE_PLUGIN_DATA and the handoff_root and log_dir options at stand-in folders: the runner's own environment in this case holds no CLAUDE* or XDG_* name (the runner drops the caller's at start), so a builtin or a command reads none of those folders",
+ "steps": [
+  {"name": "the runner's environment", "lib": "runner_env"}
+ ]
+}

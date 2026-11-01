@@ -109,14 +109,18 @@ require "sha.pm";
 # wiped ~/.claude/settings.json to "{}"; lib/settings_write.pm writes
 # ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json). The guard is tests/helper/homeguard.pm,
 # shared with the watch driver; the real ones are read once, here, before anything is localised:
-# HOME as given and the account's home (getpwuid), each by real path, and the CLAUDE_CONFIG_DIR
-# given. Once its run dir exists the runner itself runs with a temp HOME ($RUN_TMP/home) and no
-# CLAUDE_CONFIG_DIR, each case with its own $HOME (run_case), and home_guard() checks the
-# environment of every child it starts before the fork.
+# HOME as given and the account's home (getpwuid), each by real path, the CLAUDE_CONFIG_DIR and
+# the state folders given (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA, ...: homeguard::PATH_VARS). Then the
+# caller's Claude Code, XDG and helper variables go (homeguard::drop_env: a runner started in a
+# Claude Code session or a plugin hook passes no CLAUDE_PLUGIN_DATA, XDG_STATE_HOME or
+# CLAUDE_PLUGIN_OPTION_* to a builtin run in-process or a command it starts; a helper call's
+# environment is built fresh anyway, child_env). Once its run dir exists the runner itself runs
+# with a temp HOME ($RUN_TMP/home), each case with its own $HOME (run_case), and home_guard()
+# checks the environment of every child it starts before the fork.
 require "$HERE/homeguard.pm";
 homeguard::init();
-my ($REAL_HOME, $REAL_CONFIG_DIR, $ACCOUNT_HOME, %REAL_HOMES);
-{ no warnings q(once); ($REAL_HOME, $REAL_CONFIG_DIR, $ACCOUNT_HOME) = ($homeguard::REAL_HOME, $homeguard::REAL_CONFIG_DIR, $homeguard::ACCOUNT_HOME); %REAL_HOMES = %homeguard::REAL_HOMES }
+homeguard::drop_env(\%ENV);
+my ($REAL_HOME, $REAL_CONFIG_DIR, $ACCOUNT_HOME) = @homeguard::REAL{qw(home config_dir account)};
 
 # DP-12: messages hold characters (decoded case text and helper output); raw bytes are
 # decoded before they are printed (see say_raw), so nothing prints "Wide character".
@@ -202,11 +206,11 @@ $RUN_TMP = do {
     $d;
 };
 # HOME-GUARD: from here on the runner's own HOME is a temp folder of its run dir and no
-# CLAUDE_CONFIG_DIR is set, so a child started outside a case (staging, a needs check) and any
-# helper code run in-process get no real home either; run_case gives each case its own $HOME.
+# CLAUDE_CONFIG_DIR is set (drop_env took it), so a child started outside a case (staging, a needs
+# check) and any helper code run in-process get no real home either; run_case gives each case its
+# own $HOME.
 util::mkdir_p("$RUN_TMP/home");
 $ENV{HOME} = "$RUN_TMP/home";
-delete $ENV{CLAUDE_CONFIG_DIR};
 my %STAGE_INFO;
 my $STAGE = stage_plugin("$RUN_TMP/stage/plugin");
 sub repo_tmp {
@@ -1384,13 +1388,13 @@ sub stdin_of {
 }
 
 # ---------------------------------------------------------------- HOME-GUARD
-# The guard itself is tests/helper/homeguard.pm (shared with the watch driver). under_temp(path):
-# 1 when the path's real path lies strictly under a temp folder (the system temp folder the
-# runner started with, /tmp, or the repo's tmp/). home_guard(env, what): dies before `what`
-# starts when its environment (a hash: the whole environment the child gets) could reach the
-# owner's real HOME or config folder (homeguard::check). case_home(path) -> the path, for a
-# builtin's declared "home": dies unless a child given it as HOME passes home_guard.
-sub under_temp { return homeguard::under_temp(@_) }
+# The guard itself is tests/helper/homeguard.pm (shared with the watch driver).
+# home_guard(env, what): dies before `what` starts when its environment (a hash: the whole
+# environment the child gets) could reach the owner's real HOME, config folder or state folders
+# (homeguard::check; the temp folders are the system temp folder the runner started with, /tmp
+# and the repo's tmp/, and a path must be absolute with no `..` part to lie under one).
+# case_home(path) -> the path, for a builtin's declared "home": dies unless a child given it as
+# HOME passes home_guard.
 sub home_guard { return homeguard::check(@_) }
 sub case_home { return homeguard::case_home(@_) }
 
@@ -3015,13 +3019,22 @@ sub builtin {
         # is the child's TMPDIR as given ("/tmp": the shortest case folders a host gives, as on
         # the Linux rows), else a fresh child-<4 hex> folder under "tmp"; "timeout_s" (180).
         # A failing child keeps its work dir (BH-6); under a given "tmpdir", which outlives the
-        # case, it is removed here once the output is read, and the failure says so.
+        # case, it is removed here once the output is read, and the failure says so. "env"
+        # ({name: value}) is laid over the child's environment too (home_guard checks it), and
+        # each of "empty" [folders] must hold no file after the run.
         my @cases = @{ $a->{cases} || [] };
         my $dir = @cases ? join(' ', @cases) : $a->{dir} // die "runner_child: no dir\n";
         my @targets = @cases ? (map { "$HERE/cases/$_" } @cases) : ("$cdir/$dir");
         my $td = $a->{tmpdir} // (($a->{tmp} // die "runner_child: no tmp\n") . '/child-' . util::rand_hex(4));
         util::mkdir_p($td);
-        my $r = run_cmd(['/usr/bin/perl', "$HERE/run.pl", @targets], timeout_ms => 1000 * ($a->{timeout_s} // 180), env => { TMPDIR => $td });
+        util::mkdir_p($_) for @{ $a->{empty} || [] };
+        my $r = run_cmd(['/usr/bin/perl', "$HERE/run.pl", @targets], timeout_ms => 1000 * ($a->{timeout_s} // 180), env => { %{ $a->{env} || {} }, TMPDIR => $td });
+        for my $f (@{ $a->{empty} || [] }) {
+            my @q = ($f);
+            while (defined(my $d = shift @q)) {
+                for my $n (util::list_dir($d)) { my $p = "$d/$n"; if (-d $p && !-l $p) { push @q, $p } else { push @e, "child run of $dir: $p landed in $f, want nothing there" } }
+            }
+        }
         my $out = chars($r->{out} // '');
         if (defined $a->{tmpdir}) {
             my ($kept) = $out =~ /^# kept: ([^\n]*)$/m;
@@ -3032,89 +3045,71 @@ sub builtin {
         for my $re (@{ $a->{stdout_has} || [] }) { push @e, "child run of $dir: output has no /$re/: " . substr($out, -600) unless $out =~ /$re/m }
         return @e;
     }
+    if ($name eq 'runner_env') {
+        # AT-RN-06 (HOME-GUARD): the runner's own environment inside a case holds no Claude Code or
+        # XDG name (homeguard::drop_env took the caller's at start), so a builtin run in-process
+        # or a command it starts reads no state folder of the caller's
+        push @e, "the runner's environment holds $_=$ENV{$_} (a name the runner drops at start)" for sort grep { /\A(?:CLAUDE|XDG_)/ } keys %ENV;
+        return @e;
+    }
     if ($name eq 'home_guard') {
-        # AT-RN-06 (HOME-GUARD): inside a case this runner's own HOME is the case's $HOME and no
-        # CLAUDE_CONFIG_DIR is set; home_guard refuses, before the fork, a helper call (spawn) and
-        # a command (run_cmd) whose environment could reach the real home or config folder: the
-        # real HOME, the account's home, a link to it, no HOME, an empty HOME, a relative HOME, a
-        # HOME outside the temp folders, a HOME or CLAUDE_CONFIG_DIR through a link into the real
-        # home and `..` (the kernel applies it after the link), a temp HOME whose .claude or
-        # settings.json links to the real one, a CLAUDE_CONFIG_DIR at the real ~/.claude or not
-        # absolute; a declared home
-        # (case_home) at the account's home; with TMPDIR at the account's home, a CLAUDE_CONFIG_DIR
-        # at its .claude. The child is `true`, so a guard that lets one through starts nothing
-        # that reads or writes a home. A temp HOME, with or without a CLAUDE_CONFIG_DIR under it,
-        # or with its .claude and settings.json linked inside temp, starts.
+        # AT-RN-06 (HOME-GUARD): inside a case this runner's own HOME is the case's $HOME, no
+        # CLAUDE_CONFIG_DIR, XDG_* or CLAUDE* name is set, and the real homes, config folder and
+        # state folders the guard read at start are the owner's. Then, with stand-ins for those
+        # (homeguard::self_rows: a real HOME, an account home, a config folder and state folders
+        # given, all under $TMP, so no link into the real home or ~/.claude is made), home_guard
+        # refuses, before the fork, a helper call (spawn) and a command (run_cmd) in every row of
+        # the guard's table whose environment could reach them: the real HOME, the account's home
+        # or a link to it (also another case of its name where the file system folds case), no,
+        # an empty, a relative HOME or one outside the temp folders, a HOME or CLAUDE_CONFIG_DIR
+        # through a link into the home and `..` (the kernel applies it after the link), a
+        # CLAUDE_CONFIG_DIR at a real config folder, relative or outside temp, a temp HOME whose
+        # .claude or settings.json links to the real one, whose .claude is a dangling link, or
+        # links outside temp to another folder; with TMPDIR at the account's home (or another case
+        # of it), a CLAUDE_CONFIG_DIR or CLAUDE_PLUGIN_DATA in its .claude; an XDG_STATE_HOME,
+        # XDG_CACHE_HOME, CLAUDE_PLUGIN_DATA, folder option or CLAUDE_CODE_TMPDIR outside temp,
+        # relative (an option), through `..`, or in a real config or state folder; and a declared
+        # home (case_home) at the account's home. The child is `true`, so a guard that lets one
+        # through starts nothing that reads or writes a home. A temp HOME, a CLAUDE_CONFIG_DIR
+        # under it, its .claude and settings.json linked inside temp, state folders under temp
+        # and the values the helper reads as unset start.
         my $V = $_[3];
         my $tmp = $a->{tmp} // die "home_guard: no tmp\n";
         push @e, "runner HOME is " . ($ENV{HOME} // '(unset)') . ", want the case's $V->{HOME}" unless ($ENV{HOME} // '') eq $V->{HOME};
-        push @e, "runner HOME $ENV{HOME} is a real home" if defined $ENV{HOME} && $REAL_HOMES{ util::real_path($ENV{HOME}) // '' };
-        push @e, "runner CLAUDE_CONFIG_DIR is set ($ENV{CLAUDE_CONFIG_DIR})" if defined $ENV{CLAUDE_CONFIG_DIR};
+        push @e, "runner HOME $ENV{HOME} is a real home" if defined $ENV{HOME} && homeguard::real_home($ENV{HOME});
+        push @e, "the runner's environment holds $_ (a name the runner drops at start)" for sort grep { /\A(?:CLAUDE|XDG_)/ } keys %ENV;
+        # the real ones, read by init (no link is made to them): the account's home and its .claude
         my $acct = $ACCOUNT_HOME // die "home_guard: no account home\n";
-        symlink($acct, "$tmp/link-home") or die "home_guard: symlink: $!\n" unless -l "$tmp/link-home";
+        push @e, "the guard does not hold the account's home $acct as a real home" unless homeguard::real_home($acct);
+        push @e, "the guard does not hold $acct/.claude as a real config folder" unless homeguard::real_config("$acct/.claude");
+        push @e, "the guard does not hold $acct/.local/state as a real state folder" unless homeguard::real_state("$acct/.local/state");
         my $th = $V->{HOME};
         my $true = -x '/usr/bin/true' ? '/usr/bin/true' : '/bin/true';
-        # links for the round-2 rows: one into the real home (its ..: the home for a child, $tmp as
-        # text), a temp HOME whose .claude is the real one, one whose settings.json is the real one,
-        # and one whose .claude and settings.json link inside temp (taken)
-        my ($sub) = grep { -d "$acct/$_" && !-l "$acct/$_" } qw(.claude Library .config .local);
-        symlink("$acct/" . ($sub // '.'), "$tmp/link-in") or die "home_guard: symlink: $!\n" unless -l "$tmp/link-in";
-        util::mkdir_p("$tmp/$_") for qw(h-clink h-slink/.claude h-tlink cfg-in-temp);
-        symlink("$acct/.claude", "$tmp/h-clink/.claude") unless -l "$tmp/h-clink/.claude";
-        symlink("$acct/.claude/settings.json", "$tmp/h-slink/.claude/settings.json") unless -l "$tmp/h-slink/.claude/settings.json";
-        symlink("$tmp/cfg-in-temp", "$tmp/h-tlink/.claude") unless -l "$tmp/h-tlink/.claude";
-        write_text("$tmp/cfg-in-temp/real.json", "{}\n") unless -e "$tmp/cfg-in-temp/real.json";
-        symlink("$tmp/cfg-in-temp/real.json", "$tmp/cfg-in-temp/settings.json") unless -l "$tmp/cfg-in-temp/settings.json";
-        my @bad = (["the account's home", { HOME => $acct }], ['a link to the account home', { HOME => "$tmp/link-home" }],
-                   ['no HOME', { HOME => undef }], ['an empty HOME', { HOME => '' }],
-                   ['a HOME outside the temp folders', { HOME => '/nonexistent-home-guard' }],
-                   ['CLAUDE_CONFIG_DIR at the real ~/.claude', { HOME => $th, CLAUDE_CONFIG_DIR => "$acct/.claude" }],
-                   ['a relative CLAUDE_CONFIG_DIR', { HOME => $th, CLAUDE_CONFIG_DIR => 'cfg' }],
-                   ['a HOME through a link into the real home and ..', { HOME => "$tmp/link-in/.." }],
-                   ['a CLAUDE_CONFIG_DIR through a link into the real home and ..', { HOME => $th, CLAUDE_CONFIG_DIR => "$tmp/link-in/../.claude" }],
-                   ['a relative HOME (read from a temp working folder)', { HOME => 'home-guard-rel' }],
-                   ['a temp HOME whose .claude links to the real one', { HOME => "$tmp/h-clink" }],
-                   ['a temp HOME whose settings.json links to the real one', { HOME => "$tmp/h-slink" }]);
-        unshift @bad, ['the real HOME', { HOME => $REAL_HOME }] if defined $REAL_HOME && $REAL_HOME =~ m{\A/} && $REAL_HOMES{ util::real_path($REAL_HOME) };
+        my $t = homeguard::self_rows($tmp, $th);
+        no warnings q(once);
+        local %homeguard::REAL = %{ $t->{real} };
         my $n = 0;
         # the runner works in $tmp here, so a relative HOME read against it lies under temp: only
         # the absolute rule refuses it (a child started in its step's folder reads it there)
         require Cwd;
         my $back = Cwd::getcwd();
         chdir($tmp) or die "home_guard: chdir $tmp: $!\n";
-        for my $b (@bad, map { [$_->[0], $_->[1], 'ok'] } (['a temp HOME', { HOME => $th }], ['a CLAUDE_CONFIG_DIR under the temp HOME', { HOME => $th, CLAUDE_CONFIG_DIR => '~/.claude' }],
-                                                     ['a temp HOME whose .claude and settings.json link inside temp', { HOME => "$tmp/h-tlink" }])) {
-            my ($what, $over, $ok) = @$b;
-            my %env = (PATH => '/usr/bin:/bin', TMPDIR => "$tmp/tmpdir", %$over);
+        for my $row (@{ $t->{rows} }) {
+            local @homeguard::TEMP_ROOTS = $row->{temp} ? @{ $row->{temp} } : @homeguard::TEMP_ROOTS;
+            my %env = (PATH => '/usr/bin:/bin', TMPDIR => "$tmp/tmpdir", %{ $row->{env} });
             delete $env{$_} for grep { !defined $env{$_} } keys %env;
             $n++;
             my $pid = eval { spawn([$true], \%env, '', "$tmp/hg-out-$n", "$tmp/hg-err-$n", $tmp) };
             my $err = $@;
             if ($pid) { waitpid($pid, 0); delete $KIDS{$pid} }
-            my $r = eval { run_cmd([$true], env => { HOME => undef, CLAUDE_CONFIG_DIR => undef, %$over }) };
+            my $r = eval { run_cmd([$true], env => { HOME => undef, CLAUDE_CONFIG_DIR => undef, %{ $row->{env} } }) };
             my $rerr = $@;
-            if ($ok) {
-                push @e, "$what: the helper call was refused: $err" if $err;
-                push @e, "$what: the command was refused: $rerr" if $rerr;
-                next;
-            }
-            push @e, "$what: the helper call started (pid $pid), want HOME-GUARD" if $pid;
-            push @e, "$what: the helper call died with '$err', want HOME-GUARD" if !$pid && $err !~ /\AHOME-GUARD: /;
-            push @e, "$what: the command ran (exit $r->{exit}), want HOME-GUARD" if $r;
-            push @e, "$what: the command died with '$rerr', want HOME-GUARD" if !$r && $rerr !~ /\AHOME-GUARD: /;
+            push @e, "$row->{what}: the command exited $r->{exit}" if $row->{ok} && $r && $r->{exit} != 0;
+            push @e, homeguard::self_row_errs($row, ['helper call', $pid ? 1 : 0, $err], ['command', $r ? 1 : 0, $rerr]);
         }
         chdir($back) or die "home_guard: chdir $back: $!\n";
-        # a runner started with TMPDIR=$HOME: the real ~/.claude lies under a "temp" folder and is
-        # still refused (the temp folders put back after)
-        {
-            no warnings q(once);
-            local @homeguard::TEMP_ROOTS = (util::real_path($acct));
-            my $ok = eval { home_guard({ HOME => "$acct/home-guard-none", CLAUDE_CONFIG_DIR => "$acct/.claude" }, 'TMPDIR at home'); 1 };
-            my $err = $@;
-            push @e, "TMPDIR the account's home: CLAUDE_CONFIG_DIR at its .claude was taken" if $ok;
-            push @e, "TMPDIR the account's home: died with '$err', want the real config folder" if !$ok && $err !~ /\AHOME-GUARD: .* is the real config folder; /;
-        }
-        push @e, "a declared home at the account's home was taken" if eval { case_home($acct); 1 };
+        push @e, "rows tried: $n, want at least 32" if $n < 32;
+        push @e, "a declared home at the account's home was taken" if eval { case_home($t->{account}); 1 };
         push @e, "a declared home under the case was refused: $@" unless eval { case_home("$tmp/h1"); 1 };
         return @e;
     }

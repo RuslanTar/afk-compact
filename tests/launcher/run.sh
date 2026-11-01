@@ -21,6 +21,14 @@
 # Output: TAP lines (`ok N - <shell> <case> <title>`), then `# passed N, failed M, skipped K`.
 # Exit 0 when nothing failed, else 1.
 set -u
+# HOME-GUARD: none of the caller's Claude Code, XDG or helper variables (CLAUDECODE,
+# CLAUDE_CONFIG_DIR, CLAUDE_PLUGIN_DATA, CLAUDE_PLUGIN_OPTION_*, CLAUDE_CODE_*, XDG_STATE_HOME,
+# XDG_CACHE_HOME, STORE_*, ...) reaches a launcher, its claude or its helper: run from a Claude
+# Code session or a plugin hook they would put state into the owner's folders. Each case sets its
+# own HOME and TMPDIR (run_launcher).
+for hg_v in $(env | sed -n 's/^\(CLAUDE[A-Za-z0-9_]*\)=.*/\1/p; s/^\(XDG_[A-Za-z0-9_]*\)=.*/\1/p; s/^\(STORE_[A-Za-z0-9_]*\)=.*/\1/p'); do
+  unset "$hg_v"
+done
 here=$(cd "$(dirname "$0")" && pwd -P)
 repo=$(cd "$here/../.." && pwd -P)
 brand=$(sed -n 's/^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"\([a-z0-9-]*\)".*/\1/p' "$repo/brand.json" | head -n 1)
@@ -200,7 +208,8 @@ run_launcher() {
   [ -z "$r_os" ] || r_path=$here/stub-os:$r_path
   {
     printf 'cd %s || exit 99\n' "$(q "$C/work")"
-    # HOME-GUARD: no CLAUDE_CONFIG_DIR of the caller's reaches the launcher or its claude
+    # HOME-GUARD: no CLAUDE_CONFIG_DIR of the caller's reaches the launcher or its claude (the
+    # caller's Claude Code and XDG variables went at start; this line holds for a case on its own)
     printf 'unset CLAUDECODE CLAUDE_CONFIG_DIR XDG_RUNTIME_DIR XDG_CACHE_HOME %s\n' "$envname"
     printf 'export PATH=%s:"$PATH" TMPDIR=%s HOME=%s STUB_DIR=%s STUB_LAUNCH_ENV=%s STUB_NOTES=%s\n' \
       "$(q "$r_path")" "$(q "$C/tmp")" "$(q "$C/home")" "$(q "$C")" "$envname" "$(q "$here/notes")"

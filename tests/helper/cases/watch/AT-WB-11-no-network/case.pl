@@ -18,6 +18,8 @@ my %got;
               my $prog = 'BEGIN { *CORE::GLOBAL::socket = sub { die "socket called\n" }; '
                        . '*CORE::GLOBAL::connect = sub { die "connect called\n" } } my $m = shift @ARGV; do $m; die $@ if $@;';
               local $ENV{STORE_TEST_NO_GIT} = '1';
+              # HOME-GUARD: %ENV changed since the driver checked it; the perl child below starts with it
+              homeguard::check(\%ENV, q(report));
               my $q = sub { my $s = shift; $s =~ s/'/'\\''/g; return "'$s'" };
               $got{out} = `perl -e @{[ $q->($prog) ]} @{[ $q->($main) ]} report --out @{[ $q->("$v->{TMP}/out") ]} 2>&1`;
               $got{exit} = $? >> 8;
