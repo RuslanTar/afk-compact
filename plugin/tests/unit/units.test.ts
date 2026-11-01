@@ -173,6 +173,15 @@ describe('AT-P-07 assembler (14-character name)', () => {
       }
     }
   })
+  // 0.1.3 small fixes: 3 of 77 saved summaries had no closing line, each the summary Claude Code
+  // installed byte for byte (the summarizer left it out, where it stood mid-text after Next steps):
+  // the closing-line rule is the last line on every path, after the rules and Measured facts.
+  test('SENTINEL-LAST: every main instructions path ends with the closing-line rule', () => {
+    for (const tags of combos(TAGS['handoff-instructions'] ?? [])) {
+      const lines = assembleText(text('handoff-instructions'), tags, { ...WORST, measured_facts: 'Measured facts (x):\ngit: branch main' }).trimEnd().split('\n')
+      expect([tags.join('+'), lines[lines.length - 1]]).toEqual([tags.join('+'), 'Last line before </summary>: ' + sentinelText(NAME, WORST.nonce)])
+    }
+  })
   // D-17: the static core has a soft 4,500-char target only (tools/assemble prints ADVISORY);
   // the hard guard is the channel total below, with the D-18 `[handoff]` line included; 8,720 B since
   // the owner's 2026-10-26 plugin-text ruling ("Raise the cap"; tools/assemble BUDGETS), 8,800 B since the
