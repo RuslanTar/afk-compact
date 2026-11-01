@@ -110,17 +110,20 @@ require "sha.pm";
 # shared with the watch driver; the real folders are read once, here, before anything is
 # localised: HOME as given and the account's home (getpwuid), each by real path, the
 # CLAUDE_CONFIG_DIR and the state folders given (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA, ...:
-# homeguard::PATH_VARS). A TMPDIR that is relative, has a `..` part or lies at or under a real
-# config or state folder ends the run there, exit 2, before anything is written (the run dir, the
-# staged plugin and the case folders would land in it). Then the caller's Claude Code, XDG, helper
-# and git variables go (homeguard::drop_env: a runner started in a Claude Code session or a plugin
-# hook passes no CLAUDE_PLUGIN_DATA, XDG_STATE_HOME, CLAUDE_PLUGIN_OPTION_* or STORE_TEST_* to a
-# builtin run in-process or a command it starts, and one started from a git hook no GIT_DIR or
-# GIT_INDEX_FILE to the fixture git commands; a helper call's environment is built fresh anyway,
+# homeguard::PATH_VARS). A TMPDIR that is relative, has a `..` part, lies at or under a real
+# config or state folder or at or above a real home ends the run there, exit 2, before anything is
+# written (the run dir, the staged plugin and the case folders would land in it). Then the
+# caller's Claude Code, XDG, helper, git and shell start-up variables go (homeguard::drop_env: a
+# runner started in a Claude Code session or a plugin hook passes no CLAUDE_PLUGIN_DATA,
+# XDG_STATE_HOME, CLAUDE_PLUGIN_OPTION_* or STORE_TEST_* to a builtin run in-process or a command
+# it starts, one started from a git hook no GIT_DIR or GIT_INDEX_FILE to the fixture git commands,
+# and none passes a BASH_ENV, ENV or ZDOTDIR; a helper call's environment is built fresh anyway,
 # child_env). Once its run dir exists the runner itself runs with a temp HOME ($RUN_TMP/home),
 # each case with its own $HOME (run_case), and home_guard() checks the environment of every child
-# it starts before the fork: HOME, CLAUDE_CONFIG_DIR, the state folders and every link under them
-# (homeguard::check). What a case passes a child in its arguments or stdin is not read.
+# it starts before the fork, and of the case before each of the runner's own writes under the case
+# HOME (write_options, setup) and each builtin: HOME, CLAUDE_CONFIG_DIR, the state folders and
+# every link under them (homeguard::check). What a case passes a child in its arguments or stdin
+# is not read.
 require "$HERE/homeguard.pm";
 eval { homeguard::init(); 1 } or do { print STDERR $@; exit 2 };
 # the docker config folder of the real HOME, read for its endpoint once (docker_endpoint, below:
@@ -179,7 +182,8 @@ $FIXTURES_DIR //= "$REPO/tests/fixtures";
 $REPO_TMP_BASE =~ s{/+$}{};
 # HOME-GUARD: a case's HOME and CLAUDE_CONFIG_DIR may also lie under the repo's tmp/ (tmp_base
 # "repo"; --repo-tmp), beside the system temp folder as given at start and /tmp; one at or under a
-# real config or state folder ends the run, exit 2, before anything is written there
+# real config or state folder or at or above a real home ends the run, exit 2, before anything is
+# written there
 eval { homeguard::add_temp_root($REPO_TMP_BASE); 1 } or do { print STDERR $@; exit 2 };
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
@@ -818,6 +822,9 @@ sub run_case {
 
 sub write_options {
     my ($o, $V) = @_;
+    # HOME-GUARD: the runner writes the case HOME's .claude/settings.json itself; a .claude a step
+    # linked into a real config folder would take the write (and its rename) there
+    home_guard({ %ENV, HOME => $V->{HOME} }, 'options');
     my $f = "$V->{HOME}/.claude/settings.json";
     my $raw = -f $f ? util::read_file($f) : undef;
     my $s = defined $raw ? eval { jsonc::decode($raw) } : undef;
@@ -1149,6 +1156,9 @@ sub scalar_text {
 
 sub setup {
     my ($s, $V, $case, $st, $cdir) = @_;
+    # HOME-GUARD: a setup action writes in this process, mostly under the case HOME; a link an
+    # earlier action made there into a real home, config or state folder would take the write
+    home_guard({ %ENV, HOME => $V->{HOME} }, 'setup');
     $s = subst_deep($s, $V);
     my $now = $st->{now} // $case->{now};
     if (exists $s->{write}) {
@@ -3062,8 +3072,8 @@ sub builtin {
         # A failing child keeps its work dir (BH-6); under a given "tmpdir", which outlives the
         # case, it is removed here once the output is read, and the failure says so. "env"
         # ({name: value}) is laid over the child's environment too (home_guard checks it), and
-        # each of "empty" [folders] must hold no file or link after the run. "args" [words] go to the
-        # runner before the folders (--repo-tmp DIR); "stderr": true reads its stderr with its
+        # each of "empty" [folders] must hold no file or link after the run. "args" [words] go to
+        # the runner before the folders (--repo-tmp DIR); "stderr": true reads its stderr with its
         # stdout (a run the runner ends before any case, HOME-GUARD at start); "direct": true
         # executes run.pl itself, as tools/check's X-H does, not through perl.
         my @cases = @{ $a->{cases} || [] };
@@ -3112,9 +3122,11 @@ sub builtin {
     }
     if ($name eq 'runner_env') {
         # AT-RN-06 (HOME-GUARD): the runner's own environment inside a case holds no Claude Code,
-        # XDG, helper or git name (homeguard::drop_env took the caller's at start), so a builtin run
-        # in-process or a command it starts reads no state folder, trace file or repo of the caller's
-        push @e, "the runner's environment holds $_=$ENV{$_} (a name the runner drops at start)" for sort grep { /\A(?:CLAUDE|XDG_|STORE_|GIT_)/ } keys %ENV;
+        # XDG, helper, git or shell start-up name (BASH_ENV, ENV, ZDOTDIR; homeguard::drop_env
+        # took the caller's at start), so a builtin run in-process or a command it starts reads no
+        # state folder, trace file, repo or start-up file of the caller's
+        push @e, "the runner's environment holds $_=$ENV{$_} (a name the runner drops at start)"
+            for sort grep { /\A(?:CLAUDE|XDG_|STORE_|GIT_|BASH_ENV\z|ENV\z|ZDOTDIR\z)/ } keys %ENV;
         # AT-RN-08: "docker_host": the DOCKER_HOST the runner set at start from the docker context
         # its HOME's .docker/config.json names
         push @e, "the runner's DOCKER_HOST is " . ($ENV{DOCKER_HOST} // '(unset)') . ", want $a->{docker_host}"
@@ -3146,9 +3158,14 @@ sub builtin {
         # CLAUDE_CONFIG_DIR or CLAUDE_PLUGIN_DATA in its .claude, at the real home an
         # XDG_CACHE_HOME or XDG_CONFIG_HOME at its .cache or .config; an XDG_STATE_HOME,
         # XDG_CACHE_HOME, CLAUDE_PLUGIN_DATA, folder option or CLAUDE_CODE_TMPDIR outside temp,
-        # relative (an option), through `..`, or in a real config or state folder; and a declared
-        # home (case_home) at the account's home. The child is `true`, so a guard that lets one
-        # through starts nothing that reads or writes a home. A temp HOME, a CLAUDE_CONFIG_DIR
+        # relative (an option), through `..`, or in a real config or state folder; a
+        # CLAUDE_CONFIG_DIR under temp outside HOME with a link below it into a real state folder;
+        # an XDG_DATA_HOME at the real home's .local/share; and a declared home (case_home) at the
+        # account's home. With a temp HOME whose .claude links to the real one, the runner's own
+        # options write (write_options) and a setup write are refused before they write, and a
+        # builtin run after a setup link below a temp HOME into the real .local/state is refused
+        # before it runs. The child is `true`, so a guard that lets one through starts nothing
+        # that reads or writes a home. A temp HOME, a CLAUDE_CONFIG_DIR
         # under it, its .claude and settings.json linked inside temp, its .local and .cache linked
         # inside temp, links below it into temp (one dangling, one loop), state folders under
         # temp and the values the helper reads as unset start.
@@ -3190,7 +3207,36 @@ sub builtin {
         }
         chdir($back) or die "home_guard: chdir $back: $!\n";
         chmod(0700, @{ $t->{restore} });
-        push @e, "rows tried: $n, want at least 61" if $n < 61;
+        push @e, "rows tried: $n, want at least 63" if $n < 63;
+        # the runner's own writes under a case HOME: with a temp HOME whose .claude links to the
+        # stand-in account's real one, an options write (write_options) and a setup write are
+        # refused before they write, so the stand-in settings.json stays as it was and nothing
+        # lands beside it; a builtin run after a setup link below a temp HOME into the stand-in
+        # real home's .local/state is refused before it runs
+        my $sset = "$t->{account}/.claude/settings.json";
+        my $was = util::read_file($sset) // '';
+        my $gerr = sub { my ($what, $err, $want) = @_;
+                         push @e, "$what: " . ($err eq '' ? 'not refused' : "died with '$err'") . ", want HOME-GUARD ... $want" unless $err =~ $want };
+        {
+            local $ENV{HOME} = "$tmp/h-clink";
+            my $oe = eval { write_options({ hg => 1 }, { %$V, HOME => "$tmp/h-clink" }); 1 } ? '' : $@;
+            $gerr->('an options write under a temp HOME whose .claude links to the real one', $oe,
+                    qr{\AHOME-GUARD: options: \S+/h-clink/\.claude leads to a real config folder; });
+            my $se = eval { setup({ write => "$tmp/h-clink/.claude/hg-setup.json", text => "{}\n" }, { %$V, HOME => "$tmp/h-clink" }, {}, {}, $cdir); 1 } ? '' : $@;
+            $gerr->('a setup write under a temp HOME whose .claude links to the real one', $se,
+                    qr{\AHOME-GUARD: setup: \S+/h-clink/\.claude leads to a real config folder; });
+        }
+        push @e, "the stand-in real $sset changed (a runner write landed there)" if (util::read_file($sset) // '') ne $was;
+        push @e, "a setup write landed in the stand-in real config folder" if -e "$t->{account}/.claude/hg-setup.json";
+        {
+            local $ENV{HOME} = "$tmp/h-blt";
+            util::mkdir_p("$tmp/h-blt");
+            my $le = eval { setup({ symlink => "$tmp/h-blt/.local/state/p", to => "$t->{home}/.local/state/p" }, { %$V, HOME => "$tmp/h-blt" }, {}, {}, $cdir); 1 } ? '' : $@;
+            push @e, "a setup link below a temp HOME with no link yet was refused: $le" if $le ne '';
+            my $be = eval { builtin('runner_env', {}, $cdir, $V); 1 } ? '' : $@;
+            $gerr->('a builtin run after a setup link below a temp HOME into the real .local/state', $be,
+                    qr{\AHOME-GUARD: builtin runner_env: \S+/h-blt/\.local/state/p leads to a real state folder; });
+        }
         push @e, "a declared home at the account's home was taken" if eval { case_home($t->{account}); 1 };
         push @e, "a declared home under the case was refused: $@" unless eval { case_home("$tmp/h1"); 1 };
         return @e;

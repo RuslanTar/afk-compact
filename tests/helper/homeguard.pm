@@ -7,19 +7,23 @@ package homeguard;
 # watch logs under $XDG_STATE_HOME (else ~/.local/state), CLAUDE_PLUGIN_DATA and the
 # CLAUDE_PLUGIN_OPTION_* folders. The guard refuses to start a child whose environment leads into
 # the owner's real HOME, Claude Code config folder or state folders through what a child writes by:
-# HOME, CLAUDE_CONFIG_DIR, the folders of PATH_VARS, the XDG defaults under HOME, and every link
-# under those folders (a bounded walk; see check). A path a child is given in its arguments or
-# stdin is the case's to choose and is not read here.
+# HOME, CLAUDE_CONFIG_DIR, the folders of PATH_VARS, the XDG defaults under HOME, and every symbolic
+# link under those folders (a bounded walk; see check). A path a child is given in its arguments or
+# stdin is the case's to choose and is not read here. Hard links are out of scope: one is made only
+# by a process that already reaches the file by its path (which check refuses a child), cases make
+# them on purpose among their own files (AT-SW-02), and matching every file under a temp HOME
+# against every file of the real config and state folders would read the whole real ~/.claude.
 #
 # A runner calls init() once, before it changes its environment or writes anything (the real
 # HOME, the account's home, the CLAUDE_CONFIG_DIR and the state folders given are read there, and
-# a TMPDIR that is relative, has a `..` part or lies at or under a real config or state folder dies
-# there), then drops the caller's Claude Code, XDG, helper and git variables (drop_env) or starts
-# from a fresh environment (fresh_env), add_temp_root() for a temp folder of its own outside the
-# system one (which dies the same way), then check(env, what) before each child it starts. Needs
-# core's util.pm (plugin/helper/lib) loaded. Paths are compared by real path (every link
-# followed, a dangling one too: _real) and by device and inode (a case-insensitive file system
-# reads /users/me as /Users/me, which a text compare misses).
+# a TMPDIR that is relative, has a `..` part, lies at or under a real config or state folder or
+# lies at or above a real home dies there), then drops the caller's Claude Code, XDG, helper, git
+# and shell start-up variables (drop_env) or starts from a fresh environment (fresh_env),
+# add_temp_root() for a temp folder of its own outside the system one (which dies the same way),
+# then check(env, what) before each child it starts. Needs core's util.pm (plugin/helper/lib)
+# loaded. Paths are compared by real path (every link followed, a dangling one too: _real) and by
+# device and inode (a case-insensitive file system reads /users/me as /Users/me, which a text
+# compare misses).
 use strict;
 use warnings;
 
@@ -53,10 +57,12 @@ our @HOME_DIRS = qw(.local .local/state .local/share .cache .config);
 # `local` them)
 our ($WALK_MAX, $WALK_DEPTH) = (20000, 64);
 # drop_env drops these names: Claude Code's (CLAUDECODE, CLAUDE_CONFIG_DIR, CLAUDE_PLUGIN_*,
-# CLAUDE_CODE_*, ...), the XDG ones, the helper's own (STORE_*) and git's (GIT_DIR,
+# CLAUDE_CODE_*, ...), the XDG ones, the helper's own (STORE_*), git's (GIT_DIR,
 # GIT_WORK_TREE, GIT_INDEX_FILE, GIT_CONFIG*, ...: git exports GIT_DIR to its hooks, and a runner
-# started from one would put the fixture repos' commits and index into the owner's repo)
-our $DROP_RE = qr/\A(?:CLAUDE|XDG_|STORE_|GIT_)/;
+# started from one would put the fixture repos' commits and index into the owner's repo) and the
+# shell start-up files a caller names (BASH_ENV, ENV, ZDOTDIR: a shell a case starts reads them;
+# the launcher's run.sh and the watch driver's fresh environment drop them too)
+our $DROP_RE = qr/\A(?:CLAUDE|XDG_|STORE_|GIT_|BASH_ENV\z|ENV\z|ZDOTDIR\z)/;
 # fresh_env keeps only these from the caller's environment
 our $KEEP_RE = qr/\A(?:PATH|TMPDIR|TZDIR|LANG|LANGUAGE|LC_[A-Z_]+|USER|LOGNAME|SHELL|TERM|PERL5LIB|PERLLIB)\z/;
 my $INIT;
@@ -77,8 +83,10 @@ sub init {
 # run folders under (TMPDIR at start, an added root) is relative (it would be read against
 # whatever folder the runner is in), has a `..` part (the kernel applies it after links, util's
 # real_path folds it as text first: with TMPDIR=$T/L/.. and L a link into ~/.claude, a run staged
-# its plugin and case folders in ~/.claude) or is at or under a real config or state folder (with
-# TMPDIR=~/.claude the same happened before the first child was refused).
+# its plugin and case folders in ~/.claude), is at or under a real config or state folder (with
+# TMPDIR=~/.claude the same happened before the first child was refused) or holds a real home (see
+# holds_home: under_temp would read the whole home as temp, so a link to ~/.claude.json or
+# ~/.gitconfig passed).
 sub check_temp_root {
     my ($p, $what) = @_;
     return 1 unless defined $p;
@@ -86,17 +94,44 @@ sub check_temp_root {
     die "HOME-GUARD: $what $p has a .. part (applied after links); nothing written\n" if dotdot($p);
     die "HOME-GUARD: $what $p is in a real config folder; nothing written\n" if real_config($p);
     die "HOME-GUARD: $what $p is in a real state folder; nothing written\n" if real_state($p);
+    if (defined(my $h = holds_home($p))) {
+        die "HOME-GUARD: $what $p is at or above the real home $h (every file in it would read as temp); nothing written\n";
+    }
     return 1;
 }
 
+# holds_home(path) -> the real home (as its real path) that the path's real path is or holds (by
+# text or by device and inode: a parent of the home that is the path), undef for none. A home that
+# already lies under /tmp, a temp folder whatever TMPDIR is, is skipped: a temp root over it adds
+# nothing (a runner started by another one gets a temp HOME as its real one; on a host with no
+# TMPDIR its child runs take TMPDIR=/tmp).
+sub holds_home {
+    my ($p) = @_;
+    my $r = _real($p) // return undef;
+    $r =~ s{(?<=.)/+\z}{};
+    my $rid = _id($r);
+    my $tmp = _real('/tmp') // '/tmp';
+    for my $h (sort keys %{ $REAL{homes} || {} }) {
+        next if index($h, "$tmp/") == 0;
+        my @up;
+        for (my $d = $h; $d ne ''; $d =~ s{/[^/]*\z}{}) { push @up, $d }
+        push @up, '/';
+        return $h if grep { $_ eq $r || ($rid ne '' && _id($_) eq $rid) } @up;
+    }
+    return undef;
+}
+
 # real_set(home => path, account => path, config_dir => path, given => {name => value}) -> the
-# %REAL of those folders (see %REAL; a leading ~ in a given value reads as home)
+# %REAL of those folders (see %REAL; a leading ~ in config_dir or a given value reads as home, as
+# the helper's settings::config_dir reads CLAUDE_CONFIG_DIR)
 sub real_set {
     my (%a) = @_;
-    my %r = (home => $a{home}, account => $a{account}, config_dir => $a{config_dir}, given => { %{ $a{given} || {} } });
+    my $tilde = sub { my $v = $_[0]; $v =~ s{\A~(?=/|\z)}{$a{home}} if defined $v && defined $a{home}; $v };
+    my $cd = $tilde->($a{config_dir});
+    my %r = (home => $a{home}, account => $a{account}, config_dir => $cd, given => { %{ $a{given} || {} } });
     $r{homes} = _ids($a{home}, $a{account});
-    $r{configs} = _ids((map { "$_/.claude" } keys %{ $r{homes} }), $a{config_dir});
-    my @given = map { my $v = $_; $v =~ s{\A~(?=/|\z)}{$a{home}} if defined $a{home}; $v } grep { defined } values %{ $r{given} };
+    $r{configs} = _ids((map { "$_/.claude" } keys %{ $r{homes} }), $cd);
+    my @given = map { $tilde->($_) } grep { defined } values %{ $r{given} };
     $r{states} = _ids((map { ("$_/.local", "$_/.cache", "$_/.config") } keys %{ $r{homes} }), @given);
     return %r;
 }
@@ -152,9 +187,10 @@ sub _ids {
     return \%m;
 }
 
-# drop_env(env hash): drops the caller's Claude Code, XDG and helper variables (DROP_RE), so a
-# runner started inside a Claude Code session or a plugin hook passes none of them (its
-# CLAUDE_PLUGIN_DATA, XDG_STATE_HOME, ...) to a case or child. Returns the names dropped.
+# drop_env(env hash): drops the caller's Claude Code, XDG, helper, git and shell start-up
+# variables (DROP_RE), so a runner started inside a Claude Code session or a plugin hook passes
+# none of them (its CLAUDE_PLUGIN_DATA, XDG_STATE_HOME, BASH_ENV, ...) to a case or child.
+# Returns the names dropped.
 sub drop_env {
     my ($env) = @_;
     my @k = sort grep { $_ =~ $DROP_RE } keys %$env;
@@ -362,8 +398,10 @@ sub case_home {
 # `local %homeguard::REAL = %{ $t->{real} }`, so no link into the owner's real home or config
 # folder is made and no row's child could reach them. Each row: {what, env (laid over the child's;
 # undef drops a name), ok (started) or want (a regex of the refusal), temp (the temp folders, for
-# @TEMP_ROOTS)}. The case-variant rows (another case of the stand-in's name, the same folder on a
-# case-insensitive file system) are there only where the file system folds case.
+# @TEMP_ROOTS), budget ({max, depth}: the link walk's WALK_MAX and WALK_DEPTH for the row, {} for
+# the defaults)}. The case-variant rows (another case of the stand-in's name, the same folder on a
+# case-insensitive file system) are there only where the file system folds case. restore: the
+# folders a runner gives mode 0700 again after the rows (one this process cannot list).
 sub self_rows {
     my ($tmp, $th) = @_;
     my ($sh, $sa, $sc) = ("$tmp/Standin-Home", "$tmp/standin-acct", "$tmp/standin-cfg");
@@ -393,7 +431,7 @@ sub self_rows {
                            map { "$tmp/$_" } qw(h-deep/.local/state h-deepcfg/.claude h-deepcache/.cache h-deep2/.local/state/p/q
                                                 h-ddeep/.local/state h-ddout/.cache h-dhome/.local/share h-hop/.local/state hop-mid
                                                 xs-deep hr-deep cfg-slink h-deepok/.local/state deep-in-temp/p h-dok/.local/state
-                                                h-loop/.local h-many h-depth/a/b/c/d));
+                                                h-loop/.local h-many h-depth/a/b/c/d cfg-deep/plugins));
     for my $i (1 .. 8) { my $f = "$tmp/h-many/f$i"; next if -e $f; open(my $fh, '>', $f) or die "homeguard: write $f: $!\n"; close $fh }
     %ln = (%ln,
            # the review's scenarios: the helper's state folder under a temp HOME's .local/state
@@ -406,7 +444,9 @@ sub self_rows {
            "$tmp/xs-deep/p" => "$sh/.local/state/p", "$tmp/hr-deep/.watch" => "$sh/.local/state/p",
            "$tmp/cfg-slink/settings.json" => "$sa/.claude/settings.json", "$tmp/h-deepok/.local/state/p" => "$tmp/deep-in-temp/p",
            "$tmp/h-dok/.local/state/p" => "$tmp/gone-in-temp", "$tmp/h-loop/.local/a" => "$tmp/h-loop/.local/b",
-           "$tmp/h-loop/.local/b" => "$tmp/h-loop/.local/a", "$tmp/xs-dangle" => "$sh/.local/state/xs-gone");
+           "$tmp/h-loop/.local/b" => "$tmp/h-loop/.local/a", "$tmp/xs-dangle" => "$sh/.local/state/xs-gone",
+           # a CLAUDE_CONFIG_DIR outside HOME is walked too
+           "$tmp/cfg-deep/plugins/data" => "$sh/.local/state/p");
     for my $l (sort keys %ln) { -l $l or symlink($ln{$l}, $l) or die "homeguard: symlink $l: $!\n" }
     # a folder a child can go through but this process cannot list (not as root, who lists it)
     my @restore;
@@ -492,6 +532,10 @@ sub self_rows {
          qr/XDG_STATE_HOME \S+ is in a real state folder; /],
         ['a CLAUDE_CONFIG_DIR under temp whose settings.json links to the real one', { HOME => $th, CLAUDE_CONFIG_DIR => "$tmp/cfg-slink" },
          qr{/cfg-slink/settings\.json leads to a real config folder; }],
+        ["a CLAUDE_CONFIG_DIR under temp outside HOME with a link below it into the real home's .local/state",
+         { HOME => $th, CLAUDE_CONFIG_DIR => "$tmp/cfg-deep" }, qr{/cfg-deep/plugins/data leads to a real state folder; }],
+        ["XDG_DATA_HOME at the real home's .local/share", { HOME => $th, XDG_DATA_HOME => "$sh/.local/share" },
+         qr/XDG_DATA_HOME \S+ is in a real state folder; /],
         ['a temp HOME with more entries than the link walk reads', { HOME => "$tmp/h-many" }, qr/ more than 5 entries under HOME, /, undef, undef, { max => 5 }],
         ['a temp HOME with folders deeper than the link walk goes', { HOME => "$tmp/h-depth" }, qr{/h-depth/a/b/c lies more than 2 folders down }, undef, undef,
          { depth => 2 }],
