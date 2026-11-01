@@ -41,11 +41,12 @@ our $START_TMPDIR;
 # HOME in HOME_DIRS) may lie under: the system temp folder as given at start, /tmp, and each added
 # one (real paths, filled on first use; a self-test may `local` it)
 our (@EXTRA_TEMP, @TEMP_ROOTS);
-# the folders a home may lie under and still be a throwaway one, which a temp root may hold
-# (holds_home, throwaway): /tmp, a temp folder whatever TMPDIR is (tests/launcher/in-docker.sh
-# runs with HOME and TMPDIR /tmp/t), and the core runner's repo tmp/ (run.pl adds it with
-# add_throwaway: a child run of a case under it gets that case's HOME as its real one, and adds
-# that tmp/ as a temp root)
+# the folders a HOME given (never the account's home) may lie under and still be a throwaway one,
+# which a temp root may hold (holds_home, throwaway): /tmp, a temp folder whatever TMPDIR is
+# (tests/launcher/in-docker.sh runs with HOME and TMPDIR /tmp/t), and the core runner's repo tmp/
+# (run.pl adds it with add_throwaway: a child run of a case under it gets that case's HOME as its
+# real one, and adds that tmp/ as a temp root); holds_home reads the system temp folder as given
+# at start as one too (on macOS a HOME made with `mktemp -d` lies under TMPDIR)
 our @THROWAWAY = ('/tmp');
 # the folders a child writes besides HOME and CLAUDE_CONFIG_DIR, as variables: the XDG base
 # folders (the helper's default handoff root reads $XDG_STATE_HOME, the launcher's cache
@@ -107,17 +108,24 @@ sub check_temp_root {
 }
 
 # holds_home(path) -> the real home (as its real path) that the path's real path is or holds (by
-# text or by device and inode: a parent of the home that is the path), undef for none. A home that
-# lies under a THROWAWAY folder is skipped: it is a temp folder already (a runner started by
-# another one gets a temp HOME as its real one; on a host with no TMPDIR its child runs take
-# TMPDIR=/tmp).
+# text or by device and inode: a parent of the home that is the path), undef for none. A HOME
+# given that is not the account's home (by real path or device and inode) and lies strictly under
+# a THROWAWAY folder or the system temp folder as given at start is skipped: it is a temp folder
+# already (a runner started by another one gets a temp HOME as its real one; on a host with no
+# TMPDIR its child runs take TMPDIR=/tmp; `mktemp -d` makes one under TMPDIR). The account's home
+# is never skipped.
 sub holds_home {
     my ($p) = @_;
     my $r = _real($p) // return undef;
     $r =~ s{(?<=.)/+\z}{};
     my $rid = _id($r);
+    my $acct = _real($REAL{account});
+    $acct =~ s{(?<=.)/+\z}{} if defined $acct;
+    my $st = defined $START_TMPDIR && !dotdot($START_TMPDIR) ? _real($START_TMPDIR) : undef;
+    $st =~ s{/+\z}{} if defined $st;
     for my $h (sort keys %{ $REAL{homes} || {} }) {
-        next if throwaway($h);
+        my $own = defined $acct && ($h eq $acct || (_id($h) ne '' && _id($h) eq _id($acct)));
+        next if !$own && (throwaway($h) || (defined $st && index($h, "$st/") == 0));
         my @up;
         for (my $d = $h; $d ne ''; $d =~ s{/[^/]*\z}{}) { push @up, $d }
         push @up, '/';
@@ -232,8 +240,8 @@ sub fresh_env {
 }
 
 # add_temp_root(path...): more temp folders (the repo's tmp/ of a --repo-tmp run); dies, as
-# check_temp_root, for one that is relative, has a `..` part or lies at or under a real config or
-# state folder
+# check_temp_root, for one that is relative, has a `..` part, lies at or under a real config or
+# state folder or lies at or above a real home
 sub add_temp_root {
     check_temp_root($_, 'temp folder') for grep { defined } @_;
     push @EXTRA_TEMP, grep { defined } @_;
@@ -598,6 +606,48 @@ sub self_row_errs {
             unless ($err // '') =~ /\AHOME-GUARD: / && $err =~ $row->{want};
     }
     return @e;
+}
+
+# temp_root_rows(tmp) -> {tried => [what...], errs => [failure...]}: check_temp_root's start-up
+# decision on a TMPDIR at or above a home, one table for both runners (AT-RN-06, AT-RN-07), with
+# stand-ins under tmp/tr (no THROWAWAY folder, the start TMPDIR set per row): a TMPDIR that holds a
+# HOME given made in it (as `mktemp -d` makes one under TMPDIR) is taken; one that is that HOME,
+# the account's home (also under the start TMPDIR: the account's home is never a throwaway one) or
+# holds it, or is / is refused; so is another case of the HOME given's, the account home's or its
+# parent's name where the file system folds case (only the device and inode compare sees those).
+sub temp_root_rows {
+    my ($tmp) = @_;
+    my $b = "$tmp/tr";
+    my ($g, $a) = ("$b/t/home", "$b/acct");
+    util::mkdir_p($_) for ($g, $a);
+    my %real = real_set(home => $g, account => $a);
+    my $vary = sub { my $v = $_[0]; $v =~ s{([^/]+)\z}{ my $x = $1; $x eq uc $x ? lc $x : uc $x }e; $v };
+    my $held = qr/ is at or above the real home /;
+    # [what, start TMPDIR, the folder checked, want (undef: taken)]
+    my @rows = (["a TMPDIR that holds a HOME given made in it", "$b/t", "$b/t", undef],
+                ['a TMPDIR at the HOME given', $g, $g, $held],
+                ["a TMPDIR at the account's home under the start TMPDIR", $b, $a, $held],
+                ["a TMPDIR that holds the account's home", $b, $b, $held],
+                ['a TMPDIR of /', '/', '/', $held]);
+    my ($vg, $va, $vb) = map { $vary->($_) } ($g, $a, $b);
+    if (_id($va) ne '' && _id($va) eq _id($a)) {
+        push @rows, ['a TMPDIR at the HOME given by another case of its name', $vg, $vg, $held],
+                    ["a TMPDIR at the account's home by another case of its name", $b, $va, $held],
+                    ["a TMPDIR that holds the account's home by another case of its name", $b, $vb, $held];
+    }
+    my (@tried, @e);
+    for my $r (@rows) {
+        my ($what, $st, $p, $want) = @$r;
+        push @tried, $what;
+        local %REAL = %real;
+        local @THROWAWAY = ();
+        local $START_TMPDIR = $st;
+        my $err = eval { check_temp_root($p, 'TMPDIR'); 1 } ? '' : $@;
+        if (!$want) { push @e, "$what ($p): refused: $err" if $err ne ''; next }
+        push @e, "$what ($p): " . ($err eq '' ? 'taken' : "died with '$err'") . ", want HOME-GUARD ... $want"
+            unless $err =~ /\AHOME-GUARD: TMPDIR / && $err =~ $want;
+    }
+    return { tried => \@tried, errs => \@e };
 }
 
 1;

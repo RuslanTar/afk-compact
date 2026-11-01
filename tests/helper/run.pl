@@ -3174,7 +3174,10 @@ sub builtin {
         # account's home. With a temp HOME whose .claude links to the real one, the runner's own
         # options write (write_options) and a setup write are refused before they write, and a
         # builtin run after a setup link below a temp HOME into the real .local/state is refused
-        # before it runs. The child is `true`, so a guard that lets one through starts nothing
+        # before it runs. A TMPDIR that holds a HOME given made in it is taken at start; one at that
+        # HOME, at or above the account's home (also under the start TMPDIR, also another case of
+        # its or its parent's name), or /, is refused (homeguard::temp_root_rows). The child is
+        # `true`, so a guard that lets one through starts nothing
         # that reads or writes a home. A temp HOME, a CLAUDE_CONFIG_DIR
         # under it, its .claude and settings.json linked inside temp, its .local and .cache linked
         # inside temp, links below it into temp (one dangling, one loop), state folders under
@@ -3218,6 +3221,8 @@ sub builtin {
         chdir($back) or die "home_guard: chdir $back: $!\n";
         chmod(0700, @{ $t->{restore} });
         push @e, "rows tried: $n, want at least 63" if $n < 63;
+        # the start-up decision on a TMPDIR at or above a home (homeguard::temp_root_rows)
+        push @e, @{ homeguard::temp_root_rows($tmp)->{errs} };
         # homeguard::throwaway, which the at-or-above-home child runs read to skip themselves, holds
         # a folder under /tmp or the repo's tmp/ and no other
         my $rtmp = util::real_path($tmp);
