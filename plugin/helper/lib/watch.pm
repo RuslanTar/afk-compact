@@ -4,6 +4,7 @@ package watch;
 #   watch::on_hook(event, payload, ctx)   rows written at hook time
 #   watch::on_stop(ctx, deadline)         sweep + rules + delivery at main Stop
 #   watch::status_lines(sid[, ctx])       lines for `status` (MOD-SPEC §11)
+#   watch::verdict_line(sid[, ctx])       the verdict line that opens `status`
 #
 # ctx is described in lib/watch/ctx.pm. Every entry point is wrapped: it never
 # dies, never prints and never writes stderr (a hook's stdout is model-visible
@@ -196,6 +197,21 @@ sub status_lines {
         watch::status::lines($ctx);
     };
     return ref $lines eq 'ARRAY' ? $lines : ['Watcher: status unavailable'];
+}
+
+# The one-line verdict that opens `status` (lib/watch/status.pm verdict), or undef (watcher
+# off, or it could not be read).
+sub verdict_line {
+    my ($sid, $ctx) = @_;
+    local $SIG{__WARN__} = sub { };
+    $ctx = _prepare($ctx);
+    $ctx->{sid} = $sid if defined $sid;
+    my $line = eval {
+        local $SIG{__DIE__};
+        require watch::status;
+        watch::status::verdict($ctx);
+    };
+    return (defined $line && !ref $line) ? $line : undef;
 }
 
 1;

@@ -8,7 +8,7 @@ description: 'Show handoff plugin status: "handoff status", "did compaction save
 `<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/afk-compact-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..`; use that root. If that has `${` too or no helper is there, say so and stop.
 
 Run `<store> status --sid '${CLAUDE_SESSION_ID}'` and relay its lines as printed, in its order. If that `--sid` value is empty or has `${`, run it as written: never guess or invent a session id (no folder name or other id). The helper then prints `session: unknown (no session id)` and only the lines that are not about this session.
-- `watcher:` first (its state, log size, how to share or turn it off), then `notice: <text>` while the first-run notice is unshown;
+- `ok: …` or `attention: …` first (one line: saved copies and open alerts; without a session id, the last 7 days; none while the watcher is off), then `watcher:` (its state, log size, how to share or turn it off), then `notice: <text>` while the first-run notice is unshown;
 - effective thresholds with `min_window`, clamped values marked; `plugin compactions off: …` when the window is below it;
 - `seat_state` of the last 5 compactions, with trigger, verdict and copy path;
 - open escalations and open watcher alerts, with the last 7 days' counts by rule;

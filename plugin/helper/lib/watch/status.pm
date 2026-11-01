@@ -53,6 +53,71 @@ sub lines {
     return \@out;
 }
 
+# 0.1.3 alert noise: the one-line verdict that opens `status` (cmd/status.pl), or undef while
+# the watcher is off. With a session id it reads this session: its main compactions in the
+# rollup (precomputed ones left out) with a saved copy, and its open alerts, the warn and
+# critical ones (an info alert is a note and asks for nothing). Without one it reads the store
+# over the last 7 days, as the 7-day counts do. `ok` only when every compaction has its copy
+# and no alert is open; else `attention`, with the open alerts by rule.
+#   ok: 5/5 compactions saved this session, no open alerts
+#   attention: 2 open alerts (A-01, A-05); 4/5 compactions saved this session
+my $SAVED = qr/\A(?:saved|unattributed|late|exists)\z/;
+sub verdict {
+    my ($ctx) = @_;
+    watch::ctx::init($ctx);
+    return undef unless watch::ctx::watcher_on($ctx);
+    my (@alerts, @rolls, $scope);
+    if (defined $ctx->{sid} && $ctx->{sid} =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/) {
+        $scope = 'this session';
+        @alerts = @{ watch::alerts::load_existing($ctx)->{rows} };
+        @rolls = _rollup_rows(watch::ctx::sid_dir($ctx) . '/compactions.jsonl');
+    } else {
+        $scope = 'in the last 7 days';
+        my $cut = $ctx->{now} - 7 * 86400;
+        my $w = $ctx->{watch};
+        my $recent = sub { my $t = watch::io::parse_iso($_[0]{ts}); return defined $t && $t >= $cut };
+        for my $f (watch::io::list_dir($w)) {
+            my $mt = (stat "$w/$f")[9];
+            next unless defined $mt && $mt >= $cut;
+            if ($f =~ /\.alerts\.jsonl\z/) {
+                push @alerts, grep { ($_->{ev} // '') eq 'alert' && $recent->($_) } @{ watch::io::read_jsonl("$w/$f") };
+            } elsif ($f =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/ && -d "$w/$f") {
+                push @rolls, grep { $recent->($_) } _rollup_rows("$w/$f/compactions.jsonl");
+            }
+        }
+    }
+    my %open;
+    $open{ $_->{rule} // '?' }++ for grep { ($_->{severity} // '') =~ /\A(?:critical|warn)\z/ } @alerts;
+    my $n = 0;
+    $n += $_ for values %open;
+    my $saved = grep { defined $_->{copy} && !ref $_->{copy} && $_->{copy} =~ $SAVED } @rolls;
+    my $copies = @rolls ? sprintf('%d/%d compactions saved %s', $saved, scalar @rolls, $scope) : "no compactions $scope";
+    return "ok: $copies, no open alerts" if !$n && $saved == @rolls;
+    return "attention: $copies, no open alerts" unless $n;
+    return sprintf('attention: %d open alert%s (%s); %s', $n, ($n == 1 ? '' : 's'), join(', ', sort keys %open), $copies);
+}
+
+# The main compaction rows of one rollup stream (precomputed ones and core's
+# `compaction_boundary` rows left out), one per compaction: the last row of a nonce counts (a
+# late copy from reconcile after the first row); rows without a nonce count each.
+sub _rollup_rows {
+    my ($p) = @_;
+    return () unless -f $p && !-l $p;
+    my (%by, @order);
+    my $i = 0;
+    for my $r (@{ watch::io::read_jsonl($p) }) {
+        next unless ($r->{ev} // 'compaction') eq 'compaction' && ($r->{actor} // '') eq 'main';
+        my $pc = $r->{precomputed};
+        $pc = $$pc if ref $pc eq 'SCALAR';
+        next if $pc && !ref $pc;
+        my $n = $r->{nonce};
+        my $k = (defined $n && !ref $n && $n ne '' && $n ne 'none') ? "n:$n" : 'i:' . $i++;
+        push @order, $k unless exists $by{$k};
+        $by{$k} = $r;
+    }
+    return map { $by{$_} } @order;
+}
+
 # C-STORE D4/D10 (MOD-SPEC §5.8): the stashes the cross-session finish cannot reach
 # because their session left no per-process record (<root>/.sessions/by-pid/*.{live,ended}-
 # <sid8>.json). Counts and sid8s only; one line, shown only when the count is not zero.

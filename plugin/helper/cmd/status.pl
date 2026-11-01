@@ -25,6 +25,7 @@
 # 0.1.2 visible defaults: the `settings values:` block after the `settings:` line (each value with
 # its source and default; a warning per saved ""), also without a session id, and the user-run
 # `settings reset <key> --apply` line.
+# 0.1.3 (alert noise): a one-line verdict comes before the watcher line (`ok: …` or `attention: …`).
 use strict;
 use warnings;
 use utf8;
@@ -75,7 +76,7 @@ sub run {
         args::out('status: no log folder (' . (rc::root_reason('log_dir') // 'unset') . ')', root_lines());
         return 0;
     }
-    push @out, watcher_lines();
+    push @out, verdict_lines($sid), watcher_lines();
     if (!defined $sid) {
         push @out, "session: unknown (no session id); this session's compactions, escalations, halt, policy and hook rows are not shown";
         push @out, sprintf('thresholds: settings only (target %s · soft max %s · min_window %s)',
@@ -305,6 +306,15 @@ sub legacy_lines {
     }
     push @out, '  migrate (user-run, above) lists what it would copy into the new folders; --apply copies; nothing is deleted' if @out && grep { /read-only/ } @out;
     return @out;
+}
+
+# 0.1.3: the watcher's one-line verdict opens the output (lib/watch/status.pm verdict): this
+# session's saved copies and open alerts, or the store's over 7 days without a sid; none while
+# the watcher is off.
+sub verdict_lines {
+    my ($sid) = @_;
+    my $v = eval { require "watch.pm"; watch::verdict_line($sid) };
+    return (defined $v && !ref $v) ? ($v) : ();
 }
 
 # watcher lines (WP-watch): this session's alerts only with a sid, then the store-wide counts.

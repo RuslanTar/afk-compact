@@ -16,7 +16,7 @@
    "expect": {"exit": 0, "stdout": "seen\n"}},
   {"name": "status: no notice line once claimed",
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_has": ["\\Awatcher: shadow · "], "stdout_lacks": ["^notice: "]}},
+   "expect": {"exit": 0, "stdout_has": ["\\A(?:ok|attention): [^\\n]*\\nwatcher: shadow · "], "stdout_lacks": ["^notice: "]}},
   {"name": "version bump shows again",
    "argv": ["notice", "claim", "--id", "watcher-2"],
    "expect": {"exit": 0, "stdout": "show\n", "files": [{"path": "$WATCH/notice/watcher-2.shown", "mode": "0600"}]}},
