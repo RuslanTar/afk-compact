@@ -1,0 +1,10 @@
+{
+ "id": "AT-RN-09 (the runner files tools/check executes are executable)",
+ "note": "tools/check's X-H executes tests/helper/run.pl itself (subprocess, no perl in front) and the launcher cases run tests/launcher/run.sh; a commit once dropped run.pl's executable bit (100755 to 100644), which ends X-H with a PermissionError instead of a failing case. A child run that executes run.pl directly passes its one case, and run.pl and tests/launcher/run.sh are executable files and, in a git work tree, 100755 in the index. The watch driver (run-watch.pl) is run through perl and stays 100644",
+ "steps": [
+  {"name": "a child run that executes run.pl itself, as X-H does", "lib": "runner_child",
+   "args": {"tmp": "$TMP", "dir": "_dx01", "exit": 0, "direct": true, "stdout_has": ["^# passed 1, failed 0, skipped 0, not run 0$"]}},
+  {"name": "run.pl and the launcher cases' run.sh are executable, also in git's index", "lib": "runner_modes",
+   "args": {"files": ["tests/helper/run.pl", "tests/launcher/run.sh"]}}
+ ]
+}

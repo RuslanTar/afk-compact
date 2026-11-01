@@ -1,0 +1,6 @@
+{
+ "id": "AT-RN-09-inner-pass",
+ "note": "run by AT-RN-09 only (discovery skips _ folders), whose child run executes run.pl directly: one passing case",
+ "exec": ["/bin/sh", "-c", "exit 0"],
+ "expect": {"exit": 0}
+}
