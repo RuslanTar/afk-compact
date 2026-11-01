@@ -612,6 +612,7 @@ Under `log_dir` (default `<handoff_root>/.watch/`):
 | `<session>/queue-adds.jsonl` | One row per question sent to `queue_cmd add`: client id, result, queue id. No question text |
 | `<watch>/queue-caps.json` | Whether your `queue_cmd` supports `add`, cached for a day |
 | `evidence-index.tsv`, `heal/`, `version.json` | Evidence dedupe index, restart counters of the resume skill, last seen Claude Code version |
+| `<watch>/last-version` | The Claude Code version the last session start ran, for the version change row in the log. It goes into the data folder Claude Code gives this plugin (`CLAUDE_PLUGIN_DATA`, `<config>/plugins/data/<plugin>-<marketplace>`) when that variable names it, else here; a folder another plugin's variable names is never written |
 | `.orphans/` | Empty markers for sessions that still have raw summary text under `pending/` |
 | `notice/` | One marker per notice already shown |
 | `export-salt`, `install-id` | Written the first time you make a report: a random salt for the hashed ids in reports, which never leaves your machine, and a random install id |

@@ -7,13 +7,13 @@
   {
    "setup": [
     {
-     "write": "$TMP/data/last-version",
+     "write": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
      "text": "2.1.304\n"
     }
    ],
    "env": {
     "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.305",
-    "CLAUDE_PLUGIN_DATA": "$TMP/data"
+    "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/$BRAND-inline"
    },
    "argv": [
     "hook",
@@ -42,7 +42,7 @@
     ],
     "files": [
      {
-      "path": "$TMP/data/last-version",
+      "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
       "contains": [
        "2.1.305"
       ]
@@ -53,7 +53,7 @@
   {
    "name": "unset",
    "env": {
-    "CLAUDE_PLUGIN_DATA": "$TMP/data"
+    "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/$BRAND-inline"
    },
    "argv": [
     "hook",

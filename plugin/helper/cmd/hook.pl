@@ -202,7 +202,7 @@ sub on_SessionStart {
     eval { resumeblock::arm($d, $sid) } if $src eq 'resume';
     if ($src =~ /^(startup|resume)$/) {
         my $ev = rc::exec_version();
-        my $pd = $ENV{CLAUDE_PLUGIN_DATA};
+        my $pd = own_data_dir();
         if (defined $ev && defined $pd && $pd ne '') {
             my $last = util::read_file("$pd/last-version");
             $last =~ s/\s+//g if defined $last;
@@ -220,6 +220,25 @@ sub on_SessionStart {
     # the cross-session finish pass, after this session's own records (MOD-SPEC §5.8, ≤ 1 s)
     eval { orphans::pass(budget_ms => $orphans::PASS_MS) } if $src =~ /^(startup|resume|clear)$/;
     return ('', {});
+}
+
+# own_data_dir() -> the folder that keeps last-version (0.1.3): CLAUDE_PLUGIN_DATA only when it
+# names this plugin's own data folder as Claude Code makes one, <config>/plugins/data/<id> with
+# <id> the plugin id `<name>@<marketplace>` whose characters outside A-Z, a-z, 0-9, _ and - read
+# as `-` (so `<brand>-<marketplace>`), absolute, no `.` or `..` part. Another plugin's folder is
+# not ours: the codex plugin exports its own CLAUDE_PLUGIN_DATA into session shells, so a helper
+# started there saw codex's folder and wrote into it. Else (that, or unset) this plugin's own
+# log folder.
+sub own_data_dir {
+    my $pd = $ENV{CLAUDE_PLUGIN_DATA};
+    my $b = ctx::brand();
+    if (defined $pd && $pd =~ m{\A/} && defined $b && $b ne '') {
+        (my $p = $pd) =~ s{(?<=.)/+\z}{};
+        my @seg = split m{/+}, $p;
+        return $p if @seg >= 4 && !grep({ $_ eq '.' || $_ eq '..' } @seg)
+                     && $seg[-3] eq 'plugins' && $seg[-2] eq 'data' && $seg[-1] =~ /\A\Q$b\E-[A-Za-z0-9_-]+\z/;
+    }
+    return rc::watch();
 }
 
 sub session_compact {
