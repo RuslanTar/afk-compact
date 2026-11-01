@@ -41,6 +41,12 @@ our $START_TMPDIR;
 # HOME in HOME_DIRS) may lie under: the system temp folder as given at start, /tmp, and each added
 # one (real paths, filled on first use; a self-test may `local` it)
 our (@EXTRA_TEMP, @TEMP_ROOTS);
+# the folders a home may lie under and still be a throwaway one, which a temp root may hold
+# (holds_home, throwaway): /tmp, a temp folder whatever TMPDIR is (tests/launcher/in-docker.sh
+# runs with HOME and TMPDIR /tmp/t), and the core runner's repo tmp/ (run.pl adds it with
+# add_throwaway: a child run of a case under it gets that case's HOME as its real one, and adds
+# that tmp/ as a temp root)
+our @THROWAWAY = ('/tmp');
 # the folders a child writes besides HOME and CLAUDE_CONFIG_DIR, as variables: the XDG base
 # folders (the helper's default handoff root reads $XDG_STATE_HOME, the launcher's cache
 # $XDG_CACHE_HOME), the plugin's data folder (hook.pl's last-version), its folder options, and
@@ -102,23 +108,40 @@ sub check_temp_root {
 
 # holds_home(path) -> the real home (as its real path) that the path's real path is or holds (by
 # text or by device and inode: a parent of the home that is the path), undef for none. A home that
-# already lies under /tmp, a temp folder whatever TMPDIR is, is skipped: a temp root over it adds
-# nothing (a runner started by another one gets a temp HOME as its real one; on a host with no
-# TMPDIR its child runs take TMPDIR=/tmp).
+# lies under a THROWAWAY folder is skipped: it is a temp folder already (a runner started by
+# another one gets a temp HOME as its real one; on a host with no TMPDIR its child runs take
+# TMPDIR=/tmp).
 sub holds_home {
     my ($p) = @_;
     my $r = _real($p) // return undef;
     $r =~ s{(?<=.)/+\z}{};
     my $rid = _id($r);
-    my $tmp = _real('/tmp') // '/tmp';
     for my $h (sort keys %{ $REAL{homes} || {} }) {
-        next if index($h, "$tmp/") == 0;
+        next if throwaway($h);
         my @up;
         for (my $d = $h; $d ne ''; $d =~ s{/[^/]*\z}{}) { push @up, $d }
         push @up, '/';
         return $h if grep { $_ eq $r || ($rid ne '' && _id($_) eq $rid) } @up;
     }
     return undef;
+}
+
+# add_throwaway(path...): more THROWAWAY folders
+sub add_throwaway {
+    push @THROWAWAY, grep { defined } @_;
+    return;
+}
+
+# throwaway(path) -> 1 when the path's real path lies strictly under a THROWAWAY folder (by text:
+# both are real paths), else 0
+sub throwaway {
+    my $r = _real($_[0]) // return 0;
+    for my $t (@THROWAWAY) {
+        my $rt = _real($t) // next;
+        $rt =~ s{/+\z}{};
+        return 1 if index($r, "$rt/") == 0;
+    }
+    return 0;
 }
 
 # real_set(home => path, account => path, config_dir => path, given => {name => value}) -> the

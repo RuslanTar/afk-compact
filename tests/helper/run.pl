@@ -184,6 +184,9 @@ $REPO_TMP_BASE =~ s{/+$}{};
 # "repo"; --repo-tmp), beside the system temp folder as given at start and /tmp; one at or under a
 # real config or state folder or at or above a real home ends the run, exit 2, before anything is
 # written there
+# (a home under the repo's own tmp/ is a case HOME of an outer run, a throwaway one: a child run
+# of a case under tmp/ adds tmp/ as a temp root over it)
+homeguard::add_throwaway("$REPO/tmp");
 eval { homeguard::add_temp_root($REPO_TMP_BASE); 1 } or do { print STDERR $@; exit 2 };
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
@@ -3075,7 +3078,14 @@ sub builtin {
         # each of "empty" [folders] must hold no file or link after the run. "args" [words] go to
         # the runner before the folders (--repo-tmp DIR); "stderr": true reads its stderr with its
         # stdout (a run the runner ends before any case, HOME-GUARD at start); "direct": true
-        # executes run.pl itself, as tools/check's X-H does, not through perl.
+        # executes run.pl itself, as tools/check's X-H does, not through perl. "unless_throwaway"
+        # [paths]: the step is not run (a note says so) when one lies under a throwaway folder
+        # (homeguard::THROWAWAY: a stand-in real home there is no real home for the guard).
+        for my $p (@{ $a->{unless_throwaway} || [] }) {
+            next unless homeguard::throwaway($p);
+            print "# note: runner_child of " . ($a->{dir} // 'cases') . " not run: $p lies under a throwaway folder\n";
+            return @e;
+        }
         my @cases = @{ $a->{cases} || [] };
         my $dir = @cases ? join(' ', @cases) : $a->{dir} // die "runner_child: no dir\n";
         my @targets = @cases ? (map { "$HERE/cases/$_" } @cases) : ("$cdir/$dir");
@@ -3208,6 +3218,12 @@ sub builtin {
         chdir($back) or die "home_guard: chdir $back: $!\n";
         chmod(0700, @{ $t->{restore} });
         push @e, "rows tried: $n, want at least 63" if $n < 63;
+        # homeguard::throwaway, which the at-or-above-home child runs read to skip themselves, holds
+        # a folder under /tmp or the repo's tmp/ and no other
+        my $rtmp = util::real_path($tmp);
+        my $tw = grep { my $t = util::real_path($_); defined $t && index("$rtmp/", "$t/") == 0 } ('/tmp', "$REPO/tmp");
+        push @e, "homeguard::throwaway reads $tmp/x as " . (homeguard::throwaway("$tmp/x") ? '' : 'not ') . 'throwaway, want ' . ($tw ? '' : 'not ') . 'throwaway'
+            unless (homeguard::throwaway("$tmp/x") ? 1 : 0) == ($tw ? 1 : 0);
         # the runner's own writes under a case HOME: with a temp HOME whose .claude links to the
         # stand-in account's real one, an options write (write_options) and a setup write are
         # refused before they write, so the stand-in settings.json stays as it was and nothing
