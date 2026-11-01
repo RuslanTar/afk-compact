@@ -1,0 +1,42 @@
+{
+ "id": "HS-01-temp-paths-linear",
+ "note": "0.1.3 hook speed (lib/transcript.pm temp_paths): a sweep with no paths.jsonl takes its temp paths from the transcript's last 5 MB. A 120,000-character word with no delimiter in it (an image's base64, a minified blob) is read in linear time, and the paths after it are still found, each once, in order. One pattern over the whole tail tried the tasks/*.output form from every position of such a word to its end: quadratic, 33 s for 100,000 characters, 130 s on a real 41 MB transcript's tail, past the checkpoint's 10 s and every hook's timeout (the sweep runs in PostCompact and in Stop's reconcile too)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/example-repo"
+    },
+    {
+     "bigfile": "$TMP/proj/$SID.jsonl",
+     "bytes": 120000,
+     "fill": "Q",
+     "tail": "\n{\"type\":\"user\",\"message\":{\"content\":\"see /tmp/hs01-$SID8/out.log, then $TMP/work/tasks/b7.output and /tmp/hs01-$SID8/out.log again\"}}\n"
+    }
+   ],
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d",
+    "--transcript",
+    "$TMP/proj/$SID.jsonl",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "ms_max": 8000,
+    "stdout_lines": 3,
+    "stdout_has": [
+     "\\A[a-z-]+\\t/tmp/hs01-$SID8/out\\.log\\t",
+     "\\A[^\\n]*\\n[a-z-]+\\t\\S+/work/tasks/b7\\.output\\t",
+     "^TOTAL "
+    ]
+   }
+  }
+ ]
+}
