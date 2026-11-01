@@ -25,6 +25,8 @@
 # 0.1.2 visible defaults: the `settings values:` block after the `settings:` line (each value with
 # its source and default; a warning per saved ""), also without a session id, and the user-run
 # `settings reset <key> --apply` line.
+# 0.1.3 version skew: `plugin: <version> · <folder>` after the watcher lines, then `plugin notice: …`
+# when sessions started since this one run another plugin version (lib/plugver.pm).
 use strict;
 use warnings;
 use utf8;
@@ -75,7 +77,7 @@ sub run {
         args::out('status: no log folder (' . (rc::root_reason('log_dir') // 'unset') . ')', root_lines());
         return 0;
     }
-    push @out, watcher_lines();
+    push @out, watcher_lines(), plugin_lines();
     if (!defined $sid) {
         push @out, "session: unknown (no session id); this session's compactions, escalations, halt, policy and hook rows are not shown";
         push @out, sprintf('thresholds: settings only (target %s · soft max %s · min_window %s)',
@@ -482,6 +484,15 @@ sub _drift_text {
 # The first line: the watcher state, the size of its logs and the number of sessions; with
 # `off` what stays written. The first-run notice line while its marker is missing (the mod
 # claims it at session.start; a session where the mod never ran shows it here).
+# 0.1.3 version skew: this session's plugin copy (its version and folder), then the notice when
+# sessions started since run another version (lib/plugver.pm); also without a session id.
+sub plugin_lines {
+    my @l = ('plugin: ' . ctx::version() . ' · ' . util::abbrev(ctx::root()));
+    my $n = plugver::line();
+    push @l, "plugin notice: $n" if defined $n;
+    return @l;
+}
+
 sub watcher_lines {
     my $w = settings::trim(lc(rc::val('watcher') // 'shadow'));
     my $brand = ctx::brand();

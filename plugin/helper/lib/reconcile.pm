@@ -473,7 +473,7 @@ sub _run {
         }
         if (defined $mn && exists $copied->{"n:$mn"}) { $drop_if_held->($f, $copied->{"n:$mn"}, $text); next }
         my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn, content_name => ($m{stale} ? 1 : 0),
-                                writer => ($kind eq 'mod' ? 'mod' : 'postcompact-fallback'),
+                                writer => ($kind eq 'mod' ? 'mod' : $copies::POSTCOMPACT),
                                 scope => $scope, agent => $agent, tokens => $m{tokens}, cwd => $m{cwd} // $a{cwd},
                                 transcript => $m{transcript} // $a{transcript}, trigger => ($drec ? $drec->{trigger} : $m{trigger}),
                                 dispatch => $drec, channel => ($drec ? $drec->{channel} : 'none'),
@@ -735,7 +735,7 @@ sub _save_deferred {
     my $channel = $drec ? $drec->{channel} : 'none';
     my $trigger = postcompact::_trigger($drec, $it->{trigger});
     my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn, content_name => $it->{stale},
-                            writer => 'postcompact-fallback', scope => $scope, agent => $agent, tokens => $tokens,
+                            writer => $copies::POSTCOMPACT, scope => $scope, agent => $agent, tokens => $tokens,
                             cwd => $it->{cwd} // $args->{cwd}, transcript => $it->{transcript} // $args->{transcript},
                             trigger => $trigger, dispatch => ($mn && $rec ? $rec : undef), seat_state => $seat, channel => $channel,
                             precomputed => $precomputed, verdict => $verdict, proof => $proof);

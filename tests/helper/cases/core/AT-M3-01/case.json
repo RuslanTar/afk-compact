@@ -1,6 +1,6 @@
 {
  "id": "AT-M3-01",
- "note": "PostCompact, shaped summary, nonce = a mod-hook main dispatch: copy compact/<stamp>_<sid8>_c1-<nonce6>.md, mode 0400, frontmatter keys from the dispatch and the boundary row, verdict ok",
+ "note": "PostCompact, shaped summary, nonce = a mod-hook main dispatch: copy compact/<stamp>_<sid8>_c1-<nonce6>.md, mode 0400, frontmatter keys from the dispatch and the boundary row, verdict ok; 0.1.3: writer postcompact (was postcompact-fallback), plugin_version and plugin_root of the copy that saved it",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -59,13 +59,15 @@
       "mode": "0400",
       "frontmatter": {
        "kind": "compact-summary",
-       "writer": "postcompact-fallback",
+       "writer": "postcompact",
        "nonce": "1a2b3c4d",
        "date": "2026-10-21T14:05:12+03:00",
        "session_id": "$SID",
        "actor": "main",
        "transcript_path": "$TMP/proj/$SID.jsonl",
        "claude_pid": "424242",
+       "plugin_version": "$PLUGIN_VERSION",
+       "plugin_root": "/^\\/.+\\/plugin$/",
        "repository": "work",
        "bucket": "work/LAB-42",
        "bucket_source": "branch",

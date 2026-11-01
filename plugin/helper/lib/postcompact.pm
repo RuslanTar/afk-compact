@@ -4,7 +4,7 @@ package postcompact;
 # marker (a stale marker counts as none); dispatch lookup; scope proof from P1/P2 only
 # (the main compact_boundary row is written after this hook, S-21); defer rules
 # (copy_deferred: to the mod's after-step, or to reconcile when nothing proves the
-# scope); save-copy --writer postcompact-fallback (secret scan inside); main-proven
+# scope); save-copy --writer postcompact (secret scan inside; `postcompact-fallback` before 0.1.3); main-proven
 # sweep (8 s budget); rollup, verdict and escalation rows. Returns the detector run for
 # watch.on_hook.
 use strict;
@@ -218,7 +218,7 @@ sub run {
         }
         my $evid = ref $cj eq 'HASH' && ref $cj->{evidence_map} eq 'ARRAY' ? { source => 'checkpoint', rows => scalar @{ $cj->{evidence_map} } } : undef;
         $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $emn, content_name => $stale,
-                             writer => 'postcompact-fallback',
+                             writer => $copies::POSTCOMPACT,
                              scope => $scope, agent => $agent, tokens => $tokens, cwd => $cwd, transcript => $tp,
                              trigger => $trigger, dispatch => $erec, seat_state => $seat, channel => $channel,
                              precomputed => $precomputed, verdict => $verdict, queue_lane => $lane, evidence => $evid);

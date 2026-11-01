@@ -58,7 +58,7 @@ for my $lib (qw(util jsonc sha ctx spec settings paths roots log rc identity loc
                 git gsd queue bucket frontmatter detect assemble secrets evidence
                 dispatch transcript scope sessions sidecar copies measure checkpoint
                 sweep reconcile orphans keyset resumeblock args rollup postcompact repomode jobrec handoff_turn notice userre
-                restart)) {
+                restart plugver)) {
     my $ok = eval { require "$lib.pm"; 1 };
     if (!$ok) {
         if ($IS_HOOK) { local $/; my $d = <STDIN>; exit 0 }

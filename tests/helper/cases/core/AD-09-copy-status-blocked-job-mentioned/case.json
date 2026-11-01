@@ -59,7 +59,7 @@
       "mode": "0400",
       "frontmatter": {
        "kind": "compact-summary",
-       "writer": "postcompact-fallback",
+       "writer": "postcompact",
        "nonce": "1a2b3c4d",
        "date": "2026-10-21T14:05:12+03:00",
        "session_id": "$SID",

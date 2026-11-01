@@ -79,7 +79,7 @@ sub run {
         if (defined $p && -f $p) {
             my $d = skills::store::read_doc($p);
             $d->{bucket} = skills::store::bucket_of($p);
-            my $is_copy = $p =~ m{/compact/} || ($d->{fm}{writer} // '') =~ /\A(?:mod|postcompact-fallback)\z/;
+            my $is_copy = $p =~ m{/compact/} || ($d->{fm}{writer} // '') =~ /\A(?:mod|postcompact|postcompact-fallback)\z/;
             $tier = ($is_copy && $sid_of->($d) eq $sid) ? 2 : 1;
             $pick = $d;
             for my $n (map { @{ skills::store::docs_in($_, compact => 1) } } @{ skills::store::twin_buckets($ctx, $d->{bucket}) }) {

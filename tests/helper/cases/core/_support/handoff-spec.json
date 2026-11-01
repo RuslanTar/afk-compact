@@ -9,7 +9,7 @@
   "verdicts": ["stale", "scope-leak", "unshaped", "truncated", "ok-trailer", "ok"],
   "status_words": ["active", "blocked", "waiting-owner", "waiting-job", "done"],
   "kinds": ["agent", "teammate", "workflow", "monitor", "cron", "shell", "server", "peer", "external"],
-  "writers": ["handoff", "mod", "postcompact-fallback"],
+  "writers": ["handoff", "mod", "postcompact", "postcompact-fallback"],
   "copy_trailers": [],
   "secret_rules": [
     {"id": "pem", "class": "HARD", "re": "-----BEGIN [A-Z ]*PRIVATE KEY-----"},

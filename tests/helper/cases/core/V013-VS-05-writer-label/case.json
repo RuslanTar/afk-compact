@@ -1,0 +1,36 @@
+{
+ "id": "V013-VS-05-writer-label",
+ "note": "0.1.3: the PostCompact hook's copies say writer postcompact (the main saver; before 0.1.3 postcompact-fallback, the same path). save-copy still takes the old value and writes the new one, with the plugin_version and plugin_root of the saving copy. Readers take both: locate reads a postcompact copy and a postcompact-fallback copy (no marker, verdict ok) as ok, not legacy; a session row and a copy row without plugin_version (a row of an older or other writer) keep status working, and the old copy row (writer postcompact-fallback) still counts as a copy_mismatch.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "save-copy --writer postcompact-fallback: written as postcompact, with the plugin version and folder",
+   "setup": [{"mkdir": "$TMP/work"}, {"copy": "sum.txt", "to": "$TMP/sum.txt"}],
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "-", "--from", "$TMP/sum.txt", "--writer", "postcompact-fallback", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0, "stdout_has": ["^Saved copy: "],
+    "files": [{"path": "$ROOT/work/general/compact/*.md", "count": 1,
+               "frontmatter": {"kind": "compact-summary", "writer": "postcompact", "plugin_version": "$PLUGIN_VERSION", "plugin_root": "/^\\/.+\\/plugin$/"}}],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "copy", "count": 1, "fields": {"result": "saved", "writer": "postcompact", "plugin_version": "$PLUGIN_VERSION"}}]}},
+  {"name": "an unknown writer is refused",
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "-", "--from", "$TMP/sum.txt", "--writer", "fallback", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 64, "stderr_has": ["usage: --writer mod\\|postcompact"]}},
+  {"name": "locate: a postcompact copy with verdict ok reads ok",
+   "setup": [{"write": "$ROOT/work/general/compact/2026-10-21_13-00-00_${SID8}_c1-0a0b0c.md", "mode": "0400",
+              "text": "---\nkind: compact-summary\nwriter: postcompact\nnonce: 0a0b0c0d\ndate: 2026-10-21T13:00:00+03:00\nsession_id: $SID\nactor: main\nplugin_version: 0.1.3\nverdict: ok\n---\nbody\n"}],
+   "cwd": "$TMP/work",
+   "argv": ["locate", "--sid", "$SID", "--cwd", "$TMP/work", "--arg", "$ROOT/work/general/compact/2026-10-21_13-00-00_${SID8}_c1-0a0b0c.md"],
+   "expect": {"exit": 0, "stdout_has": ["^integrity: ok$"]}},
+  {"name": "locate: an old postcompact-fallback copy still reads ok",
+   "setup": [{"write": "$ROOT/work/general/compact/2026-10-21_12-00-00_${SID8}_c1-0d0e0f.md", "mode": "0400",
+              "text": "---\nkind: compact-summary\nwriter: postcompact-fallback\nnonce: 0d0e0f0a\ndate: 2026-10-21T12:00:00+03:00\nsession_id: $SID\nactor: main\nverdict: ok\n---\nbody\n"}],
+   "cwd": "$TMP/work",
+   "argv": ["locate", "--sid", "$SID", "--cwd", "$TMP/work", "--arg", "$ROOT/work/general/compact/2026-10-21_12-00-00_${SID8}_c1-0d0e0f.md"],
+   "expect": {"exit": 0, "stdout_has": ["^integrity: ok$"]}},
+  {"name": "old rows without plugin_version: status reads them",
+   "setup": [{"write": "$WATCH/$SID.classic.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-21T12:00:00+03:00", "ev": "session", "sid": "$SID", "actor": "unknown", "writer": "classic", "pid": 424242, "phase": "start", "source": "startup"},
+     {"v": 1, "ts": "2026-10-21T12:01:00+03:00", "ev": "copy", "sid": "$SID", "actor": "unknown", "writer": "postcompact-fallback", "pid": 424242, "nonce": "0d0e0f0a", "result": "mismatch", "slot": "main"}]}],
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": ["^plugin: \\S+ · /\\S+$", "copy_mismatch"]}}
+ ]
+}

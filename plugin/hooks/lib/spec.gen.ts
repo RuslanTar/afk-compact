@@ -286,6 +286,8 @@ export const SPEC = {
     "transcript_path",
     "claude_pid",
     "cc_version",
+    "plugin_version",
+    "plugin_root",
     "repository",
     "bucket",
     "bucket_source",
@@ -626,6 +628,7 @@ export const SPEC = {
   "writers": [
     "handoff",
     "mod",
+    "postcompact",
     "postcompact-fallback"
   ],
   "evidence_statuses": [

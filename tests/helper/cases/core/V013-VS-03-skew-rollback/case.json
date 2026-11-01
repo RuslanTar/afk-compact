@@ -1,0 +1,27 @@
+{
+ "id": "V013-VS-03-skew-rollback",
+ "note": "0.1.3 version skew (lib/plugver.pm): this session runs 0.1.3 (installed 2026-10-01); a session started at 12:00 loads 0.1.2 (a rollback): the notice names 0.1.2. This copy installed at 13:00, after that load (a /reload-plugins of this session onto a newer install): no notice. A newer load from another host does not count: the reference stays this host's 0.1.2.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "manifest": {"version": "0.1.3"},
+ "steps": [
+  {"name": "rollback: sessions started since 12:00 run 0.1.2",
+   "setup": [{"touch": "$PLUGIN/.claude-plugin/plugin.json", "at": "2026-10-01T00:00:00+03:00"},
+             {"write": "$ROOT/.sessions/loads/1792562405_424242-1792562400_0.1.3.json",
+              "json": {"v": 1, "plugin_version": "0.1.3", "plugin_root": "$PLUGIN", "host": "$HOST", "session_id": "$SID", "source": "startup", "ts": "2026-10-21T09:00:05+03:00"}},
+             {"write": "$ROOT/.sessions/loads/1792573200_515151-1792573195_0.1.2.json",
+              "json": {"v": 1, "plugin_version": "0.1.2", "plugin_root": "/opt/other/0.1.2", "host": "$HOST", "session_id": "51515151-1111-4222-8333-444444444444", "source": "startup", "ts": "2026-10-21T12:00:00+03:00"}}],
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": ["^plugin: 0\\.1\\.3 · /\\S+$", "^plugin notice: this session runs 0\\.1\\.3; sessions started since 2026-10-21 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins$"]}},
+  {"name": "this copy installed after that load: no notice",
+   "setup": [{"touch": "$PLUGIN/.claude-plugin/plugin.json", "at": "2026-10-21T13:00:00+03:00"}],
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": ["^plugin: 0\\.1\\.3 · /\\S+$"], "stdout_lacks": ["^plugin notice:"]}},
+  {"name": "a newer load of another host does not count",
+   "setup": [{"touch": "$PLUGIN/.claude-plugin/plugin.json", "at": "2026-10-01T00:00:00+03:00"},
+             {"write": "$ROOT/.sessions/loads/1792580400_818181-1792580390_0.1.4.json",
+              "json": {"v": 1, "plugin_version": "0.1.4", "plugin_root": "/opt/other/0.1.4", "host": "another-host.example", "session_id": "81818181-1111-4222-8333-444444444444", "source": "startup", "ts": "2026-10-21T14:00:00+03:00"}}],
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": ["^plugin notice: this session runs 0\\.1\\.3; sessions started since 2026-10-21 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins$"], "stdout_lacks": ["0\\.1\\.4"]}}
+ ]
+}
