@@ -1,0 +1,58 @@
+{
+ "id": "HS-02-stop-budget-from-start",
+ "note": "0.1.3 hook speed (cmd/hook.pl): the Stop hook's one budget, 3.5 s (under half its 8 s timeout), counts from the helper's start, before its libraries compile (main.pl). A helper that spent 3.4 s starting (STORE_TEST_HOOK_START_AGO_MS, as on a host slowed by load) gives reconcile no time for its sweeps and the watcher only its 0.2 s floor, so the hook ends itself well before Claude Code would cancel it; the turn's records are still written (last-stop) and reconcile and the watcher still run, each in what is left. With the 0.1.2 budget (7 s counted after the start) the same helper still gave the watcher its full 3 s",
+ "now": "2026-10-20T10:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 60
+       }
+      },
+      {
+       "text": "working on it"
+      }
+     ]
+    }
+   ],
+   "env": {
+    "STORE_TEST_HOOK_START_AGO_MS": "3400"
+   },
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "ms_max": 8000,
+    "trace_has": [
+     "stop-reconcile-budget 0",
+     "stop-watch-window 200"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/last-stop"
+     }
+    ]
+   }
+  }
+ ]
+}
