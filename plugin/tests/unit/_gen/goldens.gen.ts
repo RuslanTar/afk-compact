@@ -29,7 +29,7 @@ export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = {
  "question": "The dialog timed out. Which database should I use for the retry queue, Postgres or SQLite?",
  "queue_add": "\"/p/scripts/afk-compact-store\" queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d",
  "remeasure": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none",
- "resume_line": "Resumed \u00b7 step 1: sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\u2026",
+ "resume_line": "Resumed \u00b7 step 1: `bin/rails test test/models/retry_test.rb`",
  "saved_copy": "~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md",
  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "store": "\"/p/scripts/afk-compact-store\"",

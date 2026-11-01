@@ -19,5 +19,6 @@
   "lane": "hard-blocked",
   "lane_why": "the summary's Status line",
   "lane_basis": "2 of 3 listed steps marked done; 0 units running; git: 1 commit not pushed, 2 files changed",
-  "question": "The dialog timed out. Which database should I use for the retry queue, Postgres or SQLite?"
+  "question": "The dialog timed out. Which database should I use for the retry queue, Postgres or SQLite?",
+  "resume_line": "Resumed · step 1: `bin/rails test test/models/retry_test.rb`"
 }
