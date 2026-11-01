@@ -28,12 +28,16 @@ import type { AssetName } from './assets.gen'
  * 2026-10-31: the resume block's `auto-mode` (D-22, root: in auto permission mode the classifier
  * blocks a gated outward action a carried approval covers, so the block asks first; kept only
  * when the mod saw auto as the newest main permission mode, `autoModeOf` in resume.ts).
+ * 0.1.3: the resume block's `resumed` (resume-text A: one code-rendered first line, `Resumed · step
+ * 1: …`; never with `handoff-ack` or `idle-again`) and `question-timeout` (resume-text B: the carried
+ * question's dialog timed out; only with `question`).
  */
 export type Tag =
   | 'midturn' | 'auto' | 'chain' | 'measured' | 'fallback' | 'nonok' | 'continue' | 'halt' | 'queue'
   | 'halt-handoff' | 'handoff' | 'handoff-partial' | 'submit' | 'near' | 'spent' | 'imminent'
   | 'prod-forbid' | 'prod-allow' | 'idle' | 'idle-halt' | 'idle-again' | 'submit-halt' | 'submit-pre' | 'submit-idle'
   | 'driver' | 'trial-tail' | 'idle-done' | 'idle-off' | 'idle-done-off' | 'handoff-ack' | 'question' | 'auto-mode'
+  | 'resumed' | 'question-timeout'
 
 /** Runtime `@name@` values; a token with no value is left for the invariant check to catch. */
 export type Runtime = Partial<Record<
@@ -50,6 +54,8 @@ export type Runtime = Partial<Record<
   | 'lane' | 'lane_why' | 'lane_basis'
   /** Question carry (`[question]`): the open question, on one line within QUESTION_MAX (question.ts). */
   | 'question'
+  /** 0.1.3 resume-text A (`[resumed]`): the code-rendered first line (resume.ts `resumeLine`). */
+  | 'resume_line'
   /** The shadow trial's fork prompts (TRIAL-DUAL-HANDOFF §4.2): texts read at run time from the user's local files. */
   | 'old_skill' | 'old_template' | 'trial_facts' | 'trial_tail',
   string

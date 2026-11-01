@@ -329,6 +329,11 @@ export type LoadState = {
   openQuestion: string | undefined
   /** This main turn's AskUserQuestion dialog that closed on the AFK timeout: its questions (question.ts). */
   askTimedOut: string | undefined
+  /**
+   * 0.1.3 resume-text B: the turn that left `openQuestion` open had a dialog that closed on the AFK
+   * timeout (question.ts `turnQuestion`); read only while `openQuestion` is set (`carriedTimedOut`).
+   */
+  openTimedOut: boolean
   /** The next main turn.start comes from our own `$.prompt.submit`. */
   ourSubmitPending: boolean
   /** The text of that submit: it tells our turn from a prompt that entered beside it (CR-F17). */
@@ -672,6 +677,7 @@ export function newState(loadId: string): LoadState {
     lastTurnAsksUser: false,
     openQuestion: undefined,
     askTimedOut: undefined,
+    openTimedOut: false,
     ourSubmitPending: false,
     ourSubmitText: undefined,
     foreignPrompts: 0,

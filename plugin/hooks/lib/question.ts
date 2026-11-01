@@ -22,19 +22,19 @@ function oneLine(s: string): string {
 }
 
 /**
- * The text on one line within QUESTION_MAX: `end` keeps its end (an answer's question is its last
- * line) behind `…`, `start` its start (a dialog's first asks) before `…`. A surrogate pair is
- * never cut.
+ * The text on one line within `max` (QUESTION_MAX unless given): `end` keeps its end (an answer's
+ * question is its last line) behind `…`, `start` its start (a dialog's first asks) before `…`. A
+ * surrogate pair is never cut.
  */
-export function clipQuestion(text: string, keep: 'start' | 'end'): string {
+export function clipQuestion(text: string, keep: 'start' | 'end', max = QUESTION_MAX): string {
   const t = oneLine(text)
-  if (t.length <= QUESTION_MAX) return t
+  if (t.length <= max) return t
   const cps = Array.from(t)
   if (keep === 'end') cps.reverse()
   const out: string[] = []
   let n = 1
   for (const c of cps) {
-    if (n + c.length > QUESTION_MAX) break
+    if (n + c.length > max) break
     out.push(c)
     n += c.length
   }
@@ -149,10 +149,16 @@ export function noteDialog(s: Pick<LoadState, 'askTimedOut' | 'openQuestion'>, i
  * wins (the model's latest ask). A turn with neither keeps an earlier one open (a background
  * result's turn), which only a person's turn or the session's end closes (alive.ts).
  */
-export function turnQuestion(s: Pick<LoadState, 'askTimedOut' | 'openQuestion'>, t: { reason: string; answer: string }): void {
+export function turnQuestion(s: Pick<LoadState, 'askTimedOut' | 'openQuestion' | 'openTimedOut'>, t: { reason: string; answer: string }): void {
   const q = t.reason === 'answer' ? (answerQuestion(t.answer) ?? s.askTimedOut) : undefined
+  // 0.1.3 resume-text B: a dialog of this turn closed on the AFK timeout, whichever text is carried
+  // (the model often asks the timed-out dialog's question again in plain text).
+  const timed = s.askTimedOut !== undefined
   s.askTimedOut = undefined
-  if (q !== undefined) s.openQuestion = q
+  if (q !== undefined) {
+    s.openQuestion = q
+    s.openTimedOut = timed
+  }
 }
 
 /**
@@ -162,4 +168,17 @@ export function turnQuestion(s: Pick<LoadState, 'askTimedOut' | 'openQuestion'>,
  */
 export function carriedQuestion(s: Pick<LoadState, 'askTimedOut' | 'openQuestion' | 'mainTurnRunning'>): string | undefined {
   return (s.mainTurnRunning ? s.askTimedOut : undefined) ?? s.openQuestion
+}
+
+/**
+ * 0.1.3 resume-text B (usage review: 38 of 72 questions after a resume timed out at 600 s, and 9
+ * were asked again in a dialog right after): the question `carriedQuestion` gives came with a
+ * dialog that closed on the AFK timeout, the running turn's or the one of the turn that left it
+ * open, so `[question-timeout]` says not to ask it in a dialog again. `openTimedOut` is read only
+ * beside an open question: `turnQuestion` sets both together, and whatever clears the question
+ * (a person's turn, the session's end, an answered dialog) leaves the flag unread.
+ */
+export function carriedTimedOut(s: Pick<LoadState, 'askTimedOut' | 'openQuestion' | 'openTimedOut' | 'mainTurnRunning'>): boolean {
+  if (s.mainTurnRunning && s.askTimedOut !== undefined) return true
+  return s.openQuestion !== undefined && s.openTimedOut
 }
