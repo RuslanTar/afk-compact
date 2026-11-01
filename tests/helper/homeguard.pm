@@ -101,6 +101,11 @@ sub check_temp_root {
     die "HOME-GUARD: $what $p has a .. part (applied after links); nothing written\n" if dotdot($p);
     die "HOME-GUARD: $what $p is in a real config folder; nothing written\n" if real_config($p);
     die "HOME-GUARD: $what $p is in a real state folder; nothing written\n" if real_state($p);
+    # 0.1.3: the file system root holds every home, the account's or not, known or not, and
+    # every path would read as under it (a TMPDIR of / or a link to it)
+    if ((_real($p) // '') =~ m{\A/+\z}) {
+        die "HOME-GUARD: $what $p is at or above the real home (it is the file system root: every file in it would read as temp); nothing written\n";
+    }
     if (defined(my $h = holds_home($p))) {
         die "HOME-GUARD: $what $p is at or above the real home $h (every file in it would read as temp); nothing written\n";
     }
@@ -123,6 +128,8 @@ sub holds_home {
     $acct =~ s{(?<=.)/+\z}{} if defined $acct;
     my $st = defined $START_TMPDIR && !dotdot($START_TMPDIR) ? _real($START_TMPDIR) : undef;
     $st =~ s{/+\z}{} if defined $st;
+    # a start TMPDIR of / (empty here) holds every home: it makes none a throwaway one (0.1.3)
+    $st = undef if defined $st && $st eq '';
     for my $h (sort keys %{ $REAL{homes} || {} }) {
         my $own = defined $acct && ($h eq $acct || (_id($h) ne '' && _id($h) eq _id($acct)));
         next if !$own && (throwaway($h) || (defined $st && index($h, "$st/") == 0));
@@ -147,6 +154,7 @@ sub throwaway {
     for my $t (@THROWAWAY) {
         my $rt = _real($t) // next;
         $rt =~ s{/+\z}{};
+        next if $rt eq '';    # a THROWAWAY folder of / would hold every path (0.1.3)
         return 1 if index($r, "$rt/") == 0;
     }
     return 0;
@@ -613,8 +621,10 @@ sub self_row_errs {
 # stand-ins under tmp/tr (no THROWAWAY folder, the start TMPDIR set per row): a TMPDIR that holds a
 # HOME given made in it (as `mktemp -d` makes one under TMPDIR) is taken; one that is that HOME,
 # the account's home (also under the start TMPDIR: the account's home is never a throwaway one) or
-# holds it, or is / is refused; so is another case of the HOME given's, the account home's or its
-# parent's name where the file system folds case (only the device and inode compare sees those).
+# holds it, or is / is refused (also a link to /, also with no account home known, and a start
+# TMPDIR of / makes no HOME given a throwaway one, 0.1.3); so is another case of the HOME given's,
+# the account home's or its parent's name where the file system folds case (only the device and
+# inode compare sees those).
 sub temp_root_rows {
     my ($tmp) = @_;
     my $b = "$tmp/tr";
@@ -623,12 +633,21 @@ sub temp_root_rows {
     my %real = real_set(home => $g, account => $a);
     my $vary = sub { my $v = $_[0]; $v =~ s{([^/]+)\z}{ my $x = $1; $x eq uc $x ? lc $x : uc $x }e; $v };
     my $held = qr/ is at or above the real home /;
-    # [what, start TMPDIR, the folder checked, want (undef: taken)]
+    # 0.1.3: a start TMPDIR of / makes no home a throwaway one, and / is refused even with no
+    # account home known (a host whose user has no passwd entry); a link to / is / too
+    my %no_acct = real_set(home => $g);
+    my $lroot = "$b/lroot";
+    symlink('/', $lroot) or die "homeguard: symlink $lroot: $!\n" unless -l $lroot;
+    # [what, start TMPDIR, the folder checked, want (undef: taken), the %REAL (default: %real)]
     my @rows = (["a TMPDIR that holds a HOME given made in it", "$b/t", "$b/t", undef],
                 ['a TMPDIR at the HOME given', $g, $g, $held],
                 ["a TMPDIR at the account's home under the start TMPDIR", $b, $a, $held],
                 ["a TMPDIR that holds the account's home", $b, $b, $held],
-                ['a TMPDIR of /', '/', '/', $held]);
+                ['a TMPDIR of /', '/', '/', $held],
+                ['a TMPDIR of / with no account home known', '/', '/', $held, \%no_acct],
+                ['a link to / with no account home known', '/', $lroot, $held, \%no_acct],
+                ['a temp root at the HOME given while the start TMPDIR is /', '/', $g, $held],
+                ['a temp root that holds the HOME given while the start TMPDIR is /', '/', "$b/t", $held, \%no_acct]);
     my ($vg, $va, $vb) = map { $vary->($_) } ($g, $a, $b);
     if (_id($va) ne '' && _id($va) eq _id($a)) {
         push @rows, ['a TMPDIR at the HOME given by another case of its name', $vg, $vg, $held],
@@ -637,9 +656,9 @@ sub temp_root_rows {
     }
     my (@tried, @e);
     for my $r (@rows) {
-        my ($what, $st, $p, $want) = @$r;
+        my ($what, $st, $p, $want, $rs) = @$r;
         push @tried, $what;
-        local %REAL = %real;
+        local %REAL = $rs ? %$rs : %real;
         local @THROWAWAY = ();
         local $START_TMPDIR = $st;
         my $err = eval { check_temp_root($p, 'TMPDIR'); 1 } ? '' : $@;
