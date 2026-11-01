@@ -260,6 +260,12 @@ export interface Deps {
    */
   promptCacheTtl(): Promise<CacheTtl | undefined>
   /**
+   * 0.1.3: the merged `autoCompactWindow` setting (the window Claude Code compacts within), read
+   * with the thresholds once per load (config.ts effective) while `native_window_tokens` is unset;
+   * undefined when unset, not a positive number, or the read throws.
+   */
+  compactWindowSetting?(): Promise<number | undefined>
+  /**
    * Owner xxxxxxxx-17 (2b): the idle mode Claude Code last cached from its server
    * (`cachedGrowthBookFeatures.tengu_sunny_locket.mode` in `<config dir>/.claude.json`), as a
    * logged hint only: the plugin never decides on it (an internal cache shared by all processes
@@ -934,6 +940,14 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       try {
         const v = await $.settings.read({ key: 'promptCacheTtl' })
         return v === '5m' || v === '1h' ? v : undefined
+      } catch {
+        return undefined
+      }
+    },
+    async compactWindowSetting() {
+      try {
+        const v = await $.settings.read({ key: 'autoCompactWindow' })
+        return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined
       } catch {
         return undefined
       }

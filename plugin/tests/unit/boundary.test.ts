@@ -853,6 +853,42 @@ test('AT-P5-07 (row): native_window_tokens 50000 counts as 100000, with one conf
   expect(w.rowsOf('config_clamped').filter(r => r.key === 'native_window_tokens').map(r => [r.configured, r.effective])).toEqual([[50000, 100000]])
 })
 
+// 0.1.3 small fixes: an unset native_window_tokens follows Claude Code's own autoCompactWindow
+// setting (the owner had to repeat 800000 in the option by hand); an option set still wins.
+const NW_ROWS: { name: string; options?: Record<string, number>; set?: unknown; window: number }[] = [
+  { name: 'autoCompactWindow 800000, option unset: window 800000', set: 800000, window: 800000 },
+  { name: 'option 900000 over autoCompactWindow 800000: window 900000', options: { native_window_tokens: 900000 }, set: 800000, window: 900000 },
+  { name: 'autoCompactWindow 2000000 over a 1,000,000 model window: window 1000000', set: 2000000, window: 1000000 },
+  { name: 'autoCompactWindow 50000: counts as the 100,000 floor', set: 50000, window: 100000 },
+  { name: 'autoCompactWindow "800000" (not a number): the model window', set: '800000', window: 1000000 },
+  { name: 'no autoCompactWindow: the model window', window: 1000000 },
+]
+for (const r of NW_ROWS) {
+  test(`NW-SET (0.1.3): ${r.name}`, { options: r.options ?? {} }, async ($, on) => {
+    const w = new World().install(on)
+    if (r.set !== undefined) w.policy = { autoCompactWindow: r.set }
+    await w.start($)
+    const eff = w.rowsOf('config_effective')[0]
+    expect([eff?.window, eff?.native_trigger]).toEqual([r.window, r.window - 33000])
+  })
+}
+
+test('NW-SET (0.1.3): autoCompactWindow 800000: soft max 900000 is clamped to 640000, as with the option set to 800000', { options: { compact_soft_max_tokens: 900000 } }, async ($, on) => {
+  const w = new World().install(on)
+  w.policy = { autoCompactWindow: 800000 }
+  await w.start($)
+  const eff = w.rowsOf('config_effective')[0]
+  expect([eff?.soft_max, eff?.target]).toEqual([640000, 400000])
+  expect(w.rowsOf('config_clamped').map(r => [r.key, r.configured, r.effective])).toEqual([['soft_max', 900000, 640000]])
+})
+
+test('NW-SET (0.1.3): settings unreadable: the model window', async ($, on) => {
+  const w = new World().install(on)
+  w.settingsThrow = true
+  await w.start($)
+  expect(w.rowsOf('config_effective')[0]?.window).toBe(1000000)
+})
+
 // DP-30 (4): `compacted.ms` has one definition on every path: from the dispatch record written
 // (or reused) to the compaction's answer, as on the mod-hook path.
 test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'code' } }, async ($, on) => {

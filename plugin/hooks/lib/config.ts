@@ -182,7 +182,8 @@ function bounded(o: PluginOptions, k: keyof Config, dflt: number, min: number, m
 }
 
 /**
- * `native_window_tokens`: 0 (or less) means `context.window`; 1–99,999 count as 100,000, the
+ * `native_window_tokens`: 0 (or less) means Claude Code's `autoCompactWindow` setting when set
+ * (0.1.3, settingWindow), else `context.window`; 1–99,999 count as 100,000, the
  * smallest window Claude Code applies (`--autocompact` floor, P5-FOLD A3), with `config_clamped`.
  */
 function nativeWindow(o: PluginOptions, notes: Config['notes']): number {
@@ -389,12 +390,25 @@ export function minWindow(cfg: Config, k: ClampConstants = CLAMP): number | 'nev
 }
 
 /**
- * MOD-SPEC §1.2 clamp. `contextWindow` is `$.session.usage().context.window`. With `triggers`
- * false the thresholds, the clamped list, `small_window` and `min_window` are computed as with
- * triggers on (P5-FOLD A3), so the row shows what triggers-on would do.
+ * 0.1.3: the window Claude Code's `autoCompactWindow` setting names, for a `native_window_tokens`
+ * left unset (0): the floor applies as to the option, and Claude Code never compacts past the
+ * model's own window, so a larger setting gives `contextWindow` (when known). Undefined when the
+ * setting is unset or not a positive number.
  */
-export function clamp(cfg: Config, contextWindow: number, k: ClampConstants = CLAMP): Effective {
-  const window = cfg.native_window_tokens > 0 ? cfg.native_window_tokens : contextWindow
+export function settingWindow(setting: number | undefined, contextWindow: number, k: ClampConstants = CLAMP): number | undefined {
+  if (typeof setting !== 'number' || !Number.isFinite(setting) || setting <= 0) return undefined
+  const w = Math.max(k.window_floor, Math.floor(setting))
+  return contextWindow > 0 ? Math.min(w, contextWindow) : w
+}
+
+/**
+ * MOD-SPEC §1.2 clamp. `contextWindow` is `$.session.usage().context.window`; `setting` is Claude
+ * Code's `autoCompactWindow`, the window when `native_window_tokens` is unset (0.1.3; an option set
+ * wins). With `triggers` false the thresholds, the clamped list, `small_window` and `min_window`
+ * are computed as with triggers on (P5-FOLD A3), so the row shows what triggers-on would do.
+ */
+export function clamp(cfg: Config, contextWindow: number, k: ClampConstants = CLAMP, setting?: number): Effective {
+  const window = cfg.native_window_tokens > 0 ? cfg.native_window_tokens : settingWindow(setting, contextWindow, k) ?? contextWindow
   const native_trigger = window - k.native_offset
   const soft_max = Math.min(cfg.compact_soft_max_tokens, native_trigger - reserve(cfg, k), softCap(window, k))
   const target = Math.min(cfg.compact_target_tokens, targetOf(soft_max, k))
@@ -472,7 +486,16 @@ export async function effective(d: Deps, sid: string): Promise<Effective> {
   } catch {
     window = 0
   }
-  const eff = clamp(d.cfg, window)
+  // 0.1.3: an unset native_window_tokens follows Claude Code's own autoCompactWindow setting.
+  let setting: number | undefined
+  if (!(d.cfg.native_window_tokens > 0)) {
+    try {
+      setting = await d.compactWindowSetting?.()
+    } catch {
+      setting = undefined
+    }
+  }
+  const eff = clamp(d.cfg, window, CLAMP, setting)
   d.state.eff = eff
   // Disabled: the thresholds are null and the computed values go in the `_raw` fields, which no
   // reader takes as thresholds (they can be negative, P5-FOLD A3).
