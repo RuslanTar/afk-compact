@@ -1,0 +1,37 @@
+{
+ "id": "AT-SW-05 (settings writer: set and reset land in the case's temp HOME)",
+ "owner": "core",
+ "note": "HOME-GUARD (0.1.2): `settings set --apply` and `settings reset --apply` write ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json; under this runner that is the case's temp $HOME/.claude/settings.json, with no CLAUDE_CONFIG_DIR. The real settings files (the real HOME's and the account's ~/.claude/settings.json, and the CLAUDE_CONFIG_DIR one the runner started with) get no helper backup beside them and are neither emptied nor removed across both writes (a change with no backup is another writer's of the live file: noted, not failed), and the runner's own temp HOME gets no .claude. The strict check: a child run of the runner started with HOME and CLAUDE_CONFIG_DIR at stand-ins that hold a settings.json runs the same set and reset (_sw01), which pass, and both stand-in files keep their sha256 with no backup beside them; a child run over a case whose given file changes and gets a helper backup beside it fails that case with both lines",
+ "steps": [
+  {"name": "the real settings before", "lib": "real_settings", "args": {"save": "REAL_BEFORE"}},
+  {"setup": [{"write": "$HOME/.claude/settings.json", "mode": "0644",
+              "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"compact_target_tokens\": 300000\n      }\n    }\n  }\n}\n"}]},
+  {"name": "set: the write lands in the temp HOME",
+   "argv": ["settings", "set", "triggers=false", "--apply"],
+   "expect": {"exit": 0,
+              "stdout_has": ["^  triggers: default true -> false$", "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-"],
+              "files": [{"path": "$HOME/.claude/settings.json", "has": ["\"triggers\": false", "\"compact_target_tokens\": 300000"]}]}},
+  {"name": "the real settings after the set", "lib": "real_settings", "args": {"same_as": "REAL_BEFORE"}},
+  {"name": "reset: the member goes from the temp HOME's file",
+   "argv": ["settings", "reset", "triggers", "--apply"],
+   "expect": {"exit": 0,
+              "stdout_has": ["^settings reset: removed triggers from ~/\\.claude/settings\\.json ", "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-"],
+              "files": [{"path": "$HOME/.claude/settings.json", "has": ["\"compact_target_tokens\": 300000"], "lacks": ["triggers"]}]}},
+  {"name": "the real settings after the reset", "lib": "real_settings", "args": {"same_as": "REAL_BEFORE"}},
+  {"name": "stand-ins for the real HOME's and the given config folder's settings", "setup": [
+    {"write": "$TMP/standin-home/.claude/settings.json", "mode": "0644", "text": "{\n  \"model\": \"standin-home\"\n}\n"},
+    {"write": "$TMP/standin-cfg/settings.json", "mode": "0644", "text": "{\n  \"model\": \"standin-cfg\"\n}\n"}]},
+  {"name": "the stand-in settings before", "lib": "real_settings",
+   "args": {"save": "STANDIN_BEFORE", "files": ["$TMP/standin-home/.claude/settings.json", "$TMP/standin-cfg/settings.json"]}},
+  {"name": "a child run started with HOME and CLAUDE_CONFIG_DIR at the stand-ins: set and reset pass in its case's temp HOME", "lib": "runner_child",
+   "args": {"tmp": "$TMP", "dir": "_sw01", "exit": 0, "env": {"HOME": "$TMP/standin-home", "CLAUDE_CONFIG_DIR": "$TMP/standin-cfg"},
+            "stdout_has": ["^# passed 1, failed 0, skipped 0, not run 0$"]}},
+  {"name": "the stand-in settings after: the same sha256, no backup beside them", "lib": "real_settings",
+   "args": {"same_as": "STANDIN_BEFORE", "files": ["$TMP/standin-home/.claude/settings.json", "$TMP/standin-cfg/settings.json"]}},
+  {"name": "the check itself: a changed file with a helper backup beside it fails with both lines", "lib": "runner_child",
+   "args": {"tmp": "$TMP", "dir": "_sw02", "exit": 1,
+            "stdout_has": ["^#   .*a helper backup \\S+/s/\\.claude/settings\\.json\\.$BRAND-20261021-090000 appeared beside the real settings",
+                           "^#   .*settings \\S+/s/\\.claude/settings\\.json changed: was [0-9a-f]{64}, now [0-9a-f]{64}$",
+                           "^# passed 0, failed 1, skipped 0, not run 0$"]}}
+ ]
+}

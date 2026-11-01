@@ -1,0 +1,12 @@
+{
+ "id": "AT-RN-06-inner-git",
+ "note": "run by AT-RN-06 only (discovery skips _ folders), whose child run of the runner starts with GIT_DIR at a stand-in repo: the runner drops the caller's GIT_* names at start, so this case's fixture git commands (git init, git commit) land in $TMP/r, never in the stand-in",
+ "steps": [
+  {"name": "the runner's environment", "lib": "runner_env"},
+  {"setup": [{"mkdir": "$TMP/r"},
+             {"git": ["init", "-q"], "cwd": "$TMP/r"},
+             {"git": ["commit", "-q", "--allow-empty", "-m", "fixture-commit"], "cwd": "$TMP/r"}]},
+  {"name": "the fixture commit is in the case's repo", "exec": ["git", "-C", "$TMP/r", "log", "--format=%s"],
+   "expect": {"exit": 0, "stdout": "fixture-commit\n"}}
+ ]
+}

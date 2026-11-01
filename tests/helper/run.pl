@@ -104,6 +104,31 @@ require "util.pm";
 require "jsonc.pm";
 require "sha.pm";
 
+# HOME-GUARD (0.1.2): a kit test elsewhere ran a planted hook with the real HOME and wiped
+# ~/.claude/settings.json to "{}" (lib/settings_write.pm writes
+# ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json). The guard is tests/helper/homeguard.pm,
+# shared with the watch driver; the real folders are read once, here, before anything is
+# localised: HOME as given and the account's home (getpwuid), each by real path, the
+# CLAUDE_CONFIG_DIR and the state folders given (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA, ...:
+# homeguard::PATH_VARS). A TMPDIR that is relative, has a `..` part or lies at or under a real
+# config or state folder ends the run there, exit 2, before anything is written (the run dir, the
+# staged plugin and the case folders would land in it). Then the caller's Claude Code, XDG, helper
+# and git variables go (homeguard::drop_env: a runner started in a Claude Code session or a plugin
+# hook passes no CLAUDE_PLUGIN_DATA, XDG_STATE_HOME, CLAUDE_PLUGIN_OPTION_* or STORE_TEST_* to a
+# builtin run in-process or a command it starts, and one started from a git hook no GIT_DIR or
+# GIT_INDEX_FILE to the fixture git commands; a helper call's environment is built fresh anyway,
+# child_env). Once its run dir exists the runner itself runs with a temp HOME ($RUN_TMP/home),
+# each case with its own $HOME (run_case), and home_guard() checks the environment of every child
+# it starts before the fork: HOME, CLAUDE_CONFIG_DIR, the state folders and every link under them
+# (homeguard::check). What a case passes a child in its arguments or stdin is not read.
+require "$HERE/homeguard.pm";
+eval { homeguard::init(); 1 } or do { print STDERR $@; exit 2 };
+# the docker config folder of the real HOME, read for its endpoint once (docker_endpoint, below:
+# only when no DOCKER_CONFIG is given, which the children then read themselves)
+my $DOCKER_CONFIG_DIR = defined $ENV{HOME} && $ENV{HOME} =~ m{\A/} ? "$ENV{HOME}/.docker" : undef;
+homeguard::drop_env(\%ENV);
+my ($REAL_HOME, $REAL_CONFIG_DIR, $ACCOUNT_HOME) = @homeguard::REAL{qw(home config_dir account)};
+
 # DP-12: messages hold characters (decoded case text and helper output); raw bytes are
 # decoded before they are printed (see say_raw), so nothing prints "Wide character".
 binmode(STDOUT, ':encoding(UTF-8)');
@@ -152,6 +177,10 @@ while (@ARGV) {
 $REPO_TMP_BASE //= "$REPO/tmp";
 $FIXTURES_DIR //= "$REPO/tests/fixtures";
 $REPO_TMP_BASE =~ s{/+$}{};
+# HOME-GUARD: a case's HOME and CLAUDE_CONFIG_DIR may also lie under the repo's tmp/ (tmp_base
+# "repo"; --repo-tmp), beside the system temp folder as given at start and /tmp; one at or under a
+# real config or state folder ends the run, exit 2, before anything is written there
+eval { homeguard::add_temp_root($REPO_TMP_BASE); 1 } or do { print STDERR $@; exit 2 };
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
 # The launcher folder (PKG-RUNTIME A.1): one constant, as in tools/build, deps.ts and ctx.pm.
@@ -167,7 +196,10 @@ sub types_file {
 }
 
 sub find_claude_bin {
-    my $vdir = util::home() . '/.local/share/claude/versions';
+    # the real home's install (read only; HOME-GUARD: the cases' HOME is a temp folder), else the
+    # account's (a child run of this runner starts with a case's temp HOME)
+    my ($vdir) = grep { -d } map { "$_/.local/share/claude/versions" } grep { defined && $_ ne '' } ($REAL_HOME, $ACCOUNT_HOME);
+    return '' unless defined $vdir;
     my @v = sort { my @x = split /\./, $a; my @y = split /\./, $b; $x[0] <=> $y[0] || $x[1] <=> $y[1] || $x[2] <=> $y[2] }
             grep { /^\d+\.\d+\.\d+$/ } util::list_dir($vdir);
     return @v ? "$vdir/$v[-1]" : '';
@@ -181,6 +213,22 @@ $RUN_TMP = do {
     util::mkdir_p($d);
     $d;
 };
+# HOME-GUARD: from here on the runner's own HOME is a temp folder of its run dir and no
+# CLAUDE_CONFIG_DIR is set (drop_env took it), so a child started outside a case (staging, a needs
+# check) and any helper code run in-process get no real home either; run_case gives each case its
+# own $HOME.
+util::mkdir_p("$RUN_TMP/home");
+$ENV{HOME} = "$RUN_TMP/home";
+# HOME-GUARD: with a temp HOME the docker CLI no longer reads the owner's ~/.docker/config.json,
+# so a host where Docker answers only through a context (colima, Docker Desktop with the default
+# socket off) would skip the docker-image cases. The endpoint of the context named there is read
+# once, now, and every child (docker, a child run of this runner) gets it as DOCKER_HOST.
+# A DOCKER_HOST given wins, and with a DOCKER_CONFIG given the children read that folder
+# themselves; a DOCKER_CONTEXT resolved here goes (the temp HOME holds no context).
+if (!(defined $ENV{DOCKER_HOST} && $ENV{DOCKER_HOST} ne '') && !defined $ENV{DOCKER_CONFIG}) {
+    my $h = docker_endpoint($DOCKER_CONFIG_DIR, util::which('docker'));
+    if ($h ne '') { $ENV{DOCKER_HOST} = $h; delete $ENV{DOCKER_CONTEXT} }
+}
 my %STAGE_INFO;
 my $STAGE = stage_plugin("$RUN_TMP/stage/plugin");
 sub repo_tmp {
@@ -213,7 +261,7 @@ sub lstart_in {
     my $key = "$pid " . (defined $tz ? "=$tz" : '-');
     return $LSTART{$key} if defined $LSTART{$key};
     for my $try (1, 2) {
-        my $r = util::run(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C', TZ => $tz });
+        my $r = run_cmd(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C', TZ => $tz });
         (my $v = $r->{out} // '') =~ s/\s+/ /g;
         $v =~ s/\A | \z//g;
         $v = proc_lstart($pid, $tz) // '' unless $v =~ $LSTART_RE;
@@ -376,7 +424,7 @@ sub stage_plugin {
     if (!-f "$dst/assets/canary-baseline.json") {
         my $types = $ENV{CC_TYPES_DIR} ? "$ENV{CC_TYPES_DIR}/claude-code.d.ts" : "$REPO/.types/claude-code.d.ts";
         if (-f $types && -x "$REPO/tools/canary-baseline") {
-            my $r = util::run(["$REPO/tools/canary-baseline", '--types', $types, '--out', "$dst/assets/canary-baseline.json"],
+            my $r = run_cmd(["$REPO/tools/canary-baseline", '--types', $types, '--out', "$dst/assets/canary-baseline.json"],
                               timeout_ms => 120000);
             $STAGE_INFO{baseline} = $r->{exit} == 0 ? 'generated' : 'unavailable';
         } else {
@@ -633,6 +681,10 @@ sub run_case {
     # "tmp_norm": false (a JSON false; any other value keeps the count)
     $V{TMP_NORM} = $tb eq 'repo' || (jsonc::is_bool($case->{tmp_norm}) && !$case->{tmp_norm}) ? 0 : 1;
     $V{HOME} = "$V{TMP}/home";
+    # HOME-GUARD: the case's temp HOME for everything the case runs, in-process (builtins) or as
+    # a child (a helper call gets it through child_env; git, ps and child runs inherit it)
+    local $ENV{HOME} = $V{HOME};
+    delete local $ENV{CLAUDE_CONFIG_DIR};
     $V{SID} = $case->{sid} // $DEFAULT_SID;
     $V{SID8} = substr($V{SID}, 0, 8);
     $V{PLUGIN} = $STAGE;
@@ -859,7 +911,7 @@ sub git_env {
 sub git_run {
     my ($dir, $V, @a) = @_;
     my $git = util::which('git') // '/usr/bin/git';
-    my $r = util::run([$git, '-C', $dir, @a], timeout_ms => 20000, env => git_env($V));
+    my $r = run_cmd([$git, '-C', $dir, @a], timeout_ms => 20000, env => git_env($V));
     die "git @a failed in $dir\n" unless $r->{exit} == 0;
     return $r->{out};
 }
@@ -1006,7 +1058,7 @@ sub fixture_repo {
         @env{qw(GIT_AUTHOR_DATE GIT_COMMITTER_DATE)} = ($au->{date}) x 2 if $au->{date};
     }
     my $git = util::which('git') // '/usr/bin/git';
-    my $g = sub { my $r = util::run([$git, '-C', $at, @_], timeout_ms => 20000, env => \%env); die "git @_ failed in $at\n" unless $r->{exit} == 0 };
+    my $g = sub { my $r = run_cmd([$git, '-C', $at, @_], timeout_ms => 20000, env => \%env); die "git @_ failed in $at\n" unless $r->{exit} == 0 };
     my @ign = sort keys %{ $rc->{ignored_files} || {} };
     if (!defined $rc->{git} || $rc->{git}) {
         $g->('init', '-q', '-b', $rc->{branch} // 'main');
@@ -1217,7 +1269,7 @@ sub setup {
     if (exists $s->{repo} && ref $s->{repo} eq 'HASH') { make_repo($s->{repo}, $s->{at}, $V); return }
     if (exists $s->{git}) {
         my $dir = $s->{cwd} // $V->{TMP};
-        my $r = util::run([util::which('git') // '/usr/bin/git', @{ $s->{git} }], timeout_ms => 20000, cwd => $dir,
+        my $r = run_cmd([util::which('git') // '/usr/bin/git', @{ $s->{git} }], timeout_ms => 20000, cwd => $dir,
                           env => { %{ git_env($V) }, %{ $s->{env} || {} } });
         die "git @{ $s->{git} }: exit $r->{exit}\n" unless $r->{exit} == 0;
         if ($s->{var}) { (my $o = $r->{out}) =~ s/\s+\z//; $V->{ $s->{var} } = $o }
@@ -1353,9 +1405,31 @@ sub stdin_of {
     return '';
 }
 
+# ---------------------------------------------------------------- HOME-GUARD
+# The guard itself is tests/helper/homeguard.pm (shared with the watch driver).
+# home_guard(env, what): dies before `what` starts when its environment (a hash: the whole
+# environment the child gets) could reach the owner's real HOME, config folder or state folders
+# (homeguard::check; the temp folders are the system temp folder the runner started with, /tmp
+# and the repo's tmp/, and a path must be absolute with no `..` part to lie under one).
+# case_home(path) -> the path, for a builtin's declared "home": dies unless a child given it as
+# HOME passes home_guard.
+sub home_guard { return homeguard::check(@_) }
+sub case_home { return homeguard::case_home(@_) }
+
+# run_cmd(argv, util::run options): util::run (whose child inherits this process's environment,
+# with `env` laid over it) once home_guard passes that environment.
+sub run_cmd {
+    my ($argv, %o) = @_;
+    my %env = %ENV;
+    for my $k (keys %{ $o{env} || {} }) { if (defined $o{env}{$k}) { $env{$k} = $o{env}{$k} } else { delete $env{$k} } }
+    home_guard(\%env, $argv->[0]);
+    return util::run($argv, %o);
+}
+
 # Start one helper process; returns {pid, out_r}
 sub spawn {
     my ($argv, $env, $stdin, $outf, $errf, $cwd) = @_;
+    home_guard($env, "helper $argv->[0]");
     my $pid = fork();
     die "fork: $!\n" unless defined $pid;
     if ($pid == 0) {
@@ -1449,6 +1523,29 @@ sub nocase_fs {
     return ($u ne $d && -d $u) ? 1 : 0;
 }
 
+# docker_endpoint(docker config folder, docker path) -> the docker endpoint (unix://..., tcp://...,
+# ssh://...) of the context the folder's config.json names (or DOCKER_CONTEXT), as `docker
+# context inspect` reads it with DOCKER_CONFIG at that folder (read-only; the child keeps the
+# runner's temp HOME, so home_guard checks it as any other); '' when no context or "default" is
+# named (the CLI's own default socket), docker is missing or the answer is no endpoint. A context
+# that needs TLS files (DOCKER_TLS_VERIFY, DOCKER_CERT_PATH) is not carried over: such a host gives
+# the runner DOCKER_HOST and those itself, which the docker children inherit.
+sub docker_endpoint {
+    my ($dir, $docker) = @_;
+    return '' unless defined $dir && defined $docker && $docker ne '';
+    my $ctx = $ENV{DOCKER_CONTEXT};
+    if (!defined $ctx || $ctx eq '') {
+        my $text = -f "$dir/config.json" ? util::read_file("$dir/config.json") : undef;
+        my $cfg = defined $text ? eval { jsonc::decode($text) } : undef;
+        $ctx = ref $cfg eq 'HASH' && defined $cfg->{currentContext} && !ref $cfg->{currentContext} ? $cfg->{currentContext} : '';
+    }
+    return '' if $ctx eq '' || $ctx eq 'default';
+    my $r = run_cmd([$docker, 'context', 'inspect', '--format', '{{.Endpoints.docker.Host}}', $ctx], timeout_ms => 20000,
+                    env => { DOCKER_CONFIG => $dir, DOCKER_HOST => undef, DOCKER_CONTEXT => undef });
+    (my $host = $r->{exit} == 0 ? $r->{out} // '' : '') =~ s/\s+\z//;
+    return $host =~ m{\A(?:unix|tcp|ssh|npipe)://\S+\z} ? $host : '';
+}
+
 # docker_image(ref) -> 1 when a Docker daemon answers and holds the image locally (the case
 # "needs": ["docker-image:<ref>"] skips otherwise; no case pulls an image).
 my %DOCKER_IMAGE;
@@ -1456,7 +1553,7 @@ sub docker_image {
     my ($ref) = @_;
     return $DOCKER_IMAGE{$ref} if exists $DOCKER_IMAGE{$ref};
     my $docker = util::which('docker');
-    my $r = $docker ? util::run([$docker, 'image', 'inspect', '--format', '{{.Id}}', $ref], timeout_ms => 20000) : { exit => 1 };
+    my $r = $docker ? run_cmd([$docker, 'image', 'inspect', '--format', '{{.Id}}', $ref], timeout_ms => 20000) : { exit => 1 };
     return $DOCKER_IMAGE{$ref} = $r->{exit} == 0 ? 1 : 0;
 }
 
@@ -1473,6 +1570,7 @@ sub u06_within {
     my $cpu_timer = eval { require Time::HiRes; die "no setitimer\n" unless defined &Time::HiRes::setitimer; Time::HiRes::ITIMER_PROF(); 1 } ? 1 : 0;
     my $wall = $cpu_timer ? 6 * $secs : $secs;
     pipe(my $r, my $w) or return ("pipe: $!");
+    home_guard(\%ENV, 'u06 check child');
     my $pid = fork();
     return ("fork: $!") unless defined $pid;
     if ($pid == 0) {
@@ -1933,6 +2031,7 @@ sub u06_check {
             userre::limits($sig eq 'TERM' ? 2 : 1, 5) if $have;
             unlink $pidf;
             my $ents = [{ re => $starts->($pidf), at => 1 }];
+            home_guard(\%ENV, 'u06 orphan child');
             my $g0 = util::clock_ms();
             my $pid = fork();
             return ("fork: $!") unless defined $pid;
@@ -1960,6 +2059,7 @@ sub u06_check {
         # go of the lock (a fixed 300 ms on a busy machine), the lock was still held, rightly
         my $f = "$RUN_TMP/u06-lock-$$";
         my $ents = [{ re => $starts->("$f.pid"), at => 1 }];
+        home_guard(\%ENV, 'u06 lock child');
         my $t0 = util::clock_ms();
         my $pid = fork();
         return ("fork: $!") unless defined $pid;
@@ -2574,6 +2674,9 @@ sub claude_pid_walk_chains {
 sub builtin {
     my ($name, $a, $cdir) = @_;
     _libs();
+    # HOME-GUARD: a builtin runs the helper's code in this process, which may start children of
+    # its own (git, a pattern child); a declared "home" goes through case_home
+    home_guard(\%ENV, "builtin $name");
     my @e;
     if ($name eq 'detect_tsv') {
         my $tsv = src_file($a->{tsv}, $cdir);
@@ -2901,7 +3004,7 @@ sub builtin {
             my $td = ($a->{tmp} // die "runner_cleanup: no tmp\n") . "/childtmp-$t->[0]";
             util::mkdir_p($td);
             my %before = map { ($_ => 1) } $dirs->($base);
-            my $r = util::run(['/usr/bin/perl', "$HERE/run.pl", "$cdir/_$t->[0]"], timeout_ms => 180000,
+            my $r = run_cmd(['/usr/bin/perl', "$HERE/run.pl", "$cdir/_$t->[0]"], timeout_ms => 180000,
                               env => { TMPDIR => $td });
             my @new_repo = grep { !$before{$_} } $dirs->($base);
             my @new_tmp = $dirs->($td);
@@ -2940,7 +3043,7 @@ sub builtin {
         my $V = $_[3];
         for my $p ([LSTART1 => 1], [RUNNER_LSTART => $$]) {
             my ($n, $pid) = @$p;
-            my $r = util::run(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C' });
+            my $r = run_cmd(['ps', '-o', 'lstart=', '-p', $pid], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C' });
             (my $want = $r->{out} // '') =~ s/\s+/ /g;
             $want =~ s/\A | \z//g;
             $want = proc_lstart($pid, $ENV{TZ}) // '' unless $want =~ $LSTART_RE;
@@ -2957,13 +3060,28 @@ sub builtin {
         # is the child's TMPDIR as given ("/tmp": the shortest case folders a host gives, as on
         # the Linux rows), else a fresh child-<4 hex> folder under "tmp"; "timeout_s" (180).
         # A failing child keeps its work dir (BH-6); under a given "tmpdir", which outlives the
-        # case, it is removed here once the output is read, and the failure says so.
+        # case, it is removed here once the output is read, and the failure says so. "env"
+        # ({name: value}) is laid over the child's environment too (home_guard checks it), and
+        # each of "empty" [folders] must hold no file or link after the run. "args" [words] go to the
+        # runner before the folders (--repo-tmp DIR); "stderr": true reads its stderr with its
+        # stdout (a run the runner ends before any case, HOME-GUARD at start); "direct": true
+        # executes run.pl itself, as tools/check's X-H does, not through perl.
         my @cases = @{ $a->{cases} || [] };
         my $dir = @cases ? join(' ', @cases) : $a->{dir} // die "runner_child: no dir\n";
         my @targets = @cases ? (map { "$HERE/cases/$_" } @cases) : ("$cdir/$dir");
         my $td = $a->{tmpdir} // (($a->{tmp} // die "runner_child: no tmp\n") . '/child-' . util::rand_hex(4));
-        util::mkdir_p($td);
-        my $r = util::run(['/usr/bin/perl', "$HERE/run.pl", @targets], timeout_ms => 1000 * ($a->{timeout_s} // 180), env => { TMPDIR => $td });
+        # a relative TMPDIR or one with a `..` part is the child's to refuse: not made here
+        util::mkdir_p($td) if $td =~ m{\A/} && !homeguard::dotdot($td);
+        util::mkdir_p($_) for @{ $a->{empty} || [] };
+        my @argv = (($a->{direct} ? () : ('/usr/bin/perl')), "$HERE/run.pl", @{ $a->{args} || [] }, @targets);
+        @argv = ('/bin/sh', '-c', 'exec "$0" "$@" 2>&1', @argv) if $a->{stderr};
+        my $r = run_cmd(\@argv, timeout_ms => 1000 * ($a->{timeout_s} // 180), env => { %{ $a->{env} || {} }, TMPDIR => $td });
+        for my $f (@{ $a->{empty} || [] }) {
+            my @q = ($f);
+            while (defined(my $d = shift @q)) {
+                for my $n (util::list_dir($d)) { my $p = "$d/$n"; if (-d $p && !-l $p) { push @q, $p } else { push @e, "child run of $dir: $p landed in $f, want nothing there" } }
+            }
+        }
         my $out = chars($r->{out} // '');
         if (defined $a->{tmpdir}) {
             my ($kept) = $out =~ /^# kept: ([^\n]*)$/m;
@@ -2972,6 +3090,179 @@ sub builtin {
         }
         push @e, "child run of $dir: exit $r->{exit}, want " . ($a->{exit} // 0) . ': ' . substr($out, -600) if $r->{exit} != ($a->{exit} // 0);
         for my $re (@{ $a->{stdout_has} || [] }) { push @e, "child run of $dir: output has no /$re/: " . substr($out, -600) unless $out =~ /$re/m }
+        return @e;
+    }
+    if ($name eq 'runner_modes') {
+        # AT-RN-09: "files" [paths under the repo] tools/check and the docker rows execute
+        # themselves (X-H runs tests/helper/run.pl with no perl in front: without its executable
+        # bit that is a PermissionError, not a failing case) are executable files here and, where
+        # the repo is a git work tree git can read, 100755 in its index, so a commit that drops
+        # the bit fails this case
+        my @f = @{ $a->{files} || die "runner_modes: no files\n" };
+        for my $f (@f) { push @e, "$f is not an executable file" unless -f "$REPO/$f" && -x _ }
+        my $git = util::which('git');
+        if ($git && -e "$REPO/.git") {
+            my $r = run_cmd([$git, '-C', $REPO, 'ls-files', '-s', '--', @f], timeout_ms => 20000);
+            if ($r->{exit} == 0) {
+                my %mode = map { /\A(\d+) \S+ \d+\t(.*)\z/ ? ($2 => $1) : () } split /\n/, $r->{out} // '';
+                for my $f (@f) { my $m = $mode{$f} // '(not tracked)'; push @e, "$f is $m in git's index, want 100755" unless $m eq '100755' }
+            }
+        }
+        return @e;
+    }
+    if ($name eq 'runner_env') {
+        # AT-RN-06 (HOME-GUARD): the runner's own environment inside a case holds no Claude Code,
+        # XDG, helper or git name (homeguard::drop_env took the caller's at start), so a builtin run
+        # in-process or a command it starts reads no state folder, trace file or repo of the caller's
+        push @e, "the runner's environment holds $_=$ENV{$_} (a name the runner drops at start)" for sort grep { /\A(?:CLAUDE|XDG_|STORE_|GIT_)/ } keys %ENV;
+        # AT-RN-08: "docker_host": the DOCKER_HOST the runner set at start from the docker context
+        # its HOME's .docker/config.json names
+        push @e, "the runner's DOCKER_HOST is " . ($ENV{DOCKER_HOST} // '(unset)') . ", want $a->{docker_host}"
+            if defined $a->{docker_host} && ($ENV{DOCKER_HOST} // '') ne $a->{docker_host};
+        return @e;
+    }
+    if ($name eq 'home_guard') {
+        # AT-RN-06 (HOME-GUARD): inside a case this runner's own HOME is the case's $HOME, no
+        # CLAUDE_CONFIG_DIR, XDG_*, CLAUDE*, STORE_* or GIT_* name is set, and the real homes,
+        # config folder and state folders the guard read at start are the owner's. Then, with
+        # stand-ins for those (homeguard::self_rows: a real HOME, an account home, a config folder
+        # and state folders given, all under $TMP, so no link into the real home or ~/.claude is
+        # made), home_guard refuses, before the fork, a helper call (spawn) and a command (run_cmd)
+        # in every row of the guard's table whose environment leads to them: the real HOME, the
+        # account's home or a link to it (also another case of its name where the file system
+        # folds case); no, an empty, a relative HOME or one outside the temp folders (also one in a
+        # folder whose name a temp folder's begins); a HOME or CLAUDE_CONFIG_DIR through a link
+        # into the home and `..` (the kernel applies it after the link); a CLAUDE_CONFIG_DIR at a
+        # real config folder, relative or outside temp, or under temp with its settings.json
+        # linked to the real one; a temp HOME whose .claude or settings.json links to the real
+        # one, whose .claude is a dangling link, or links outside temp to another folder; a temp
+        # HOME whose .local, .local/state, .local/share, .cache or .config links to the real one
+        # (or .config to the real config folder), whose .cache is a dangling link or whose .local
+        # links outside temp; a link at any depth below a temp HOME, an XDG_STATE_HOME or a
+        # handoff root (the link walk) that leads, dangling or not, into a real state or config
+        # folder, to a real home or outside temp, also through a temp folder it links to; a temp
+        # HOME past the walk's entry or depth budget, or with a folder the guard cannot list but a
+        # child can go through; with TMPDIR at the account's home (or another case of it), a
+        # CLAUDE_CONFIG_DIR or CLAUDE_PLUGIN_DATA in its .claude, at the real home an
+        # XDG_CACHE_HOME or XDG_CONFIG_HOME at its .cache or .config; an XDG_STATE_HOME,
+        # XDG_CACHE_HOME, CLAUDE_PLUGIN_DATA, folder option or CLAUDE_CODE_TMPDIR outside temp,
+        # relative (an option), through `..`, or in a real config or state folder; and a declared
+        # home (case_home) at the account's home. The child is `true`, so a guard that lets one
+        # through starts nothing that reads or writes a home. A temp HOME, a CLAUDE_CONFIG_DIR
+        # under it, its .claude and settings.json linked inside temp, its .local and .cache linked
+        # inside temp, links below it into temp (one dangling, one loop), state folders under
+        # temp and the values the helper reads as unset start.
+        my $V = $_[3];
+        my $tmp = $a->{tmp} // die "home_guard: no tmp\n";
+        push @e, "runner HOME is " . ($ENV{HOME} // '(unset)') . ", want the case's $V->{HOME}" unless ($ENV{HOME} // '') eq $V->{HOME};
+        push @e, "runner HOME $ENV{HOME} is a real home" if defined $ENV{HOME} && homeguard::real_home($ENV{HOME});
+        push @e, "the runner's environment holds $_ (a name the runner drops at start)" for sort grep { /\A(?:CLAUDE|XDG_|STORE_|GIT_)/ } keys %ENV;
+        # the real ones, read by init (no link is made to them): the account's home and its .claude
+        my $acct = $ACCOUNT_HOME // die "home_guard: no account home\n";
+        push @e, "the guard does not hold the account's home $acct as a real home" unless homeguard::real_home($acct);
+        push @e, "the guard does not hold $acct/.claude as a real config folder" unless homeguard::real_config("$acct/.claude");
+        push @e, "the guard does not hold $acct/.local/state as a real state folder" unless homeguard::real_state("$acct/.local/state");
+        my $th = $V->{HOME};
+        my $true = -x '/usr/bin/true' ? '/usr/bin/true' : '/bin/true';
+        my $t = homeguard::self_rows($tmp, $th);
+        no warnings q(once);
+        local %homeguard::REAL = %{ $t->{real} };
+        my $n = 0;
+        # the runner works in $tmp here, so a relative HOME read against it lies under temp: only
+        # the absolute rule refuses it (a child started in its step's folder reads it there)
+        require Cwd;
+        my $back = Cwd::getcwd();
+        chdir($tmp) or die "home_guard: chdir $tmp: $!\n";
+        for my $row (@{ $t->{rows} }) {
+            local @homeguard::TEMP_ROOTS = $row->{temp} ? @{ $row->{temp} } : @homeguard::TEMP_ROOTS;
+            local $homeguard::WALK_MAX = $row->{budget}{max} // $homeguard::WALK_MAX;
+            local $homeguard::WALK_DEPTH = $row->{budget}{depth} // $homeguard::WALK_DEPTH;
+            my %env = (PATH => '/usr/bin:/bin', TMPDIR => "$tmp/tmpdir", %{ $row->{env} });
+            delete $env{$_} for grep { !defined $env{$_} } keys %env;
+            $n++;
+            my $pid = eval { spawn([$true], \%env, '', "$tmp/hg-out-$n", "$tmp/hg-err-$n", $tmp) };
+            my $err = $@;
+            if ($pid) { waitpid($pid, 0); delete $KIDS{$pid} }
+            my $r = eval { run_cmd([$true], env => { HOME => undef, CLAUDE_CONFIG_DIR => undef, %{ $row->{env} } }) };
+            my $rerr = $@;
+            push @e, "$row->{what}: the command exited $r->{exit}" if $row->{ok} && $r && $r->{exit} != 0;
+            push @e, homeguard::self_row_errs($row, ['helper call', $pid ? 1 : 0, $err], ['command', $r ? 1 : 0, $rerr]);
+        }
+        chdir($back) or die "home_guard: chdir $back: $!\n";
+        chmod(0700, @{ $t->{restore} });
+        push @e, "rows tried: $n, want at least 61" if $n < 61;
+        push @e, "a declared home at the account's home was taken" if eval { case_home($t->{account}); 1 };
+        push @e, "a declared home under the case was refused: $@" unless eval { case_home("$tmp/h1"); 1 };
+        return @e;
+    }
+    if ($name eq 'real_settings') {
+        # AT-SW-05 (HOME-GUARD): the real settings files, the real HOME's and the account's
+        # ~/.claude/settings.json and the CLAUDE_CONFIG_DIR one the runner started with ("files"
+        # [paths]: these instead, stand-ins), by sha256 ("absent" for a missing one), and the
+        # helper's backups beside them (settings.json.<brand>-*: settings set and reset write one
+        # before each write), never written: "save" keeps their state in a case var, "same_as"
+        # compares it with such a var. A new backup beside a file always fails. A changed stand-in
+        # fails. A changed live file fails when it is gone or holds no member (the wipe a planted
+        # hook once did); another change has no backup of a helper call beside it, so it is
+        # another writer's (a Claude Code session, the owner's tools: the live file is shared) and
+        # only noted; the stand-in child run of AT-SW-05 is the strict check of the same calls.
+        # The runner's own temp HOME holds no .claude.
+        my $V = $_[3];
+        my $given = ref $a->{files} eq 'ARRAY';
+        my %f = map { ($_ => 1) } grep { defined } ($given ? @{ $a->{files} } :
+                                                    ((map { defined && m{\A/} ? "$_/.claude/settings.json" : undef } ($REAL_HOME, $ACCOUNT_HOME)),
+                                                     (defined $REAL_CONFIG_DIR && $REAL_CONFIG_DIR ne '' ? "$REAL_CONFIG_DIR/settings.json" : undef)));
+        my %sha = map { my $d = -e $_ ? sha::hex256_file($_) : 'absent'; ($_ => $d // 'unreadable') } keys %f;
+        my $state = join("\n", map { "$_ $sha{$_}" } sort keys %f);
+        my %bak = map { my $d = util::dirname($_); map { ("$d/$_" => 1) } grep { /\Asettings\.json\.\Q$BRAND\E-/ } util::list_dir($d) } keys %f;
+        if (defined $a->{save}) { $V->{ $a->{save} } = $state; $V->{"$a->{save}.backups"} = join("\n", sort keys %bak) }
+        if (defined $a->{same_as}) {
+            my $was = $V->{ $a->{same_as} } // return ("real_settings: no saved $a->{same_as}");
+            my %wasb = map { ($_ => 1) } split /\n/, $V->{"$a->{same_as}.backups"} // '';
+            push @e, "a helper backup $_ appeared beside the real settings (a settings write landed there)" for grep { !$wasb{$_} } sort keys %bak;
+            my %wass = map { /\A(.*) (\S+)\z/ ? ($1 => $2) : () } split /\n/, $was;
+            for my $p (sort grep { ($wass{$_} // '') ne $sha{$_} } keys %f) {
+                my $now = -e $p ? (util::read_file($p) // '') : undef;
+                if ($given) { push @e, "settings $p changed: was $wass{$p}, now $sha{$p}"; next }
+                if (!defined $now || ($wass{$p} ne 'absent' && $now =~ /\A\s*(?:\{\s*\})?\s*\z/)) {
+                    push @e, "real settings $p " . (defined $now ? 'lost every member' : 'went') . " (was $wass{$p})";
+                    next;
+                }
+                print "# note: real settings $p changed during the case with no helper backup beside it (another writer of the live file)\n";
+            }
+        }
+        push @e, "the runner's temp HOME holds $RUN_TMP/home/.claude" if -e "$RUN_TMP/home/.claude";
+        return @e;
+    }
+    if ($name eq 'docker_endpoint') {
+        # AT-RN-08 (HOME-GUARD): docker_endpoint reads the endpoint of the context a docker config
+        # folder names (here stand-ins, with a stub docker "docker"): "colima" gives the stub's
+        # unix:// socket, read by `docker context inspect` with DOCKER_CONFIG at the stand-in and
+        # the case's temp HOME; DOCKER_CONTEXT names one too; "default", no config.json and an
+        # answer that is no endpoint give '' (the first two without starting docker).
+        my $V = $_[3];
+        my $tmp = $a->{tmp} // die "docker_endpoint: no tmp\n";
+        my $docker = $a->{docker} // die "docker_endpoint: no docker\n";
+        my %ctx = (colima => 'colima', default => 'default', bad => 'bad');
+        for my $k (sort keys %ctx) { util::mkdir_p("$tmp/dcfg-$k"); write_text("$tmp/dcfg-$k/config.json", qq({"currentContext": "$ctx{$k}"}\n)) }
+        util::mkdir_p("$tmp/dcfg-none");
+        my @rows = (['colima', undef, 'unix:///stub/colima.sock', 1], ['default', undef, '', 0], ['none', undef, '', 0],
+                    ['bad', undef, '', 1], ['none', 'colima', 'unix:///stub/colima.sock', 1]);
+        for my $row (@rows) {
+            my ($k, $dctx, $want, $runs) = @$row;
+            my $dir = "$tmp/dcfg-$k";
+            unlink "$dir/seen";
+            local $ENV{DOCKER_CONTEXT};
+            if (defined $dctx) { $ENV{DOCKER_CONTEXT} = $dctx } else { delete $ENV{DOCKER_CONTEXT} }
+            my $got = docker_endpoint($dir, $docker);
+            my $what = "config $k" . (defined $dctx ? ", DOCKER_CONTEXT $dctx" : '');
+            push @e, "$what: endpoint '$got', want '$want'" if $got ne $want;
+            my $seen = util::read_file("$dir/seen");
+            if (!$runs) { push @e, "$what: docker was started: $seen" if defined $seen; next }
+            if (!defined $seen) { push @e, "$what: docker was not started"; next }
+            push @e, "$what: docker saw '$seen', want DOCKER_CONFIG=$dir and the case's HOME $V->{HOME}"
+                unless $seen =~ /\ADOCKER_CONFIG=\Q$dir\E HOME=\Q$V->{HOME}\E DOCKER_HOST=unset args=context inspect --format \{\{\.Endpoints\.docker\.Host\}\} \w+\n\z/;
+        }
         return @e;
     }
     if ($name eq 'runner_hygiene') {
@@ -2986,7 +3277,7 @@ sub builtin {
         my $work = sub { my ($d) = @_; return map { "$d/$_" } grep { /\Astore-h-\d+-[0-9a-f]{6}\z/ } util::list_dir($d) };
         my $child = sub {
             my (@extra) = @_;
-            return util::run(['/usr/bin/perl', "$HERE/run.pl", '--repo-tmp', $rt, @extra], timeout_ms => 180000, env => { TMPDIR => $td });
+            return run_cmd(['/usr/bin/perl', "$HERE/run.pl", '--repo-tmp', $rt, @extra], timeout_ms => 180000, env => { TMPDIR => $td });
         };
         if ($which eq '01') {
             my $r = $child->("$cdir/_rn01");
@@ -3007,6 +3298,7 @@ sub builtin {
             remove_tree($_, $td) for @w;
         } elsif ($which eq '03') {
             for my $keep (0, 1) {
+                home_guard({ %ENV, TMPDIR => $td }, 'child run');
                 my $pid = fork();
                 die "fork: $!\n" unless defined $pid;
                 if ($pid == 0) {
@@ -3226,7 +3518,7 @@ sub builtin {
         # one row per manifest userConfig key and no other, each in exactly one section's key
         # list, with the manifest's title, default, min and max (read here from the staged
         # plugin.json, not through settings.pm); `unsectioned` is empty.
-        local $ENV{HOME} = $a->{home} if defined $a->{home};
+        local $ENV{HOME} = case_home($a->{home}) if defined $a->{home};
         local $ENV{CLAUDE_CONFIG_DIR};
         local $ENV{CLAUDE_PLUGIN_ROOT};
         delete local @ENV{ grep { /^CLAUDE_PLUGIN_OPTION_/ } keys %ENV };
@@ -3270,7 +3562,7 @@ sub builtin {
         # W-BETA D (CORE-02): settings::export_view; every key has an export class (AT-WB-08).
         my @none = grep { !defined $_->[3] || $_->[3] !~ /^(num|bool|enum|path|list|drop)$/ } do { no warnings "once"; @settings::KEYS };
         push @e, 'keys without an export class: ' . join(', ', map { $_->[0] } @none) if @none;
-        local $ENV{HOME} = $a->{home} if defined $a->{home};
+        local $ENV{HOME} = case_home($a->{home}) if defined $a->{home};
         # "noarg": export_view() with no argument (the watcher's report call, W2C-2). With
         # "values" the run context holds them; without, there is no run context (no rc::init)
         # and the view must still be the resolved settings, not empty values.
@@ -3357,6 +3649,7 @@ sub builtin {
         # whose parent is the runner, and the child sends its errors back on a pipe.
         if (getppid() <= 1) {
             pipe(my $rd, my $wr) or return ("claude_pid_walk: pipe: $!");
+            home_guard(\%ENV, 'claude_pid_walk child');
             my $kid = fork;
             return ("claude_pid_walk: fork: $!") unless defined $kid;
             if (!$kid) {
@@ -3399,9 +3692,9 @@ sub builtin {
                    '--read-only', '--tmpfs', '/tmp', '-e', 'LC_ALL=C', '-e', 'TZ=UTC', '-v', "$helper:/w/helper:ro",
                    $a->{image}, 'perl', '-', $a->{mb} // 32, $a->{steps} // 3);
         # docker's own errors (no such image, a path Docker cannot share) go to stdout too
-        my $r = util::run(['/bin/sh', '-c', 'exec "$0" "$@" 2>&1', @run], stdin => $probe, timeout_ms => ($a->{timeout_s} // 120) * 1000);
+        my $r = run_cmd(['/bin/sh', '-c', 'exec "$0" "$@" 2>&1', @run], stdin => $probe, timeout_ms => ($a->{timeout_s} // 120) * 1000);
         if ($r->{timed_out}) {
-            util::run([$docker, 'rm', '-f', $cname], timeout_ms => 30000);
+            run_cmd([$docker, 'rm', '-f', $cname], timeout_ms => 30000);
             push @e, "$a->{image}: timed out after " . ($a->{timeout_s} // 120) . ' s';
         }
         my $out = $r->{out} // '';
@@ -3545,7 +3838,7 @@ sub builtin {
         for my $c (@{ $a->{roots} || [] }) {
             delete local $ENV{XDG_STATE_HOME};
             $ENV{XDG_STATE_HOME} = $c->{xdg} if defined $c->{xdg};
-            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            local $ENV{HOME} = defined $c->{home} ? case_home($c->{home}) : $ENV{HOME};
             my $s = { values => { handoff_root => $c->{value}, log_dir => '' }, source => { handoff_root => $c->{source} // 'flag' } };
             my $p = paths::for($s, 'x');
             my $id = $c->{id} // ($c->{value} // 'unset');
@@ -3567,7 +3860,7 @@ sub builtin {
         for my $c (@{ $a->{disposable} || [] }) {
             delete local $ENV{XDG_STATE_HOME};
             $ENV{XDG_STATE_HOME} = $c->{xdg} if defined $c->{xdg};
-            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            local $ENV{HOME} = defined $c->{home} ? case_home($c->{home}) : $ENV{HOME};
             my $s = { values => { handoff_root => $c->{handoff_root} // "/x/hr", log_dir => '', disposable_root => $c->{value} },
                       source => { handoff_root => 'flag', disposable_root => $c->{source} // 'flag' } };
             my $p = paths::for($s, 'x');
@@ -3614,7 +3907,7 @@ sub builtin {
         # its parent: a home reached through a symlink) reads as its copy under the new root
         for my $c (@{ $a->{follow} || [] }) {
             delete local $ENV{XDG_STATE_HOME};
-            local $ENV{HOME} = $c->{home} // $ENV{HOME};
+            local $ENV{HOME} = defined $c->{home} ? case_home($c->{home}) : $ENV{HOME};
             my $s = { values => { handoff_root => $c->{value}, log_dir => '' }, source => { handoff_root => $c->{source} // 'default' } };
             my $got = paths::follow(paths::for($s, 'x')->{moved}, $c->{path});
             push @e, "$c->{id}: follow " . ($got // 'null') . ", want $c->{want}" if ($got // '') ne $c->{want};

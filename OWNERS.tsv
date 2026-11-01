@@ -69,6 +69,8 @@ plugin/helper/cmd/{begin,stamp,evidence,publish,locate,inventory,heal-check,veri
 plugin/helper/cmd/{wait,project}.*	skills
 plugin/helper/cmd/{watch,report}.*	watch
 tests/helper/run.*	core
+# HOME-GUARD (0.1.2): the one child-environment guard of the core case runner and the watch driver.
+tests/helper/homeguard.pm	core
 tests/matrix/**	core
 tests/helper/cases/core/{AT-Q,AT-RM,AT-RN}-*/**	core
 tests/helper/cases/core/**	core

@@ -15,6 +15,21 @@
 # not on PATH (`needs => ["cmd:<name>"]`) prints `not ok - <id> # TODO not run: needs <name>
 # ...`, counted as not run, neither passed nor skipped; the run does not fail on it.
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
+# HOME-GUARD (0.1.2; the guard is tests/helper/homeguard.pm, shared with the core case runner):
+# the driver itself runs in a fresh environment (none of the caller's Claude Code, XDG, helper or
+# git variables) with a temp HOME, each case with its own $HOME (a `cli` step's env may set a
+# CLAUDE_CONFIG_DIR or state folder of its own under a temp folder). The driver runs
+# homeguard::check on the environment before a `cli` step's child, a T::_git child, each
+# in-process step and each `expect` sub; an environment whose HOME, CLAUDE_CONFIG_DIR, state
+# folders (PATH_VARS), XDG defaults under HOME or any link under those folders leads to a real
+# home, into a real config or state folder or outside the temp folders (the full list is
+# homeguard::check's) dies with a `HOME-GUARD:` line and nothing starts
+# (AT-RN-07-watch-home-guard). A TMPDIR that is relative, has a `..` part or lies in a real config
+# or state folder ends the driver at start, exit 2, before it writes anything. Code run when
+# case.pl loads gets the driver's own temp HOME. A child that step or expect code starts itself
+# (backticks, system) inherits the environment checked before that step or sub; code that changes
+# %ENV or makes a link under HOME before it starts one checks again (homeguard::check(\%ENV, ...),
+# as AT-WB-02-canary-install does).
 #
 # This driver exists because the core case runner (tests/helper/run.*), the
 # core `hook` dispatcher and the shared watcher fixtures are other work
@@ -40,6 +55,24 @@ use watch;
 use watch::json;
 use watch::io;
 use watch::alerts;
+
+# HOME-GUARD: the real HOME, config folder and state folders are read once, here, before
+# anything is localised; from here on the driver runs in a fresh environment, as the core
+# runner's helper calls do (child_env): homeguard::fresh_env keeps PATH, TMPDIR, the locale, the
+# account names, the shell, the terminal and the perl library path, with HOME a temp folder of the
+# driver's own. No CLAUDE_CONFIG_DIR, CLAUDE_PLUGIN_DATA, CLAUDE_PLUGIN_OPTION_*, CLAUDE_CODE_*,
+# XDG_*, STORE_* or GIT_* of the caller's reaches the in-process steps or any child: a driver
+# started in a Claude Code session or a plugin hook (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA set) wrote
+# the cases' watch logs into the owner's state folders.
+require "$REPO/tests/helper/homeguard.pm";
+# a TMPDIR that is relative, has a `..` part or lies at or under a real config or state folder
+# ends the run here, exit 2, before the driver makes its temp folders in it
+eval { homeguard::init(); 1 } or do { print STDERR $@; exit 2 };
+# WATCH_CASE_DUMP: a debug switch the driver reads itself, kept for the driver only
+my $DUMP = $ENV{WATCH_CASE_DUMP};
+my $DRIVER_HOME = File::Temp::tempdir('watchdriver-XXXXXX', TMPDIR => 1, CLEANUP => 1) . '/home';
+watch::io::mkdir_p($DRIVER_HOME);
+%ENV = %{ homeguard::fresh_env($DRIVER_HOME) };
 
 $ENV{TZ} = 'Etc/GMT-3';
 POSIX::tzset();
@@ -170,6 +203,25 @@ sub cli_launcher {
     return $l;
 }
 
+# run_child(argv, stdin text, what) -> {exit, stdout, stderr}: argv, each word quoted, run through
+# the shell with this process's environment (a `cli` step's env is laid over %ENV by the caller),
+# stdin from a file, stdout and stderr captured. HOME-GUARD: homeguard::check(\%ENV, what) runs
+# first and dies, before the shell starts, when that environment leads into the real home, config
+# folder or state folders (see homeguard::check: HOME, CLAUDE_CONFIG_DIR, the state folders and
+# the links under them; argv itself is not read).
+sub run_child {
+    my ($argv, $stdin, $what) = @_;
+    homeguard::check(\%ENV, $what);
+    my $inf = File::Temp->new;
+    print $inf $stdin;
+    close $inf;
+    my $of = File::Temp->new;
+    my $ef = File::Temp->new;
+    my $cmd = join(' ', map { "'" . s/'/'\\''/gr . "'" } @$argv);
+    system("$cmd < '" . $inf->filename . "' > '" . $of->filename . "' 2> '" . $ef->filename . "'");
+    return { exit => $? >> 8, stdout => watch::io::slurp($of->filename), stderr => watch::io::slurp($ef->filename) };
+}
+
 sub capture {
     my ($code) = @_;
     my $tmp = File::Temp->new;
@@ -220,7 +272,11 @@ sub run_case {
     $v{WATCH} = "$v{ROOT}/.watch";
     $v{PROJ} = "$v{HOME}/.claude/projects/-synthetic-proj";
     watch::io::mkdir_p($v{HOME});
+    # the driver's own HOME, outside the case (AT-RN-07 reads it: a temp folder)
+    $v{DRIVER_HOME} = $ENV{HOME} // '';
     local $ENV{HOME} = $v{HOME};
+    # HOME-GUARD: no CLAUDE_CONFIG_DIR a step set leaks into the next case
+    delete local $ENV{CLAUDE_CONFIG_DIR};
     local $ENV{STORE_TEST_MODE} = '1';
     # A plugin root of our own: manifest + spec-literals for the test (the
     # real assets are generated from WP-text's handoff-spec.md).
@@ -249,6 +305,10 @@ sub run_case {
                        settings => { %{ $case->{settings} || {} } }, now => $now, pid => 4242,
                        pid_lstart => 'Tue Oct 21 13:00:00 2026', cc_version => '2.1.306');
         my $payload_tp = $s->{transcript} ? sub_vars($s->{transcript}, \%v) : $tpath;
+        # HOME-GUARD: an in-process step runs the watcher's code here, which may start children of
+        # its own (git), and a `code` step may start one itself; a `cli` step is checked again
+        # with its env (run_child)
+        homeguard::check(\%ENV, "step $s->{call}");
         my ($out, $err, $ret);
         if ($s->{call} eq 'hook') {
             my $payload = { session_id => $T::SID, transcript_path => $payload_tp, cwd => "$v{HOME}/work",
@@ -290,16 +350,9 @@ sub run_case {
             local @ENV{ keys %env } = map { sub_vars($_, \%v) } values %env;
             my $stdin = defined $s->{stdin} ? $s->{stdin} : '';
             $stdin = sub_vars($stdin, \%v) if $s->{stdin_vars};
-            my $inf = File::Temp->new;
-            print $inf $stdin;
-            close $inf;
-            my $of = File::Temp->new;
-            my $ef = File::Temp->new;
-            my $cmd = join(' ', map { "'" . s/'/'\\''/gr . "'" } (cli_launcher(), @argv));
-            system("$cmd < '" . $inf->filename . "' > '" . $of->filename . "' 2> '" . $ef->filename . "'");
-            my $code = $? >> 8;
-            $out = watch::io::slurp($of->filename);
-            $err = watch::io::slurp($ef->filename);
+            my $r = run_child([cli_launcher(), @argv], $stdin, "cli $argv[0]");
+            my $code = $r->{exit};
+            ($out, $err) = ($r->{stdout}, $r->{stderr});
             push @outputs, { exit => $code, stdout => $out, stderr => $err };
             push @errs, "cli @argv: exit $code, want " . ($s->{exit} // 0) if $code != ($s->{exit} // 0);
             if (defined $s->{stdout_re}) {
@@ -315,13 +368,15 @@ sub run_case {
         push @errs, "$label: stdout not empty (" . length($out) . " bytes)" if length($out // '') && $s->{call} ne 'status';
         push @errs, "$label: stderr not empty: $err" if length($err // '');
     }
-    if ($ENV{WATCH_CASE_DUMP}) {
+    if ($DUMP) {
         for my $f (sort(watch::io::list_dir($v{WATCH}))) {
             next unless $f =~ /\.jsonl\z/;
             print STDERR "== $f\n", watch::io::slurp("$v{WATCH}/$f");
         }
     }
     my $E = Checker->new(\%v, \@outputs);
+    # HOME-GUARD: an expect sub may start children of its own (the D-12 cases' git backticks)
+    homeguard::check(\%ENV, 'expect') if ref $case->{expect} eq 'CODE';
     $case->{expect}->($E) if ref $case->{expect} eq 'CODE';
     if (!$case->{allow_canary}) {
         my @hits = grep_tree($v{WATCH}, 'CANARY-TEXT');

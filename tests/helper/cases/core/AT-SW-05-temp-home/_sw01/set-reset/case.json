@@ -1,0 +1,67 @@
+{
+ "id": "AT-SW-05-inner-set-reset",
+ "note": "run by AT-SW-05 only (discovery skips _ folders), by a child run of the runner started with HOME and CLAUDE_CONFIG_DIR at stand-ins that hold a settings.json: set and reset land in this case's temp HOME, never in the stand-ins",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"compact_target_tokens\": 300000\n      }\n    }\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "set: the write lands in the temp HOME",
+   "argv": [
+    "settings",
+    "set",
+    "triggers=false",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  triggers: default true -> false$",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"triggers\": false",
+       "\"compact_target_tokens\": 300000"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "reset: the member goes from the temp HOME's file",
+   "argv": [
+    "settings",
+    "reset",
+    "triggers",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^settings reset: removed triggers from ~/\\.claude/settings\\.json ",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"compact_target_tokens\": 300000"
+      ],
+      "lacks": [
+       "triggers"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "id": "AT-SW-05-inner-changed",
+ "note": "run by AT-SW-05 only (discovery skips _ folders): a settings file given to real_settings that changes, with a helper backup appearing beside it, fails the check with both lines, so this case fails",
+ "steps": [
+  {"setup": [{"write": "$TMP/s/.claude/settings.json", "mode": "0644", "text": "{\n  \"model\": \"before\"\n}\n"}]},
+  {"name": "before", "lib": "real_settings", "args": {"save": "S_BEFORE", "files": ["$TMP/s/.claude/settings.json"]}},
+  {"setup": [{"write": "$TMP/s/.claude/settings.json", "mode": "0644", "text": "{}\n"},
+             {"write": "$TMP/s/.claude/settings.json.$BRAND-20261021-090000", "mode": "0644", "text": "{\n  \"model\": \"before\"\n}\n"}]},
+  {"name": "after", "lib": "real_settings", "args": {"same_as": "S_BEFORE", "files": ["$TMP/s/.claude/settings.json"]}}
+ ]
+}

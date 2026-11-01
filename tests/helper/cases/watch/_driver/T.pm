@@ -326,6 +326,10 @@ sub subst_deep {
 }
 sub _git {
     my ($cwd, @argv) = @_;
+    # HOME-GUARD (tests/helper/homeguard.pm, loaded by the driver): homeguard::check reads this
+    # process's environment, which the git child gets (plus GIT_CONFIG_NOSYSTEM), and dies before
+    # the fork when it leads into the real home, config folder or state folders
+    homeguard::check(\%ENV, "git $argv[0]");
     my $pid = fork() // die "fork: $!";
     if (!$pid) {
         chdir $cwd or POSIX::_exit(126);

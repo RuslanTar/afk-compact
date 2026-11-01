@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-06-inner-no-home",
+ "note": "run by AT-RN-06 only (discovery skips _ folders): a helper call with no HOME must be refused before it starts, so this case fails",
+ "env": {"HOME": null},
+ "exec": ["/bin/sh", "-c", "exit 0"],
+ "expect": {"exit": 0}
+}
