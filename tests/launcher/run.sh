@@ -18,23 +18,31 @@
 # LAUNCHER_TEST_FOREIGN_BASE (set by docker.sh): a cache folder holding <brand> that another
 # user owns, for the real foreign-owner case; without it that case uses a stub id. Each case
 # has its own HOME (its cache folder HOME/.cache, 0700) and TMPDIR.
-# LAUNCHER_TEST_HG_INNER (set by AT-RS-30e and AT-RS-30f for their own inner runs of this file):
-# AT-RS-30e checks what claude got, AT-RS-30f passes, instead of starting that inner run.
+# --hg-inner (given by AT-RS-30e and AT-RS-30f to their own inner runs of this file, which print
+# `# inner run`): AT-RS-30e checks what claude got, AT-RS-30f passes, instead of starting that
+# inner run. An argument, not a variable: a value left in the environment would make both no-ops.
 # Output: TAP lines (`ok N - <shell> <case> <title>`), then `# passed N, failed M, skipped K`.
 # Exit 0 when nothing failed, else 1.
 set -u
 # HOME-GUARD: this file writes only under one new folder in ${TMPDIR:-/tmp}, so that folder is
 # checked first, before anything is made, while the caller's CLAUDE_CONFIG_DIR and XDG folders are
 # still set: a TMPDIR that is relative (read against whatever folder a shell is in), has a `..`
-# part (the kernel applies it after links: $T/L/.. with L a link into ~/.claude is ~/.claude) or
-# lies, links resolved (cd -P), at or under $HOME/.claude, the CLAUDE_CONFIG_DIR given,
-# $HOME/.local, $HOME/.cache, $HOME/.config or a given XDG_STATE_HOME, XDG_CACHE_HOME,
-# XDG_CONFIG_HOME or XDG_DATA_HOME ends the run, exit 2 (XDG_RUNTIME_DIR is no state folder: TMPDIR
-# may lie under it). AT-RS-30f.
-hg_real() {
-  # hg_real PATH: PATH with its links resolved, as given when it is no folder
-  (cd -P -- "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"
-}
+# part (the kernel applies it after links: $T/L/.. with L a link into ~/.claude is ~/.claude),
+# lies at or under $HOME/.claude, the CLAUDE_CONFIG_DIR given (a leading ~ read as $HOME),
+# $HOME/.local, $HOME/.cache, $HOME/.config, the same four of the account's home (getpwuid) or a
+# given XDG_STATE_HOME, XDG_CACHE_HOME, XDG_CONFIG_HOME or XDG_DATA_HOME, or lies at or above
+# $HOME or the account's home ends the run,
+# exit 2 (XDG_RUNTIME_DIR is no state folder: TMPDIR may lie under it). As the helper runners'
+# guard (tests/helper/homeguard.pm) does, perl compares by real path (links resolved) and by
+# device and inode, each parent in turn: a case-insensitive file system reads $HOME/.Claude/t as
+# $HOME/.claude/t, which pwd -P keeps as typed. A HOME that is not the account's home and lies
+# strictly under /tmp or TMPDIR is a throwaway one (tests/launcher/in-docker.sh: HOME and TMPDIR
+# /tmp/t; on macOS a HOME made with `mktemp -d` lies under TMPDIR) and is not read as one TMPDIR
+# may not hold; the account's home always is. AT-RS-30f.
+if ! command -v perl >/dev/null 2>&1; then
+  echo "run.sh: perl is needed (it checks TMPDIR and starts each launcher with default signal handling)" >&2
+  exit 2
+fi
 hg_t=${TMPDIR:-/tmp}
 case $hg_t in
 /*) ;;
@@ -43,20 +51,58 @@ esac
 case /$hg_t/ in
 */../*) echo "run.sh: HOME-GUARD: TMPDIR $hg_t has a .. part (applied after links); nothing written" >&2; exit 2 ;;
 esac
-hg_rt=$(hg_real "$hg_t")
-for hg_d in "${HOME:+$HOME/.claude}" "${CLAUDE_CONFIG_DIR-}" "${HOME:+$HOME/.local}" "${HOME:+$HOME/.cache}" "${HOME:+$HOME/.config}" \
-  "${XDG_STATE_HOME-}" "${XDG_CACHE_HOME-}" "${XDG_CONFIG_HOME-}" "${XDG_DATA_HOME-}"; do
-  case $hg_d in
-  /*) ;;
-  *) continue ;;
-  esac
-  hg_r=$(hg_real "$hg_d")
-  case $hg_rt/ in
-  "${hg_r%/}"/*)
-    echo "run.sh: HOME-GUARD: TMPDIR $hg_t is in $hg_d (a real config or state folder); nothing written" >&2
-    exit 2 ;;
-  esac
-done
+# perl prints `in FOLDER` (the first folder TMPDIR lies at or under), `home HOME` (a home TMPDIR
+# is at or above) or `ok` on stdout; its stderr is not read (LC_ALL=C: no locale warning either)
+hg_hit=$(LC_ALL=C perl -e '
+use strict; use warnings; use Cwd ();
+my ($t, $home, @dirs) = @ARGV;
+my $acct = (getpwuid $<)[7];
+$acct = "" unless defined $acct && $acct =~ m{\A/};
+push @dirs, map { "$acct/$_" } qw(.claude .local .cache .config) if $acct ne "";
+sub id { my @s = stat $_[0]; return @s ? "$s[0]:$s[1]" : "" }
+sub real {
+  my ($p) = @_;
+  $p =~ s{(?<=.)/+\z}{};
+  my @tail;
+  while ($p ne "/" && !-e $p) { $p =~ s{/+([^/]*)\z}{}; unshift @tail, $1; $p = "/" if $p eq "" }
+  my $r = Cwd::abs_path($p);
+  $r = $p unless defined $r;
+  return @tail ? join("/", ($r eq "/" ? "" : $r), @tail) : $r;
+}
+sub ups { my @u; for (my $d = $_[0]; $d ne ""; $d =~ s{/[^/]*\z}{}) { push @u, $d } return (@u, "/") }
+my $rt = real($t);
+my $tid = id($rt);
+for my $d (@dirs) {
+  my $x = $d;
+  $x =~ s{\A~(?=/|\z)}{$home} if $home ne "";
+  next unless $x =~ m{\A/};
+  my ($rd, $did) = (real($x), id($x));
+  if (grep { $_ eq $rd || ($did ne "" && id($_) eq $did) } ups($rt)) { print "in $d"; exit 0 }
+}
+my @tw = map { (my $x = real($_)) =~ s{/+\z}{}; $x } "/tmp", $t;
+my $ra = $acct ne "" ? real($acct) : "";
+my $aid = $ra ne "" ? id($ra) : "";
+for my $h (grep { m{\A/} } $home, $acct) {
+  my $rh = real($h);
+  my $own = $ra ne "" && ($rh eq $ra || ($aid ne "" && id($rh) eq $aid));
+  next if !$own && grep { index($rh, "$_/") == 0 } @tw;
+  if (grep { $_ eq $rt || ($tid ne "" && id($_) eq $tid) } ups($rh)) { print "home $h"; exit 0 }
+}
+print "ok";
+' "$hg_t" "${HOME-}" "${HOME:+$HOME/.claude}" "${CLAUDE_CONFIG_DIR-}" "${HOME:+$HOME/.local}" "${HOME:+$HOME/.cache}" \
+  "${HOME:+$HOME/.config}" "${XDG_STATE_HOME-}" "${XDG_CACHE_HOME-}" "${XDG_CONFIG_HOME-}" "${XDG_DATA_HOME-}")
+case $hg_hit in
+ok) ;;
+"in "*)
+  echo "run.sh: HOME-GUARD: TMPDIR $hg_t is in ${hg_hit#in } (a real config or state folder); nothing written" >&2
+  exit 2 ;;
+"home "*)
+  echo "run.sh: HOME-GUARD: TMPDIR $hg_t is at or above the real home ${hg_hit#home }; nothing written" >&2
+  exit 2 ;;
+*)
+  echo "run.sh: HOME-GUARD: TMPDIR $hg_t could not be checked: $hg_hit; nothing written" >&2
+  exit 2 ;;
+esac
 # HOME-GUARD: none of the caller's Claude Code, XDG, helper or git variables (CLAUDECODE,
 # CLAUDE_CONFIG_DIR, CLAUDE_PLUGIN_DATA, CLAUDE_PLUGIN_OPTION_*, CLAUDE_CODE_*, XDG_STATE_HOME,
 # XDG_CACHE_HOME, STORE_*, GIT_DIR, ...) reaches a launcher, its claude or its helper: run from a
@@ -87,20 +133,18 @@ SID=00000000-0000-4000-8000-000000000000
 quick=
 only=
 shells=
+hg_inner=
 while [ $# -gt 0 ]; do
   case $1 in
   --shell) shells="$shells$2
 "; shift 2 ;;
   --quick) quick=1; shift ;;
+  --hg-inner) hg_inner=1; shift ;;
   -*) echo "run.sh: unknown option $1" >&2; exit 2 ;;
   *) only="$only $1"; shift ;;
   esac
 done
-
-if ! command -v perl >/dev/null 2>&1; then
-  echo "run.sh: perl is needed (it starts each launcher with default signal handling)" >&2
-  exit 2
-fi
+[ -z "$hg_inner" ] || echo "# inner run (--hg-inner: AT-RS-30e and AT-RS-30f check it)"
 have_pty=
 if command -v script >/dev/null 2>&1; then have_pty=1; fi
 
@@ -300,7 +344,9 @@ want_runs() {
 }
 
 want_argv() {
-  # want_argv RUN WORD...: the exact arguments of that claude run, one word per line.
+  # want_argv RUN WORD...: the exact arguments of that claude run, one word per line (nothing for
+  # a case not run: it has no run file to read).
+  [ -z "$CSKIP" ] || return 0
   w_run=$1
   shift
   printf '%s\n' "$@" >"$C/want$w_run.argv"
@@ -510,7 +556,7 @@ case_30d() {
 case_30e() {
   new_case AT-RS-30e "HOME-GUARD: the caller's Claude Code, XDG, helper and git variables never reach claude (run.sh unsets them at start)" needs-pty
   x_vars="CLAUDE_PLUGIN_DATA CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT XDG_STATE_HOME STORE_TEST_NOW GIT_DIR BASH_ENV ENV ZDOTDIR"
-  if [ -n "${LAUNCHER_TEST_HG_INNER-}" ]; then
+  if [ -n "$hg_inner" ]; then
     # the inner run (below): this file started with each name set; the stub records what claude got
     scen "1 exit 0"
     run_launcher --env "STUB_VARS=$x_vars" -- --verbose
@@ -524,10 +570,10 @@ case_30e() {
     # this case: the inner case passes only when every one was unset at start, and nothing lands
     # in those folders
     mkdir -p "$C/sd"
-    LAUNCHER_TEST_HG_INNER=1 CLAUDE_PLUGIN_DATA=$C/sd/data CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=$C/sd/handoffs \
+    CLAUDE_PLUGIN_DATA=$C/sd/data CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=$C/sd/handoffs \
       XDG_STATE_HOME=$C/sd/state STORE_TEST_NOW=2026-10-21T09:00:00Z GIT_DIR=$C/sd/git TMPDIR=$C/tmp \
       BASH_ENV=$C/sd/bash_env ENV=$C/sd/env ZDOTDIR=$C/sd/zdotdir \
-      /bin/sh "$here/run.sh" --shell "$SH" AT-RS-30e >"$C/inner.out" 2>&1
+      /bin/sh "$here/run.sh" --hg-inner --shell "$SH" AT-RS-30e >"$C/inner.out" 2>&1
     grep -q '^# passed 1, failed 0, skipped 0$' "$C/inner.out" ||
       fail "the inner run of run.sh started with $x_vars set: $(tail -n 8 "$C/inner.out" | tr '\n' '|')"
     [ -z "$(ls -A "$C/sd")" ] || fail "files landed in the stand-in folders: $(ls -A "$C/sd" | tr '\n' ' ')"
@@ -536,36 +582,110 @@ case_30e() {
 }
 
 case_30f() {
-  new_case AT-RS-30f "HOME-GUARD: a TMPDIR that is relative, has a .. part or lies in a real config or state folder ends run.sh at start, nothing written"
-  if [ -n "${LAUNCHER_TEST_HG_INNER-}" ]; then
+  new_case AT-RS-30f "HOME-GUARD: a TMPDIR that is relative, has a .. part, lies in a real config or state folder or at or above a real home ends run.sh at start, nothing written"
+  if [ -n "$hg_inner" ]; then
     # the inner run (below) with a TMPDIR run.sh takes: nothing to check here
     :
   elif [ -z "$CSKIP" ]; then
     # this file again, on this case alone in this shell, with HOME a stand-in real home and each
     # TMPDIR: refused ones end it, exit 2, with its line and no launcher-tests folder anywhere in
-    # the stand-in; one under the stand-in home outside its config and state folders runs
+    # the stand-in; one under the stand-in home outside its config and state folders runs, and so
+    # does one that holds a HOME made in it
     x_h=$C/fh
-    mkdir -p "$x_h/.claude/t" "$x_h/.local/state/t" "$x_h/.cache/t" "$x_h/.config/t" "$x_h/tmp" "$C/cfg/t" "$C/xs/t" "$C/xc/t"
+    mkdir -p "$x_h/.claude/t" "$x_h/.local/state/t" "$x_h/.cache/t" "$x_h/.config/t" "$x_h/tmp" "$x_h/cfg2/t" \
+      "$C/cfg/t" "$C/xs/t" "$C/xc/t" "$C/xk/t" "$C/xd/t"
     ln -s "$x_h/.claude/t" "$C/L"
     ln -s "$x_h/.cache" "$C/lc"
-    for x_row in "rel/tmp|is not absolute" "$C/L/..|has a .. part" "$x_h/.claude/t|is in $x_h/.claude " \
-      "$x_h/.local/state/t|is in $x_h/.local " "$x_h/.cache/t|is in $x_h/.cache " "$x_h/.config/t|is in $x_h/.config " \
-      "$C/lc|is in $x_h/.cache " "$C/cfg/t|is in $C/cfg " "$C/xs/t|is in $C/xs " "$C/xc/t|is in $C/xc "; do
+    x_rows="rel/tmp|is not absolute
+$C/L/..|has a .. part
+$x_h/.claude/t|is in $x_h/.claude 
+$x_h/.local/state/t|is in $x_h/.local 
+$x_h/.cache/t|is in $x_h/.cache 
+$x_h/.config/t|is in $x_h/.config 
+$C/lc|is in $x_h/.cache 
+$C/cfg/t|is in $C/cfg 
+$C/xs/t|is in $C/xs 
+$C/xc/t|is in $C/xc 
+$C/xk/t|is in $C/xk 
+$C/xd/t|is in $C/xd "
+    # another case of the names, the same folders where the file system folds case (pwd -P keeps
+    # the case as typed: only the device and inode compare sees them)
+    if [ -d "$C/FH" ] && [ "$C/FH" -ef "$x_h" ]; then
+      x_rows="$x_rows
+$C/FH/.Claude/t|is in $x_h/.claude 
+$x_h/.LOCAL/state/t|is in $x_h/.local "
+    fi
+    # TMPDIR at the home, also by another case of its name (a stand-in under /tmp is a throwaway
+    # home, which TMPDIR may hold)
+    x_rh=$(cd -P "$x_h" && pwd -P)
+    x_rtmp=$(cd -P /tmp && pwd -P)
+    case $x_rh/ in
+    "$x_rtmp"/*) ;;
+    *) x_rows="$x_rows
+$x_h|is at or above the real home $x_h;"
+      if [ -d "$C/FH" ] && [ "$C/FH" -ef "$x_h" ]; then
+        x_rows="$x_rows
+$C/FH|is at or above the real home $x_h;"
+      fi ;;
+    esac
+    # the account's home (getpwuid), whatever HOME is: a TMPDIR in a missing folder of its .claude
+    # (mktemp cannot make a work folder there, so nothing is written even past the guard), and its
+    # parent where this user cannot write there (the account's home is never a throwaway one)
+    x_acct=$(perl -e 'my $h = (getpwuid $<)[7]; print $h if defined $h && $h =~ m{\A/}')
+    if [ -n "$x_acct" ] && [ ! -e "$x_acct/.claude/launcher-hg-none" ]; then
+      x_rows="$x_rows
+$x_acct/.claude/launcher-hg-none/t|is in $x_acct/.claude "
+    fi
+    x_ap=$(dirname "$x_acct")
+    if [ -n "$x_acct" ] && [ -d "$x_ap" ] && [ ! -w "$x_ap" ]; then
+      x_rows="$x_rows
+$x_ap|is at or above the real home $x_acct;"
+    fi
+    x_n=0
+    IFS_SAVE=$IFS
+    IFS=$nl
+    for x_row in $x_rows; do
+      IFS=$IFS_SAVE
+      x_n=$((x_n + 1))
       x_td=${x_row%%|*}
       x_want=${x_row#*|}
-      (cd "$C/work" && env HOME="$x_h" CLAUDE_CONFIG_DIR="$C/cfg" XDG_STATE_HOME="$C/xs" XDG_CONFIG_HOME="$C/xc" TMPDIR="$x_td" \
-        LAUNCHER_TEST_HG_INNER=1 /bin/sh "$here/run.sh" --shell "$SH" AT-RS-30f >"$C/inner.out" 2>&1)
+      (cd "$C/work" && env HOME="$x_h" CLAUDE_CONFIG_DIR="$C/cfg" XDG_STATE_HOME="$C/xs" XDG_CONFIG_HOME="$C/xc" \
+        XDG_CACHE_HOME="$C/xk" XDG_DATA_HOME="$C/xd" TMPDIR="$x_td" \
+        /bin/sh "$here/run.sh" --hg-inner --shell "$SH" AT-RS-30f >"$C/inner.out" 2>&1)
       x_rc=$?
       [ "$x_rc" = 2 ] || fail "TMPDIR $x_td: exit $x_rc, want 2: $(tail -n 4 "$C/inner.out" | tr '\n' '|')"
       grep -F "run.sh: HOME-GUARD: TMPDIR $x_td $x_want" "$C/inner.out" >/dev/null 2>&1 ||
         fail "TMPDIR $x_td: no HOME-GUARD line ($x_want): $(tr '\n' '|' <"$C/inner.out")"
+      IFS=$nl
     done
-    x_left=$(find "$x_h" "$C/cfg" "$C/xs" "$C/xc" "$C/work" -name 'launcher-tests.*' 2>/dev/null)
+    IFS=$IFS_SAVE
+    [ "$x_n" -ge 12 ] || fail "TMPDIR rows tried: $x_n, want at least 12"
+    # CLAUDE_CONFIG_DIR given as ~/cfg2: read as the home's cfg2
+    (cd "$C/work" && env HOME="$x_h" CLAUDE_CONFIG_DIR='~/cfg2' TMPDIR="$x_h/cfg2/t" \
+      /bin/sh "$here/run.sh" --hg-inner --shell "$SH" AT-RS-30f >"$C/inner.out" 2>&1)
+    x_rc=$?
+    [ "$x_rc" = 2 ] || fail "CLAUDE_CONFIG_DIR ~/cfg2, TMPDIR in it: exit $x_rc, want 2: $(tail -n 4 "$C/inner.out" | tr '\n' '|')"
+    grep -F "run.sh: HOME-GUARD: TMPDIR $x_h/cfg2/t is in ~/cfg2 " "$C/inner.out" >/dev/null 2>&1 ||
+      fail "CLAUDE_CONFIG_DIR ~/cfg2, TMPDIR in it: no HOME-GUARD line: $(tr '\n' '|' <"$C/inner.out")"
+    x_left=$(find "$x_h" "$C/cfg" "$C/xs" "$C/xc" "$C/xk" "$C/xd" "$C/work" -name 'launcher-tests.*' 2>/dev/null;
+      find "$C" -maxdepth 1 -name 'launcher-tests.*' 2>/dev/null)
     [ -z "$x_left" ] || fail "a work folder was made: $x_left"
     (cd "$C/work" && env HOME="$x_h" CLAUDE_CONFIG_DIR="$C/cfg" XDG_STATE_HOME="$C/xs" TMPDIR="$x_h/tmp" \
-      LAUNCHER_TEST_HG_INNER=1 /bin/sh "$here/run.sh" --shell "$SH" AT-RS-30f >"$C/inner.out" 2>&1) ||
+      /bin/sh "$here/run.sh" --hg-inner --shell "$SH" AT-RS-30f >"$C/inner.out" 2>&1) ||
       fail "TMPDIR under the home outside its config and state folders: $(tail -n 4 "$C/inner.out" | tr '\n' '|')"
     grep -q '^# passed 1, failed 0, skipped 0$' "$C/inner.out" || fail "the inner run did not pass: $(tail -n 4 "$C/inner.out" | tr '\n' '|')"
+    grep -q '^# inner run ' "$C/inner.out" || fail "the inner run given --hg-inner has no '# inner run' line: $(head -n 2 "$C/inner.out" | tr '\n' '|')"
+    # a HOME made in TMPDIR (as mktemp -d makes one under TMPDIR on macOS), TMPDIR unchanged: runs
+    x_mh=$(mktemp -d "$C/home.XXXXXX")
+    (cd "$C/work" && env HOME="$x_mh" TMPDIR="$C" \
+      /bin/sh "$here/run.sh" --hg-inner --shell "$SH" AT-RS-30f >"$C/inner.out" 2>&1) ||
+      fail "HOME made in TMPDIR: $(tail -n 4 "$C/inner.out" | tr '\n' '|')"
+    grep -q '^# passed 1, failed 0, skipped 0$' "$C/inner.out" || fail "HOME made in TMPDIR: the inner run did not pass: $(tail -n 4 "$C/inner.out" | tr '\n' '|')"
+    # a LAUNCHER_TEST_HG_INNER left in the environment (the inner mode's variable before 0.1.2's
+    # review) starts no inner run: the mode is an argument
+    (cd "$C/work" && env LAUNCHER_TEST_HG_INNER=1 TMPDIR="$C/tmp" \
+      /bin/sh "$here/run.sh" --shell "$SH" AT-RS-none >"$C/inner.out" 2>&1)
+    if grep -q '^# inner run ' "$C/inner.out"; then fail "LAUNCHER_TEST_HG_INNER in the environment started an inner run"; fi
   fi
   end_case
 }

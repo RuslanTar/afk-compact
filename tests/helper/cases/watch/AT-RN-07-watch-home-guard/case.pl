@@ -13,7 +13,8 @@
 # .local/state, .local/share, .cache or .config links into the real home (or the real config
 # folder), is a dangling link or links outside temp, a link at any depth below HOME or a state
 # folder that leads, dangling or not, into the real home's folders or outside temp (the link
-# walk, past its budget too), a HOME in a folder whose name a temp folder's begins, TMPDIR at the
+# walk, past its budget too; a CLAUDE_CONFIG_DIR outside HOME is walked too), an XDG_DATA_HOME at
+# the real home's .local/share, a HOME in a folder whose name a temp folder's begins, TMPDIR at the
 # account's home or another case of it, or at the real home with XDG_CACHE_HOME or
 # XDG_CONFIG_HOME at its .cache or .config, a state folder outside temp, relative, through `..`
 # or in a real config or state folder). The `cli` child is `true` and the git child
@@ -25,11 +26,19 @@
 # (X-hooks) and one whose environment holds none of them and whose fixture git commits land in
 # its own repo (_env), and nothing lands in the stand-ins (the stand-in repo keeps its one
 # commit); an inner driver whose TMPDIR lies in a stand-in real home's .local/state, is relative,
-# or goes through a link into that folder and `..` ends at start, exit 2, with the guard's line,
-# and writes nothing there.
+# goes through a link into that folder and `..`, or is that stand-in home (also by another case
+# of its name where the file system folds case) ends at start, exit 2, with the guard's line, and
+# writes nothing there; one whose TMPDIR lies under the stand-in home outside its config and state
+# folders runs, and so does one whose HOME was made in its TMPDIR (as `mktemp -d` makes one under
+# TMPDIR on macOS). The start-up decision on a TMPDIR at or above a home holds on stand-ins
+# (homeguard::temp_root_rows, as in AT-RN-06). The inner drivers' TMPDIR is a folder beside the
+# case's HOME (INNER_TMP).
 my (@bad, @tried, $want_rows);
 my $HERE = do { (my $d = __FILE__) =~ s{/[^/]*\z}{}; $d };
 my $DRIVER = sub { return "$T::REPO/tests/helper/cases/watch/_driver/run-watch.pl" };
+# an inner driver's TMPDIR: a folder beside the case's HOME, which the inner driver reads as its
+# real home
+my $INNER_TMP = sub { my $d = "$_[0]{TMP}/inner-tmp"; watch::io::mkdir_p($d); return $d };
 {
     steps => [
         { call => 'code', code => sub {
@@ -77,8 +86,9 @@ my $DRIVER = sub { return "$T::REPO/tests/helper/cases/watch/_driver/run-watch.p
         # outside the temp folders, fails that case at its second step, and over _expect, whose last
         # step does so, fails that case before its expect sub runs, each with the guard's line
         { call => 'code', code => sub {
+            my $v = shift;
             push @tried, 'a step after HOME left temp', 'an expect sub after HOME left temp';
-            my $r = main::run_child([$^X, $DRIVER->(), "$HERE/_step", "$HERE/_expect"], '', 'inner driver');
+            my $r = do { local %ENV = (%ENV, TMPDIR => $INNER_TMP->($v)); main::run_child([$^X, $DRIVER->(), "$HERE/_step", "$HERE/_expect"], '', 'inner driver') };
             push @bad, "the inner driver run exited $r->{exit}, want 1: $r->{stdout}$r->{stderr}" unless $r->{exit} == 1;
             push @bad, "the inner driver run has no HOME-GUARD line for the second step: $r->{stdout}$r->{stderr}"
                 unless $r->{stdout} =~ m{^not ok - _step\n#   died: HOME-GUARD: step code: HOME /nonexistent-home-guard is not under a temp folder; not started$}m;
@@ -103,7 +113,7 @@ my $DRIVER = sub { return "$T::REPO/tests/helper/cases/watch/_driver/run-watch.p
             T::_git($repo, 'commit', '-q', '--allow-empty', '-m', 'fixture');
             push @tried, 'a driver started with the state folders, STORE_TEST_TRACE and GIT_DIR at stand-ins';
             my $r = do {
-                local %ENV = (%ENV, %sf, STORE_TEST_TRACE => "$trace/trace.log", GIT_DIR => "$repo/.git");
+                local %ENV = (%ENV, %sf, STORE_TEST_TRACE => "$trace/trace.log", GIT_DIR => "$repo/.git", TMPDIR => $INNER_TMP->($v));
                 main::run_child([$^X, $DRIVER->(), "$HERE/../X-hooks", "$HERE/_env"], '', 'inner driver');
             };
             push @bad, "the inner driver run with stand-in state folders exited $r->{exit}, want 0: $r->{stdout}$r->{stderr}" unless $r->{exit} == 0;
@@ -168,10 +178,50 @@ my $DRIVER = sub { return "$T::REPO/tests/helper/cases/watch/_driver/run-watch.p
                 }
             }
         } },
+        # a driver whose TMPDIR is a real home (a stand-in; also by another case of its name where
+        # the file system folds case) ends at start, before it makes its temp folders there; one
+        # whose TMPDIR lies under that home outside its config and state folders runs, and so does
+        # one whose HOME was made in its TMPDIR (as `mktemp -d` makes one under TMPDIR on macOS)
+        { call => 'code', code => sub {
+            my $v = shift;
+            my $fh = "$v->{TMP}/standin-tmpdir3";
+            watch::io::mkdir_p("$fh/home/tmp");
+            # the start-up decision on a TMPDIR at or above a home, on stand-ins
+            my $tr = homeguard::temp_root_rows($v->{TMP});
+            push @tried, @{ $tr->{tried} };
+            push @bad, @{ $tr->{errs} };
+            # a stand-in home under a throwaway folder (/tmp: a host with no TMPDIR) is no real
+            # home for the guard: not run there
+            return if homeguard::throwaway($fh);
+            (my $vfh = $fh) =~ s{standin-tmpdir3\z}{STANDIN-TMPDIR3};
+            my @vary = (-e $vfh && homeguard::_id($vfh) eq homeguard::_id($fh))
+                ? ([$fh, $vfh, qr{\AHOME-GUARD: TMPDIR \S+/STANDIN-TMPDIR3 is at or above the real home \S+/standin-tmpdir3 \(every file in it would read as temp\); nothing written\n\z}]) : ();
+            for my $c ([$fh, $fh, qr{\AHOME-GUARD: TMPDIR \S+/standin-tmpdir3 is at or above the real home \S+/standin-tmpdir3 \(every file in it would read as temp\); nothing written\n\z}],
+                       @vary,
+                       ["$fh/home", $fh, undef],
+                       ["$fh/home", "$fh/home/tmp", undef]) {
+                my ($h, $td, $want) = @$c;
+                push @tried, "a driver with HOME $h and TMPDIR $td";
+                my $r = do {
+                    local %ENV = (%ENV, HOME => $h, TMPDIR => $td);
+                    main::run_child([$^X, $DRIVER->(), "$HERE/_env"], '', 'inner driver');
+                };
+                if (!$want) {
+                    push @bad, "the inner driver run with HOME $h and TMPDIR $td exited $r->{exit}, want 0: $r->{stdout}$r->{stderr}" unless $r->{exit} == 0;
+                    next;
+                }
+                push @bad, "the inner driver run with HOME $h and TMPDIR $td exited $r->{exit}, want 2: $r->{stdout}$r->{stderr}" unless $r->{exit} == 2;
+                push @bad, "the inner driver run with HOME $h and TMPDIR $td has no HOME-GUARD line: $r->{stdout}$r->{stderr}" unless $r->{stderr} =~ $want;
+                my @left = grep { $_ ne 'home' } watch::io::list_dir($fh);
+                push @bad, "the inner driver run with HOME $h and TMPDIR $td wrote in $fh: @left" if @left;
+            }
+        } },
     ],
     expect => sub {
         my ($E) = @_;
-        $E->ok(@tried >= 67, 'home guard: ' . scalar(@tried) . ' environments tried, want at least 67');
+        # 74: the guard's table, temp_root_rows and the inner driver runs (the TMPDIR-at-or-above-a-
+        # home runs are not run where the stand-in lies under a throwaway folder)
+        $E->ok(@tried >= 74, 'home guard: ' . scalar(@tried) . ' environments tried, want at least 74');
         $E->ok(0, $_) for @bad;
     },
 };

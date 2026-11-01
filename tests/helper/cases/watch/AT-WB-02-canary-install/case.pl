@@ -32,8 +32,8 @@ my %got;
               my %env = (%{ $inv->{env} || {} }, STORE_TEST_NOW => '2026-10-21T14:05:12+03:00');
               $env{PATH} = join(':', @{ $inv->{path_prepend} || [] }, $ENV{PATH});
               local @ENV{ keys %env } = values %env;
-              # HOME-GUARD: the recipe's env is laid over the checked one; `report` and `report verify`
-              # below start with it
+              # HOME-GUARD: the recipe's env is laid over the checked one; `report` and
+              # `report verify` below start with it
               homeguard::check(\%ENV, 'report');
               my $cwd = Cwd::getcwd();
               chdir($inv->{cwd} // $v->{TMP}) or die "chdir: $!";

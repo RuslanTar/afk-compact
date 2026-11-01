@@ -27,7 +27,8 @@ my %got;
               local $ENV{PATH} = "$v->{TMP}/stubbin:$ENV{PATH}";
               local $ENV{USER} = $acct;
               local $ENV{LOGNAME} = $acct;
-              # HOME-GUARD: %ENV changed since the driver checked it; identity_list starts `hostname -s` with it
+              # HOME-GUARD: %ENV changed since the driver checked it; identity_list starts
+              # `hostname -s` with it
               homeguard::check(\%ENV, q(identity_list));
               my $ctx = watch::ctx::init({ sid => $T::SID, watch => $v->{WATCH}, root => $v->{ROOT}, plugin_root => $v->{PLUGIN},
                                            settings => {}, now => $T::BASE + 100 });

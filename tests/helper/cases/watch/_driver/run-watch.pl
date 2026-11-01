@@ -24,8 +24,9 @@
 # folders (PATH_VARS), XDG defaults under HOME or any link under those folders leads to a real
 # home, into a real config or state folder or outside the temp folders (the full list is
 # homeguard::check's) dies with a `HOME-GUARD:` line and nothing starts
-# (AT-RN-07-watch-home-guard). A TMPDIR that is relative, has a `..` part or lies in a real config
-# or state folder ends the driver at start, exit 2, before it writes anything. Code run when
+# (AT-RN-07-watch-home-guard). A TMPDIR that is relative, has a `..` part, lies in a real config
+# or state folder or at or above a real home ends the driver at start, exit 2, before it writes
+# anything. Code run when
 # case.pl loads gets the driver's own temp HOME. A child that step or expect code starts itself
 # (backticks, system) inherits the environment checked before that step or sub; code that changes
 # %ENV or makes a link under HOME before it starts one checks again (homeguard::check(\%ENV, ...),
@@ -65,8 +66,8 @@ use watch::alerts;
 # started in a Claude Code session or a plugin hook (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA set) wrote
 # the cases' watch logs into the owner's state folders.
 require "$REPO/tests/helper/homeguard.pm";
-# a TMPDIR that is relative, has a `..` part or lies at or under a real config or state folder
-# ends the run here, exit 2, before the driver makes its temp folders in it
+# a TMPDIR that is relative, has a `..` part, lies at or under a real config or state folder or
+# at or above a real home ends the run here, exit 2, before the driver makes its temp folders in it
 eval { homeguard::init(); 1 } or do { print STDERR $@; exit 2 };
 # WATCH_CASE_DUMP: a debug switch the driver reads itself, kept for the driver only
 my $DUMP = $ENV{WATCH_CASE_DUMP};
