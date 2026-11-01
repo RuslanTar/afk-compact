@@ -62,7 +62,7 @@
     "stdout_has": [
      "\\ALINT headings [^\\n]+\\n  why: [^\\n]+ · fix: [^\\n]+\\nLINT headings [^\\n]+\\nLINT headings [^\\n]+\\n",
      "^LINT headings missing Open questions$",
-     "^ADVISORY secret-warn rules=key-value\\n  why: [^\\n]+ · fix: [^\\n]+$",
+     "^ADVISORY secret-warn rules=key-value lines=25\\n  why: [^\\n]+ · fix: [^\\n]+$",
      "^REFUSED: lint \\(3 blocking\\); draft kept at $STAGE/body\\.md$"
     ],
     "stdout_lacks": [

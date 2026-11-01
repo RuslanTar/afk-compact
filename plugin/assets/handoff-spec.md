@@ -222,7 +222,7 @@ Kebab-case ids, printed as `LINT <id> <where>` (blocking: nothing is published) 
 | `changes` · `must-read` | advisory | over 15 changes; over 3 must-read paths |
 | `recipe-mismatch` | advisory | a recorded job's recipe whose `command:` differs from its record |
 | `overlap` | advisory | 30% or more of non-ledger lines shared with `previous_handoff` (ledger lines, headings, none-forms and helper-pasted Evidence lines excluded) |
-| `secret-warn` | advisory | a WARN secret hit (rule ids printed, never values) |
+| `secret-warn` | advisory | a WARN secret hit (rule ids and line numbers printed, never values) |
 | `acuity` | advisory | Resume here has no `Acuity:` (`missing`), or a rating below the measured floor (`below <floor>`) |
 | `store-path` | advisory | a body line contains `/scripts/afk-compact-store` |
 | `approval-unchecked` | advisory | the session transcript could not be read or the session's start is not on record, so no quote was checked; the line is published but not listed in `approvals_checked`, and the next session treats it as context |

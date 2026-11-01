@@ -1,0 +1,96 @@
+{
+ "id": "SW-LINES-01",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.3 small fixes: publish's `ADVISORY secret-warn rules=<ids>` also names the body.md line numbers of the WARN hits (lines=<n>,...: each line once, ascending; past 10 the rest counted as +<n>), never a value",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Notes\nsee above\n## Misc\nnothing\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- the stub reads token=abcdef123456 from its own fixture\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "one WARN value on body line 25: lines=25",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "stdout_has": [
+     "^ADVISORY secret-warn rules=key-value lines=25$"
+    ],
+    "stdout_lacks": [
+     "abcdef123456"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Notes\nsee above\n## Misc\nnothing\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- the stub reads token=abcdef123456 from its own fixture\n## Next steps\n1. `bin/test retry` — done when the suite passes\n- fixture 0: token=abcdef123450 and key=zyxwvu987650\n- fixture 1: token=abcdef123451 and key=zyxwvu987651\n- fixture 2: token=abcdef123452 and key=zyxwvu987652\n- fixture 3: token=abcdef123453 and key=zyxwvu987653\n- fixture 4: token=abcdef123454 and key=zyxwvu987654\n- fixture 5: token=abcdef123455 and key=zyxwvu987655\n- fixture 6: token=abcdef123456 and key=zyxwvu987656\n- fixture 7: token=abcdef123457 and key=zyxwvu987657\n- fixture 8: token=abcdef123458 and key=zyxwvu987658\n- fixture 9: token=abcdef123459 and key=zyxwvu987659\n- fixture 10: token=abcdef1234510 and key=zyxwvu9876510\n"
+  },
+  {
+   "name": "12 lines with WARN values (two on one line count once): the first 10 numbers, then +2",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "stdout_has": [
+     "^ADVISORY secret-warn rules=key-value lines=25,28,29,30,31,32,33,34,35,36,\\+2$"
+    ],
+    "stdout_lacks": [
+     "abcdef12345",
+     "zyxwvu98765"
+    ]
+   }
+  }
+ ]
+}

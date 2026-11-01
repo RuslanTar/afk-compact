@@ -240,10 +240,11 @@ sub session_ended {
 }
 
 sub secrets_scan {
-    my ($text) = @_;
-    my $r = secrets::scan($text);
+    my ($text, %o) = @_;
+    my $r = secrets::scan($text, ($o{lines} ? (lines => 1) : ()));
     return [] unless ref $r eq 'ARRAY';
-    return [ map { { rule => $_->{rule} // $_->{id} // 'unknown', class => uc($_->{class} // 'WARN') } } @$r ];
+    return [ map { { rule => $_->{rule} // $_->{id} // 'unknown', class => uc($_->{class} // 'WARN'),
+                     (ref $_->{lines} eq 'ARRAY' ? (lines => $_->{lines}) : ()) } } @$r ];
 }
 
 sub classify_file {
