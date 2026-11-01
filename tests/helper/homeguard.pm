@@ -8,11 +8,12 @@ package homeguard;
 # writes its handoff root and watch logs under $XDG_STATE_HOME, CLAUDE_PLUGIN_DATA and the
 # CLAUDE_PLUGIN_OPTION_* folders).
 #
-# A runner calls init() once, before it changes its environment (the real HOME, the account's
-# home, the CLAUDE_CONFIG_DIR and the state folders given are read there), then drops the
-# caller's Claude Code, XDG and helper variables (drop_env) or starts from a fresh environment
-# (fresh_env), add_temp_root() for a temp folder of its own outside the system one, then
-# check(env, what) before each child it starts. Needs core's util.pm (plugin/helper/lib) loaded:
+# A runner calls init() once, before it changes its environment or writes anything (the real
+# HOME, the account's home, the CLAUDE_CONFIG_DIR and the state folders given are read there, and
+# a TMPDIR at or under a real config or state folder dies there), then drops the caller's Claude
+# Code, XDG, helper and git variables (drop_env) or starts from a fresh environment (fresh_env),
+# add_temp_root() for a temp folder of its own outside the system one (which dies the same way),
+# then check(env, what) before each child it starts. Needs core's util.pm (plugin/helper/lib) loaded:
 # paths are compared by util::real_path, and by device and inode (a case-insensitive file system
 # reads /users/me as /Users/me, which a text compare misses).
 use strict;
@@ -28,9 +29,9 @@ use warnings;
 # or config folder is ever made.
 our %REAL;
 our $START_TMPDIR;
-# the temp folders a child's HOME and CLAUDE_CONFIG_DIR may lie under: the system temp folder as
-# given at start, /tmp, and each added one (real paths, filled on first use; a self-test may
-# `local` it)
+# the temp folders a child's HOME, CLAUDE_CONFIG_DIR and PATH_VARS values (and the folders under
+# HOME in HOME_DIRS) may lie under: the system temp folder as given at start, /tmp, and each added
+# one (real paths, filled on first use; a self-test may `local` it)
 our (@EXTRA_TEMP, @TEMP_ROOTS);
 # the folders a child writes besides HOME and CLAUDE_CONFIG_DIR, as variables: the XDG base
 # folders (the helper's default handoff root reads $XDG_STATE_HOME, the launcher's cache
@@ -39,9 +40,15 @@ our (@EXTRA_TEMP, @TEMP_ROOTS);
 our @PATH_VARS = qw(XDG_STATE_HOME XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_RUNTIME_DIR
                     CLAUDE_PLUGIN_DATA CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT CLAUDE_PLUGIN_OPTION_LOG_DIR
                     CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT CLAUDE_CODE_TMPDIR);
+# the folders a child writes under HOME when the XDG variables are unset: the XDG defaults
+# (~/.local/state holds the helper's default handoff root and watch logs, ~/.cache the launcher's
+# cache) and their parent ~/.local
+our @HOME_DIRS = qw(.local .local/state .local/share .cache .config);
 # drop_env drops these names: Claude Code's (CLAUDECODE, CLAUDE_CONFIG_DIR, CLAUDE_PLUGIN_*,
-# CLAUDE_CODE_*, ...), the XDG ones and the helper's own (STORE_*)
-our $DROP_RE = qr/\A(?:CLAUDE|XDG_|STORE_)/;
+# CLAUDE_CODE_*, ...), the XDG ones, the helper's own (STORE_*) and git's (GIT_DIR,
+# GIT_WORK_TREE, GIT_INDEX_FILE, GIT_CONFIG*, ...: git exports GIT_DIR to its hooks, and a runner
+# started from one would put the fixture repos' commits and index into the owner's repo)
+our $DROP_RE = qr/\A(?:CLAUDE|XDG_|STORE_|GIT_)/;
 # fresh_env keeps only these from the caller's environment
 our $KEEP_RE = qr/\A(?:PATH|TMPDIR|TZDIR|LANG|LANGUAGE|LC_[A-Z_]+|USER|LOGNAME|SHELL|TERM|PERL5LIB|PERLLIB)\z/;
 my $INIT;
@@ -53,7 +60,21 @@ sub init {
     # CLAUDE_CODE_TMPDIR: TMPDIR may lie under them)
     %REAL = real_set(home => $ENV{HOME}, account => (getpwuid($<))[7], config_dir => $ENV{CLAUDE_CONFIG_DIR},
                      given => { map { ($_ => $ENV{$_}) } grep { defined $ENV{$_} && !/\A(?:XDG_RUNTIME_DIR|CLAUDE_CODE_TMPDIR)\z/ } @PATH_VARS });
+    # the runners make their run folders under TMPDIR before any child is checked
+    check_temp_root($START_TMPDIR, 'TMPDIR') if defined $START_TMPDIR && $START_TMPDIR ne '';
     return;
+}
+
+# check_temp_root(path, what): dies before a runner writes there when a temp folder it makes its
+# run folders under (TMPDIR at start, an added root) is at or under a real config or state folder:
+# with TMPDIR=~/.claude a run staged its plugin and case folders in the owner's config folder
+# before the first child was refused.
+sub check_temp_root {
+    my ($p, $what) = @_;
+    return 1 unless defined $p && $p =~ m{\A/};
+    die "HOME-GUARD: $what $p is in a real config folder; nothing written\n" if real_config($p);
+    die "HOME-GUARD: $what $p is in a real state folder; nothing written\n" if real_state($p);
+    return 1;
 }
 
 # real_set(home => path, account => path, config_dir => path, given => {name => value}) -> the
@@ -105,8 +126,10 @@ sub fresh_env {
     return \%e;
 }
 
-# add_temp_root(path...): more temp folders (the repo's tmp/ of a --repo-tmp run)
+# add_temp_root(path...): more temp folders (the repo's tmp/ of a --repo-tmp run); dies, as
+# check_temp_root, for one at or under a real config or state folder
 sub add_temp_root {
+    check_temp_root($_, 'temp folder') for grep { defined } @_;
     push @EXTRA_TEMP, grep { defined && m{\A/} } @_;
     @TEMP_ROOTS = ();
     return;
@@ -168,7 +191,10 @@ sub real_state { return _hit($_[0], $REAL{states} || {}, 1) }
 # the runner started with (TMPDIR=$HOME puts the real ~/.claude under a "temp" folder); the config
 # folder the child writes (CLAUDE_CONFIG_DIR, else $HOME/.claude) or its settings.json at or under
 # a real config folder or not under a temp folder by real path (a temp HOME whose .claude links
-# to the real one), or a dangling link (where it leads is not read here); a PATH_VARS value (a
+# to the real one), or a dangling link (where it leads is not read here); a folder of HOME_DIRS
+# under HOME ($HOME/.local, .local/state, .local/share, .cache, .config, where a child writes when
+# the XDG variables are unset) that is a dangling link or leads by real path to a real config or
+# state folder or outside temp (a temp HOME whose .local links to the real one); a PATH_VARS value (a
 # leading ~ read as the child's HOME; empty, or a `${user_config.<key>}` the helper reads as unset,
 # passes; so does a relative XDG one, which the XDG rule ignores) not absolute, with a `..` part,
 # at or under a real config or state folder, or not under a temp folder. Links inside temp pass.
@@ -194,6 +220,12 @@ sub check {
     for my $p ($cfg, "$cfg/settings.json") {
         die "HOME-GUARD: $what: $p is a dangling link; not started\n" if -l $p && !-e $p;
         die "HOME-GUARD: $what: $p leads to a real config folder; not started\n" if real_config($p);
+        die "HOME-GUARD: $what: $p leads outside the temp folders; not started\n" unless under_temp($p);
+    }
+    for my $p (map { "$h/$_" } @HOME_DIRS) {
+        die "HOME-GUARD: $what: $p is a dangling link; not started\n" if -l $p && !-e $p;
+        die "HOME-GUARD: $what: $p leads to a real config folder; not started\n" if real_config($p);
+        die "HOME-GUARD: $what: $p leads to a real state folder; not started\n" if real_state($p);
         die "HOME-GUARD: $what: $p leads outside the temp folders; not started\n" unless under_temp($p);
     }
     for my $k (@PATH_VARS) {
@@ -232,8 +264,11 @@ sub case_home {
 sub self_rows {
     my ($tmp, $th) = @_;
     my ($sh, $sa, $sc) = ("$tmp/Standin-Home", "$tmp/standin-acct", "$tmp/standin-cfg");
-    util::mkdir_p($_) for ($th, "$sh/.claude", "$sh/.local/state", "$sa/.claude", $sc, "$tmp/standin-xdg-cache", "$tmp/t-root",
-                           "$tmp/outside-cfg", map { "$tmp/$_" } qw(h-clink h-slink/.claude h-tlink h-dangle cfg-in-temp t-root/h-olink));
+    util::mkdir_p($_) for ($th, "$sh/.claude", "$sh/.local/state", "$sh/.local/share", "$sh/.cache", "$sh/.config", "$sa/.claude", $sc,
+                           "$tmp/standin-xdg-cache", "$tmp/t-root", "$tmp/outside-cfg", "$tmp/outside-state",
+                           map { "$tmp/$_" } qw(h-clink h-slink/.claude h-tlink h-dangle cfg-in-temp t-root/h-olink t-root-x/h h-local
+                                                h-state/.local h-share/.local h-cache h-config h-sdangle h-lcfg t-root/h-olocal h-tstate
+                                                state-in-temp/state cache-in-temp));
     for my $f ("$sa/.claude/settings.json", "$tmp/cfg-in-temp/real.json") {
         next if -e $f;
         open(my $fh, '>', $f) or die "homeguard: write $f: $!\n";
@@ -243,7 +278,13 @@ sub self_rows {
     my %ln = ("$tmp/link-home" => $sa, "$tmp/link-in" => "$sa/.claude", "$tmp/h-clink/.claude" => "$sa/.claude",
               "$tmp/h-slink/.claude/settings.json" => "$sa/.claude/settings.json", "$tmp/h-tlink/.claude" => "$tmp/cfg-in-temp",
               "$tmp/cfg-in-temp/settings.json" => "$tmp/cfg-in-temp/real.json", "$tmp/h-dangle/.claude" => "$sa/.claude-gone",
-              "$tmp/t-root/h-olink/.claude" => "$tmp/outside-cfg");
+              "$tmp/t-root/h-olink/.claude" => "$tmp/outside-cfg",
+              # the folders a child writes under HOME with the XDG variables unset (HOME_DIRS)
+              "$tmp/h-local/.local" => "$sh/.local", "$tmp/h-state/.local/state" => "$sh/.local/state",
+              "$tmp/h-share/.local/share" => "$sh/.local/share", "$tmp/h-cache/.cache" => "$sh/.cache",
+              "$tmp/h-config/.config" => "$sh/.config", "$tmp/h-sdangle/.cache" => "$sh/.cache-gone",
+              "$tmp/h-lcfg/.config" => "$sa/.claude", "$tmp/t-root/h-olocal/.local" => "$tmp/outside-state",
+              "$tmp/h-tstate/.local" => "$tmp/state-in-temp", "$tmp/h-tstate/.cache" => "$tmp/cache-in-temp");
     for my $l (sort keys %ln) { -l $l or symlink($ln{$l}, $l) or die "homeguard: symlink $l: $!\n" }
     my %real = real_set(home => $sh, account => $sa, config_dir => $sc,
                         given => { XDG_STATE_HOME => "$tmp/standin-xdg-state", XDG_CACHE_HOME => "$tmp/standin-xdg-cache",
@@ -270,10 +311,25 @@ sub self_rows {
          qr/\.claude leads outside the temp folders; /, [$rp->("$tmp/t-root")]],
         ["TMPDIR the account's home: CLAUDE_CONFIG_DIR at its .claude", { HOME => "$sa/home-guard-none", CLAUDE_CONFIG_DIR => "$sa/.claude" },
          qr/ is the real config folder; /, [$rp->($sa)]],
+        ['a HOME in a folder that shares a temp folder\'s name as a prefix', { HOME => "$tmp/t-root-x/h" }, qr/ is not under a temp folder; /,
+         [$rp->("$tmp/t-root")]],
+        ['a temp HOME whose .local links to the real one', { HOME => "$tmp/h-local" }, qr{/\.local leads to a real state folder; }],
+        ['a temp HOME whose .local/state links to the real one', { HOME => "$tmp/h-state" }, qr{/\.local/state leads to a real state folder; }],
+        ['a temp HOME whose .local/share links to the real one', { HOME => "$tmp/h-share" }, qr{/\.local/share leads to a real state folder; }],
+        ['a temp HOME whose .cache links to the real one', { HOME => "$tmp/h-cache" }, qr{/\.cache leads to a real state folder; }],
+        ['a temp HOME whose .config links to the real one', { HOME => "$tmp/h-config" }, qr{/\.config leads to a real state folder; }],
+        ['a temp HOME whose .cache is a dangling link into a stand-in folder', { HOME => "$tmp/h-sdangle" }, qr{/\.cache is a dangling link; }],
+        ['a temp HOME whose .config links to the real config folder', { HOME => "$tmp/h-lcfg" }, qr{/\.config leads to a real config folder; }],
+        ['a temp HOME whose .local links outside temp to a folder that is no state folder', { HOME => "$tmp/t-root/h-olocal" },
+         qr{/\.local leads outside the temp folders; }, [$rp->("$tmp/t-root")]],
         ['XDG_STATE_HOME outside the temp folders', { HOME => $th, XDG_STATE_HOME => '/nonexistent-state-guard' }, qr/XDG_STATE_HOME \S+ is not under a temp folder; /],
         ['CLAUDE_PLUGIN_DATA in the real config folder', { HOME => $th, CLAUDE_PLUGIN_DATA => "$sa/.claude/plugins/data/p" }, qr/CLAUDE_PLUGIN_DATA \S+ is in a real config folder; /],
         ["XDG_STATE_HOME at the real home's .local/state", { HOME => $th, XDG_STATE_HOME => "$sh/.local/state" }, qr/XDG_STATE_HOME \S+ is in a real state folder; /],
         ['XDG_CACHE_HOME under the cache folder the runner started with', { HOME => $th, XDG_CACHE_HOME => "$tmp/standin-xdg-cache/x" }, qr/XDG_CACHE_HOME \S+ is in a real state folder; /],
+        ["TMPDIR the real home: XDG_CACHE_HOME at its .cache", { HOME => "$sh/home-guard-none", XDG_CACHE_HOME => "$sh/.cache" },
+         qr/XDG_CACHE_HOME \S+ is in a real state folder; /, [$rp->($sh)]],
+        ["TMPDIR the real home: XDG_CONFIG_HOME at its .config", { HOME => "$sh/home-guard-none", XDG_CONFIG_HOME => "$sh/.config" },
+         qr/XDG_CONFIG_HOME \S+ is in a real state folder; /, [$rp->($sh)]],
         ['a relative CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT', { HOME => $th, CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT => 'rel/handoffs' }, qr/CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT \S+ is not absolute /],
         ['CLAUDE_PLUGIN_OPTION_LOG_DIR through a link into the real home and ..', { HOME => $th, CLAUDE_PLUGIN_OPTION_LOG_DIR => "$tmp/link-in/../logs" }, qr/CLAUDE_PLUGIN_OPTION_LOG_DIR \S+ has a \.\. part /],
         ['CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT outside the temp folders', { HOME => $th, CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT => '/nonexistent-disp-guard' }, qr/ is not under a temp folder; /],
@@ -284,15 +340,16 @@ sub self_rows {
     if (_id($va) ne '' && _id($va) eq _id($sa)) {
         push @rows, ['the real HOME by another case of its name', { HOME => $vh }, qr/ is the real home; /],
                     ["TMPDIR another case of the account's home: CLAUDE_CONFIG_DIR at its .claude", { HOME => "$va/home-guard-none", CLAUDE_CONFIG_DIR => "$va/.claude" },
-                     qr/ is the real config folder; /, [$va]],
+                     qr/ is the real config folder; /, [$rp->($va)]],
                     ["TMPDIR another case of the account's home: CLAUDE_PLUGIN_DATA in its .claude", { HOME => "$va/home-guard-none", CLAUDE_PLUGIN_DATA => "$va/.claude/plugins/data/p" },
-                     qr/ is in a real config folder; /, [$va]];
+                     qr/ is in a real config folder; /, [$rp->($va)]];
     }
     push @rows, map { [@$_[0, 1], undef, undef, 'ok'] } (
         ['a temp HOME', { HOME => $th }],
         ['a CLAUDE_CONFIG_DIR under the temp HOME', { HOME => $th, CLAUDE_CONFIG_DIR => '~/.claude' }],
         ['an absolute CLAUDE_CONFIG_DIR under the temp HOME', { HOME => $th, CLAUDE_CONFIG_DIR => "$th/.claude" }],
         ['a temp HOME whose .claude and settings.json link inside temp', { HOME => "$tmp/h-tlink" }],
+        ['a temp HOME whose .local and .cache link inside temp', { HOME => "$tmp/h-tstate" }],
         ['state folders under temp', { HOME => $th, XDG_STATE_HOME => "$th/.local/state", XDG_CACHE_HOME => "$th/.cache", CLAUDE_PLUGIN_DATA => "$th/data",
                                        CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT => '~/.local/state/x/handoffs', CLAUDE_PLUGIN_OPTION_LOG_DIR => "$tmp/logs" }],
         ['state values the helper reads as unset', { HOME => $th, XDG_STATE_HOME => 'rel/state', CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT => '${user_config.handoff_root}',
@@ -302,9 +359,9 @@ sub self_rows {
              rows => [ map { { what => $_->[0], env => $_->[1], want => $_->[2], temp => $_->[3], ok => $_->[4] ? 1 : 0 } } @rows ] };
 }
 
-# self_row_errs(row, error of the first start, error of the second, started?...) -> the row's
-# failures: an `ok` row with a refusal, any other row that started or died without its
-# `HOME-GUARD: ... <want>` line. Each start is [label, started, error].
+# self_row_errs(row, [label, started, error]...) -> the row's failures, one start per child kind
+# tried: an `ok` row with a refusal, any other row that started or died without its
+# `HOME-GUARD: ... <want>` line.
 sub self_row_errs {
     my ($row, @starts) = @_;
     my @e;

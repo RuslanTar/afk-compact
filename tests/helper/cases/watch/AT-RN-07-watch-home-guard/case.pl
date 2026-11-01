@@ -8,14 +8,19 @@
 # as AT-RN-06: a real home or a link to it or another case of its name, no, an empty, a relative
 # HOME or one outside temp, `..` through a link, a CLAUDE_CONFIG_DIR at a real config folder,
 # relative or outside temp, a temp HOME whose .claude or settings.json links to the real one,
-# whose .claude is a dangling link or links outside temp, TMPDIR at the account's home or another
-# case of it, a state folder outside temp, relative, through `..` or in a real config or state
-# folder). The `cli` child is `true` and the git child `git --version`, so a guard that lets one
+# whose .claude is a dangling link or links outside temp, whose .local, .local/state,
+# .local/share, .cache or .config links into the real home (or the real config folder), is a
+# dangling link or links outside temp, a HOME in a folder whose name a temp folder's begins,
+# TMPDIR at the account's home or another case of it, or at the real home with XDG_CACHE_HOME or
+# XDG_CONFIG_HOME at its .cache or .config, a state folder outside temp, relative, through `..` or
+# in a real config or state folder). The `cli` child is `true` and the git child `git --version`, so a guard that lets one
 # through starts nothing that reads or writes a home. The rows that pass start both. An inner
 # driver run fails a case whose step moved HOME outside temp at its next step and one whose last
 # step did so at its `expect` sub, each with the guard's line; an inner driver started with
 # XDG_STATE_HOME, XDG_CACHE_HOME, CLAUDE_PLUGIN_DATA and the folder options at stand-in folders
-# runs a case that writes watch logs (X-hooks) and nothing lands there.
+# runs a case that writes watch logs (X-hooks) and nothing lands there; an inner driver whose
+# TMPDIR lies in a stand-in real home's .local/state ends at start, exit 2, with the guard's line,
+# and writes nothing there.
 my (@bad, @tried, $want_rows);
 my $HERE = do { (my $d = __FILE__) =~ s{/[^/]*\z}{}; $d };
 my $DRIVER = sub { return "$T::REPO/tests/helper/cases/watch/_driver/run-watch.pl" };
@@ -93,10 +98,33 @@ my $DRIVER = sub { return "$T::REPO/tests/helper/cases/watch/_driver/run-watch.p
                 }
             }
         } },
+        # a driver whose TMPDIR lies in a real state folder (a stand-in HOME's .local/state) ends
+        # at start, before it makes its temp folders there
+        { call => 'code', code => sub {
+            my $v = shift;
+            my $fh = "$v->{TMP}/standin-tmpdir";
+            my $td = "$fh/.local/state/t";
+            watch::io::mkdir_p($td);
+            push @tried, 'a driver whose TMPDIR lies in a real state folder';
+            my $r = do {
+                local %ENV = (%ENV, HOME => $fh, TMPDIR => $td);
+                main::run_child([$^X, $DRIVER->(), "$HERE/../X-hooks"], '', 'inner driver');
+            };
+            push @bad, "the inner driver run with TMPDIR in a real state folder exited $r->{exit}, want 2: $r->{stdout}$r->{stderr}" unless $r->{exit} == 2;
+            push @bad, "the inner driver run with TMPDIR in a real state folder has no HOME-GUARD line: $r->{stdout}$r->{stderr}"
+                unless $r->{stderr} =~ m{\AHOME-GUARD: TMPDIR \S+/standin-tmpdir/\.local/state/t is in a real state folder; nothing written\n\z};
+            my @q = ("$fh/.local/state");
+            while (defined(my $d = shift @q)) {
+                for my $n (watch::io::list_dir($d)) {
+                    my $p = "$d/$n";
+                    if (-d $p && !-l $p) { push @q, $p; push @bad, "$p landed in the stand-in real state folder" if $p ne $td } else { push @bad, "$p landed in the stand-in real state folder" }
+                }
+            }
+        } },
     ],
     expect => sub {
         my ($E) = @_;
-        $E->ok(@tried >= 35, 'home guard: ' . scalar(@tried) . ' environments tried, want at least 35');
+        $E->ok(@tried >= 48, 'home guard: ' . scalar(@tried) . ' environments tried, want at least 48');
         $E->ok(0, $_) for @bad;
     },
 };

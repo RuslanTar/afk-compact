@@ -16,14 +16,16 @@
 # ...`, counted as not run, neither passed nor skipped; the run does not fail on it.
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
 # HOME-GUARD (0.1.2; the guard is tests/helper/homeguard.pm, shared with the core case runner):
-# the driver itself runs in a fresh environment (none of the caller's Claude Code, XDG or helper
-# variables) with a temp HOME, each case with its own $HOME (a `cli` step's env may set a
+# the driver itself runs in a fresh environment (none of the caller's Claude Code, XDG, helper or
+# git variables) with a temp HOME, each case with its own $HOME (a `cli` step's env may set a
 # CLAUDE_CONFIG_DIR or state folder of its own under a temp folder). The driver checks the
 # environment before a `cli` step's child, a T::_git child, each in-process step and each `expect`
 # sub: the real HOME, the account's home, a CLAUDE_CONFIG_DIR at a real config folder or outside
-# the temp folders, or a state folder (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA, a folder option, ...)
-# in a real config or state folder or outside the temp folders dies with a `HOME-GUARD:` line and
-# nothing starts (AT-RN-07-watch-home-guard). Code run when case.pl loads gets the driver's own
+# the temp folders, a $HOME/.local, .cache or .config that leads into a real config or state
+# folder, or a state folder (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA, a folder option, ...) in a real
+# config or state folder or outside the temp folders dies with a `HOME-GUARD:` line and nothing
+# starts (AT-RN-07-watch-home-guard). A TMPDIR in a real config or state folder ends the driver at
+# start, exit 2, before it writes anything. Code run when case.pl loads gets the driver's own
 # temp HOME. A child that step or expect code starts itself (backticks, system) inherits the
 # environment checked before that step or sub; code that changes %ENV before it starts one
 # checks again (homeguard::check(\%ENV, ...), as AT-WB-02-canary-install does).
@@ -58,11 +60,13 @@ use watch::alerts;
 # runner's helper calls do (child_env): homeguard::fresh_env keeps PATH, TMPDIR, the locale, the
 # account names, the shell, the terminal and the perl library path, with HOME a temp folder of the
 # driver's own. No CLAUDE_CONFIG_DIR, CLAUDE_PLUGIN_DATA, CLAUDE_PLUGIN_OPTION_*, CLAUDE_CODE_*,
-# XDG_* or STORE_* of the caller's reaches the in-process steps or any child: a driver started
+# XDG_*, STORE_* or GIT_* of the caller's reaches the in-process steps or any child: a driver started
 # in a Claude Code session or a plugin hook (XDG_STATE_HOME, CLAUDE_PLUGIN_DATA set) wrote the
 # cases' watch logs into the owner's state folders.
 require "$REPO/tests/helper/homeguard.pm";
-homeguard::init();
+# a TMPDIR at or under a real config or state folder ends the run here, exit 2, before the driver
+# makes its temp folders in it
+eval { homeguard::init(); 1 } or do { print STDERR $@; exit 2 };
 # WATCH_CASE_DUMP: a debug switch the driver reads itself, kept for the driver only
 my $DUMP = $ENV{WATCH_CASE_DUMP};
 my $DRIVER_HOME = File::Temp::tempdir('watchdriver-XXXXXX', TMPDIR => 1, CLEANUP => 1) . '/home';
@@ -201,7 +205,7 @@ sub cli_launcher {
 # run_child(argv, stdin text, what) -> {exit, stdout, stderr}: argv run through the shell with
 # this process's environment (a `cli` step's env laid over it), stdin from a file, stdout and
 # stderr captured. HOME-GUARD: homeguard::check refuses, before the shell starts, an environment
-# that could reach the real home or config folder.
+# that could reach the real home, config folder or state folders.
 sub run_child {
     my ($argv, $stdin, $what) = @_;
     homeguard::check(\%ENV, $what);

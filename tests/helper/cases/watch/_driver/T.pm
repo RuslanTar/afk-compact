@@ -326,8 +326,8 @@ sub subst_deep {
 }
 sub _git {
     my ($cwd, @argv) = @_;
-    # HOME-GUARD (tests/helper/homeguard.pm, loaded by the driver): no git child with the real
-    # HOME or a CLAUDE_CONFIG_DIR at a real config folder or outside the temp folders
+    # HOME-GUARD (tests/helper/homeguard.pm, loaded by the driver): no git child whose
+    # environment could reach the real home, config folder or state folders (homeguard::check)
     homeguard::check(\%ENV, "git $argv[0]");
     my $pid = fork() // die "fork: $!";
     if (!$pid) {

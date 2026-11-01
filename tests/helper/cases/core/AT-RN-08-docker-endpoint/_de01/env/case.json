@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-08-inner-docker-host",
+ "note": "run by AT-RN-08 only (discovery skips _ folders), by a child run of the runner whose HOME holds a .docker/config.json naming the context colima and whose PATH starts with a stub docker: the runner set DOCKER_HOST at start to the endpoint the stub gives for it",
+ "steps": [
+  {"name": "the runner's DOCKER_HOST", "lib": "runner_env", "args": {"docker_host": "unix:///stub/colima.sock"}}
+ ]
+}

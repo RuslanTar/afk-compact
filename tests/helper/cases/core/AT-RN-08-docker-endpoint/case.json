@@ -1,0 +1,15 @@
+{
+ "id": "AT-RN-08 (HOME-GUARD: docker children keep the docker context of the runner's HOME)",
+ "note": "HOME-GUARD (0.1.2): cases and children run with a temp HOME, so the docker CLI no longer reads the owner's ~/.docker/config.json; on a host where Docker answers only through a context (colima, Docker Desktop with the default socket off) the docker-image cases would skip. The runner reads, once at start, the endpoint of the context the given HOME's .docker/config.json (or DOCKER_CONTEXT) names, by `docker context inspect` with DOCKER_CONFIG at that folder and its own temp HOME, and gives it to every child as DOCKER_HOST (a DOCKER_HOST or DOCKER_CONFIG given wins). With a stub docker: a named context gives its endpoint, read with DOCKER_CONFIG at the stand-in folder and the case's temp HOME; DOCKER_CONTEXT names one too; \"default\", no config.json and an answer that is no endpoint give none, the first two without starting docker; a child run of the runner whose HOME names the context colima runs its case with DOCKER_HOST at the stub's endpoint",
+ "steps": [
+  {"name": "a stub docker and a stand-in HOME whose docker config names colima", "setup": [
+    {"write": "$TMP/dbin/docker", "mode": "0755",
+     "text": "#!/bin/sh\nprintf 'DOCKER_CONFIG=%s HOME=%s DOCKER_HOST=%s args=%s\\n' \"${DOCKER_CONFIG-unset}\" \"${HOME-unset}\" \"${DOCKER_HOST-unset}\" \"$*\" >>\"${DOCKER_CONFIG:-/nonexistent}/seen\" 2>/dev/null\n[ \"$1 $2\" = 'context inspect' ] || exit 1\ncase $5 in\ncolima) echo unix:///stub/colima.sock ;;\nbad) echo 'no endpoint here' ;;\n*) exit 1 ;;\nesac\n"},
+    {"write": "$TMP/dhome/.docker/config.json", "mode": "0600", "text": "{\"currentContext\": \"colima\"}\n"}]},
+  {"name": "the endpoint of the context a docker config folder names", "lib": "docker_endpoint", "args": {"tmp": "$TMP", "docker": "$TMP/dbin/docker"}},
+  {"name": "a child run whose HOME names the context colima: its case gets DOCKER_HOST at the stub's endpoint", "lib": "runner_child",
+   "args": {"tmp": "$TMP", "dir": "_de01", "exit": 0,
+            "env": {"HOME": "$TMP/dhome", "PATH": "$TMP/dbin:/usr/bin:/bin", "DOCKER_HOST": null, "DOCKER_CONTEXT": null, "DOCKER_CONFIG": null},
+            "stdout_has": ["^# passed 1, failed 0, skipped 0, not run 0$"]}}
+ ]
+}

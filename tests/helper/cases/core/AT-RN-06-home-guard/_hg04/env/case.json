@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-06-inner-never-run",
+ "note": "run by AT-RN-06 only (discovery skips _ folders), by child runs that must end before any case (a TMPDIR or --repo-tmp folder in a stand-in real config or state folder): this case never runs",
+ "steps": [
+  {"name": "the runner's environment", "lib": "runner_env"}
+ ]
+}

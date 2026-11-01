@@ -18,15 +18,18 @@
 # LAUNCHER_TEST_FOREIGN_BASE (set by docker.sh): a cache folder holding <brand> that another
 # user owns, for the real foreign-owner case; without it that case uses a stub id. Each case
 # has its own HOME (its cache folder HOME/.cache, 0700) and TMPDIR.
+# LAUNCHER_TEST_HG_INNER (set by AT-RS-30e for its own inner run of this file): AT-RS-30e checks
+# what claude got instead of starting that inner run.
 # Output: TAP lines (`ok N - <shell> <case> <title>`), then `# passed N, failed M, skipped K`.
 # Exit 0 when nothing failed, else 1.
 set -u
-# HOME-GUARD: none of the caller's Claude Code, XDG or helper variables (CLAUDECODE,
+# HOME-GUARD: none of the caller's Claude Code, XDG, helper or git variables (CLAUDECODE,
 # CLAUDE_CONFIG_DIR, CLAUDE_PLUGIN_DATA, CLAUDE_PLUGIN_OPTION_*, CLAUDE_CODE_*, XDG_STATE_HOME,
-# XDG_CACHE_HOME, STORE_*, ...) reaches a launcher, its claude or its helper: run from a Claude
-# Code session or a plugin hook they would put state into the owner's folders. Each case sets its
-# own HOME and TMPDIR (run_launcher).
-for hg_v in $(env | sed -n 's/^\(CLAUDE[A-Za-z0-9_]*\)=.*/\1/p; s/^\(XDG_[A-Za-z0-9_]*\)=.*/\1/p; s/^\(STORE_[A-Za-z0-9_]*\)=.*/\1/p'); do
+# XDG_CACHE_HOME, STORE_*, GIT_DIR, ...) reaches a launcher, its claude or its helper: run from a
+# Claude Code session, a plugin hook or a git hook they would put state into the owner's folders
+# or repo. Each case sets its own HOME and TMPDIR (run_launcher); AT-RS-30e runs this file again
+# with some of them set and fails when one reaches claude.
+for hg_v in $(env | sed -n 's/^\(CLAUDE[A-Za-z0-9_]*\)=.*/\1/p; s/^\(XDG_[A-Za-z0-9_]*\)=.*/\1/p; s/^\(STORE_[A-Za-z0-9_]*\)=.*/\1/p; s/^\(GIT_[A-Za-z0-9_]*\)=.*/\1/p'); do
   unset "$hg_v"
 done
 here=$(cd "$(dirname "$0")" && pwd -P)
@@ -465,6 +468,33 @@ case_30d() {
   want_lj 1 "\"launch_mode\":\"plan\"}"
   want_lj 2 "\"relaunches\":1"
   want_lj 2 "\"launch_mode\":\"acceptEdits\"}"
+  end_case
+}
+
+case_30e() {
+  new_case AT-RS-30e "HOME-GUARD: the caller's Claude Code, XDG, helper and git variables never reach claude (run.sh unsets them at start)" needs-pty
+  x_vars="CLAUDE_PLUGIN_DATA CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT XDG_STATE_HOME STORE_TEST_NOW GIT_DIR"
+  if [ -n "${LAUNCHER_TEST_HG_INNER-}" ]; then
+    # the inner run (below): this file started with each name set; the stub records what claude got
+    scen "1 exit 0"
+    run_launcher --env "STUB_VARS=$x_vars" -- --verbose
+    want_runs 1
+    for x_v in $x_vars; do
+      w=$(sed -n "s/^$x_v=//p" "$C/run1.vars" 2>/dev/null)
+      [ "$w" = unset ] || fail "$x_v reached claude as '${w:-nothing}', want unset"
+    done
+  elif [ -z "$CSKIP" ]; then
+    # this file again, on this case alone in this shell, started with each name at a folder of
+    # this case: the inner case passes only when every one was unset at start, and nothing lands
+    # in those folders
+    mkdir -p "$C/sd"
+    LAUNCHER_TEST_HG_INNER=1 CLAUDE_PLUGIN_DATA=$C/sd/data CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=$C/sd/handoffs \
+      XDG_STATE_HOME=$C/sd/state STORE_TEST_NOW=2026-10-21T09:00:00Z GIT_DIR=$C/sd/git TMPDIR=$C/tmp \
+      /bin/sh "$here/run.sh" --shell "$SH" AT-RS-30e >"$C/inner.out" 2>&1
+    grep -q '^# passed 1, failed 0, skipped 0$' "$C/inner.out" ||
+      fail "the inner run of run.sh started with $x_vars set: $(tail -n 8 "$C/inner.out" | tr '\n' '|')"
+    [ -z "$(ls -A "$C/sd")" ] || fail "files landed in the stand-in folders: $(ls -A "$C/sd" | tr '\n' ' ')"
+  fi
   end_case
 }
 
@@ -1116,7 +1146,7 @@ run_shell() {
   WS=$work/$T
   mkdir -p "$WS"
   N=0
-  for w_c in 30 30b 30c 30d 31a 31b 31c 31d 31e 31f 32a 32b 32c 33a 33b 33c 33d 34 35a 35b 35c 35d 36a 36b 36c 37 38 39 40 43; do
+  for w_c in 30 30b 30c 30d 30e 31a 31b 31c 31d 31e 31f 32a 32b 32c 33a 33b 33c 33d 34 35a 35b 35c 35d 36a 36b 36c 37 38 39 40 43; do
     want_case "AT-RS-$w_c" || continue
     [ -z "$quick" ] || [ "$w_c" != 36c ] || continue
     "case_$w_c"
