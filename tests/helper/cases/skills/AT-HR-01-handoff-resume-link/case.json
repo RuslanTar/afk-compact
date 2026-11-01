@@ -512,7 +512,7 @@
   },
   {
    "write": "$STAGE_F/body.md",
-   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 53535353\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 53535353\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "name": "publish-time carry: the fork repeats P's checked line and is refused (its copy of the quote predates it)",
@@ -529,7 +529,8 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 10$",
+     "^LINT time-format line 24$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
      "^REFUSED: lint \\([0-9]+ blocking\\)"
     ],
     "stdout_lacks": [
@@ -586,7 +587,7 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 10$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
      "^REFUSED: lint \\([0-9]+ blocking\\)"
     ],
     "stdout_lacks": [
@@ -1072,7 +1073,7 @@
   },
   {
    "write": "$STAGE_S2/body.md",
-   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-3: approval \"restart the retry worker on feat/x after the claim\" — action bin/restart retry · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-3: approval \"restart the retry worker on feat/x after the claim\" — action bin/restart retry · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "name": "slice A review: S repeats P3's U-3 line unchanged: no carry from P's later handoff, and the quote is not S's: refused",
@@ -1090,7 +1091,8 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 10$",
+     "^LINT time-format line 24$",
+     "^ADVISORY approval-quote line 10: U-3 goes to Open questions as Q-1, a re-ask; ",
      "^REFUSED: lint \\([0-9]+ blocking\\)"
     ],
     "stdout_lacks": [
@@ -1133,7 +1135,7 @@
   },
   {
    "write": "$STAGE_P4/body.md",
-   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — handoff resume\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 51515151\n## Approvals\n- U-2: approval \"push feat/x to origin once the suite passes\" — action git push origin feat/x · targets branch feat/x @ $HEADSHA · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "name": "slice A review: P (resumed) repeats its pre-claim U-2 line: its typed rows before the claim no longer count (quote_floor): refused",
@@ -1151,7 +1153,8 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 10$",
+     "^LINT time-format line 24$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
      "^REFUSED: lint \\([0-9]+ blocking\\)"
     ],
     "stdout_lacks": [

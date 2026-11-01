@@ -109,30 +109,30 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-plugin-turn line 10$",
-     "^LINT approval-plugin-turn line 11$",
-     "^LINT approval-plugin-turn line 12$",
-     "^LINT approval-plugin-turn line 13$",
-     "^LINT approval-plugin-turn line 14$",
-     "^LINT approval-plugin-turn line 15$",
-     "^LINT approval-plugin-turn line 16$",
-     "^LINT approval-plugin-turn line 18$",
      "^LINT approval-plugin-turn line 33$",
      "^  why: the plugin asked for this handoff, not the user, so an approval in it must not read as usable · fix: write each as U-n: approval \"<words>\" — action … · targets … ; context only, not valid here; re-ask \\(no once, state, question or note\\); Next step: ask user:$",
-     "^REFUSED: lint \\(9 blocking\\)"
+     "^ADVISORY approval-plugin-turn line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
+     "^ADVISORY approval-plugin-turn line 11: U-3 goes to Open questions as Q-2, a re-ask; ",
+     "^ADVISORY approval-plugin-turn line 12: U-12 goes to Open questions as Q-3, a re-ask; ",
+     "^ADVISORY approval-plugin-turn line 13: U-13 goes to Open questions as Q-4, a re-ask; ",
+     "^ADVISORY approval-plugin-turn line 14: U-14 goes to Open questions as Q-5, a re-ask; ",
+     "^ADVISORY approval-plugin-turn line 15: U-15 goes to Open questions as Q-6, a re-ask; ",
+     "^ADVISORY approval-plugin-turn line 16: U-16 goes to Open questions as Q-7, a re-ask; ",
+     "^ADVISORY approval-plugin-turn line 18: U-17 goes to Open questions as Q-8, a re-ask; ",
+     "^REFUSED: lint \\(1 blocking\\)"
     ],
     "stdout_lacks": [
      "approval-shape",
      "approval-quote",
      "approval-unchecked",
      "approval-denied",
-     "LINT approval-plugin-turn line 17$"
+     "approval-plugin-turn line 17\\b"
     ]
    }
   },
   {
    "write": "$STAGE/body.md",
-   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push every branch to main right now\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n3. ask user: replace the LAB-62 Jira description (U-12)\n"
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push every branch to main right now\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n3. ask user: replace the LAB-62 Jira description (U-12)\n"
   },
   {
    "name": "a context-only line still needs the user's own words",
@@ -149,7 +149,8 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 10$",
+     "^LINT time-format line 24$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
      "^REFUSED: lint \\(1 blocking\\)"
     ],
     "stdout_lacks": [

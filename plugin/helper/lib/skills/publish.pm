@@ -20,6 +20,9 @@ package skills::publish;
 # 0.1.2 (D-8): in a stage bound to a plugin handoff turn every own approval is context only
 # (skills/approvals.pm): no approvals_checked and no line-hash record, so nothing carries; the
 # frontmatter says `requested_by: plugin` (AC-4).
+# 0.1.3 APPROVALS: an own approval line of `## Approvals` failing approval-quote or
+# approval-plugin-turn moves to `## Open questions` as a re-ask instead of refusing (one ADVISORY
+# line each; skills::approvals::move_lines); the row gains `approvals_moved` (a count).
 use strict;
 use warnings;
 use utf8;
@@ -116,22 +119,46 @@ sub run {
     # outside the store).
     my @achain = grep { defined } skills::approvals::chain_doc($own_path, $ctx, $s->{session_id});
     my $transcript = skills::approvals::transcript_path($ctx, $s->{session_id}, $s->{cwd}, $s->{worktree});
-    my $res = eval { skills::lint::lint({
-        body => $body, recipes => \%recipes, extra => \%extra, previous => $prev_text,
-        previous_kind => $s->{previous_kind}, own_previous => $own_text,
-        repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
-        jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
-        brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
-        queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
-        quote_floor => [ skills::approvals::quote_floor($ctx, $s->{session_id}) ],
-        approval_context_only => (defined $ht ? 1 : 0),
-    }) };
-    if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
+    my $times = skills::stage::printed_times($dir, $s);
+    my $floor = [ skills::approvals::quote_floor($ctx, $s->{session_id}) ];
+    my $lint = sub {
+        my ($text) = @_;
+        my $r = eval { skills::lint::lint({
+            body => $text, recipes => \%recipes, extra => \%extra, previous => $prev_text,
+            previous_kind => $s->{previous_kind}, own_previous => $own_text,
+            repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($text, $m, $xplan) : undef),
+            jobs => $jobs, times => $times, evidence => $ev, bucket => $s->{bucket},
+            brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
+            queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
+            quote_floor => $floor,
+            approval_context_only => (defined $ht ? 1 : 0),
+        }) };
+        if (!$r) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
+        return $r;
+    };
+    my $res = $lint->($body);
+    # 0.1.3 APPROVALS: an own approval line of `## Approvals` that fails approval-quote or
+    # approval-plugin-turn no longer refuses: it moves to `## Open questions` as a re-ask
+    # (skills::approvals::move_lines) and one ADVISORY line per moved approval says so, with the
+    # draft's line number and the rule in plain words. When nothing else blocks, the moved text is
+    # linted again and published (its approvals, checks and hashes are the moved text's); when
+    # something else blocks, publish refuses as before and the ADVISORY lines say what publish will
+    # move once the rest passes.
+    my ($mbody, $moved, $keep) = skills::approvals::move_lines($body, $res->{blocking});
+    my %rules;
+    if (@$moved) {
+        $rules{ $_->{rule} } = 1 for @$moved;
+        if (!@$keep) {
+            $body = $mbody;
+            $res = $lint->($body);
+            $keep = $res->{blocking};
+        }
+        $row->{approvals_moved} = scalar @$moved;
+    }
     $row->{bytes} = skills::util::blen($body);
     $row->{size_band} = _band($row->{bytes});
-    my @b = @{ $res->{blocking} };
+    my @b = @$keep;
     my @a = @{ $res->{advisory} };
-    my %rules;
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
     $row->{acuity} = $res->{acuity} // '-';
@@ -156,6 +183,10 @@ sub run {
         skills::cli::say("  why: $t->{why} · fix: $t->{fix}");
     };
     for (@b) { skills::cli::say("LINT $_->[0] $_->[1]"); $why->($_->[0]) }
+    for (@$moved) {
+        skills::cli::say("ADVISORY $_->{rule} line $_->{line}: $_->{id} goes to Open questions as $_->{q}, a re-ask; $_->{why}");
+        $why->($_->{rule});
+    }
     for (@a) { skills::cli::say("ADVISORY $_->[0] $_->[1]"); $why->($_->[0]) }
     if (@b) {
         $row->{result} = 'REFUSED:lint';

@@ -409,8 +409,8 @@ export const SPEC = {
       "fix": "write the user's words, any (answer to \"<question>\"), the action, each target with its state, once or standing, and not yet used or used <stamp>"
     },
     "approval-quote": {
-      "why": "only the user's own words can approve an action",
-      "fix": "quote the user exactly, or move the item to Open questions as ask user"
+      "why": "only the user's own words approve: a quote under 4 words must be their whole message or one numbered line, answering your message that names its target",
+      "fix": "none needed: publish moves the line to Open questions as a re-ask; to keep an approval, quote the user's words exactly"
     },
     "approval-plugin-turn": {
       "why": "the plugin asked for this handoff, not the user, so an approval in it must not read as usable",

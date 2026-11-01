@@ -185,7 +185,9 @@ our %SCHEMA = (
                          kind => 'word', writer => 'word', ht => 'hash',
                          attempt => 'int', template_rev => 'hex8', acuity => [enum => @ACUITY], acuity_floor => [enum => @ACUITY],
                          # AP-4 (2026-10-23): counts and outward class ids of the checked approvals, never a quote
-                         approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int', hashed => 'int', context => 'int' }], approval_classes => [list => 'word'] },
+                         approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int', hashed => 'int', context => 'int' }], approval_classes => [list => 'word'],
+                         # 0.1.3 APPROVALS: how many approval lines publish moved to Open questions (a count)
+                         approvals_moved => 'int' },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
     # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was

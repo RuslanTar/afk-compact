@@ -1,0 +1,523 @@
+{
+ "id": "AT-AP-23 (moved approvals, 0.1.3 APPROVALS)",
+ "needs": [
+  "nonroot"
+ ],
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.3 APPROVALS (on 0.1.2, 8 of 15 publish calls were refused, every one by an approval rule: 6 approval-quote, 2 approval-plugin-turn; one session looped quote, (answer to …), plugin-turn, quote; in 4 of 4 cases the model deleted the whole section): an own line of ## Approvals that fails approval-quote or approval-plugin-turn no longer refuses. Publish moves it to ## Open questions as a re-ask that keeps the words, the action, the targets and the rule in plain words, prints one ADVISORY line per moved line (the draft's line number) and publishes; the moved line is no approval anywhere (approvals_checked, the line-hash record, measure). Classes seen in the data, each moved: a short quote that is not the whole message (U-2), a short quote whose question names no target (U-3), the (answer to …) variant (U-6, and U-8 in a plugin turn), the plugin-turn shape (U-7) and a short quote in a plugin turn (U-10); a made-up quote never carries (U-5); a valid approval still carries (U-4) and a valid context line stays (U-9). With another blocking rule publish refuses as before and the draft is untouched; an Approvals section left empty is dropped and a lone none in Open questions is replaced.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"let's finish the release prep\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Two questions:\\n1. Run the tests?\\n2. Push feat/x to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. yes\\n2. no\"}}\n{\"type\": \"assistant\", \"uuid\": \"a3\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Shall I merge MR !12 now?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes, but wait for CI first\"}}\n{\"type\": \"assistant\", \"uuid\": \"a5\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"The release notes are ready.\"}]}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"ok\"}}\n{\"type\": \"assistant\", \"uuid\": \"a7\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"May I push feat/z to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/z to origin now please\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "begin, no handoff turn",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn": {
+      "null": 1
+     }
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, merge pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-3: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n- U-4: approval \"push feat/z to origin\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 · once · not yet used\n- U-5: approval \"go ahead and delete the old release branches\" — action delete branch release/0.9 · targets branch release/0.9 @ 2b2b2b2 · once · not yet used\n- U-6: approval \"yes\" (answer to \"Shall I merge MR !12 now?\") — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "another rule blocks: publish refuses as before, the ADVISORY lines say what it will move, and the draft is kept as written",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT time-format line 30$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-2, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^ADVISORY approval-quote line 11: U-3 goes to Open questions as Q-3, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-4, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^ADVISORY approval-quote line 14: U-6 goes to Open questions as Q-5, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^  why: only the user's own words approve: a quote under 4 words must be their whole message or one numbered line, answering your message that names its target · fix: none needed: publish moves the line to Open questions as a re-ask; to keep an approval, quote the user's words exactly$",
+     "^REFUSED: lint \\(1 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "^LINT approval",
+     "approval-quote line 12\\b",
+     "approval-shape",
+     "approval-unchecked",
+     "^Wrote handoff"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^- U-2: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used$",
+       "^- U-5: approval \"go ahead and delete the old release branches\" — action delete branch release/0\\.9 · targets branch release/0\\.9 @ 2b2b2b2 · once · not yet used$",
+       "^- U-6: approval \"yes\" \\(answer to \"Shall I merge MR !12 now\\?\"\\) — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used$"
+      ],
+      "lacks": [
+       "^- Q-2:"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/approvals/$STEM.md",
+      "count": 0
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "REFUSED:lint",
+       "blocking": 1,
+       "approvals_moved": 4
+      }
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, merge pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-3: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n- U-4: approval \"push feat/z to origin\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 · once · not yet used\n- U-5: approval \"go ahead and delete the old release branches\" — action delete branch release/0.9 · targets branch release/0.9 @ 2b2b2b2 · once · not yet used\n- U-6: approval \"yes\" (answer to \"Shall I merge MR !12 now?\") — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "a short quote that is not the whole message, a short quote whose question named no target, a made-up quote and the (answer to …) variant move to Open questions; publish succeeds; the valid approval still carries",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-2, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^ADVISORY approval-quote line 11: U-3 goes to Open questions as Q-3, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-4, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^ADVISORY approval-quote line 14: U-6 goes to Open questions as Q-5, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^  why: only the user's own words approve: a quote under 4 words must be their whole message or one numbered line, answering your message that names its target · fix: none needed: publish moves the line to Open questions as a re-ask; to keep an approval, quote the user's words exactly$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^REFUSED",
+     "approval-quote line 12\\b",
+     "approval-unchecked"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "approvals": {
+        "lines": 1,
+        "checked": 1,
+        "unchecked": 0,
+        "hashed": 1
+       },
+       "approval_classes": [
+        "push"
+       ],
+       "approvals_moved": 4
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$",
+    "PUB_REL": "re:^Wrote handoff to: .*?/handoffs/(.+)$"
+   }
+  },
+  {
+   "name": "the published file: only the valid line stays in Approvals and is listed; the moved ones are re-ask items after the table, with the words, the action, the targets and the rule",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB",
+      "has": [
+       "^approvals_checked: U-4$",
+       "^## Approvals\n- U-4: approval \"push feat/z to origin\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 · once · not yet used\n## Decisions",
+       "^\\| Q-1 \\| Keep the 45 s retry window\\? Upstream retries at 40 s\\. Recommend 45 s \\| Step 2 \\| user \\| agent \\| unasked \\|\n\n- Q-2: re-ask before acting: merge MR !12 · targets MR !12 @ head 9f8e7d6 · words recorded as the user's: \"yes\" \\(was U-2; not carried: a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target\\) · owner user · raised by agent · unasked\n- Q-3: re-ask before acting: delete branch old/x · targets branch old/x @ 5e5e5e5 · words recorded as the user's: \"ok\" \\(was U-3; not carried: a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target\\) · owner user · raised by agent · unasked\n- Q-4: re-ask before acting: delete branch release/0\\.9 · targets branch release/0\\.9 @ 2b2b2b2 · words recorded as the user's: \"go ahead and delete the old release branches\" \\(was U-5; not carried: these words are not in a message the user typed in this session or in their answer to a question dialog\\) · owner user · raised by agent · unasked\n- Q-5: re-ask before acting: merge MR !12 · targets MR !12 @ head 9f8e7d6 · words recorded as the user's: \"yes\" \\(answer to \"Shall I merge MR !12 now\\?\"\\) \\(was U-6; not carried: a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target\\) · owner user · raised by agent · unasked\n## Location$"
+      ],
+      "lacks": [
+       "U-[0-9]+: approval \"(?:yes|ok|go ahead)",
+       "^requested_by:"
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/approvals/*",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "measure (what resume reads): only U-4 carries; no moved line is an approval of any kind",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-4 git push origin feat/z → branch feat/z @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "^Approvals.*\\bU-[2356]\\b",
+     "context only",
+     "^Approvals \\(unchecked\\)",
+     "^Approvals \\(gate"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "handoff",
+       "checked": 1,
+       "gate": 0
+      }
+     }
+    ],
+    "grep_absent": [
+     {
+      "dir": "$WATCH",
+      "text": "delete the old release branches"
+     },
+     {
+      "dir": "$ROOT/.sessions/approvals",
+      "text": "delete the old release branches"
+     }
+    ]
+   }
+  },
+  {
+   "name": "begin: own base",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_handoff": "$PUB_REL",
+     "previous_kind": "own"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded, merge pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-11: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "the only approval moves: the empty Approvals section is dropped and Open questions' none is replaced",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY approval-quote line 10: U-11 goes to Open questions as Q-1, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "approvals_moved": 1
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB3": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "no Approvals heading, no approvals_checked, the item in place of none",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB3",
+      "has": [
+       "^- U-1: .*\n## Decisions and do-not-re-raise$",
+       "^## Open questions\n- Q-1: re-ask before acting: merge MR !12 · targets MR !12 @ head 9f8e7d6 · words recorded as the user's: \"yes\" \\(was U-11; not carried: a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target\\) · owner user · raised by agent · unasked\n## Location$"
+      ],
+      "lacks": [
+       "^## Approvals",
+       "^approvals_checked:",
+       "^none$",
+       "U-11: approval"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "the plugin opens an idle handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "b2c3d4e5",
+    "--reason",
+    "idle",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "name": "begin binds the turn",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn.ht": "b2c3d4e5"
+    }
+   },
+   "capture": {
+    "STAGE2": "json:stage",
+    "STEM2": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time (plugin turn)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE2"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE2/body.md",
+   "content": "# LAB-9 — approvals recorded, merge pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-7: approval \"push feat/z to origin\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 · once · not yet used\n- U-8: approval \"push feat/z to origin\" (answer to \"May I push feat/z to origin?\") — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-9: approval \"push feat/z to origin\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-10: approval \"2a\" — action merge MR !12 into lane A · targets MR !12 @ head 9f8e7d6 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: push feat/z to origin (user-run: ! git push origin feat/z)\n"
+  },
+  {
+   "name": "plugin handoff turn: a usable line and the (answer to …) context line (approval-plugin-turn) and a short quote that is no whole message (approval-quote) move; publish succeeds; the bare context line stays, context only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE2",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY approval-plugin-turn line 10: U-7 goes to Open questions as Q-1, a re-ask; the plugin asked for this handoff, not the user, so an approval in it may only be written in the context-only form$",
+     "^ADVISORY approval-plugin-turn line 11: U-8 goes to Open questions as Q-2, a re-ask; the plugin asked for this handoff, not the user, so an approval in it may only be written in the context-only form$",
+     "^  why: the plugin asked for this handoff, not the user, so an approval in it must not read as usable · fix: ",
+     "^ADVISORY approval-quote line 13: U-10 goes to Open questions as Q-3, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^REFUSED",
+     "line 12\\b"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "ht": "b2c3d4e5",
+       "approvals": {
+        "lines": 1,
+        "checked": 0,
+        "unchecked": 0,
+        "context": 1
+       },
+       "approvals_moved": 3
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB2": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "the plugin handoff: requested_by plugin, nothing listed or hashed, the context line kept, three re-ask items in place of none",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB2",
+      "has": [
+       "^requested_by: plugin$",
+       "^## Approvals\n- U-9: approval \"push feat/z to origin\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions",
+       "^## Open questions\n- Q-1: re-ask before acting: git push origin feat/z · targets branch feat/z @ 1a2b3c4 · words recorded as the user's: \"push feat/z to origin\" \\(was U-7; not carried: the plugin asked for this handoff, not the user, so an approval in it may only be written in the context-only form\\) · owner user · raised by agent · unasked\n- Q-2: re-ask before acting: git push origin feat/z · targets branch feat/z @ 1a2b3c4 · words recorded as the user's: \"push feat/z to origin\" \\(answer to \"May I push feat/z to origin\\?\"\\) \\(was U-8; not carried: the plugin asked for this handoff, not the user, so an approval in it may only be written in the context-only form\\) · owner user · raised by agent · unasked\n- Q-3: re-ask before acting: merge MR !12 into lane A · targets MR !12 @ head 9f8e7d6 · words recorded as the user's: \"2a\" \\(was U-10; not carried: a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target\\) · owner user · raised by agent · unasked\n## Location$"
+      ],
+      "lacks": [
+       "^approvals_checked:",
+       "U-(?:7|8|10): approval"
+      ]
+     },
+     {
+      "path": "$ROOT/.sessions/approvals/*",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "measure: the context line alone, as (plugin handoff); the moved lines are no approval",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-9 \\(plugin handoff\\)$"
+    ],
+    "stdout_lacks": [
+     "^Approvals.*\\bU-(?:7|8|10)\\b"
+    ]
+   }
+  }
+ ]
+}

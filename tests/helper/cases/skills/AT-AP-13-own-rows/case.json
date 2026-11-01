@@ -90,7 +90,7 @@
   },
   {
    "write": "$STAGE/body.md",
-   "content": "# LAB-9 — approvals in a copied session\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push the release branch rel/2 to origin\" — action git push origin rel/2 · targets branch rel/2 @ 2a2a2a2 · once · not yet used\n- U-3: approval \"yes\" — action merge MR !22 · targets MR !22 @ head 2b2b2b2 · once · not yet used\n- U-4: approval \"push branch rel/4 to origin now\" — action git push origin rel/4 · targets branch rel/4 @ 4a4a4a4 · once · not yet used\n- U-5: approval \"tag build 55 as the release candidate\" — action git tag rc55 · targets commit 5a5a5a5 @ 5a5a5a5 · once · not yet used\n- U-6: approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n- U-7: approval \"yes\" — action delete branch old/q · targets branch old/q @ 7a7a7a7 · once · not yet used\n- U-8: approval \"close MR !77 without merging\" — action close MR !77 · targets MR !77 @ head 7b7b7b7 · once · not yet used\n- U-9: approval \"archive the old-tools repo today\" — action archive repo old-tools · targets repo old-tools @ 1b1b1b1 · once · not yet used\n- U-10: approval \"push branch rel/10 to origin now\" — action git push origin rel/10 · targets branch rel/10 @ 1c1c1c1 · once · not yet used\n- U-11: approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-12: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-13: approval \"Yes\" — action delete branch old/a · targets branch old/a @ 5e5e5e5 · once · not yet used\n- U-14: approval \"push branch rel/14 to origin now\" — action git push origin rel/14 · targets branch rel/14 @ 1d1d1d1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — approvals in a copied session\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push the release branch rel/2 to origin\" — action git push origin rel/2 · targets branch rel/2 @ 2a2a2a2 · once · not yet used\n- U-3: approval \"yes\" — action merge MR !22 · targets MR !22 @ head 2b2b2b2 · once · not yet used\n- U-4: approval \"push branch rel/4 to origin now\" — action git push origin rel/4 · targets branch rel/4 @ 4a4a4a4 · once · not yet used\n- U-5: approval \"tag build 55 as the release candidate\" — action git tag rc55 · targets commit 5a5a5a5 @ 5a5a5a5 · once · not yet used\n- U-6: approval \"rerun the flaky suite tests/flaky twice\" — action rerun tests/flaky · targets suite tests/flaky @ 1a2b3c4 · once · not yet used\n- U-7: approval \"yes\" — action delete branch old/q · targets branch old/q @ 7a7a7a7 · once · not yet used\n- U-8: approval \"close MR !77 without merging\" — action close MR !77 · targets MR !77 @ head 7b7b7b7 · once · not yet used\n- U-9: approval \"archive the old-tools repo today\" — action archive repo old-tools · targets repo old-tools @ 1b1b1b1 · once · not yet used\n- U-10: approval \"push branch rel/10 to origin now\" — action git push origin rel/10 · targets branch rel/10 @ 1c1c1c1 · once · not yet used\n- U-11: approval \"push feat/x to origin when the suite passes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-12: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-13: approval \"Yes\" — action delete branch old/a · targets branch old/a @ 5e5e5e5 · once · not yet used\n- U-14: approval \"push branch rel/14 to origin now\" — action git push origin rel/14 · targets branch rel/14 @ 1d1d1d1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "name": "xxxxxxxx-27 revised approval-quote: a --fork-session copy (typed, a yes after a copied question, a dialog), a bg copy's row, the record's own second, an own yes or answer to a copied question or dialog, no timestamp, forkedFrom",
@@ -107,22 +107,23 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 10$",
-     "^LINT approval-quote line 11$",
-     "^LINT approval-quote line 12$",
-     "^LINT approval-quote line 13$",
-     "^LINT approval-quote line 14$",
-     "^LINT approval-quote line 15$",
-     "^LINT approval-quote line 16$",
-     "^LINT approval-quote line 17$",
-     "^LINT approval-quote line 18$",
-     "^REFUSED: lint \\(9 blocking\\)"
+     "^LINT time-format line 36$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
+     "^ADVISORY approval-quote line 11: U-3 goes to Open questions as Q-2, a re-ask; ",
+     "^ADVISORY approval-quote line 12: U-4 goes to Open questions as Q-3, a re-ask; ",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-4, a re-ask; ",
+     "^ADVISORY approval-quote line 14: U-6 goes to Open questions as Q-5, a re-ask; ",
+     "^ADVISORY approval-quote line 15: U-7 goes to Open questions as Q-6, a re-ask; ",
+     "^ADVISORY approval-quote line 16: U-8 goes to Open questions as Q-7, a re-ask; ",
+     "^ADVISORY approval-quote line 17: U-9 goes to Open questions as Q-8, a re-ask; ",
+     "^ADVISORY approval-quote line 18: U-10 goes to Open questions as Q-9, a re-ask; ",
+     "^REFUSED: lint \\(1 blocking\\)"
     ],
     "stdout_lacks": [
-     "approval-quote line 19$",
-     "approval-quote line 20$",
-     "approval-quote line 21$",
-     "approval-quote line 22$",
+     "approval-quote line 19\\b",
+     "approval-quote line 20\\b",
+     "approval-quote line 21\\b",
+     "approval-quote line 22\\b",
      "approval-shape",
      "approval-unchecked"
     ]
@@ -517,7 +518,7 @@
   },
   {
    "write": "$STAGE_F/body.md",
-   "content": "# LAB-9 — approvals in a copied session\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — approvals in a copied session\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "name": "xxxxxxxx-27 revised: publish under the fork successor, the parent's checked line repeated",
@@ -534,7 +535,8 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 10$",
+     "^LINT time-format line 24$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
      "^REFUSED: lint \\(1 blocking\\)"
     ],
     "stdout_lacks": [

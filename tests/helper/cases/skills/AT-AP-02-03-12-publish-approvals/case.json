@@ -105,7 +105,7 @@
   },
   {
    "write": "$STAGE/body.md",
-   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used · given 11111111 2026-10-21 13:00 +0300\n- U-3: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-4: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n- U-5: approval \"deploy the hotfix to staging now\" — action deploy hotfix · targets env staging @ build 77 · once · not yet used\n- U-6: approval \"rotate the signing keys tonight\" — action rotate keys · targets keyring main @ v3 · once · not yet used\n- U-8: approval \"reset the staging database please\" — action reset db · targets db staging @ snap 4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used · given 11111111 2026-10-21 13:00 +0300\n- U-3: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n- U-4: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n- U-5: approval \"deploy the hotfix to staging now\" — action deploy hotfix · targets env staging @ build 77 · once · not yet used\n- U-6: approval \"rotate the signing keys tonight\" — action rotate keys · targets keyring main @ v3 · once · not yet used\n- U-8: approval \"reset the staging database please\" — action reset db · targets db staging @ snap 4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "name": "AT-AP-03 approval-quote: a short quote after an unrelated message; words only in a tool result, a meta row or a notification",
@@ -122,16 +122,17 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 12$",
-     "^LINT approval-quote line 13$",
-     "^LINT approval-quote line 14$",
-     "^LINT approval-quote line 15$",
-     "^  why: only the user's own words can approve an action · fix: ",
-     "^REFUSED: lint \\(4 blocking\\)"
+     "^LINT time-format line 29$",
+     "^  why: only the user's own words approve: a quote under 4 words must be their whole message or one numbered line, answering your message that names its target · fix: none needed: ",
+     "^ADVISORY approval-quote line 12: U-4 goes to Open questions as Q-1, a re-ask; ",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-2, a re-ask; ",
+     "^ADVISORY approval-quote line 14: U-6 goes to Open questions as Q-3, a re-ask; ",
+     "^ADVISORY approval-quote line 15: U-8 goes to Open questions as Q-4, a re-ask; ",
+     "^REFUSED: lint \\(1 blocking\\)"
     ],
     "stdout_lacks": [
-     "approval-quote line 10$",
-     "approval-quote line 11$",
+     "approval-quote line 10\\b",
+     "approval-quote line 11\\b",
      "approval-shape"
     ]
    }
@@ -156,15 +157,15 @@
     "exit": 3,
     "stdout_has": [
      "^LINT approval-shape line 11$",
-     "^LINT approval-quote line 12$",
-     "^LINT approval-quote line 13$",
-     "^LINT approval-quote line 14$",
-     "^LINT approval-quote line 15$",
-     "^REFUSED: lint \\(5 blocking\\)"
+     "^ADVISORY approval-quote line 12: U-4 goes to Open questions as Q-1, a re-ask; ",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-2, a re-ask; ",
+     "^ADVISORY approval-quote line 14: U-6 goes to Open questions as Q-3, a re-ask; ",
+     "^ADVISORY approval-quote line 15: U-7 goes to Open questions as Q-4, a re-ask; ",
+     "^REFUSED: lint \\(1 blocking\\)"
     ],
     "stdout_lacks": [
-     "approval-quote line 10$",
-     "approval-quote line 11$",
+     "approval-quote line 10\\b",
+     "approval-quote line 11\\b",
      "approval-unchecked"
     ]
    }
