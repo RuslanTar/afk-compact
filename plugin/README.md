@@ -611,12 +611,14 @@ Under `log_dir` (default `<handoff_root>/.watch/`):
 | `<session>/handoff-turn/` | One small record per handoff turn: its id, reason, budget, stage and published markers (see [The handoff turn](#the-handoff-turn-of-a-last-cycle)) |
 | `<session>/queue-adds.jsonl` | One row per question sent to `queue_cmd add`: client id, result, queue id. No question text |
 | `<watch>/queue-caps.json` | Whether your `queue_cmd` supports `add`, cached for a day |
-| `evidence-index.tsv`, `heal/`, `version.json` | Evidence dedupe index, restart counters of the resume skill, last seen Claude Code version |
-| `<watch>/last-version` | The Claude Code version the last session start ran, for the version change row in the log. It goes into the data folder Claude Code gives this plugin (`CLAUDE_PLUGIN_DATA`, `<config>/plugins/data/<plugin>-<marketplace>`) when that variable names it, else here; a folder another plugin's variable names is never written |
+| `evidence-index.tsv`, `heal/` | Evidence dedupe index, restart counters of the resume skill |
+| `version.json` | The mod's version record: the Claude Code version its last session start saw, the one before, and whether a smoke check is due after an update (`/afk-compact:status` shows it) |
 | `.orphans/` | Empty markers for sessions that still have raw summary text under `pending/` |
 | `notice/` | One marker per notice already shown |
 | `export-salt`, `install-id` | Written the first time you make a report: a random salt for the hashed ids in reports, which never leaves your machine, and a random install id |
 | `reports/` | Report zips, when `~/Downloads` is missing, not writable or inside a git work tree |
+
+One file lives outside this folder: `last-version`, the classic hooks' version record. It holds the Claude Code version the last session start ran, for the version change row in the log, and works without the mod. It is kept in this plugin's own data folder, `<config>/plugins/data/<plugin>-<marketplace>` (`<plugin>-inline` for a `--plugin-dir` run), the name Claude Code gives that folder. When `CLAUDE_PLUGIN_DATA` names another plugin's folder (the codex plugin sets its own in session shells), the plugin still uses its own folder beside it, so there is one record and a version change is logged once. Another plugin's folder is never read or written.
 
 Rows hold ids, counts, sizes, times, classes and rule ids. The files under `pending/` and the copies under `compact/` hold summary text, the files under `checkpoint/` hold the measured git file list and project-state lines, a waiting resume block (`resume-pending.json`, `resume-armed.json`) holds its measured lines, the saved copy's path and the text of an open question it quotes, and `jobs.jsonl` holds the command text of background shells; treat them like the summaries themselves.
 

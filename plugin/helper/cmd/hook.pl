@@ -222,23 +222,41 @@ sub on_SessionStart {
     return ('', {});
 }
 
-# own_data_dir() -> the folder that keeps last-version (0.1.3): CLAUDE_PLUGIN_DATA only when it
-# names this plugin's own data folder as Claude Code makes one, <config>/plugins/data/<id> with
-# <id> the plugin id `<name>@<marketplace>` whose characters outside A-Z, a-z, 0-9, _ and - read
-# as `-` (so `<brand>-<marketplace>`), absolute, no `.` or `..` part. Another plugin's folder is
-# not ours: the codex plugin exports its own CLAUDE_PLUGIN_DATA into session shells, so a helper
-# started there saw codex's folder and wrote into it. Else (that, or unset) this plugin's own
-# log folder.
+# own_data_name() -> this plugin's data folder name as Claude Code derives it (0.1.3): the plugin
+# id `<name>@<marketplace>` with each character outside A-Z, a-z, 0-9, _ and - read as `-`
+# (afk-compact@afk-compact -> afk-compact-afk-compact). The marketplace comes from where Claude
+# Code loaded the plugin, CLAUDE_PLUGIN_ROOT (else the helper's own root): an installed plugin's
+# .../plugins/cache/<marketplace>/<name>/<version>, a synced one's .../plugins/synced/<x>/<name>
+# (`synced`), anything else a --plugin-dir run (`inline`, as settings::inline_key reads it).
+sub own_data_name {
+    my $b = ctx::brand();
+    my $r = $ENV{CLAUDE_PLUGIN_ROOT};
+    $r = ctx::root() unless defined $r && $r =~ m{\A/};
+    my @s = grep { $_ ne '' } split m{/+}, $r // '';
+    my $m = 'inline';
+    if (@s >= 5 && $s[-5] eq 'plugins' && $s[-4] eq 'cache' && $s[-2] eq $b) { $m = $s[-3] }
+    elsif (@s >= 4 && $s[-4] eq 'plugins' && $s[-3] eq 'synced' && $s[-1] eq $b) { $m = 'synced' }
+    (my $id = "$b\@$m") =~ s/[^A-Za-z0-9_-]/-/g;
+    return $id;
+}
+
+# own_data_dir() -> the folder that keeps last-version (0.1.3), or undef for none: when
+# CLAUDE_PLUGIN_DATA is an absolute .../plugins/data/<folder> path with no `.` or `..` part, this
+# plugin's own data folder there: that path when <folder> is exactly own_data_name, else the
+# folder of that name beside it. The codex plugin exports its own CLAUDE_PLUGIN_DATA into session
+# shells, so a helper started there saw codex's folder and wrote into it; any other plugin's
+# folder is never read or written, and one record serves both cases (no version change logged
+# twice). Unset or any other shape: no record (as before 0.1.3).
 sub own_data_dir {
     my $pd = $ENV{CLAUDE_PLUGIN_DATA};
-    my $b = ctx::brand();
-    if (defined $pd && $pd =~ m{\A/} && defined $b && $b ne '') {
-        (my $p = $pd) =~ s{(?<=.)/+\z}{};
-        my @seg = split m{/+}, $p;
-        return $p if @seg >= 4 && !grep({ $_ eq '.' || $_ eq '..' } @seg)
-                     && $seg[-3] eq 'plugins' && $seg[-2] eq 'data' && $seg[-1] =~ /\A\Q$b\E-[A-Za-z0-9_-]+\z/;
-    }
-    return rc::watch();
+    return undef unless defined $pd && $pd =~ m{\A/};
+    (my $p = $pd) =~ s{(?<=.)/+\z}{};
+    my @seg = split m{/+}, $p;
+    return undef unless @seg >= 4 && !grep({ $_ eq '.' || $_ eq '..' } @seg) && $seg[-3] eq 'plugins' && $seg[-2] eq 'data';
+    my $own = own_data_name();
+    return $p if $seg[-1] eq $own;
+    $p =~ s{/[^/]+\z}{};
+    return "$p/$own";
 }
 
 sub session_compact {
