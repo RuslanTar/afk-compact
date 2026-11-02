@@ -1,0 +1,402 @@
+{
+  "id": "AT-AP-25 (moved approvals: numbering, placement, references, 0.1.3 APPROVALS review round 2)",
+  "needs": [
+    "nonroot"
+  ],
+  "tmp_base": "repo",
+  "layer": "H",
+  "owner": "skills",
+  "note": "0.1.3 APPROVALS, review round 2. Q numbers of moved approvals go on above every Q-<n> of the draft, the base, the own file (with a foreign base: A, Q-6 above the own file's Q-5 while the foreign base holds Q-2) and the stage's ledger.md (B, Q-21 above the ledger's Q-20 while the base holds Q-7). The items go before a Queued: line, which stays last (A, queue degraded, so the line is allowed). A quote whose words only a row stamped with another session's id holds moves naming the copy (A, U-3). References: an exact U-<k> token of a moved id elsewhere in the file (User constraints, Next steps) now reads its Q-<m>, never inside the user's quoted words, a code span, an id range, a re-ask item or a carried line's tag, and a \"see Approvals\" pointer reads \"see Open questions\" once the section is dropped; the ADVISORY lines name those lines (A). In a plugin handoff turn, a plain context line that repeats the id of a line moved for its quote stays as the id's only line, references to that id stay, and an id moved twice keeps its references (C).",
+  "now": "2026-10-21T14:05:12+03:00",
+  "tz": "Etc/GMT-3",
+  "options": {
+    "queue_cmd": "$TMP/bin/notexec"
+  },
+  "steps": [
+    {
+      "setup": [
+        {
+          "repo": {
+            "branch": "feat/x",
+            "commits": [
+              {
+                "files": {
+                  "app/retry.rb": "x = 1\n"
+                },
+                "msg": "seed"
+              }
+            ]
+          },
+          "at": "$TMP/repo"
+        },
+        {
+          "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+          "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+        },
+        {
+          "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+          "content": "{\"type\": \"user\", \"uuid\": \"u0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"let's finish the release prep\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Two questions:\\n1. Run the tests?\\n2. Push feat/x to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. yes\\n2. no\"}}\n{\"type\": \"assistant\", \"uuid\": \"a3\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Shall I merge MR !12 now?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes, but wait for CI first\"}}\n{\"type\": \"assistant\", \"uuid\": \"a5\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"The release notes are ready.\"}]}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"ok\"}}\n{\"type\": \"assistant\", \"uuid\": \"a7\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"May I push feat/z to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/z to origin now please\"}}\n{\"type\":\"user\",\"uuid\":\"x9\",\"sessionId\":\"99999999-aaaa-4bbb-8ccc-dddddddddddd\",\"timestamp\":\"2026-10-21T13:20:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"archive the old-tools repo today\"}}\n"
+        },
+        {
+          "git": [
+            "rev-parse",
+            "HEAD"
+          ],
+          "cwd": "$TMP/repo",
+          "var": "HEAD0"
+        },
+        {
+          "write": "$TMP/bin/notexec",
+          "content": "#!/bin/sh\nexit 0\n",
+          "mode": "0600"
+        },
+        {
+          "write": "$ROOT/repo/approvals/2026-10-21_09-00-00_11111111_approvals.md",
+          "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-9 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Open questions\n- Q-5: rename the retry flag? · owner user · raised by agent · unasked\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=0a0a0a0a⟫\n"
+        },
+        {
+          "write": "$ROOT/repo/approvals/2026-10-21_12-00-00_99999999_other.md",
+          "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\ngit_commit: 1234567890abcdef1234567890abcdef12345678\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-9 — other session\n## User constraints\n- U-3: \"never deploy on Fridays\" — scope deploys; user, 99999999\n## Open questions\n- Q-2: bump the gateway timeout? · owner user · raised by agent · unasked\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+        }
+      ]
+    },
+    {
+      "name": "begin: the newest handoff is another session's (foreign base), the own file is older; the queue is degraded, so a Queued: line is allowed",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "begin",
+        "--sid",
+        "$SID",
+        "--topic",
+        "approvals"
+      ],
+      "expect": {
+        "exit": 0,
+        "json": {
+          "previous_kind": "foreign",
+          "own_previous_handoff": "repo/approvals/2026-10-21_09-00-00_11111111_approvals.md",
+          "queue.mode": "degraded"
+        }
+      },
+      "capture": {
+        "STAGE": "json:stage"
+      }
+    },
+    {
+      "name": "stamp prints the check time",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "stamp",
+        "--stage",
+        "$STAGE"
+      ],
+      "expect": {
+        "exit": 0
+      }
+    },
+    {
+      "write": "$STAGE/body.md",
+      "content": "# LAB-9 — approvals moved, references follow\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-2: \"merge only after CI\" — scope merges; user, 11111111; see Approvals for U-7\n- U-13: \"never deploy on Fridays\" — scope deploys; user, 99999999 [from 99999999 · U-3 · 2026-10-21 12:00 +0300]\n## Approvals\n- U-7: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n- U-3: approval \"archive the old-tools repo today\" — action archive repo old-tools · targets repo old-tools @ 1b1b1b1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n- Q-1: keep the 45 s retry window? Upstream retries at 40 s · owner user · raised by agent · unasked\n- Q-4: re-ask before acting: delete branch old/y · targets branch old/y @ 9e9e9e9 · words recorded as the user's: \"fine\" (was U-7; not carried: these words are not in a message the user typed in this session or in their answer to a question dialog) · owner user · raised by agent · unasked\nQueued: 1 open in repo x (q-0007); answered only via the queue; never re-ask.\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- approvals: the user's words \"U-7 can wait\" kept as said; ids U-7..U-8 reviewed, notes in `U-7.txt`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: delete branch old/x (re-ask U-7)\n"
+    },
+    {
+      "name": "the moved U-7 takes Q-6, above the own file's Q-5 (the foreign base holds only Q-2), and U-3, whose words only a row stamped with another session's id holds, takes Q-7 naming the copy; the ADVISORY lines name the lines whose references now cite Q-6 and the pointer that now says see Open questions",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "publish",
+        "--stage",
+        "$STAGE",
+        "--slug",
+        "approvals",
+        "--status",
+        "in-progress"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout_has": [
+          "^ADVISORY approval-quote line 12: U-7 goes to Open questions as Q-6, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target; lines 9, 33 cite Q-6 instead$",
+          "^ADVISORY approval-quote line 13: U-3 goes to Open questions as Q-7, a re-ask; these words are only in messages copied from another session \\(a fork or a background copy\\), not typed in this session; line 9 says see Open questions instead$",
+          "^Wrote handoff to: "
+        ],
+        "stdout_lacks": [
+          "^LINT ",
+          "^REFUSED"
+        ]
+      },
+      "capture": {
+        "PUBA": "re:^Wrote handoff to: (.+)$"
+      }
+    },
+    {
+      "name": "the items go before the Queued: line (it stays last); U-7 in Next steps and User constraints now reads Q-6 and the pointer says see Open questions, while the user's quoted words, a code span, an id range and an earlier re-ask item keep U-7, and the carried line's tag keeps the other session's U-3",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "handoff-state",
+        "--sid",
+        "$SID"
+      ],
+      "expect": {
+        "files": [
+          {
+            "path": "$PUBA",
+            "has": [
+              "^- Q-1: keep the 45 s retry window\\? Upstream retries at 40 s · owner user · raised by agent · unasked\n- Q-4: re-ask before acting: delete branch old/y · targets branch old/y @ 9e9e9e9 · words recorded as the user's: \"fine\" \\(was U-7; not carried: these words are not in a message the user typed in this session or in their answer to a question dialog\\) · owner user · raised by agent · unasked\n- Q-6: re-ask before acting: delete branch old/x · targets branch old/x @ 5e5e5e5 · words recorded as the user's: \"ok\" \\(was U-7; not carried: a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target\\) · owner user · raised by agent · unasked\n- Q-7: re-ask before acting: archive repo old-tools · targets repo old-tools @ 1b1b1b1 · words recorded as the user's: \"archive the old-tools repo today\" \\(was U-3; not carried: these words are only in messages copied from another session \\(a fork or a background copy\\), not typed in this session\\) · owner user · raised by agent · unasked\nQueued: 1 open in repo x \\(q-0007\\); answered only via the queue; never re-ask\\.\n## Location$",
+              "^- U-2: \"merge only after CI\" — scope merges; user, 11111111; see Open questions for Q-6$",
+              "^2\\. ask user: delete branch old/x \\(re-ask Q-6\\)$",
+              "^- U-13: \"never deploy on Fridays\" — scope deploys; user, 99999999 \\[from 99999999 · U-3 · 2026-10-21 12:00 \\+0300\\]$",
+              "^- approvals: the user's words \"U-7 can wait\" kept as said; ids U-7\\.\\.U-8 reviewed, notes in `U-7\\.txt`$"
+            ],
+            "lacks": [
+              "^## Approvals",
+              "see Approvals",
+              "U-7: approval",
+              "U-3: approval",
+              "re-ask U-7",
+              "Q-3:"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "begin: own base (the file A wrote)",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "begin",
+        "--sid",
+        "$SID",
+        "--topic",
+        "approvals"
+      ],
+      "expect": {
+        "exit": 0,
+        "json": {
+          "previous_kind": "own"
+        }
+      },
+      "capture": {
+        "STAGE": "json:stage"
+      }
+    },
+    {
+      "name": "stamp prints the check time",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "stamp",
+        "--stage",
+        "$STAGE"
+      ],
+      "expect": {
+        "exit": 0
+      }
+    },
+    {
+      "write": "$STAGE/body.md",
+      "content": "# LAB-9 — approvals moved, references follow\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-8: approval \"ok\" — action delete branch old/w · targets branch old/w @ 6e6e6e6 · once · not yet used\n- U-14: approval \"push feat/z to origin\" — action git push origin feat/z, not before U-8 · targets branch feat/z @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    },
+    {
+      "write": "$STAGE/ledger.md",
+      "content": "- Q-20: retire the old retry flag? · owner user · raised by agent · answered\n"
+    },
+    {
+      "name": "the moved U-8 takes Q-21, above the stage ledger's Q-20 (the base holds up to Q-7)",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "publish",
+        "--stage",
+        "$STAGE",
+        "--slug",
+        "approvals",
+        "--status",
+        "in-progress"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout_has": [
+          "^ADVISORY approval-quote line 10: U-8 goes to Open questions as Q-21, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+          "^Wrote handoff to: "
+        ],
+        "stdout_lacks": [
+          "^LINT ",
+          "^REFUSED",
+          " instead"
+        ]
+      },
+      "capture": {
+        "PUBB": "re:^Wrote handoff to: (.+)$"
+      }
+    },
+    {
+      "name": "the item in place of none; a kept approval line that names U-8 is left as written (lines of Approvals are never rewritten)",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "handoff-state",
+        "--sid",
+        "$SID"
+      ],
+      "expect": {
+        "files": [
+          {
+            "path": "$PUBB",
+            "has": [
+              "^## Open questions\n- Q-21: re-ask before acting: delete branch old/w ",
+              "^## Approvals\n- U-14: approval \"push feat/z to origin\" — action git push origin feat/z, not before U-8 · targets branch feat/z @ 1a2b3c4 · once · not yet used\n## Decisions"
+            ],
+            "lacks": [
+              "Q-8:",
+              "not before Q-"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "the plugin opens an idle handoff turn",
+      "argv": [
+        "handoff-turn",
+        "open",
+        "--sid",
+        "$SID",
+        "--ht",
+        "b2c3d4e5",
+        "--reason",
+        "idle",
+        "--max-calls",
+        "34",
+        "--max-tokens",
+        "64000"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout": "ok\n"
+      }
+    },
+    {
+      "name": "begin binds the turn",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "begin",
+        "--sid",
+        "$SID",
+        "--topic",
+        "approvals"
+      ],
+      "expect": {
+        "exit": 0,
+        "json": {
+          "handoff_turn.ht": "b2c3d4e5"
+        }
+      },
+      "capture": {
+        "STAGE2": "json:stage"
+      }
+    },
+    {
+      "name": "stamp prints the check time (plugin turn)",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "stamp",
+        "--stage",
+        "$STAGE2"
+      ],
+      "expect": {
+        "exit": 0
+      }
+    },
+    {
+      "write": "$STAGE2/body.md",
+      "content": "# LAB-9 — approvals moved, references follow\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-9: approval \"ok\" — action delete branch old/v · targets branch old/v @ 7e7e7e7 ; context only, not valid here; re-ask\n- U-9: approval \"push feat/z to origin\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-11: approval \"ok\" — action delete branch old/u · targets branch old/u @ 8e8e8e8 · once · not yet used\n- U-11: approval \"ok\" — action delete branch old/u · targets branch old/u @ 8e8e8e8 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: push feat/z to origin (re-ask U-9)\n3. ask user: delete branch old/u (re-ask U-11)\n"
+    },
+    {
+      "name": "plugin turn: the first U-9 (a short quote) moves for its quote; the second U-9, a plain context line whose quote the user typed, is then the id's only line and stays (no duplicate-id move); both U-11 lines move, so no reference to U-11 changes",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "publish",
+        "--stage",
+        "$STAGE2",
+        "--slug",
+        "approvals",
+        "--status",
+        "in-progress"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout_has": [
+          "^ADVISORY approval-quote line 10: U-9 goes to Open questions as Q-8, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+          "^ADVISORY approval-plugin-turn line 12: U-11 goes to Open questions as Q-9, a re-ask; the plugin asked for this handoff, not the user, so an approval in it may only be written in the context-only form$",
+          "^ADVISORY approval-quote line 13: U-11 goes to Open questions as Q-10, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+          "^Wrote handoff to: "
+        ],
+        "stdout_lacks": [
+          "^LINT ",
+          "^REFUSED",
+          "line 11\\b",
+          "another line of Approvals already has this id",
+          " instead"
+        ],
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "handoff_publish",
+            "fields": {
+              "result": "wrote",
+              "ht": "b2c3d4e5",
+              "approvals": {
+                "lines": 1,
+                "checked": 0,
+                "unchecked": 0,
+                "context": 1
+              },
+              "approvals_moved": 3
+            }
+          }
+        ]
+      },
+      "capture": {
+        "PUBC": "re:^Wrote handoff to: (.+)$"
+      }
+    },
+    {
+      "name": "the second U-9 stays in Approvals; Next steps keep U-9 (a kept line still holds the id) and U-11 (moved twice, so no one question)",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "handoff-state",
+        "--sid",
+        "$SID"
+      ],
+      "expect": {
+        "files": [
+          {
+            "path": "$PUBC",
+            "has": [
+              "^## Approvals\n- U-9: approval \"push feat/z to origin\" — action git push origin feat/z · targets branch feat/z @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions",
+              "^## Open questions\n- Q-8: re-ask before acting: delete branch old/v · targets branch old/v @ 7e7e7e7 · words recorded as the user's: \"ok\" \\(was U-9; not carried: ",
+              "^2\\. ask user: push feat/z to origin \\(re-ask U-9\\)$",
+              "^3\\. ask user: delete branch old/u \\(re-ask U-11\\)$"
+            ],
+            "lacks": [
+              "re-ask Q-",
+              "U-9: approval \"ok\"",
+              "U-11: approval"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "measure: the kept context line, as (plugin handoff)",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "measure",
+        "--sid",
+        "$SID",
+        "$PUBC"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout_has": [
+          "^Approvals \\(context only, re-ask\\): U-9 \\(plugin handoff\\)$"
+        ]
+      }
+    }
+  ]
+}

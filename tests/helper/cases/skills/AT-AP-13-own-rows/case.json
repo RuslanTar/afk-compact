@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner 2026-10-23 xxxxxxxx-27 revised (\"No: forks re-ask\"): the quote check counts only rows this session wrote after it started (its first per-process record, stamped in milliseconds; an older stamp without a fraction is rounded up to the next second). Claude Code 2.1.309 writes the rows a --fork-session resume or a background copy (sessionKind bg) carries over with the new session's id, the parent's uuids and times and no marker, so they are told apart by time; a /branch copy also has forkedFrom. Not counted: a copied typed row, a yes after a copied question, a copied dialog (ask and answer), a bg copy's carried row, a row 5 ms before the record, a row from a fraction-less record's own second, an own yes that answers a copied question, an own answer to a copied dialog, an own row without a timestamp, a forkedFrom row; a session with no record is not checked (unchecked, never a miss). Counted: a launch prompt 50 ms after the record, the bg session's own typed words, an own yes after an own question, an own dialog. Carry: a clear or handoff-resume predecessor's checked approval carries; a fork, bg-copy, none, missing or unknown link carries none; fork and bg-copy predecessors stay own for commands (locate relation successor).",
+ "note": "Owner 2026-10-23 xxxxxxxx-27 revised (\"No: forks re-ask\"): the quote check counts only rows this session wrote after it started (its first per-process record, stamped in milliseconds; an older stamp without a fraction is rounded up to the next second). Claude Code 2.1.309 writes the rows a --fork-session resume or a background copy (sessionKind bg) carries over with the new session's id, the parent's uuids and times and no marker, so they are told apart by time; a /branch copy also has forkedFrom. Not counted: a copied typed row, a yes after a copied question, a copied dialog (ask and answer), a bg copy's carried row, a row 5 ms before the record, a row from a fraction-less record's own second, an own yes that answers a copied question, an own answer to a copied dialog, an own row without a timestamp, a forkedFrom row; a session with no record is not checked (unchecked, never a miss). Counted: a launch prompt 50 ms after the record, the bg session's own typed words, an own yes after an own question, an own dialog. Carry: a clear or handoff-resume predecessor's checked approval carries; a fork, bg-copy, none, missing or unknown link carries none; fork and bg-copy predecessors stay own for commands (locate relation successor). Review round 2: a line moved for a quote found only in copied rows (a copied typed row or dialog, a bg copy's row, a row before the record, a forkedFrom row) names the copy as its reason; an own yes to a copied question keeps the short-quote rule, and an own answer to a copied dialog and a row without a timestamp keep the plain rule.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -108,15 +108,15 @@
     "exit": 3,
     "stdout_has": [
      "^LINT time-format line 36$",
-     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
-     "^ADVISORY approval-quote line 11: U-3 goes to Open questions as Q-2, a re-ask; ",
-     "^ADVISORY approval-quote line 12: U-4 goes to Open questions as Q-3, a re-ask; ",
-     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-4, a re-ask; ",
-     "^ADVISORY approval-quote line 14: U-6 goes to Open questions as Q-5, a re-ask; ",
-     "^ADVISORY approval-quote line 15: U-7 goes to Open questions as Q-6, a re-ask; ",
-     "^ADVISORY approval-quote line 16: U-8 goes to Open questions as Q-7, a re-ask; ",
-     "^ADVISORY approval-quote line 17: U-9 goes to Open questions as Q-8, a re-ask; ",
-     "^ADVISORY approval-quote line 18: U-10 goes to Open questions as Q-9, a re-ask; ",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; these words are only in messages copied from another session \\(a fork or a background copy\\), not typed in this session$",
+     "^ADVISORY approval-quote line 11: U-3 goes to Open questions as Q-2, a re-ask; these words are only in messages copied from another session \\(a fork or a background copy\\), not typed in this session$",
+     "^ADVISORY approval-quote line 12: U-4 goes to Open questions as Q-3, a re-ask; these words are only in messages copied from another session \\(a fork or a background copy\\), not typed in this session$",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-4, a re-ask; these words are only in messages copied from another session \\(a fork or a background copy\\), not typed in this session$",
+     "^ADVISORY approval-quote line 14: U-6 goes to Open questions as Q-5, a re-ask; these words are only in messages copied from another session \\(a fork or a background copy\\), not typed in this session$",
+     "^ADVISORY approval-quote line 15: U-7 goes to Open questions as Q-6, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^ADVISORY approval-quote line 16: U-8 goes to Open questions as Q-7, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^ADVISORY approval-quote line 17: U-9 goes to Open questions as Q-8, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^ADVISORY approval-quote line 18: U-10 goes to Open questions as Q-9, a re-ask; these words are only in messages copied from another session \\(a fork or a background copy\\), not typed in this session$",
      "^REFUSED: lint \\(1 blocking\\)"
     ],
     "stdout_lacks": [

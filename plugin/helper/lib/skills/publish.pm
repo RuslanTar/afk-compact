@@ -145,7 +145,9 @@ sub run {
     # something else blocks, publish refuses as before and the ADVISORY lines say what publish will
     # move once the rest passes.
     # Q numbers go on above the chain's (spec §4): the base, the own file and the stage's ledger.
-    my ($mbody, $moved, $keep) = skills::approvals::move_lines($body, $res->{blocking}, $prev_text, $own_text, $extra{'ledger.md'});
+    # The reason a quote failed (copy, claim, pasted: review round 2) comes from the lint.
+    my ($mbody, $moved, $keep) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
+                                                               $prev_text, $own_text, $extra{'ledger.md'});
     my %rules;
     if (@$moved) {
         $rules{ $_->{rule} } = 1 for @$moved;
@@ -188,7 +190,10 @@ sub run {
     my $moved_fix = @b ? 'none needed: publish moves the line once the LINT lines are fixed'
                        : 'none needed: the handoff is written with the line moved; list it in the report';
     for (@$moved) {
-        skills::cli::say("ADVISORY $_->{rule} line $_->{line}: $_->{id} goes to Open questions as $_->{q}, a re-ask; $_->{why}");
+        # Review round 2: the draft lines whose references now read the new id or Open questions.
+        my $refs = $_->{refs} ? sprintf('; line%s %s cite%s %s instead', (@{ $_->{refs} } > 1 ? ('s', join(', ', @{ $_->{refs} }), '') : ('', $_->{refs}[0], 's')), $_->{q}) : '';
+        my $see = $_->{see} ? sprintf('; line%s %s say%s see Open questions instead', (@{ $_->{see} } > 1 ? ('s', join(', ', @{ $_->{see} }), '') : ('', $_->{see}[0], 's'))) : '';
+        skills::cli::say("ADVISORY $_->{rule} line $_->{line}: $_->{id} goes to Open questions as $_->{q}, a re-ask; $_->{why}$refs$see");
         next if !%$texts || $told{"moved $_->{rule}"}++;
         my $t = $texts->{ $_->{rule} } or die "lint id $_->{rule} has no lint_texts entry in the spec\n";
         skills::cli::say("  why: $t->{why} · fix: $moved_fix");

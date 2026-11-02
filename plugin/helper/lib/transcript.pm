@@ -481,7 +481,7 @@ sub _picked_labels {
 # answer must name a target in), or () when the row answers no recorded dialog or does not count.
 # The dialog is forgotten once its result is seen.
 sub _dialog_answers {
-    my ($j, $asked) = @_;
+    my ($j, $asked, $pasted) = @_;
     my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
     return () unless ref $c eq 'ARRAY';
     my @tr = grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' } @$c;
@@ -537,8 +537,9 @@ sub _dialog_answers {
     }
     my $resp = defined $u->{response} && !ref $u->{response} ? _chars($u->{response}) : '';
     push @out, { text => $resp, ctx => join("\n", map { $_->{text} } @qs) } if $resp =~ /\S/ && index($shown, $resp) >= 0;
-    # A dialog answer that holds an approval line was pasted: none of its answers count.
-    return () if grep { $_->{text} =~ $PASTED } @out;
+    # A dialog answer that holds an approval line was pasted: none of its answers count (the
+    # caller's @$pasted gets them: the reason a quote was not found, see `why`).
+    if (grep { $_->{text} =~ $PASTED } @out) { push @$pasted, @out if $pasted; return () }
     return @out;
 }
 
@@ -584,6 +585,20 @@ sub quotes_found {
         $q[$i]{averbs} = _verbs($asks->[$i]{action});
     }
     my $origins = ref $o{origins} eq 'ARRAY' ? $o{origins} : undef;
+    # `why` (0.1.3 APPROVALS, the reason publish writes for a moved line): for each quote not
+    # found, `copy`, `claim` or `pasted` when its words are only in a row that does not count for
+    # that reason, by the same rules otherwise (_why_near; the first one seen stays), else undef
+    # (the plain rule: not typed by the user, or a short quote that is no whole message answering a
+    # message naming a target): a typed row or a dialog (its ask and its answer) of a copy or from
+    # before a claim (_why_of), or an own message or dialog answer that was pasted ($PASTED).
+    # `start`: the session's own start when `since` is a successor's claim
+    # (skills::core::quotes_found); rows before it are copies, rows after it and before `since`
+    # come before the claim.
+    my $why = ref $o{why} eq 'ARRAY' ? $o{why} : undef;
+    my $start = defined $o{start} && !ref $o{start} && $o{start} =~ /\A[0-9]+(?:\.[0-9]+)?\z/ && $o{start} < $since ? $o{start} : $since;
+    my @near;
+    my $any_asst = '';
+    my (%xasked, @xorder);
     my @found = map { $_->{quote} eq '' ? 0 : undef } @q;
     my $need_asst = grep { $_->{short} } @q;
     my $size = -s $path;
@@ -612,10 +627,18 @@ sub quotes_found {
         }
         if (index($line, '"assistant"') >= 0
             && ($need_asst || index($line, $ASK_TOOL) >= 0
-                || (%asked && index($line, '"tool_use"') >= 0 && grep { index($line, $_) >= 0 } keys %asked))) {
+                || (%asked && index($line, '"tool_use"') >= 0 && grep { index($line, $_) >= 0 } keys %asked)
+                || (%xasked && index($line, '"tool_use"') >= 0 && grep { index($line, $_) >= 0 } keys %xasked))) {
             $j = eval { jsonc::decode($line) };
             if (ref $j eq 'HASH' && ($j->{type} // '') eq 'assistant') {
                 _drop_reused($j, \%asked) if %asked;
+                _drop_reused($j, \%xasked) if %xasked;
+                # `why`: any main assistant text since the last typed row, the context of a short
+                # quote in a copied row.
+                if ($why && $need_asst && !$j->{isSidechain}) {
+                    $any_asst .= "\n" . _chars(_row_text($j));
+                    $any_asst = substr($any_asst, -$ASSISTANT_KEEP) if length($any_asst) > $ASSISTANT_KEEP;
+                }
                 # Only this session's own assistant rows name a short quote's target or ask a
                 # dialog: a copied question is the parent's (owner xxxxxxxx-27 revised).
                 if (!$j->{isSidechain} && _own_row($j, $sid, $until)) {
@@ -624,6 +647,8 @@ sub quotes_found {
                         $asst = substr($asst, -$ASSISTANT_KEEP) if length($asst) > $ASSISTANT_KEEP;
                     }
                     _dialogs_asked($j, \%asked, \@asked_order);
+                } elsif ($why && !$j->{isSidechain} && defined _why_of($j, $sid, $start, $since)) {
+                    _dialogs_asked($j, \%xasked, \@xorder);
                 }
                 next;
             }
@@ -631,12 +656,25 @@ sub quotes_found {
         next unless index($line, '"user"') >= 0;
         if (index($line, '"tool_use_id"') >= 0) {
             # A tool result: only the user's answer in an AskUserQuestion dialog counts (NR-14).
-            next unless %asked;
+            next unless %asked || %xasked;
             $j //= eval { jsonc::decode($line) };
-            next unless _own_user_row($j, $sid, $until);
+            if (!_own_user_row($j, $sid, $until)) {
+                # `why`: the answer in a dialog of a copy or from before a claim.
+                my $cat = %xasked ? _why_of($j, $sid, $start, $since) : undef;
+                if (defined $cat && ($j->{type} // '') eq 'user' && !($j->{isMeta} || $j->{isCompactSummary} || $j->{isSidechain})) {
+                    my $xo = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
+                    if (!defined $xo || $human{$xo}) {
+                        _why_near(\@q, \@found, \@near, $cat, $_->{text}, $_->{ctx}, 0) for _dialog_answers($j, \%xasked);
+                    }
+                }
+                next;
+            }
+            next unless %asked;
             my $ok = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
             next if defined $ok && !$human{$ok};
-            my @ans = _dialog_answers($j, \%asked);
+            my @pa;
+            my @ans = _dialog_answers($j, \%asked, ($why ? \@pa : undef));
+            _why_near(\@q, \@found, \@near, 'pasted', $_->{text}, '', 1) for @pa;
             for my $d (@ans) {
                 my $ft = _fold($d->{text});
                 my $fw = _whole($d->{text});
@@ -656,14 +694,24 @@ sub quotes_found {
         }
         $j //= eval { jsonc::decode($line) };
         # A typed row in the coarse window counts only by order (see "Coarse start" above).
-        next unless _own_user_row($j, $sid, $until) || ($early && _own_user_row($j, $sid, $since));
+        my $own = _own_user_row($j, $sid, $until) || ($early && _own_user_row($j, $sid, $since));
+        if (!$own) {
+            # `why`: a typed row of a copy or from before a claim, with the quote's words.
+            my $cat = $why ? _why_of($j, $sid, $start, $since) : undef;
+            if (defined $cat && ($j->{type} // '') eq 'user' && !($j->{isMeta} || $j->{isCompactSummary} || $j->{isSidechain} || $j->{isVisibleInTranscriptOnly})) {
+                my $wt = _typed_text($j, \%human);
+                if (defined $wt) { _why_near(\@q, \@found, \@near, $cat, $wt, $any_asst, 0); $any_asst = '' }
+            }
+            next;
+        }
         my $o = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
         next if defined $o && !$human{$o};
         my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
         next if ref $c eq 'ARRAY' && grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' } @$c;
         my $t = _chars(_row_text($j));
         if ($t =~ $NOT_TYPED) { next }
-        if ($t =~ $PASTED) { $asst = ''; next }
+        $any_asst = '';
+        if ($t =~ $PASTED) { _why_near(\@q, \@found, \@near, 'pasted', $t, '', 1) if $why; $asst = ''; next }
         my $ft = _fold($t);
         my $fw = _whole($t);
         for my $i (0 .. $#q) {
@@ -683,7 +731,60 @@ sub quotes_found {
         $asst = '';
     }
     close $fh;
+    @$why = map { $found[$_] || $partial ? undef : $near[$_] } 0 .. $#q if $why;
     return [ map { $found[$_] ? 1 : $partial ? undef : 0 } 0 .. $#q ];
+}
+
+# _why_of(row, sid, start, since) -> `copy` (forkedFrom, another session's id, or a time before
+# the session's start: a fork's, --fork-session resume's or background copy's history), `claim` (a
+# time at or after the start but before `since`, the floor a successor's claim set) or undef.
+sub _why_of {
+    my ($j, $sid, $start, $since) = @_;
+    return undef unless ref $j eq 'HASH';
+    return 'copy' if exists $j->{forkedFrom};
+    return 'copy' if exists $j->{sessionId} && (ref $j->{sessionId} || ($j->{sessionId} // '') ne $sid);
+    my $e = _row_epoch($j);
+    return undef unless defined $e;
+    return 'copy' if $e < $start;
+    return 'claim' if $e < $since;
+    return undef;
+}
+
+# The text of a typed user row of a person (a human origin, no tool result, no reminder or
+# command output), or undef.
+sub _typed_text {
+    my ($j, $human) = @_;
+    my $o = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
+    return undef if defined $o && !$human->{$o};
+    my $c = ref $j->{message} eq 'HASH' ? $j->{message}{content} : undef;
+    return undef if ref $c eq 'ARRAY' && grep { ref $_ eq 'HASH' && ($_->{type} // '') eq 'tool_result' } @$c;
+    my $t = _chars(_row_text($j));
+    return $t =~ $NOT_TYPED ? undef : $t;
+}
+
+# 1 when a short quote is the whole text, or one whole numbered line of it.
+sub _whole_or_item {
+    my ($t, $q) = @_;
+    return 1 if _whole($t) eq $q->{whole};
+    return 0 if $q->{wbody} eq '';
+    for my $l (split /\n/, $t) { return 1 if $l =~ $ITEM_RE && _whole($2 // '') eq $q->{wbody} }
+    return 0;
+}
+
+# `why`: each quote not found yet whose words this text holds gets reason `cat` (the first one
+# seen stays): a long quote as whole words; a short one as the whole text or one numbered line
+# after an assistant text naming a target, or, in a pasted text, in double quotes as a line or
+# item holds it.
+sub _why_near {
+    my ($q, $found, $near, $cat, $t, $ctx, $pasted) = @_;
+    my $ft = _fold($t);
+    for my $i (0 .. $#$q) {
+        next if $found->[$i] || defined $near->[$i] || $q->[$i]{quote} eq '';
+        if (!$q->[$i]{short}) { next unless $ft =~ $q->[$i]{re} }
+        elsif ($pasted) { next unless index($ft, qq{"$q->[$i]{quote}"}) >= 0 }
+        else { next unless (grep { $ctx =~ $_ } @{ $q->[$i]{ids} }) && _whole_or_item($t, $q->[$i]) }
+        $near->[$i] = $cat;
+    }
 }
 
 # user_quote_found(path, quote, [target…], sid, since) -> 1 | 0 | undef (unreadable, no sid or

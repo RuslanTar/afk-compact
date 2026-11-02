@@ -6,7 +6,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.3 APPROVALS, review round 1 (medium): publish writes a moved approval as an Open questions re-ask item that keeps the words that failed the quote check, without a `U-n: approval` marker. Owner rule Q-2 (a message holding a pasted approval line counts for nothing) must cover that item too, or a later session could quote the pasted words and carry them. A typed message or a dialog answer holding the item's text is pasted, whichever part was copied: `words recorded as the user's:` before the words (U-2; U-5 in a dialog answer, with a typographic apostrophe), `as written:` of a line that did not parse (U-3), or `(was U-<k>; not carried:` after them (U-4). Each of these quotes fails approval-quote and moves; nothing pasted is listed as checked. A message the user typed themselves still counts (U-6 carries).",
+ "note": "0.1.3 APPROVALS, review round 1 (medium): publish writes a moved approval as an Open questions re-ask item that keeps the words that failed the quote check, without a `U-n: approval` marker. Owner rule Q-2 (a message holding a pasted approval line counts for nothing) must cover that item too, or a later session could quote the pasted words and carry them. A typed message or a dialog answer holding the item's text is pasted, whichever part was copied: `words recorded as the user's:` before the words (U-2; U-5 in a dialog answer, with a typographic apostrophe), `as written:` of a line that did not parse (U-3), or `(was U-<k>; not carried:` after them (U-4). Each of these quotes fails approval-quote and moves; nothing pasted is listed as checked. A message the user typed themselves still counts (U-6 carries). Review round 2: each moved line names the paste as its reason, not the plain quote rule.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -90,10 +90,10 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
-     "^ADVISORY approval-quote line 11: U-3 goes to Open questions as Q-2, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
-     "^ADVISORY approval-quote line 12: U-4 goes to Open questions as Q-3, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
-     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-4, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; the message holding these words also holds an approval line or a re-ask item, so it was pasted and none of its words count$",
+     "^ADVISORY approval-quote line 11: U-3 goes to Open questions as Q-2, a re-ask; the message holding these words also holds an approval line or a re-ask item, so it was pasted and none of its words count$",
+     "^ADVISORY approval-quote line 12: U-4 goes to Open questions as Q-3, a re-ask; the message holding these words also holds an approval line or a re-ask item, so it was pasted and none of its words count$",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-4, a re-ask; the message holding these words also holds an approval line or a re-ask item, so it was pasted and none of its words count$",
      "^Wrote handoff to: "
     ],
     "stdout_lacks": [
