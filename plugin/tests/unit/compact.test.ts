@@ -172,7 +172,9 @@ test('AF-A4: the prefix past the start is taken only behind a header tag line; a
   expect(summaryText('<artifact-content-authored-by-others/>\nno summary here')).toBeUndefined()
 })
 
-/** The classic PostCompact hook's copy of the compaction now at the bottom, with this verdict (and nonce, by default its own). */
+/** The classic PostCompact hook's copy of the compaction now at the bottom, with this verdict (and nonce, by default its own).
+ *  It says `writer: postcompact-fallback` on purpose: the old-copy case (copies before 0.1.3; the hooks write `postcompact` now,
+ *  and readers take both). */
 function hooksSaved(w: World, verdict: string, nonceOf: (n: string) => string = n => n): void {
   w.atCompact = () => {
     const n = markerNonce(w, w.compacts[w.compacts.length - 1]?.instructions) ?? ''

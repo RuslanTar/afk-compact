@@ -1,6 +1,6 @@
 {
  "id": "M4-defer-open-only",
- "note": "MOD-SPEC §2.4 (P1 is the record of the nonce found in the summary or custom_instructions), §5.3 step 2, §5.4, §6 (unknown scope -> compact/unattributed/), ROOT-RULINGS F2-1 (no proof in the hook -> stash, defer to reconcile): (a) a mod-self dispatch whose $.session.compact got no compaction, followed by a seated PreCompact fallback: the unmarked summary is not deferred to the mod dispatch (copy_deferred why=scope, not why=mod); the Stop after SETTLE_S saves it as unattributed, and the mod dispatch is later compaction_unresolved; (b) a mod dispatch the mod logged as compact_rejected is neither deferred to nor time-joined; (c) a deferred stash with no scope proof is saved late under the dispatch nonce in unattributed/, not promoted to the main slot",
+ "note": "MOD-SPEC §2.4 (P1 is the record of the nonce found in the summary or custom_instructions), §5.3 step 2, §5.4, §6 (unknown scope -> compact/unattributed/), ROOT-RULINGS F2-1 (no proof in the hook -> stash, defer to reconcile): (a) a mod-self dispatch whose $.session.compact got no compaction, followed by a seated PreCompact fallback: the unmarked summary is not deferred to the mod dispatch (copy_deferred why=scope, not why=mod); the Stop after SETTLE_S saves it as unattributed, and the mod dispatch is later compaction_unresolved; (b) a mod dispatch the mod logged as compact_rejected is neither deferred to nor time-joined; (c) a deferred stash with no scope proof is saved late under the dispatch nonce in unattributed/, not promoted to the main slot; every one of these copies, saved by reconcile from the PostCompact stash (now or deferred), says writer postcompact (0.1.3)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -124,7 +124,8 @@
       "count": 1,
       "fields": {
        "result": "unattributed",
-       "slot": "unattributed"
+       "slot": "unattributed",
+       "writer": "postcompact"
       }
      },
      {
@@ -143,7 +144,8 @@
       "count": 1,
       "frontmatter": {
        "actor": "unknown",
-       "channel": "classic"
+       "channel": "classic",
+       "writer": "postcompact"
       }
      }
     ]
@@ -271,7 +273,8 @@
       "ev": "copy",
       "count": 1,
       "fields": {
-       "result": "unattributed"
+       "result": "unattributed",
+       "writer": "postcompact"
       }
      },
      {
@@ -363,7 +366,8 @@
       "path": "$ROOT/work/general/compact/unattributed/*_13333333_7c3d00.md",
       "count": 1,
       "frontmatter": {
-       "actor": "unknown"
+       "actor": "unknown",
+       "writer": "postcompact"
       }
      }
     ]

@@ -1,0 +1,420 @@
+{
+ "id": "V013-VS-08-prune",
+ "note": "0.1.3 version skew (lib/plugver.pm), load records stay bounded: a process's first start prunes .sessions/loads/ at most once a day (loads/.pruned). Kept: the record of a pid that runs (the runner's own here; its process may start another session), the newest record per version and scope (0.1.0, 0.1.1, 0.1.3 of the user scope; 0.1.2 of another scope tag), and the newest records of the last 7 days (at most 200); dropped: older ones and a record dated a day ahead. More drops than the batch (3 here, STORE_TEST_LOADS_BATCH; 500 by default) move the folder aside to .sessions/loads-drop/<epoch>-<pid> with the kept ones moved back, so a reader at once lists a small folder; each later first start drains at most a batch of the oldest moved folder, and a record dated from a minute before its move goes back to loads/. /clear and compaction starts (no record written) do neither.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "manifest": {
+  "version": "0.1.3"
+ },
+ "plugin_at": "$HOME/.claude/plugins/cache/m/$BRAND/0.1.3",
+ "env": {
+  "STORE_TEST_LOADS_BATCH": "3"
+ },
+ "steps": [
+  {
+   "now": "2026-10-21T14:05:12+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "name": "first start of a process, no prune yet: 5 records to drop, over the batch (3): the folder moves aside, the kept ones come back",
+   "setup": [
+    {
+     "sha_tag": "user\n$PLUGIN_PARENT",
+     "var": "UTAG"
+    },
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1790852712_50000001-1790852702_0.1.0_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.0",
+      "plugin_root": "$PLUGIN_PARENT/0.1.0",
+      "host": "$HOST",
+      "session_id": "50002712-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1791716712_50000003-1791716702_0.1.1_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.1",
+      "plugin_root": "$PLUGIN_PARENT/0.1.1",
+      "host": "$HOST",
+      "session_id": "50006712-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792407912_50000005-1792407902_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "$HOST",
+      "session_id": "50007912-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792321512_50000006-1792321502_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "$HOST",
+      "session_id": "50001512-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1789988712_$RUNNER_PID-1789988702_0.1.0_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.0",
+      "plugin_root": "$PLUGIN_PARENT/0.1.0",
+      "host": "$HOST",
+      "session_id": "50008712-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1791284712_50000009-1791284702_0.1.2_deadbeef.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.2",
+      "plugin_root": "$PLUGIN_PARENT/0.1.2",
+      "host": "$HOST",
+      "session_id": "50004712-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1790420712_50000002-1790420702_0.1.0_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.0",
+      "plugin_root": "$PLUGIN_PARENT/0.1.0",
+      "host": "$HOST",
+      "session_id": "50000712-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1791543912_50000004-1791543902_0.1.1_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.1",
+      "plugin_root": "$PLUGIN_PARENT/0.1.1",
+      "host": "$HOST",
+      "session_id": "50003912-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1791803112_50000007-1791803102_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "$HOST",
+      "session_id": "50003112-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792667112_50000008-1792667102_0.1.9_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.9",
+      "plugin_root": "$PLUGIN_PARENT/0.1.9",
+      "host": "$HOST",
+      "session_id": "50007112-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1791198312_50000010-1791198302_0.1.2_deadbeef.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.2",
+      "plugin_root": "$PLUGIN_PARENT/0.1.2",
+      "host": "$HOST",
+      "session_id": "50008312-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads/*.json",
+      "count": 7
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1792580712_424242-1792562400_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1790852712_50000001-1790852702_0.1.0_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1791716712_50000003-1791716702_0.1.1_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1792407912_50000005-1792407902_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1792321512_50000006-1792321502_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1789988712_$RUNNER_PID-1789988702_0.1.0_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1791284712_50000009-1791284702_0.1.2_deadbeef.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads-drop/*/*",
+      "count": 5
+     },
+     {
+      "path": "$ROOT/.sessions/loads/.pruned"
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/loads/1790420712_50000002-1790420702_0.1.0_$UTAG.json",
+     "$ROOT/.sessions/loads/1791543912_50000004-1791543902_0.1.1_$UTAG.json",
+     "$ROOT/.sessions/loads/1791803112_50000007-1791803102_0.1.3_$UTAG.json",
+     "$ROOT/.sessions/loads/1792667112_50000008-1792667102_0.1.9_$UTAG.json",
+     "$ROOT/.sessions/loads/1791198312_50000010-1791198302_0.1.2_deadbeef.json"
+    ]
+   }
+  },
+  {
+   "now": "2026-10-21T14:06:12+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "52525252-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/52525252.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "525252:Tue Oct 21 14:06:00 2026"
+   },
+   "name": "the next process start drains a batch of the oldest moved folder (a record written while it moved goes back) and does not prune again that day",
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/loads-drop/1700000000-1/1700000030_50000020-1700000020_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN",
+      "host": "$HOST",
+      "session_id": "50000020-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads-drop/1700000000-1/1699000000_50000021-1698999990_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN",
+      "host": "$HOST",
+      "session_id": "50000021-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1791630312_50000022-1791630302_0.1.1_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.1",
+      "plugin_root": "$PLUGIN_PARENT/0.1.1",
+      "host": "$HOST",
+      "session_id": "50000312-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads/1700000030_50000020-1700000020_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1791630312_50000022-1791630302_0.1.1_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/*.json",
+      "count": 10
+     },
+     {
+      "path": "$ROOT/.sessions/loads-drop/*/*",
+      "count": 5
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/loads-drop/1700000000-1",
+     "$ROOT/.sessions/loads/1699000000_50000021-1698999990_0.1.3_$UTAG.json"
+    ]
+   }
+  },
+  {
+   "now": "2026-10-21T14:07:12+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "53535353-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/53535353.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "535353:Tue Oct 21 14:07:00 2026"
+   },
+   "name": "the next drains three more",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads-drop/*/*",
+      "count": 2
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1791630312_50000022-1791630302_0.1.1_$UTAG.json"
+     }
+    ]
+   }
+  },
+  {
+   "now": "2026-10-21T14:08:12+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "54545454-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/54545454.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "545454:Tue Oct 21 14:08:00 2026"
+   },
+   "name": "the last two: the moved folder is gone",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads-drop/*",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/.sessions/loads/*.json",
+      "count": 12
+     }
+    ]
+   }
+  },
+  {
+   "now": "2026-10-22T14:07:12+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "55555555-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/55555555.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "555555:Thu Oct 22 14:07:00 2026"
+   },
+   "name": "a day later the next start prunes again, in place (2 drops, within the batch)",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads/*.json",
+      "count": 11
+     },
+     {
+      "path": "$ROOT/.sessions/loads-drop/*",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1790852712_50000001-1790852702_0.1.0_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1791716712_50000003-1791716702_0.1.1_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1792407912_50000005-1792407902_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1792321512_50000006-1792321502_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1789988712_$RUNNER_PID-1789988702_0.1.0_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1791284712_50000009-1791284702_0.1.2_deadbeef.json"
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/loads/1791630312_50000022-1791630302_0.1.1_$UTAG.json",
+     "$ROOT/.sessions/loads/1700000030_50000020-1700000020_0.1.3_$UTAG.json"
+    ]
+   }
+  }
+ ]
+}

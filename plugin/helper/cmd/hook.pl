@@ -179,7 +179,7 @@ sub on_SessionStart {
     my $spd = rc::sid_dir();
     eval { sidecar::note_scratchpad($spd, $sp, $src) } if defined $spd && defined $sp;
     # 0.1.3 version skew (lib/plugver.pm): this process's first start under this plugin copy
-    eval { plugver::note_load($sid, $src) };
+    eval { plugver::note_load($sid, $src, $p->{cwd}) };
     return session_compact($p) if $src eq 'compact';
     my $c = rc::claude();
     my ($lin, $where);
