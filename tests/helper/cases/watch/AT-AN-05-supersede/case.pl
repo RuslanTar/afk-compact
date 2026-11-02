@@ -54,6 +54,8 @@ my @tasks = ({ id => 'tm-1', type => 'teammate', status => 'running', output_pat
              { id => 'sh-d', type => 'shell', status => 'running', output_path => undef },
              { id => 'sh-x', type => 'shell', status => 'running', output_path => undef },
              { id => 'sh-k', type => 'shell', status => 'running', output_path => '/nonexistent/sh-k.output' });
+# the Stops run as 0.1.3 (the cases' own manifest says 0.1.0): rows of the running version are never re-checked
+my $v013 = { plugin_version => '0.1.3' };
 my %got;
 my $status = sub {
     my ($v, $at, $key) = @_;
@@ -85,7 +87,13 @@ my $status = sub {
     ],
     steps => [
         { call => 'code', code => sub { $status->($_[0], 2900, 'before') } },
-        { call => 'stop', at => 3000 },
+        # a Stop of 0.1.2 itself (the rows are its own) closes nothing and marks the logs checked
+        # by 0.1.2 only
+        { call => 'stop', at => 2950, ctx => { plugin_version => '0.1.2' } },
+        { call => 'code', code => sub {
+              $got{after0} = [ grep { ($_->{ev} // '') eq 'alert_closed' } @{ watch::io::read_jsonl("$_[0]{WATCH}/$OTHER.alerts.jsonl") } ];
+          } },
+        { call => 'stop', at => 3000, ctx => $v013 },
         { call => 'code', code => sub {
               my ($v) = @_;
               $got{after1} = [ grep { ($_->{ev} // '') eq 'alert_closed' } @{ watch::io::read_jsonl("$v->{WATCH}/$OTHER.alerts.jsonl") } ];
@@ -97,7 +105,7 @@ my $status = sub {
               $watch::alerts::DELIVERY = 'system-message';
           } },
         # delivery (once probe P-W2 passes) skips a closed alert: this session's only one is closed
-        { call => 'stop', at => 3100, expect_output => 1 },
+        { call => 'stop', at => 3100, expect_output => 1, ctx => $v013 },
         { call => 'code', code => sub { $watch::alerts::DELIVERY = 'status-only' } },
         { call => 'code', code => sub {
               my ($v) = @_;
@@ -105,11 +113,11 @@ my $status = sub {
               open(my $fh, '>>', "$v->{WATCH}/$OTHER.alerts.jsonl") or die;
               print $fh watch::json::encode($late), "\n";
               close $fh;
-              # same second as the mark: the size it holds tells the change
+              # in the same second as the mark: its size tells the change
               my $mt = (stat "$v->{WATCH}/$OTHER/superseded-0.1.3")[9];
               utime($mt, $mt, "$v->{WATCH}/$OTHER.alerts.jsonl");
           } },
-        { call => 'stop', at => 3200 },
+        { call => 'stop', at => 3200, ctx => $v013 },
         { call => 'code', code => sub {
               my ($v) = @_;
               $got{after3} = [ grep { ($_->{ev} // '') eq 'alert_closed' } @{ watch::io::read_jsonl("$v->{WATCH}/$OTHER.alerts.jsonl") } ];
@@ -126,6 +134,7 @@ my $status = sub {
         $E->is(join(',', sort grep { !$c{$_} } keys %closed_want), '', 'every superseded row closed');
         $E->is(scalar(grep { ($_->{reason} // '') eq 'superseded: rule changed in 0.1.3' && ($_->{sid} // '') eq $OTHER } @c), 9,
                'each with the reason, in that session');
+        $E->count($got{after0} || [], 0, '0.1.2 closes none of its own rows');
         $E->is($got{mark}, 1, 'the log is marked checked');
         $E->count($got{after2} || [], 9, 'a second Stop closes nothing more');
         my @c3 = @{ $got{after3} || [] };

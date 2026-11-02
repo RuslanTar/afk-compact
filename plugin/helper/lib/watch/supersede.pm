@@ -6,10 +6,12 @@ package watch::supersede;
 # Store-wide, at a main Stop in the time left after delivery (watch.pm on_stop): every
 # session's alerts log is checked once, and again whenever it changed since (a process of an
 # older version still running writes more). `<watch>/<sid>/superseded-0.1.3` keeps the log
-# size checked last. A row is closed by appending `alert_closed {alert_id, rule, reason:
-# "superseded: rule changed in 0.1.3"}` to the same log; rows are never deleted, and a closed
-# alert is not open (lib/watch/alerts.pm). One run at a time (flock on <watch>/.supersede.lock);
-# at the Stop's hard stop it ends, and the next Stop goes on from the logs not yet checked.
+# size checked last and the version that checked it (a version that wrote the rows itself closes
+# none of them: older below). A row is closed by appending `alert_closed {alert_id, rule,
+# reason: "superseded: rule changed in 0.1.3"}` to the same log; rows are never deleted, and a
+# closed alert is not open (lib/watch/alerts.pm). One run at a time (flock on
+# <watch>/.supersede.lock); at the Stop's hard stop it ends, and the next Stop goes on from the
+# logs not yet checked.
 #
 # The re-check uses what the session's own files recorded: the boundary record the sweep row
 # kept (its time and whether a PostCompact row or dispatch was joined), the session's first
@@ -30,13 +32,20 @@ our $MARK = 'superseded-0.1.3';
 my %RULES = map { $_ => 1 } qw(A-01 A-05 A-11 A-15);
 my $SID_RE = qr/\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/;
 
-# older(plugin_version) -> 1 when written before 0.1.3 (or with no version).
+# older(row's plugin_version, running version) -> 1 when the row was written before 0.1.3 and by
+# an older version than the one running (or with no version): a row this version wrote itself
+# is never re-checked here.
 sub older {
-    my ($v) = @_;
-    return 1 unless defined $v && !ref $v && $v =~ /\A([0-9]+)\.([0-9]+)\.([0-9]+)/;
-    my @x = ($1, $2, $3);
-    my @y = split /\./, $RULE_V;
-    for my $i (0 .. 2) { return $x[$i] < $y[$i] ? 1 : 0 if $x[$i] != $y[$i] }
+    my ($v, $running) = @_;
+    return 1 unless defined $v && !ref $v && $v =~ /\A[0-9]+\.[0-9]+\.[0-9]+/;
+    return 0 unless _vcmp($v, $RULE_V) < 0;
+    return 1 unless defined $running && !ref $running && $running =~ /\A[0-9]+\.[0-9]+\.[0-9]+/;
+    return _vcmp($v, $running) < 0 ? 1 : 0;
+}
+sub _vcmp {
+    my @x = $_[0] =~ /\A([0-9]+)\.([0-9]+)\.([0-9]+)/;
+    my @y = $_[1] =~ /\A([0-9]+)\.([0-9]+)\.([0-9]+)/;
+    for my $i (0 .. 2) { return $x[$i] <=> $y[$i] if $x[$i] != $y[$i] }
     return 0;
 }
 
@@ -51,6 +60,8 @@ sub run {
     my ($lock) = watch::io::open_locked("$w/.supersede.lock");
     return 0 unless $lock;
     my $n = 0;
+    my $run = $ctx->{plugin_version};
+    $run = 'unknown' unless defined $run && !ref $run && $run =~ /\A[0-9A-Za-z.+-]{1,32}\z/;
     for my $f (watch::io::list_dir($w)) {
         next unless $f =~ /\A(.+)\.alerts\.jsonl\z/;
         my $sid = $1;
@@ -60,14 +71,16 @@ sub run {
         my @st = stat $p or next;
         my $mark = "$w/$sid/$MARK";
         next if -l $mark;
-        my @ms = stat $mark;
-        # unchanged since the last check: the mark is newer, or (same second) holds its size
-        next if @ms && $ms[9] > $st[9];
-        if (@ms) { my $v = watch::io::slurp($mark, 64) // ''; next if $v =~ /\A([0-9]+)/ && $1 == $st[7] }
+        # unchanged since the last check by this version: the mark holds the log's size and the
+        # version that checked it
+        my $done = sprintf('%d %s', $st[7], $run);
+        my $was = -f $mark ? (watch::io::slurp($mark, 128) // '') : '';
+        $was =~ s/\s+\z//;
+        next if $was eq $done;
         watch::rules::tick($ctx);
         $n += session($ctx, $sid, $p);
         my @now = stat $p;
-        watch::io::write_atomic($mark, ($now[7] // $st[7]) . "\n");
+        watch::io::write_atomic($mark, sprintf("%d %s\n", $now[7] // $st[7], $run));
     }
     close $lock;
     return $n;
@@ -77,7 +90,7 @@ sub run {
 sub session {
     my ($ctx, $sid, $p) = @_;
     my ($alerts, $closed) = watch::alerts::read_log($p);
-    my @cand = grep { $RULES{ $_->{rule} // '' } && !exists $closed->{ $_->{alert_id} } && older($_->{plugin_version}) } @$alerts;
+    my @cand = grep { $RULES{ $_->{rule} // '' } && !exists $closed->{ $_->{alert_id} } && older($_->{plugin_version}, $ctx->{plugin_version}) } @$alerts;
     return 0 unless @cand;
     my $sc = { %$ctx, sid => $sid, payload => {} };
     delete @$sc{qw(sid_dir _task_dirs)};
