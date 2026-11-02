@@ -10,7 +10,7 @@ import type { Runtime, Tag } from './assemble'
 import { assemble } from './assemble'
 import type { RaceBlock } from './handoff-turn'
 import { channelToken, claimBy, measure } from './helper'
-import { clipQuestion } from './question'
+import { clipQuestion, oneLine } from './question'
 import { escalate, helperMissing, log, stamp, vettedWatch } from './log'
 import type { Lane, LaneFacts, LaneResult } from './lane'
 import { LANES, LEGACY_STATUS, asLaneFacts, laneBasis, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
@@ -81,30 +81,51 @@ export type BlockArgs = {
 export const STEP1_MAX = 100
 /** The `[resumed]` line's text when no Step 1 can be read (the classic SessionStart path has the same: lib/resumeblock.pm). */
 export const RESUMED_FALLBACK = 'Resumed after compaction'
-/** Step 1's `— for "<the user's latest request>"` tail (and what follows it), as lane.ts cuts it. */
-const STEP1_FOR_TAIL = /\s+—\s+for\s+".*$/
+/**
+ * Step 1's tail after the step (and what follows it): `— for "<the user's latest request>"`, as
+ * lane.ts cuts it, or the template's other form, `— proposed…` / `| proposed` (real copy xxxxxxxx c1).
+ */
+const STEP1_TAIL = /\s+(?:—\s+(?:for\s+"|proposed\b).*|\|\s*proposed\s*)$/
 const STEP1_LINE = /^\s*Step 1:[ \t]*(.*)$/
+/** A cut Step 1 ends at its last space when that keeps at least this many chars (else mid-word: a long path). */
+const STEP1_WORD_MIN = 60
+
+/**
+ * A Step 1 text on one line within STEP1_MAX: whole when it fits; else its start, cut at its last
+ * space when that keeps STEP1_WORD_MIN chars, an open backtick closed, `…` after it (review of the
+ * first build: 23 of 26 real Step 1 lines are over 100 chars, most cut inside a backticked path).
+ */
+export function clipStep1(text: string): string {
+  const t = oneLine(text)
+  if (t.length <= STEP1_MAX) return t
+  let body = clipQuestion(t, 'start', STEP1_MAX).slice(0, -1).trimEnd()
+  const sp = body.lastIndexOf(' ')
+  if (sp >= STEP1_WORD_MIN) body = body.slice(0, sp).trimEnd()
+  const open = (x: string) => (x.split('`').length - 1) % 2 === 1
+  if (open(body) && body.length + 2 > STEP1_MAX) body = Array.from(body).slice(0, -1).join('').trimEnd()
+  if (open(body)) body += '`'
+  return body + '…'
+}
 
 /**
  * 0.1.3 resume-text A (owner 2026-10-30 07:52: "it's not clear if the compaction went well, as
  * there are literally no messages after compaction"; usage review: median 5 tool calls before the
- * first visible line): the summary's Step 1, as lane.ts reads it (the first `Step 1:` line of
- * `## Resume here`, else of the whole text), without its `— for "<request>"` tail, on one line
- * within STEP1_MAX (its start kept, `…` after it). Undefined when there is no Step 1 text.
+ * first visible line): the summary's Step 1, the first `Step 1:` line of its `## Resume here`
+ * section, without its tail (STEP1_TAIL), on one line within STEP1_MAX (`clipStep1`). Undefined
+ * when there is no Step 1 text, or no such section: a summary not in handoff form may quote a
+ * plan's `Step 1:` that is not the resume step (review of the first build), so the line takes the
+ * fixed form.
  */
 export function step1Of(summary: string): string | undefined {
   const lines = summary.split('\n')
   const at = lines.findIndex(l => l.trim().toLowerCase().startsWith('## resume here'))
-  let scope = lines
-  if (at >= 0) {
-    const rest = lines.slice(at + 1)
-    const end = rest.findIndex(l => /^#{1,2} /.test(l) || l.startsWith('⟪/') || l.startsWith('</summary>'))
-    scope = end < 0 ? rest : rest.slice(0, end)
-  }
-  for (const l of scope) {
+  if (at < 0) return undefined
+  const rest = lines.slice(at + 1)
+  const end = rest.findIndex(l => /^#{1,2} /.test(l) || l.startsWith('⟪/') || l.startsWith('</summary>'))
+  for (const l of end < 0 ? rest : rest.slice(0, end)) {
     const m = STEP1_LINE.exec(l)
     if (!m) continue
-    const s = clipQuestion((m[1] ?? '').replace(STEP1_FOR_TAIL, ''), 'start', STEP1_MAX)
+    const s = clipStep1((m[1] ?? '').replace(STEP1_TAIL, ''))
     return s === '' ? undefined : s
   }
   return undefined
@@ -748,12 +769,9 @@ export async function restorePending(d: Deps, sid: string): Promise<PendingResum
   // Question carry: a stored question goes out on one line within QUESTION_MAX whatever wrote it.
   const q = typeof a.question === 'string' ? clipQuestion(a.question, 'end') : ''
   if (q !== '') a.question = q
-  else {
-    delete a.question
-    delete a.questionTimedOut
-  }
+  else delete a.question
   // The [resumed] line's Step 1 likewise, on one line within STEP1_MAX.
-  const s1 = typeof a.step1 === 'string' ? clipQuestion(a.step1, 'start', STEP1_MAX) : ''
+  const s1 = typeof a.step1 === 'string' ? clipStep1(a.step1) : ''
   if (s1 !== '') a.step1 = s1
   else delete a.step1
   const at = typeof measuredAt === 'number' ? measuredAt : builtAt

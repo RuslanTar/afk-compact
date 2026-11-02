@@ -17,7 +17,7 @@ import type { LoadState } from './deps'
 export const QUESTION_MAX = 240
 
 /** Whitespace runs (line breaks too) and control characters as one space, trimmed. */
-function oneLine(s: string): string {
+export function oneLine(s: string): string {
   return s.replace(/[\s\u0000-\u001f\u007f]+/g, ' ').trim()
 }
 
@@ -152,12 +152,15 @@ export function noteDialog(s: Pick<LoadState, 'askTimedOut' | 'openQuestion'>, i
 export function turnQuestion(s: Pick<LoadState, 'askTimedOut' | 'openQuestion' | 'openTimedOut'>, t: { reason: string; answer: string }): void {
   const q = t.reason === 'answer' ? (answerQuestion(t.answer) ?? s.askTimedOut) : undefined
   // 0.1.3 resume-text B: a dialog of this turn closed on the AFK timeout, whichever text is carried
-  // (the model often asks the timed-out dialog's question again in plain text).
+  // (the model often asks the timed-out dialog's question again in plain text). The mark stays while
+  // a question is open: a later turn no person started (a task notification, a peer message) that
+  // lists it last, as step 6 and `[question]` ask, re-words the question but nobody has answered
+  // (review of the first build: 3 of the 6 real compactions after a timeout had such turns).
   const timed = s.askTimedOut !== undefined
   s.askTimedOut = undefined
   if (q !== undefined) {
+    s.openTimedOut = timed || (s.openQuestion !== undefined && s.openTimedOut)
     s.openQuestion = q
-    s.openTimedOut = timed
   }
 }
 
@@ -172,11 +175,12 @@ export function carriedQuestion(s: Pick<LoadState, 'askTimedOut' | 'openQuestion
 
 /**
  * 0.1.3 resume-text B (usage review: 38 of 72 questions after a resume timed out at 600 s, and 9
- * were asked again in a dialog right after): the question `carriedQuestion` gives came with a
- * dialog that closed on the AFK timeout, the running turn's or the one of the turn that left it
- * open, so `[question-timeout]` says not to ask it in a dialog again. `openTimedOut` is read only
- * beside an open question: `turnQuestion` sets both together, and whatever clears the question
- * (a person's turn, the session's end, an answered dialog) leaves the flag unread.
+ * were asked again in a dialog right after): a dialog closed on the AFK timeout since the person
+ * last wrote, the running turn's or one of a turn that left the question `carriedQuestion` gives
+ * open (or an earlier wording of it), so `[question-timeout]` says not to ask it in a dialog again.
+ * `openTimedOut` is read only beside an open question: `turnQuestion` sets both together, and
+ * whatever clears the question (a person's turn, the session's end, an answered dialog) leaves the
+ * flag unread and ends it.
  */
 export function carriedTimedOut(s: Pick<LoadState, 'askTimedOut' | 'openQuestion' | 'openTimedOut' | 'mainTurnRunning'>): boolean {
   if (s.mainTurnRunning && s.askTimedOut !== undefined) return true

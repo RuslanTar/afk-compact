@@ -12,7 +12,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import { assembleText, hasTag } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
 import type { PendingResume } from '../../hooks/lib/deps'
-import { ARMED_FILE, PENDING_FILE, RESUMED_FALLBACK, STEP1_MAX, pendingRecord, resumeLine, step1Of } from '../../hooks/lib/resume'
+import { ARMED_FILE, PENDING_FILE, RESUMED_FALLBACK, STEP1_MAX, clipStep1, pendingRecord, resumeLine, step1Of } from '../../hooks/lib/resume'
 import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
 
 const RESUMED = hasTag('resume-context', 'resumed')
@@ -21,7 +21,7 @@ const TIMEOUT = hasTag('resume-context', 'question-timeout')
 const LEAD = 'Main session: your first line, before any tool call, is exactly "'
 const TAIL = '" (no recap); any other first line asked below comes after it.'
 const STEP6 = "A question whose dialog timed out or came back empty: no dialog again before the person's next own message; list it last."
-const TIMED = "That turn's question dialog timed out unanswered: step 6 applies (text only, no dialog)."
+const TIMED = "A question dialog timed out since the person last wrote: step 6 applies (text only, no dialog)."
 
 type Ctx = { blocks: readonly { name: string; text: string }[] }
 const blockOf = (w: World, ctx: Ctx): string | undefined => ctx.blocks.find(b => b.name === `${w.name}-resume`)?.text
@@ -44,9 +44,13 @@ describe('resume line (A): Step 1 as code reads it', () => {
   test('the first `Step 1:` line of `## Resume here`, without its `— for "<request>"` tail, on one line', () => {
     expect(step1Of('## Resume here\nStatus: working\nStep 1: `npm test` — for "fix the build"\nGate: none\n')).toBe('`npm test`')
     expect(step1Of('## Resume here\nStep 1:   run   the\ttests \n## Next steps: 1. Step 1: not this · todo')).toBe('run the tests')
-    // A Step 1 line elsewhere is not taken when the section exists; without the section the whole text counts.
+    // A Step 1 line elsewhere is not taken; without the section none is (review of the first build: a
+    // summary not in handoff form may quote a plan's Step 1 that is not the resume step).
     expect(step1Of('## Resume here\nStatus: working\n## Next steps\nStep 1: later')).toBeUndefined()
-    expect(step1Of('Summary:\nStep 1: `git status`\n')).toBe('`git status`')
+    expect(step1Of('Summary:\nStep 1: `git status`\n')).toBeUndefined()
+    // The template's other tail, `— proposed…` or `| proposed`, is cut too (real copy xxxxxxxx c1).
+    expect(step1Of('## Resume here\nStep 1: `catchup.py answers` — proposed: read the answers; if none, wait\n')).toBe('`catchup.py answers`')
+    expect(step1Of('## Resume here\nStep 1: `make lint` | proposed\n')).toBe('`make lint`')
     expect(step1Of('## Resume here\nStep 1:\nGate: none')).toBeUndefined()
     expect(step1Of('no step here')).toBeUndefined()
   })
@@ -58,6 +62,26 @@ describe('resume line (A): Step 1 as code reads it', () => {
     expect(resumeLine('`npm test`')).toBe('Resumed · step 1: `npm test`')
     expect(resumeLine(undefined)).toBe(RESUMED_FALLBACK)
     expect(resumeLine('')).toBe('Resumed after compaction')
+  })
+
+  test('a cut Step 1 ends at a word when that keeps 60 chars, else mid-word; an open backtick is closed (review of the first build)', () => {
+    const path = '`tail -c 600 /Users/u/.claude/projects/-Users-u-RubymineProjects-meta/00000000-0000-4000-8000-000000000000.jsonl`'
+    const cut = clipStep1(path)
+    expect(cut).toBe(path.slice(0, STEP1_MAX - 2) + '`…')
+    expect(cut.length).toBe(STEP1_MAX)
+    const words = 'when the round 3 workflow notifies, read its journal and report the verdicts of every reviewer to the user in one table'
+    const w = clipStep1(words)
+    expect(w).toBe('when the round 3 workflow notifies, read its journal and report the verdicts of every reviewer to…')
+    expect(w.length <= STEP1_MAX).toBe(true)
+    // A word cut inside backticks closes them before the `…`.
+    const mixed = clipStep1('when b3 is green: `git -C repo push origin feat/x # intentional push`, then tell the user it is pushed and done')
+    expect(mixed).toBe('when b3 is green: `git -C repo push origin feat/x # intentional push`, then tell the user it is…')
+    const inside = clipStep1('run `' + 'aaaa '.repeat(30) + '`')
+    expect(inside.endsWith('`…')).toBe(true)
+    expect(inside.length <= STEP1_MAX).toBe(true)
+    expect((inside.split('`').length - 1) % 2).toBe(0)
+    // A text that fits is whole, on one line.
+    expect(clipStep1('`npm   test`\n')).toBe('`npm test`')
   })
 
   test('the asset: [resumed] sits before step 1, so it is read first; without the tag no such line', () => {
@@ -249,6 +273,87 @@ describe('no re-ask after a timeout (B)', () => {
     w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, JSON.stringify({ ...raw, args: { ...raw.args, question: '' } }) + '\n')
     const b = await nextBlock($, w) ?? ''
     expect(b).not.toContain('Open question: ')
+    expect(b).not.toContain(TIMED)
+  })
+  // Review of the first build: step 6, [question] and the resume skill's R8 tell the model to list
+  // the open question last in a later turn; a turn no person started that does so re-words the
+  // question, but nobody has written since the timeout, so the mark stays.
+  test('a background turn that lists the timed-out question last keeps [question-timeout]', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Rebase first?'))
+    await w.turnEnd($, 'The dialog timed out.\n\nRebase first?')
+    await w.userTurn($, 'background result', 'task-notification')
+    await w.turnEnd($, 'The tests passed.\n\nNeeds you: rebase first, or merge as is?')
+    await raiseCompact($, { trigger: 'auto' })
+    const b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Needs you: rebase first, or merge as is?"')
+    if (TIMEOUT) expect(b).toContain(TIMED)
+  })
+
+  test('a turn no person started that asks it again in text, after a turn that went on, keeps [question-timeout]', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Ship it today?'))
+    await w.turnEnd($, 'Went on.')
+    await w.userTurn($, 'peer says hi', 'task-notification')
+    await w.turnEnd($, 'Noted.\n\nShip it today?')
+    await raiseCompact($, { trigger: 'auto' })
+    const b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Ship it today?"')
+    if (TIMEOUT) expect(b).toContain(TIMED)
+  })
+
+  test('two compactions before the person returns: the model obeys [question] in a background turn, the second block still marks it', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    await w.turnEnd($, 'Went on.')
+    await raiseCompact($, { trigger: 'auto' })
+    await w.userTurn($, 'background result', 'task-notification')
+    const first = await nextBlock($, w) ?? ''
+    if (TIMEOUT) expect(first).toContain(TIMED)
+    await w.turnEnd($, 'Resumed after compaction\nThe job finished.\n\nWhich database?')
+    await raiseCompact($, { trigger: 'auto' })
+    const second = await nextBlock($, w) ?? ''
+    expect(second).toContain('"Which database?"')
+    if (TIMEOUT) expect(second).toContain(TIMED)
+  })
+
+  test('the mark ends with the question: after the person writes, or answers a dialog, a new question is not marked', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Rebase first?'))
+    await w.turnEnd($, 'Went on.')
+    await w.userTurn($, 'merge as is')
+    await w.turnEnd($, 'Merged.')
+    await w.userTurn($, 'background result', 'task-notification')
+    await w.turnEnd($, 'CI is green.\n\nDeploy now?')
+    await raiseCompact($, { trigger: 'auto' })
+    let b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Deploy now?"')
+    expect(b).not.toContain(TIMED)
+    // A dialog times out, then an answered dialog closes it; a later turn's question is not marked.
+    await w.userTurn($)
+    await $.tool.call(ask('Tag the release?'))
+    await w.turnEnd($, 'Went on.\n\nTag the release?')
+    dialogs(w, 'answered')
+    await w.userTurn($, 'background result', 'task-notification')
+    await $.tool.call(ask('Tag the release?'))
+    await w.turnEnd($, 'Tagged.')
+    await w.userTurn($, 'background result', 'task-notification')
+    await w.turnEnd($, 'Built.\n\nPublish the notes?')
+    await raiseCompact($, { trigger: 'auto' })
+    b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Publish the notes?"')
     expect(b).not.toContain(TIMED)
   })
 })
