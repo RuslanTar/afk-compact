@@ -48,10 +48,24 @@ sub _watch_call {
     if (!$ok && $err !~ /not implemented/) { rc::emit('watch_error', [stage => $stage, error_class => _error_class($err)]) }
 }
 
-# Stop (8 s hook timeout): reconcile and the watcher share one budget from hook start,
-# on the real clock (STORE_TEST_NOW fixes the clock, never a budget).
-our $STOP_BUDGET_MS = 7000;
+# Stop (8 s hook timeout): one budget for the whole process, counted from the helper's start
+# (main.pl, before its libraries compile), on the real clock (STORE_TEST_NOW fixes the clock,
+# never a budget). 0.1.3 hook speed: well under half the timeout, so a host slowed by load still
+# ends the hook itself: the turn's records first, then reconcile (keeping room for the watcher),
+# the cross-session finish pass, the GSD scan cache, and the watcher with what is left (its
+# sweep keeps no offset it did not finish: the next Stop reads on). The reserve is for writing
+# the rows and exiting.
+our $STOP_BUDGET_MS = 3500;
+our $STOP_RESERVE_MS = 300;
+our $RECONCILE_MS = 2000;
+our $WATCH_MIN_MS = 1000;
 our $WATCH_HARD_S = 3;
+our $GSD_WARM_LAG = 1 << 20;
+our $GSD_WARM_MS = 300;
+our $GSD_WARM_MIN_MS = 50;
+our $T_START;
+# What this Stop's phases took and what the budget cut, for its `stop_timing` row.
+our %STOP;
 
 # SessionStart (5 s hook timeout): the compact block is measured within this budget from
 # hook start, so it is printed and claimed before the hook is killed.
@@ -66,8 +80,31 @@ our $T0;
 our %REGEX_S = (PreCompact => [0.5, 1], PostCompact => [1, 2, 6], SessionStart => [0.5, 1], SessionEnd => [0.5, 1],
                 Stop => [1, 1.5, 3], SubagentStop => [0.3, 0.6], StopFailure => [0.25, 0.4], PermissionDenied => [0.25, 0.4]);
 
+# The helper's start: main.pl's mark when it is not in the future, else now. Test seam
+# (STORE_TEST_MODE only): STORE_TEST_HOOK_START_AGO_MS moves main.pl's mark back, as a host
+# slowed by load would have spent that long starting (without the mark it moves nothing).
+sub _start_ms {
+    my $now = util::clock_ms();
+    return $now unless defined $main::T_START_MS && $main::T_START_MS =~ /\A\d+\z/ && $main::T_START_MS <= $now;
+    my $s = $main::T_START_MS;
+    my $ago = util::test_mode() ? ($ENV{STORE_TEST_HOOK_START_AGO_MS} // '') : '';
+    $s -= $ago if $ago =~ /\A[0-9]{1,6}\z/;
+    return $s;
+}
+
+# _stop_left(cap, keep) -> ms of the Stop budget still free after the reserve and `keep` ms
+# held for what follows, at most `cap`, never below 0.
+sub _stop_left {
+    my ($cap, $keep) = @_;
+    my $l = $STOP_BUDGET_MS - $STOP_RESERVE_MS - ($keep // 0) - (util::clock_ms() - ($T_START // util::clock_ms()));
+    $l = $cap if defined $cap && $l > $cap;
+    return $l < 0 ? 0 : int $l;
+}
+
 sub run {
     my ($event) = @_;
+    $T_START = _start_ms();
+    %STOP = ();
     my $t0 = $T0 = util::clock_ms();
     my $raw = do { local $/; <STDIN> };
     return 0 unless defined $event && $EVENTS{$event};
@@ -102,11 +139,13 @@ sub run {
     }
     if ($event eq 'Stop') {
         # Relative seconds (watch.on_stop reads a small value as "from now" on its own clock):
-        # at most the 3 s hard stop of WATCH W9, less when reconcile used the shared budget.
-        my $left = ($STOP_BUDGET_MS - (util::clock_ms() - $t0)) / 1000;
-        $left = $WATCH_HARD_S if $left > $WATCH_HARD_S;
+        # at most the 3 s hard stop of WATCH W9, less when the start or reconcile used the budget.
+        my $left = _stop_left($WATCH_HARD_S * 1000, 0) / 1000;
         $left = 0.2 if $left < 0.2;
+        util::trace(sprintf('stop-watch-window %d', $left * 1000));
+        my $w0 = util::clock_ms();
         _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p }), $left) });
+        eval { _stop_row($t0, $w0, $left) };
     } elsif (!$CORE_ROWS_ONLY{$event}) {
         _watch_call('watch.on_hook', sub { watch::on_hook($event, $p, _watch_ctx($event, $extra)) });
     }
@@ -328,14 +367,71 @@ sub on_Stop {
     eval { restart::note_stop($d, $p) };
     # AT-RP-04: a resume block armed for this process's first turn that the turn did not take
     eval { resumeblock::settle_armed($d, rc::sid()) };
+    # reconcile: at most 2 s, and no more than leaves the watcher its minimum (a start slowed by
+    # load shortens it; its sweeps get what is left of it)
+    my $rb = _stop_left($RECONCILE_MS, $WATCH_MIN_MS);
+    util::trace("stop-reconcile-budget $rb") if $rb < $RECONCILE_MS;
     my $r0 = util::clock_ms();
-    my $n = reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000, cutoff => reconcile::cutoff());
-    # the cross-session finish pass, only when reconcile left ≥ 500 ms of its 2 s (MOD-SPEC §5.8)
-    my $rleft = 2000 - (util::clock_ms() - $r0);
+    my $n = reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => $rb, cutoff => reconcile::cutoff());
+    my $rms = util::clock_ms() - $r0;
+    %STOP = (%STOP, reconcile_ms => $rms, reconcile_budget_ms => $rb);
+    # cut by the Stop budget: a budget under reconcile's own 2 s that ran out, or a main-proven
+    # save left for the next Stop (no time for its sweep)
+    push @{ $STOP{cut} }, 'reconcile' if ($rb < $RECONCILE_MS && $rms >= $rb) || (ref $n eq 'HASH' && $n->{waited});
+    # the cross-session finish pass, only when reconcile left ≥ 500 ms of its budget (MOD-SPEC §5.8)
+    my $rleft = $rb - (util::clock_ms() - $r0);
     eval { orphans::pass(budget_ms => ($rleft < $orphans::PASS_MS ? $rleft : $orphans::PASS_MS)) } if $rleft >= $orphans::STOP_MIN_LEFT_MS;
     # Dev-1 D5: a relaunch bumped in this turn that no recorded job matched
     eval { jobrec::on_stop($d) };
+    my ($gb, $g0) = (_stop_left($GSD_WARM_MS, $WATCH_MIN_MS), util::clock_ms());
+    my $gsd = eval { _warm_gsd($d, $p->{transcript_path}, $gb) };
+    if (defined $gsd) {
+        %STOP = (%STOP, gsd => $gsd, gsd_ms => util::clock_ms() - $g0);
+        # cut by the Stop budget: a catch-up it gave less than its own 300 ms that did not finish
+        push @{ $STOP{cut} }, 'gsd' if $gb < $GSD_WARM_MS && $gsd ne 'ok';
+    }
     return ('', { reconcile => $n });
+}
+
+# 0.1.3 hook speed: the GSD scan cache (lib/gsd.pm, <watch>/<sid>/gsd-scan.json) is read on from
+# its offset by the checkpoint before a compaction (1.5 s) and by SessionStart(compact); a cache
+# that is missing, of another file or version, or GSD_WARM_LAG bytes or more behind the
+# transcript's end is read on here, within GSD_WARM_MS, so neither starts from far back (a whole
+# 50 MB transcript under load ran out of its 1.5 s: `GSD: not measured (timeout)`). A scan that
+# runs out keeps its offset; the next Stop reads on.
+# _warm_gsd(d, transcript, budget) -> undef (no catch-up due), gsd::scan's status ('ok', 'timeout':
+# the scan ran out, 'unread') or 'no-time' (due, but the budget is under GSD_WARM_MIN_MS)
+sub _warm_gsd {
+    my ($d, $tp, $budget) = @_;
+    return undef unless defined $tp && !ref $tp && $tp ne '';
+    my @s = stat $tp;
+    return undef unless @s && -f _;
+    my $cache = "$d/$gsd::CACHE";
+    # the cache's own fields, without decoding its state: v, dev, ino, offset
+    my $raw = -f $cache ? util::read_file($cache, 256 * 1024) // '' : '';
+    my %c = map { ($_ => ($raw =~ /"\Q$_\E":(\d+)/)[0]) } qw(dev ino offset);
+    ($c{v}) = $raw =~ /"v":(\d+)\}\s*\z/;
+    return undef if defined $c{offset} && ($c{v} // -1) == $gsd::CACHE_V && ($c{dev} // -1) == $s[0] && ($c{ino} // -1) == $s[1]
+                    && $c{offset} <= $s[7] && $s[7] - $c{offset} < $GSD_WARM_LAG;
+    return 'no-time' unless $budget >= $GSD_WARM_MIN_MS;
+    util::trace('stop-gsd-warm');
+    my (undef, $status) = gsd::scan($tp, cache => $cache, budget_ms => $budget);
+    return $status // 'ok';
+}
+
+# 0.1.3 hook speed: one `stop_timing` row per Stop (not with `watcher: off`), written last: the
+# hook's own duration from the helper's start (ms; the launcher's shell before main.pl is not
+# in it), the start itself (start_ms: main.pl's mark to this file's run, the libraries' compile), what
+# reconcile, the GSD catch-up and the watcher took and were given, and which phases the Stop
+# budget cut (cut). Claude Code's durationMs is not in the plugin's logs; this row is.
+sub _stop_row {
+    my ($t0, $w0, $window_s) = @_;
+    return if _watcher_off();
+    my $now = util::clock_ms();
+    rc::emit('stop_timing', [ms => $now - $T_START, start_ms => $t0 - $T_START, reconcile_ms => $STOP{reconcile_ms},
+                             reconcile_budget_ms => $STOP{reconcile_budget_ms}, gsd => $STOP{gsd} // 'none',
+                             gsd_ms => $STOP{gsd_ms}, watch_ms => $now - $w0, watch_window_ms => int($window_s * 1000),
+                             cut => $STOP{cut} || []]);
 }
 
 sub on_SubagentStop {

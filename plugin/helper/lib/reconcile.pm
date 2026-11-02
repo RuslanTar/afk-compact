@@ -47,6 +47,10 @@ our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long afte
 our $SUB_WINDOW_S = 120;            # a subagent boundary row at most this long after its PostCompact
 our $TOL_S = 2;                     # subagent rows: slack around a PostCompact's time
 our $BESIDE_S = 5;                  # a subagent row this far past TOL_S beside a main match: not main (BD-3)
+# 0.1.3 hook speed: a main-proven save is swept right after it (sweep::run claims swept/<id6>,
+# once); with less than this left of the run's budget the save and its sweep both wait for the
+# next run, so a run cut short by a slow start never claims a sweep it has no time to copy.
+our $SWEEP_MIN_MS = 500;
 # A main boundary row's PostCompact is one at or before the row, never after it (RR-S21-01):
 # the row is written after PostCompact and the mod after-step (S-21), and the stash time
 # has milliseconds, so a later PostCompact (an unproven subagent one) cannot take its place.
@@ -323,7 +327,7 @@ sub run_locked {
     return $out // $n;
 }
 
-sub _counts { return { map { ($_ => 0) } qw(late unresolved precompute_not_reused order_anomaly undelivered saved kept dropped attributed) } }
+sub _counts { return { map { ($_ => 0) } qw(late unresolved precompute_not_reused order_anomaly undelivered saved kept dropped attributed waited) } }
 
 # A save that returned EXISTS sha-differs: the stash is settled once (RRP-04, MOD-SPEC §5.8).
 sub _settle {
@@ -342,6 +346,12 @@ sub _run {
     my $t0 = util::clock_ms();
     my $deadline = $t0 + ($a{budget_ms} // 2000);
     my $left = sub { my $l = $deadline - util::clock_ms(); return $l > 0 ? $l : 0 };
+    # a main-proven save waits for the next run when its sweep would not have SWEEP_MIN_MS
+    my $sweep_waits = sub {
+        return 0 unless $_[0] eq 'main' && $left->() < $SWEEP_MIN_MS && rc::val('auto_evidence');
+        $n->{waited}++;
+        return 1;
+    };
     my $now = util::now();
     my $st = _load($sid_dir);
     local $LOGGED = $st->{logged};    # the rows this session already has (_save_deferred reads it)
@@ -421,6 +431,7 @@ sub _run {
         elsif (($it->{p3} // '') eq 'sub') { ($scope, $agent, $proof) = ('sub', $it->{agent}, 'p3-sub') }
         elsif ($main_end && $subs_end && ($a{final} || $now - $it->{e} >= $SETTLE_S)) { ($scope, $proof) = ('unknown', 'none') }
         else { next }    # its boundary row may still come: the next Stop decides
+        next if $sweep_waits->($scope);
         _save_deferred($it, $text, $scope, $agent, $proof, \%a, $left, $copied, $f, $n);
     }
 
@@ -472,6 +483,7 @@ sub _run {
             next unless $main_end && $subs_end && ($a{final} || $now - $e >= $SETTLE_S);
         }
         if (defined $mn && exists $copied->{"n:$mn"}) { $drop_if_held->($f, $copied->{"n:$mn"}, $text); next }
+        next if $sweep_waits->($scope);
         my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn, content_name => ($m{stale} ? 1 : 0),
                                 writer => ($kind eq 'mod' ? 'mod' : 'postcompact-fallback'),
                                 scope => $scope, agent => $agent, tokens => $m{tokens}, cwd => $m{cwd} // $a{cwd},

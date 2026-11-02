@@ -17,6 +17,11 @@ BEGIN {
     }
 }
 
+# The helper's start (util::clock_ms's clock), before its libraries compile: a hook's budget
+# that must cover the whole process (Stop's) counts from here.
+our $T_START_MS;
+BEGIN { $T_START_MS = eval { require Time::HiRes; int(Time::HiRes::time() * 1000) } }
+
 use strict;
 use warnings;
 use utf8;

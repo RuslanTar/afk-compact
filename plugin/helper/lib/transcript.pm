@@ -874,19 +874,28 @@ sub subagent_files {
 }
 
 # Temp paths cited in the last 5 MB of a transcript (sweep scope, OD-9).
+# 0.1.3 hook speed: no match spans a delimiter, so the tail is read one delimiter-free word at a
+# time (a streaming match: no list of every word, so memory stays at the tail's size) and only
+# the words that hold an anchor are matched, the tasks/*.output form from the word's start (\A)
+# or right after the previous match (\G). One pattern over the whole tail tried that form from
+# every position of a long word (an image's base64, a minified blob) to its end: quadratic,
+# about 86 s on a 41 MB transcript's 5 MB tail with no paths.jsonl, past every hook's timeout.
+# Same paths, same order.
 sub temp_paths {
     my ($path, $tmpdir) = @_;
     return [] unless defined $path && -f $path;
     my $tail = util::read_tail($path, 5 * 1024 * 1024) // return [];
-    my @roots = ('/tmp/', '/private/tmp/', '/var/folders/');
-    push @roots, "$tmpdir/" if defined $tmpdir && $tmpdir =~ m{^/} && $tmpdir ne '/';
     my %seen;
     my @out;
-    while ($tail =~ m{((?:/private)?/(?:tmp|var/folders)/[^\s"'<>\\|;&\x60]+|[^\s"'<>\\|;&\x60]*/tasks/[A-Za-z0-9_.-]+\.output)}g) {
-        my $p = $1;
-        $p =~ s/[),.:]+$//;
-        next if $seen{$p}++;
-        push @out, $p;
+    while ($tail =~ /([^\s"'<>\\|;&\x60]+)/g) {
+        my $w = $1;
+        next unless index($w, '/tmp/') >= 0 || index($w, '/var/folders/') >= 0 || index($w, '/tasks/') >= 0;
+        while ($w =~ m{((?:/private)?/(?:tmp|var/folders)/[^\s"'<>\\|;&\x60]+|(?:\A|\G)[^\s"'<>\\|;&\x60]*/tasks/[A-Za-z0-9_.-]+\.output)}g) {
+            my $p = $1;
+            $p =~ s/[),.:]+$//;
+            next if $seen{$p}++;
+            push @out, $p;
+        }
     }
     if (defined $tmpdir && $tmpdir =~ m{^/.+}) {
         my $t = $tmpdir;

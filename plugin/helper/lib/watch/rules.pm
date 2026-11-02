@@ -994,7 +994,7 @@ sub _session_rules {
         $R->(rule => 'A-24', severity => 'warn', id_parts => ['quota', $r->{ts}], evidence => { mb => $r->{mb} });
     }
     unless (grep { ($_->{rule} // '') eq 'A-24' && ref $_->{evidence} eq 'HASH' && $_->{evidence}{watch_dir} } @{ $ex->{rows} }) {
-        my $mb = _dir_mb($ctx->{watch}, 20000, $ctx);
+        my $mb = _watch_mb($ctx, $sess);
         my $quota = $ctx->{settings}{watch_quota_mb} // 50;
         $quota = 10000 if $quota > 10000;
         if (defined $mb && $quota > 0 && $mb > $quota) {
@@ -1039,17 +1039,42 @@ sub _session_rules {
     }
 }
 
+# 0.1.3 hook speed: the watch folder's size (A-24) is walked at most once per WATCH_MB_EVERY_S per
+# session, the result kept in the session state ({ts, mb}): the walk grows with the store (every
+# session's folder; up to 20,000 entries) and ran at every Stop. The walk may use WATCH_MB_SHARE of
+# the time left before the run's hard stop; past that it gives up (no size, nothing kept) and the
+# run goes on with the rest of the rules and commits, so a large store under load cannot drop
+# every Stop's run at the hard stop (a walk that ran to the hard stop itself left the next tick()
+# to drop the run); the next Stop walks again.
+our $WATCH_MB_EVERY_S = 3600;
+our $WATCH_MB_CAP = 20000;
+our $WATCH_MB_SHARE = 0.5;
+sub _watch_mb {
+    my ($ctx, $sess) = @_;
+    my $now = $ctx->{now} // time;
+    my $c = ref $sess eq 'HASH' && ref $sess->{watch_mb} eq 'HASH' ? $sess->{watch_mb} : undef;
+    if ($c && defined $c->{ts} && $c->{ts} <= $now && $now - $c->{ts} < $WATCH_MB_EVERY_S) { return $c->{mb} }
+    my $dl = $ctx->{_deadline};
+    if (defined $dl) { my $m = watch::io::mono(); $dl = $m + ($dl - $m) * $WATCH_MB_SHARE }
+    my $mb = _dir_mb($ctx->{watch}, $WATCH_MB_CAP, $dl);
+    return undef if defined $mb && $mb eq 'late';
+    $sess->{watch_mb} = { ts => $now, mb => $mb } if ref $sess eq 'HASH';
+    return $mb;
+}
+
+# _dir_mb(dir, cap, deadline) -> MB under dir, undef over cap entries, 'late' at the deadline.
 sub _dir_mb {
-    my ($dir, $cap, $ctx) = @_;
+    my ($dir, $cap, $deadline) = @_;
     my ($bytes, $n) = (0, 0);
     my @q = ($dir);
     while (@q) {
+        return 'late' if defined $deadline && watch::io::mono() >= $deadline;
         my $d = shift @q;
         opendir(my $dh, $d) or next;
         for my $e (readdir $dh) {
             next if $e eq '.' || $e eq '..';
             return undef if ++$n > $cap;
-            tick($ctx) if $ctx && $n % 256 == 0;
+            return 'late' if defined $deadline && $n % 256 == 0 && watch::io::mono() >= $deadline;
             my $p = "$d/$e";
             my @st = lstat $p or next;
             if (-l _) { next }
