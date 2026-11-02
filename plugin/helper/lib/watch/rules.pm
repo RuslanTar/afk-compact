@@ -433,10 +433,7 @@ sub _derive {
     $pc = $$pc if ref $pc eq q(SCALAR);
     $C->{precompute} = 1 if !$B && $pc;
     if ($roll) {
-        my $iv = $roll->{idle};
-        $iv = ($$iv ? 'true' : 'false') if ref $iv eq 'SCALAR';
-        $C->{idle} = (defined $iv && !ref $iv && $iv =~ /\A(?:true|false|unknown)\z/) ? $iv
-                    : (defined $iv && !ref $iv && $iv eq '1') ? 'true' : (defined $iv && !ref $iv && $iv eq '0') ? 'false' : undef;
+        $C->{idle} = rollup_idle($roll);
         $C->{idle_source} = $roll->{idle_source} if defined $roll->{idle_source} && !ref $roll->{idle_source};
     }
     if (defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy}) { $copy = $S->{rollup}{$rk}{copy} }
@@ -491,6 +488,16 @@ sub _derive {
     }
 }
 
+# rollup_idle(rollup row) -> its idle as `true`, `false` or `unknown`, else undef.
+sub rollup_idle {
+    my ($roll) = @_;
+    return undef unless ref $roll eq 'HASH';
+    my $iv = $roll->{idle};
+    $iv = ($$iv ? 'true' : 'false') if ref $iv eq 'SCALAR';
+    return (defined $iv && !ref $iv && $iv =~ /\A(?:true|false|unknown)\z/) ? $iv
+         : (defined $iv && !ref $iv && $iv eq '1') ? 'true' : (defined $iv && !ref $iv && $iv eq '0') ? 'false' : undef;
+}
+
 # --- rules ------------------------------------------------------------------
 
 sub evaluate {
@@ -518,8 +525,8 @@ sub evaluate {
         # history the sweep reads from offset 0: a session already running at the install, or
         # resumed or forked after it) with no hook row or dispatch of its own was never
         # observed, so it raises no A-01, A-05 or hookless A-15.
-        my $hist = ($B && !$P && !$D && defined $obs && defined $B->{ts_epoch} && $B->{ts_epoch} < $obs) ? 1 : 0;
-        my $idle = _idle_compaction($S, $c);
+        my $hist = $B ? history_boundary($B->{ts_epoch}, $P, $D, $obs) : 0;
+        my $idle = idle_compaction($S, $c);
         if ($main_nf && $c->{copy_bad} && !$hist) {
             $R->(rule => 'A-01', severity => 'critical', id_parts => \@idp, %k,
                  evidence => { copy => ($c->{copy} =~ /\Afailed/ ? 'failed' : $c->{copy}), line => ($B ? $B->{line} : undef) });
@@ -735,12 +742,15 @@ sub _pre_near {
 # plugin was not loaded in that process, or under a store this install does not read. Per
 # session, not store-wide: Claude Code loads plugins when a process starts, so a session
 # already running at the install compacts unobserved until it is resumed. The streams are
-# append-only, so their first rows never change.
+# append-only, so their first rows never change. 0.1.3: a session whose streams hold only the
+# Stop's own rows (no SessionStart, mod or preamble row before its first plugin Stop, e.g. the
+# plugin loaded mid-session on the classic path) is observed from the earliest of those rows:
+# the first plugin Stop ran then, so what its sweep found before that is history too.
 our $OBS_HEAD_LINES = 64;
 my %OWN_ROW = map { $_ => 1 } qw(sweep sweep_partial watch_error precompute_or_failed);
 sub observed_from {
     my ($ctx) = @_;
-    my $best;
+    my ($best, $own);
     for my $p (watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx)) {
         next if -l $p;
         open(my $fh, '<:raw', $p) or next;
@@ -749,22 +759,32 @@ sub observed_from {
             last if ++$n > $OBS_HEAD_LINES;
             (my $raw = $line) =~ s/[\r\n]+\z//;
             my $r = eval { watch::json::decode($raw) };
-            next unless ref $r eq 'HASH' && !$OWN_ROW{ $r->{ev} // '' };
+            next unless ref $r eq 'HASH';
             my $t = watch::io::parse_iso($r->{ts}) // next;
+            if ($OWN_ROW{ $r->{ev} // '' }) { $own = $t if !defined $own || $t < $own; next }
             $best = $t if !defined $best || $t < $best;
             last;
         }
         close $fh;
     }
-    return $best;
+    return $best // $own;
 }
 
-# _idle_compaction(S, compaction) -> 1 for an idle compaction: the rollup's settled idle (mod
+# history_boundary(boundary epoch, P, D, observed_from) -> 1 for a boundary from before the
+# session's first hook row (observed_from) with no PostCompact row and no dispatch of its own:
+# the plugin never observed that compaction (0.1.3 alert noise: no A-01, A-05 or hookless A-15).
+# P and D are anything true when present (the rows, or the flags a sweep record keeps).
+sub history_boundary {
+    my ($bt, $P, $D, $obs) = @_;
+    return ($P || $D || !defined $obs || !defined $bt || $bt >= $obs) ? 0 : 1;
+}
+
+# idle_compaction(S, compaction) -> 1 for an idle compaction: the rollup's settled idle (mod
 # OR the native notice, IC-1 D1), or the mod's dispatch record says idle. A swept boundary
 # whose dispatch an earlier P-only record already took (the sweep lagged behind the hooks in a
 # long transcript) has no D of its own: a main mod dispatch marked idle from $JOIN_S before
 # it to 1 s after it is that compaction's.
-sub _idle_compaction {
+sub idle_compaction {
     my ($S, $c) = @_;
     return 1 if ($c->{idle} // '') eq 'true';
     my $yes = sub { my $i = shift; $i = $$i if ref $i eq 'SCALAR'; return (defined $i && !ref $i && ($i eq '1' || $i eq 'true')) ? 1 : 0 };
@@ -1078,8 +1098,10 @@ sub _session_rules {
     tick($ctx);
     # A-11: an item listed running for >= stall_min whose output has not moved. 0.1.3 alert
     # noise: only an item with a known output path is checked; without one (every teammate,
-    # workflow, subagent and monitor, and a shell whose path the result text did not give) the
-    # watcher cannot see progress, and "quiet" was every such item (107 of 107 on 0.1.2).
+    # workflow, subagent and monitor) the watcher cannot see progress, and "quiet" was every
+    # such item (107 of 107 on 0.1.2). A shell whose path the result text did not give has the
+    # file Claude Code writes for every background shell (task_output); it counts only when that
+    # file exists.
     my @slots = @{ $S->{bg} };
     if (@slots) {
         my %first;
@@ -1094,7 +1116,11 @@ sub _session_rules {
             next unless defined $t->{id} && ($t->{status} // 'running') =~ /\A(?:running|pending)\z/;
             next unless defined $first{ $t->{id} } && $now - $first{ $t->{id} } >= $stall_s;
             my $out = $t->{output_path} // $t->{outputFilePath};
-            next unless defined $out && !ref $out && length $out;
+            my $derived;
+            unless (defined $out && !ref $out && length $out) {
+                $out = task_output($ctx, $t) // next;
+                $derived = 1;
+            }
             my $quiet = 1;
             if (-e $out) {
                 my $mt = (stat $out)[9];
@@ -1102,9 +1128,49 @@ sub _session_rules {
             }
             next unless $quiet;
             $R->(rule => 'A-11', severity => 'warn', id_parts => [$t->{id}],
-                 evidence => { output_known => \1, minutes => int(($now - $first{ $t->{id} }) / 60) });
+                 evidence => { output_known => \1, minutes => int(($now - $first{ $t->{id} }) / 60),
+                               ($derived ? (source => 'derived') : ()) });
         }
     }
+}
+
+# task_output(ctx, task) -> the output file Claude Code writes for a background shell with no
+# recorded path, when it exists: <tmp>/claude-<uid>/<project>/<sid>/tasks/<id>.output, where
+# <tmp> is CLAUDE_CODE_TMPDIR, else /tmp (Claude Code 2.1.316 does not read TMPDIR here; on
+# macOS the recorded paths read /private/tmp, the same folder), and <project> is the session's
+# project folder name, the one its transcript sits in under ~/.claude/projects. Without a
+# transcript path (another session, lib/watch/supersede.pm) the folder is found by session id.
+# A shell's file is a regular file (a subagent's is a link to its transcript). undef otherwise.
+sub task_output {
+    my ($ctx, $t) = @_;
+    return undef unless ($t->{type} // '') eq 'shell' && defined $t->{id} && !ref $t->{id} && $t->{id} =~ /\A[0-9A-Za-z_-]{1,64}\z/;
+    for my $d (task_dirs($ctx)) {
+        my $p = "$d/$t->{id}.output";
+        return $p if -f $p && !-l $p;
+    }
+    return undef;
+}
+
+sub task_dirs {
+    my ($ctx) = @_;
+    return @{ $ctx->{_task_dirs} } if ref $ctx->{_task_dirs} eq 'ARRAY';
+    my $sid = $ctx->{sid} // '';
+    my @d;
+    if ($sid =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/) {
+        # ctx cc_tmpdir: the cases' own folder (core passes none; the hook has Claude Code's env)
+        my $base = $ctx->{cc_tmpdir} // $ENV{CLAUDE_CODE_TMPDIR};
+        $base = '/tmp' unless defined $base && length $base;
+        $base =~ s{/+\z}{};
+        my $root = "$base/claude-$<";
+        my $tp = ref $ctx->{payload} eq 'HASH' ? $ctx->{payload}{transcript_path} : undef;
+        if (defined $tp && !ref $tp && $tp =~ m{([^/]+)/\Q$sid\E\.jsonl\z} && -d "$root/$1/$sid/tasks") {
+            push @d, "$root/$1/$sid/tasks";
+        } else {
+            for my $e (watch::io::list_dir($root)) { push @d, "$root/$e/$sid/tasks" if -d "$root/$e/$sid/tasks" }
+        }
+    }
+    $ctx->{_task_dirs} = \@d;
+    return @d;
 }
 
 sub _dir_mb {

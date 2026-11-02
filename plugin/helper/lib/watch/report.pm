@@ -137,12 +137,15 @@ sub stats {
         $s{main} += @main;
         $s{chains}++ if @main >= 3;
         $s{chain_steps} += @main > 1 ? @main - 1 : 0;
+        # 0.1.3: an alert closed by a later `alert_closed` row (lib/watch/alerts.pm) is not counted
+        my %closed = map { ($_->{alert_id} // '') => 1 } grep { _ev($_) eq 'alert_closed' } @$rows;
         my %inject;
         for my $r (@$rows) {
             my $ev = _ev($r);
             $s{cc}{ $r->{cc_version} }++ if defined $r->{cc_version} && !ref $r->{cc_version};
             $s{plugin_versions}{ $r->{plugin_version} }++ if defined $r->{plugin_version} && !ref $r->{plugin_version};
             if ($ev eq 'alert') {
+                next if $closed{ $r->{alert_id} // '' };
                 $s{alerts}{ $r->{rule} // '?' }++;
                 push @{ $s{alert_rows} }, $r;
                 $s{days}{ substr($r->{ts} // '????-??-??', 0, 10) }{alerts}++;

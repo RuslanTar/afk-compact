@@ -163,6 +163,19 @@ sub on_stop {
         watch::sweep::finish($run);
         $stage = 'deliver';
         $out = watch::alerts::deliver($ctx, $ex, $hard);
+        # 0.1.3: in the time left, close the older version's alert rows of a changed rule
+        # (lib/watch/supersede.pm); its failure costs nothing else of this run.
+        if (watch::io::mono() < $hard) {
+            my $done = eval {
+                local $SIG{__DIE__};
+                local $ctx->{_deadline} = $hard;
+                require watch::supersede;
+                watch::supersede::run($ctx);
+                1;
+            };
+            my $err = $@;
+            watch::ctx::error_row($ctx, 'supersede', _class($err)) unless $done || (defined $err && !ref $err && $err eq "hard-stop\n");
+        }
         1;
     };
     unless ($ok) {

@@ -62,7 +62,7 @@ my %st;
                   'A-07 for the first thrash row, and once for the one whose line was completed later');
         $E->is(sprintf('%o', $st{mode} // 0), '600', 'state.json is 0600');
         my $s = $st{state} || {};
-        $E->is($s->{v}, 1, 'state version');
+        $E->is($s->{v}, 2, 'state version (2: the alerts log keeps its alert_closed rows)');
         my @k = map { $_->{r}{ev} // 'none' } @{ $st{rows} || [] };
         $E->count([ grep { /\A(?:measure|skip|sweep)\z/ } @k ], 0, 'no row of a kind the rules do not read is kept');
         $E->count([ grep { $_ eq 'continue' } @k ], 1, 'the replaced stream was read again from the start, its old rows dropped');

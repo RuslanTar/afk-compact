@@ -31,7 +31,7 @@ sub lines {
     if (defined $ctx->{sid} && $ctx->{sid} =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/) {
         my $ex = watch::alerts::load_existing($ctx);
         my @rows = sort { ($RANK{ $a->{severity} // 'info' } // 3) <=> ($RANK{ $b->{severity} // 'info' } // 3)
-                          || ($a->{ts} // '') cmp ($b->{ts} // '') } @{ $ex->{rows} };
+                          || ($a->{ts} // '') cmp ($b->{ts} // '') } @{ $ex->{open} };
         my %sev;
         $sev{ $_->{severity} // 'info' }++ for @rows;
         push @out, sprintf('Alerts this session: %d (critical %d, warn %d, info %d)',
@@ -47,6 +47,7 @@ sub lines {
     push @out, @$counts
         ? 'Alerts, last 7 days: ' . join(', ', map { "$_->[0] $_->[1]" } @$counts) . " ($sessions sessions)"
         : 'Alerts, last 7 days: none';
+    push @out, superseded_lines($ctx);
     push @out, stash_lines($ctx);
     my $last = last_row_ts($ctx);
     push @out, 'Last watcher row: ' . ($last // 'none');
@@ -69,7 +70,7 @@ sub verdict {
     my (@alerts, @rolls, $scope);
     if (defined $ctx->{sid} && $ctx->{sid} =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/) {
         $scope = 'this session';
-        @alerts = @{ watch::alerts::load_existing($ctx)->{rows} };
+        @alerts = @{ watch::alerts::load_existing($ctx)->{open} };
         @rolls = _rollup_rows(watch::ctx::sid_dir($ctx) . '/compactions.jsonl');
     } else {
         $scope = 'in the last 7 days';
@@ -77,11 +78,15 @@ sub verdict {
         my $w = $ctx->{watch};
         my $recent = sub { my $t = watch::io::parse_iso($_[0]{ts}); return defined $t && $t >= $cut };
         for my $f (watch::io::list_dir($w)) {
-            my $mt = (stat "$w/$f")[9];
-            next unless defined $mt && $mt >= $cut;
             if ($f =~ /\.alerts\.jsonl\z/) {
-                push @alerts, grep { ($_->{ev} // '') eq 'alert' && $recent->($_) } @{ watch::io::read_jsonl("$w/$f") };
+                my $mt = (stat "$w/$f")[9];
+                next unless defined $mt && $mt >= $cut;
+                my ($al, $closed) = watch::alerts::read_log("$w/$f");
+                push @alerts, grep { !exists $closed->{ $_->{alert_id} } && $recent->($_) } @$al;
             } elsif ($f =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/ && -d "$w/$f") {
+                # by the rollup stream's own time: the folder's changes only when an entry is added
+                my $mt = (stat "$w/$f/compactions.jsonl")[9];
+                next unless defined $mt && $mt >= $cut;
                 push @rolls, grep { $recent->($_) } _rollup_rows("$w/$f/compactions.jsonl");
             }
         }
@@ -172,8 +177,10 @@ sub week_counts {
         my $p = "$ctx->{watch}/$f";
         my $mt = (stat $p)[9];
         next unless defined $mt && $mt >= $cut;
-        for my $r (@{ watch::io::read_jsonl($p) }) {
-            next unless ($r->{ev} // '') eq 'alert';
+        # 0.1.3: a closed alert (lib/watch/alerts.pm) is not counted
+        my ($rows, $closed) = watch::alerts::read_log($p);
+        for my $r (@$rows) {
+            next if exists $closed->{ $r->{alert_id} };
             my $t = watch::io::parse_iso($r->{ts});
             next unless defined $t && $t >= $cut;
             $n{ $r->{rule} // '?' }++;
@@ -181,6 +188,28 @@ sub week_counts {
         }
     }
     return ([ map { [$_, $n{$_}] } sort keys %n ], scalar keys %s);
+}
+
+# 0.1.3 (lib/watch/supersede.pm): one line with the number of alerts closed as superseded in
+# the last 7 days (by the close row's time), store-wide; none when there are none.
+sub superseded_lines {
+    my ($ctx) = @_;
+    my $cut = $ctx->{now} - 7 * 86400;
+    my %ids;
+    for my $f (watch::io::list_dir($ctx->{watch})) {
+        next unless $f =~ /\.alerts\.jsonl\z/;
+        my $p = "$ctx->{watch}/$f";
+        my $mt = (stat $p)[9];
+        next unless defined $mt && $mt >= $cut;
+        for my $r (@{ watch::io::read_jsonl($p, undef, qr/"ev"\s*:\s*"alert_closed"/) }) {
+            next unless ($r->{ev} // '') eq 'alert_closed' && defined $r->{alert_id} && !ref $r->{alert_id};
+            next unless ($r->{reason} // '') =~ /\Asuperseded:/;
+            my $t = watch::io::parse_iso($r->{ts});
+            $ids{"$f/$r->{alert_id}"} = 1 if defined $t && $t >= $cut;
+        }
+    }
+    my $n = keys %ids;
+    return $n ? (sprintf('Alerts closed as superseded (the rule changed in 0.1.3; rows kept): %d', $n)) : ();
 }
 
 sub last_row_ts {
