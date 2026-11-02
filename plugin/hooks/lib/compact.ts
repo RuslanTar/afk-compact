@@ -597,7 +597,8 @@ export type LineFacts = {
  * pointer to the status skill when the summary is not in handoff format or its copy failed.
  */
 export function compactLine(name: string, f: LineFacts): string {
-  const parts = [f.ok ? 'compaction ok' : `compaction NOT in handoff format (${f.verdict})`]
+  // 0.1.3: a summary complete but for its closing line reads ok, with its verdict word
+  const parts = [f.ok ? (f.verdict === 'ok-unclosed' ? 'compaction ok-unclosed' : 'compaction ok') : `compaction NOT in handoff format (${f.verdict})`]
   parts.push(f.savedCopy !== null ? 'copy saved' : `copy NOT saved (${(f.notSaved ?? 'unknown').slice(0, 40)})`)
   const h = f.handoff
   if (h && 'published' in h) parts.push(`handoff ${h.published.replace(/^.*\//, '')}`)
@@ -607,7 +608,7 @@ export function compactLine(name: string, f: LineFacts): string {
   return `${name}: ${parts.join(' · ')}`
 }
 
-const VERDICTS: readonly string[] = ['stale', 'scope-leak', 'unshaped', 'truncated', 'ok-trailer', 'ok']
+const VERDICTS: readonly string[] = ['stale', 'scope-leak', 'unshaped', 'ok-unclosed', 'truncated', 'ok-trailer', 'ok']
 
 function isVerdict(v: string): v is Verdict {
   return VERDICTS.includes(v)

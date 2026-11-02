@@ -35,7 +35,7 @@ use utf8;
 
 our $VERSION = 1;
 
-my @VERDICT = qw(ok ok-trailer unshaped truncated stale scope-leak none);
+my @VERDICT = qw(ok ok-trailer ok-unclosed unshaped truncated stale scope-leak none);
 my @TRIGGER = qw(auto manual plugin precompute unknown);
 my @CHANNEL = qw(mod-hook mod-self classic none sessionstart prompt.context prompt.submit);
 my @SEAT = qw(mod-hook mod-self classic-only none);

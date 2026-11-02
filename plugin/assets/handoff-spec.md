@@ -42,7 +42,7 @@ Each heading of both forms has a fixed section id (`section_ids`, e.g. `main:nex
 
 ## 3. Verdicts
 
-First match wins: `stale` · `scope-leak` · `unshaped` · `truncated` · `ok-trailer` · `ok`. For readers, "ok" means `ok` or `ok-trailer`.
+First match wins: `stale` · `scope-leak` · `unshaped` · `ok-unclosed` · `truncated` · `ok-trailer` · `ok`. `ok-unclosed`: no line in the sentinel grammar, and every section `unclosed_required` lists for the marker's scope is there, in order, the last with text under it (a summary complete but for its closing line); a summary cut inside its body stays `truncated`. For readers, "ok" means `ok`, `ok-trailer` or `ok-unclosed`.
 
 ## 4. Vocabularies
 
@@ -335,8 +335,12 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
     "^Continue the conversation from where it left off without asking",
     "^The messages after this summary are the most recent messages from before compaction"
   ],
-  "verdicts": ["stale", "scope-leak", "unshaped", "truncated", "ok-trailer", "ok"],
-  "ok_verdicts": ["ok", "ok-trailer"],
+  "verdicts": ["stale", "scope-leak", "unshaped", "ok-unclosed", "truncated", "ok-trailer", "ok"],
+  "ok_verdicts": ["ok", "ok-trailer", "ok-unclosed"],
+  "unclosed_required": {
+    "main": ["## Resume here", "## User constraints", "## In flight", "## Live state", "## Open questions", "## Next steps"],
+    "sub": ["## Task as assigned", "## Constraints from the parent", "## Report", "## Done", "## Findings", "## Produced but not yet delivered", "## Own background tasks", "## Next action"]
+  },
   "scopes": ["main", "sub", "manual"],
   "status_words": ["working", "finished", "hard-blocked", "soft-blocked", "active", "blocked", "waiting-owner", "waiting-job", "done"],
   "acuity_words": ["stable", "watch", "unstable"],

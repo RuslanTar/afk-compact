@@ -21,7 +21,7 @@ use watch::io;
 use watch::spec;
 use watch::hturn;
 
-my %OKV = map { $_ => 1 } qw(ok ok-trailer);
+my %OKV = map { $_ => 1 } qw(ok ok-trailer ok-unclosed);
 my %BADV = map { $_ => 1 } qw(unshaped truncated stale);
 my $JOIN_S = 120;
 # A-28 (MG-5): a handoff turn's first request that read under this share of its input from the

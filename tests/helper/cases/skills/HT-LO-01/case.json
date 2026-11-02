@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "locate: tiers 1-6 of resume R1, ordered by frontmatter date (not file name); lineage up to 3 hops, same chain (A-6), a 4th hop is not followed; relation from session ids; integrity ok / ok-trailer copy is ok (not unshaped) / unshaped / possibly truncated / legacy / s=sub with its parent; .staging/ drafts last and never picked (D-15); newer files and foreign state files reported",
+ "note": "locate: tiers 1-6 of resume R1, ordered by frontmatter date (not file name); lineage up to 3 hops, same chain (A-6), a 4th hop is not followed; relation from session ids; integrity ok / ok-trailer and ok-unclosed (0.1.3) copies are ok (not unshaped) / unshaped / possibly truncated / legacy / s=sub with its parent; .staging/ drafts last and never picked (D-15); newer files and foreign state files reported",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [
@@ -36,6 +36,10 @@
   {
    "write": "$ROOT/repo/LAB-7/compact/2026-10-21_11-30-00_11111111_c1-0c0c0c.md",
    "content": "---\nwriter: mod\nnonce: 0c0c0c0c\ndate: 2026-10-21T11:30:00+03:00\nsession_id: $SID\nactor: main\nverdict: ok-trailer\n---\n⟪$BRAND v1 n=0c0c0c0c s=main⟫\n# LAB-7 — work\n⟪/$BRAND n=0c0c0c0c⟫\ntrailing words\n"
+  },
+  {
+   "write": "$ROOT/repo/LAB-7/compact/2026-10-21_05-30-00_11111111_c0-0b0b0b.md",
+   "content": "---\nwriter: postcompact-fallback\nnonce: 0b0b0b0b\ndate: 2026-10-21T05:30:00+03:00\nsession_id: $SID\nactor: main\nverdict: ok-unclosed\n---\n⟪$BRAND v1 n=0b0b0b0b s=main⟫\n# LAB-7 — work\n## Next steps\n1. git status — done when clean\n"
   },
   {
    "write": "$ROOT/repo/LAB-7/compact/2026-10-21_11-40-00_11111111_c2-0d0d0d.md",
@@ -163,6 +167,24 @@
     "exit": 0,
     "stdout_has": [
      "\\Atier: 2\\npick: $ROOT/repo/LAB-7/compact/2026-10-21_11-30-00_11111111_c1-0c0c0c.md\\n",
+     "^integrity: ok$"
+    ]
+   }
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "locate",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    "$ROOT/repo/LAB-7/compact/2026-10-21_05-30-00_11111111_c0-0b0b0b.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
      "^integrity: ok$"
     ]
    }

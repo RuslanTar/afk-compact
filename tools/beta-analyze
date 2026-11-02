@@ -73,7 +73,7 @@ PATTERNS = (
     ("url", re.compile(rb"[a-z][a-z0-9+.-]*://[^\s\"/]+", re.I)),
 )
 SHAPED = {"mod-hook", "mod-self", "classic"}
-OK_VERDICTS = {"ok", "ok-trailer"}
+OK_VERDICTS = {"ok", "ok-trailer", "ok-unclosed"}
 BAND_STEP = 50000
 BAR_WIDTH = 40
 

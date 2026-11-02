@@ -6,7 +6,7 @@ file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatc
 05-p5-c5-inside.txt	ok	1	1	228e0cc9	sub	6e4bc59d07eba0ff476d8b39b90baffaeb2bf22e2bf0263164d071d6f8700055		inside
 06-p5-c6-after-close.txt	ok	1	1	084ad868	sub	9e62425911cf075da02cb8ce19e9e31f3651f8f5133f6d9c4a8c0dc9bdef0aec		after-close
 07-after-close-sentinel-other-nonce.txt	truncated	1	1	5e6f7081	sub	5ac7a6e617e12047ac87b672eed408a34e06722ce1c60fe80c0ffbbe03ab5365		after-close
-08-after-close-text-then-sentinel.txt	truncated	1	-	5e6f7081	sub	9f988ae5330c708aea1eecfeb736578954970723265b83928a7bab94e7529649		-
+08-after-close-text-then-sentinel.txt	ok-unclosed	1	-	5e6f7081	sub	9f988ae5330c708aea1eecfeb736578954970723265b83928a7bab94e7529649		-
 09-after-close-sentinel-listed-trailer.txt	ok	1	1	5e6f7081	sub	a2aceeee613872e90de849369f56aaab479c9846403822ba671e4391eca4fb37		after-close
 10-after-close-sentinel-unlisted-text.txt	ok-trailer	1	2	5e6f7081	sub	6617b8242dee081c7a39a6f8ad7ee6009c4135b5917e2d80a233372e216adefe		after-close
 11-after-close-marker-absent.txt	unshaped	-	1	-	-	fa006dccc65ba914912e86286908a8151d13969a0fb1fc37b8058af3d68fa549		after-close

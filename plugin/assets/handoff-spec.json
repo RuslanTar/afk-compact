@@ -75,14 +75,36 @@
     "stale",
     "scope-leak",
     "unshaped",
+    "ok-unclosed",
     "truncated",
     "ok-trailer",
     "ok"
   ],
   "ok_verdicts": [
     "ok",
-    "ok-trailer"
+    "ok-trailer",
+    "ok-unclosed"
   ],
+  "unclosed_required": {
+    "main": [
+      "## Resume here",
+      "## User constraints",
+      "## In flight",
+      "## Live state",
+      "## Open questions",
+      "## Next steps"
+    ],
+    "sub": [
+      "## Task as assigned",
+      "## Constraints from the parent",
+      "## Report",
+      "## Done",
+      "## Findings",
+      "## Produced but not yet delivered",
+      "## Own background tasks",
+      "## Next action"
+    ]
+  },
   "scopes": [
     "main",
     "sub",

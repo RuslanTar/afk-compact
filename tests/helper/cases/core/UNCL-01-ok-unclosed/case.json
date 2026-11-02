@@ -1,0 +1,203 @@
+{
+  "id": "UNCL-01 (summary complete but for its closing line)",
+  "needs": [
+    "fixture:summaries/unclosed/expected.tsv"
+  ],
+  "note": "0.1.3 (root decision on the small-fixes review): a main or sub summary with no line in the sentinel grammar that holds every section the spec's unclosed_required lists for its scope, in order, with text under the last (or after a colon on its heading line), reads ok-unclosed, an ok verdict; cut inside the body, an empty last section or out of order stays truncated. The helper detector gives summaries/unclosed/expected.tsv (the TS detector checks the same table in U). The PostCompact copy and its verdict row carry ok-unclosed; status counts it ok and shows the word; a summary cut inside its body is still truncated and counted not ok",
+  "tz": "Etc/GMT-3",
+  "steps": [
+    {
+      "lib": "detect_tsv",
+      "args": {
+        "tsv": "summaries/unclosed/expected.tsv"
+      }
+    },
+    {
+      "setup": [
+        {
+          "mkdir": "$TMP/work"
+        }
+      ]
+    },
+    {
+      "name": "c1 complete, no closing line",
+      "now": "2026-10-21T14:03:00+03:00",
+      "setup": [
+        {
+          "dispatch": {
+            "nonce": "0c1a0001",
+            "actor": "main",
+            "channel": "mod-hook",
+            "trigger": "auto",
+            "age_s": 15,
+            "midturn": false
+          }
+        },
+        {
+          "transcript": "$TMP/proj/$SID.jsonl",
+          "rows": [
+            {
+              "prompt": {
+                "age_s": 60
+              }
+            }
+          ]
+        }
+      ],
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "PostCompact",
+        "trigger": "auto",
+        "compact_summary": "<summary>\n⟪$BRAND v1 n=0c1a0001 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · Acuity: stable · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\nnone stated\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions, user-owned\nnone\n## Next steps\n1. git status — done when clean · todo\n</summary>"
+      },
+      "expect": {
+        "exit": 0,
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "verdict",
+            "fields": {
+              "nonce": "0c1a0001",
+              "verdict": "ok-unclosed"
+            }
+          }
+        ],
+        "files": [
+          {
+            "path": "$ROOT/work/general/compact/*_c*-0c1a00.md",
+            "contains": [
+              "\nverdict: ok-unclosed\n"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "c2 cut inside the body",
+      "now": "2026-10-21T14:06:00+03:00",
+      "setup": [
+        {
+          "dispatch": {
+            "nonce": "0c1a0002",
+            "actor": "main",
+            "channel": "mod-hook",
+            "trigger": "auto",
+            "age_s": 15,
+            "midturn": false
+          }
+        },
+        {
+          "transcript": "$TMP/proj/$SID.jsonl",
+          "rows": [
+            {
+              "prompt": {
+                "age_s": 60
+              }
+            }
+          ]
+        }
+      ],
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "PostCompact",
+        "trigger": "auto",
+        "compact_summary": "<summary>\n⟪$BRAND v1 n=0c1a0002 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · Acuity: stable · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\nnone stated\n## In flight\nNothing in flight as of the last message (not checked)\n</summary>"
+      },
+      "expect": {
+        "exit": 0,
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "verdict",
+            "fields": {
+              "nonce": "0c1a0002",
+              "verdict": "truncated"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "c3 Next steps on its heading line",
+      "now": "2026-10-21T14:09:00+03:00",
+      "setup": [
+        {
+          "dispatch": {
+            "nonce": "0c1a0003",
+            "actor": "main",
+            "channel": "mod-hook",
+            "trigger": "auto",
+            "age_s": 15,
+            "midturn": false
+          }
+        },
+        {
+          "transcript": "$TMP/proj/$SID.jsonl",
+          "rows": [
+            {
+              "prompt": {
+                "age_s": 60
+              }
+            }
+          ]
+        }
+      ],
+      "argv": [
+        "hook",
+        "PostCompact"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "PostCompact",
+        "trigger": "auto",
+        "compact_summary": "<summary>\n⟪$BRAND v1 n=0c1a0003 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · Acuity: stable · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\nnone stated\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps: 1. git status — done when clean · todo\n</summary>"
+      },
+      "expect": {
+        "exit": 0,
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "verdict",
+            "fields": {
+              "nonce": "0c1a0003",
+              "verdict": "ok-unclosed"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "status counts ok-unclosed ok and shows the word",
+      "now": "2026-10-21T14:10:00+03:00",
+      "argv": [
+        "status",
+        "--sid",
+        "$SID"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout_contains": [
+          "compactions: 3 in this session; last 3 (1 not ok):"
+        ],
+        "stdout_has": [
+          "(?m)^  2026-10-21T14:09:00\\.000\\+03:00 · main · mod-hook · auto · ok-unclosed · copy ",
+          "(?m)^  2026-10-21T14:06:00\\.000\\+03:00 · main · mod-hook · auto · truncated · copy "
+        ]
+      }
+    }
+  ]
+}
