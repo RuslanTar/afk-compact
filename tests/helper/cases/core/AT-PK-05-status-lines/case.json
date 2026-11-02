@@ -1,6 +1,6 @@
 {
  "id": "AT-PK-05, AT-P5-09, AT-J-08, AT-RM-05 (status lines, CORE-16)",
- "note": "MOD-SPEC §11 (CORE-16). PKG-RUNTIME A.6: the allow rule for default mode with the absolute current folder; one line per older plugin folder an allow rule in ~/.claude/settings.json or the project's .claude/settings.local.json still names (none for the current folder); the user-run lines with the real folder; the settings files' bytes unchanged. W-BETA A: the first line is the watcher line, with the first-run notice while its marker is missing; with watcher off the off line and no notice. P5-FOLD A3: a small-window config_effective row gives the min_window sentence and no negative number (also an old row with negative thresholds and no min_window: computed from the clamp constants, 313000 with handoff_turn off, never with a low target). S-SETTINGS B: the unattended_prod_reads line with its source and pattern counts. S-SETTINGS C: relaunch_allow active. C-STORE D3: kept mismatch stashes with their paths",
+ "note": "MOD-SPEC §11 (CORE-16). PKG-RUNTIME A.6: the allow rule for default mode with the absolute current folder; one line per older plugin folder an allow rule in ~/.claude/settings.json or the project's .claude/settings.local.json still names (none for the current folder); the user-run lines with the real folder; the settings files' bytes unchanged. W-BETA A: the first line is the watcher line (since 0.1.3 after the verdict line, AT-AN-04), with the first-run notice while its marker is missing; with watcher off the off line and no notice. P5-FOLD A3: a small-window config_effective row gives the min_window sentence and no negative number (also an old row with negative thresholds and no min_window: computed from the clamp constants, 313000 with handoff_turn off, never with a low target). S-SETTINGS B: the unattended_prod_reads line with its source and pattern counts. S-SETTINGS C: relaunch_allow active. C-STORE D3: kept mismatch stashes with their paths",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -19,7 +19,7 @@
   {"name": "status: watcher, notice, allow rule, stale rules, user-run lines, prod, kept",
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
-    "stdout_has": ["\\Awatcher: shadow · logs \\d+ (B|KB|MB) in \\d+ sessions · share: /$BRAND:report · off: watcher = off in /config\\n",
+    "stdout_has": ["\\A(?:ok|attention): [^\\n]*\\nwatcher: shadow · logs \\d+ (B|KB|MB) in \\d+ sessions · share: /$BRAND:report · off: watcher = off in /config\\n",
                    "^notice: $BRAND: local compaction logs are on \\(content-free; nothing is sent\\)\\. To share them: /$BRAND:report\\. To turn them off: set watcher to off in /config\\.$",
                    "^allow rule \\(default mode\\): Bash\\(\"/[^\"]+/scripts/$BRAND-store\" wait \\*\\)$",
                    "^allow rule for an older plugin folder: /old/plugins/cache/m/$BRAND/0\\.0\\.9; current: /",
@@ -42,7 +42,7 @@
   {"name": "notice marker present: no notice line",
    "setup": [{"write": "$WATCH/notice/watcher-1.shown", "text": ""}],
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
-   "expect": {"exit": 0, "stdout_has": ["\\Awatcher: shadow · "], "stdout_lacks": ["^notice: "]}},
+   "expect": {"exit": 0, "stdout_has": ["\\A(?:ok|attention): [^\\n]*\\nwatcher: shadow · "], "stdout_lacks": ["^notice: "]}},
   {"name": "watcher off",
    "options": {"watcher": "off"},
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],

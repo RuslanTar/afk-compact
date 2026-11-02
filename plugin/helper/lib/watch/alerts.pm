@@ -6,6 +6,11 @@ package watch::alerts;
 # `<watch>/<sid>.alerts.jsonl`. The id is a stable hash of the rule and its
 # key, so a later Stop never writes the same alert twice.
 #
+# Rows are never deleted. An alert is closed by a later `alert_closed {alert_id, rule, reason}`
+# row in the same log (0.1.3: the rows an older version wrote under a rule that changed,
+# lib/watch/supersede.pm); a closed alert is not open: not counted or listed as open, not
+# delivered, and never raised again (its id stays taken).
+#
 # Delivery by Stop `systemMessage` is built but switched to status-only until
 # probe P-W2 passes (BUILD-PLAN E-17, W-Q3): in that mode nothing is printed
 # and no `delivered/` marker is created; `/status` lists the alerts.
@@ -20,21 +25,42 @@ use watch::json;
 our $DELIVERY = 'status-only';    # or 'system-message' after P-W2
 my %SEV_RANK = (critical => 0, warn => 1, info => 2);
 
+our $CLOSED = 'alert_closed';
+our $LOG_RE = qr/"ev"\s*:\s*"alert(?:_closed)?"/;
+
 # The alerts written so far: from a cache load (lib/watch/cache.pm) at Stop,
-# else read from the alerts log.
+# else read from the alerts log. rows: every alert row; closed: {alert_id => reason};
+# open: the rows not closed.
 sub load_existing {
     my ($ctx, $C) = @_;
-    my %e = (ids => {}, by_rule => {}, rows => []);
+    my %e = (ids => {}, by_rule => {}, rows => [], closed => {}, open => []);
     my $rows = $C && ref $C->{rows} eq 'HASH' ? $C->{rows}{alerts}
-             : watch::io::read_jsonl(watch::ctx::alerts_log($ctx), undef, qr/"ev"\s*:\s*"alert"/);
-    for my $r (@$rows) {
-        next unless ($r->{ev} // '') eq 'alert' && defined $r->{alert_id};
+             : watch::io::read_jsonl(watch::ctx::alerts_log($ctx), undef, $LOG_RE);
+    my ($alerts, $closed) = split_rows($rows);
+    $e{closed} = $closed;
+    for my $r (@$alerts) {
         $e{ids}{ $r->{alert_id} } = 1;
         $e{by_rule}{ $r->{rule} // '' }++;
         push @{ $e{rows} }, $r;
+        push @{ $e{open} }, $r unless exists $closed->{ $r->{alert_id} };
     }
     return \%e;
 }
+
+# split_rows(rows) -> ([alert rows], {alert_id => close reason}); read_log(path) does the same
+# for one alerts log.
+sub split_rows {
+    my ($rows) = @_;
+    my (@a, %c);
+    for my $r (@{ $rows || [] }) {
+        my $ev = $r->{ev} // '';
+        next unless defined $r->{alert_id} && !ref $r->{alert_id};
+        if ($ev eq 'alert') { push @a, $r }
+        elsif ($ev eq $CLOSED) { $c{ $r->{alert_id} } //= (defined $r->{reason} && !ref $r->{reason}) ? $r->{reason} : 'closed' }
+    }
+    return (\@a, \%c);
+}
+sub read_log { return split_rows(watch::io::read_jsonl($_[0], undef, $LOG_RE)) }
 
 sub alert_id {
     my ($rule, $sid, @parts) = @_;
@@ -58,6 +84,7 @@ sub raise {
     $ex->{ids}{$id} = 1;
     $ex->{by_rule}{ $a{rule} }++;
     push @{ $ex->{rows} }, $row;
+    push @{ $ex->{open} }, $row;
     push @{ $ex->{new} }, $row;
     return $id;
 }
@@ -99,7 +126,7 @@ sub deliver {
     my @pick;
     for my $r (sort { $SEV_RANK{ $a->{severity} } <=> $SEV_RANK{ $b->{severity} } } @{ $ex->{rows} }) {
         last if @pick >= 3 || $late->();
-        next if -e "$dir/$r->{alert_id}";
+        next if -e "$dir/$r->{alert_id}" || exists $ex->{closed}{ $r->{alert_id} };
         my $sev = $r->{severity} // 'info';
         next if $sev eq 'info';
         if ($sev eq 'warn') {

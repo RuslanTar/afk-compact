@@ -4,6 +4,7 @@ package watch;
 #   watch::on_hook(event, payload, ctx)   rows written at hook time
 #   watch::on_stop(ctx, deadline)         sweep + rules + delivery at main Stop
 #   watch::status_lines(sid[, ctx])       lines for `status` (MOD-SPEC §11)
+#   watch::verdict_line(sid[, ctx])       the verdict line that opens `status`
 #
 # ctx is described in lib/watch/ctx.pm. Every entry point is wrapped: it never
 # dies, never prints and never writes stderr (a hook's stdout is model-visible
@@ -162,6 +163,19 @@ sub on_stop {
         watch::sweep::finish($run);
         $stage = 'deliver';
         $out = watch::alerts::deliver($ctx, $ex, $hard);
+        # 0.1.3: in the time left, close the older version's alert rows of a changed rule
+        # (lib/watch/supersede.pm); its failure costs nothing else of this run.
+        if (watch::io::mono() < $hard) {
+            my $done = eval {
+                local $SIG{__DIE__};
+                local $ctx->{_deadline} = $hard;
+                require watch::supersede;
+                watch::supersede::run($ctx);
+                1;
+            };
+            my $err = $@;
+            watch::ctx::error_row($ctx, 'supersede', _class($err)) unless $done || (defined $err && !ref $err && $err eq "hard-stop\n");
+        }
         1;
     };
     unless ($ok) {
@@ -196,6 +210,21 @@ sub status_lines {
         watch::status::lines($ctx);
     };
     return ref $lines eq 'ARRAY' ? $lines : ['Watcher: status unavailable'];
+}
+
+# The one-line verdict that opens `status` (lib/watch/status.pm verdict), or undef (watcher
+# off, or it could not be read).
+sub verdict_line {
+    my ($sid, $ctx) = @_;
+    local $SIG{__WARN__} = sub { };
+    $ctx = _prepare($ctx);
+    $ctx->{sid} = $sid if defined $sid;
+    my $line = eval {
+        local $SIG{__DIE__};
+        require watch::status;
+        watch::status::verdict($ctx);
+    };
+    return (defined $line && !ref $line) ? $line : undef;
 }
 
 1;

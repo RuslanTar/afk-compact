@@ -1,0 +1,80 @@
+{
+ "id": "AT-AN-04 (0.1.3 alert noise: the status verdict line)",
+ "layer": "H",
+ "owner": "watch",
+ "note": "0.1.3 alert noise item 4: `status` opens with one verdict line before the watcher line. With a session id: this session's main compactions in the rollup (precomputed and subagent rows left out; the last row of a nonce counts) with a saved copy (saved, exists, late, unattributed), and its open alerts, the warn and critical ones (an info alert is a note). `ok: <saved>/<n> compactions saved this session, no open alerts` only when every compaction has its copy and no alert is open; else `attention:`, with the open alert count and rules, or the copies alone. Without a session id the same over every session's last 7 days (rows by their ts). With watcher off there is no verdict line (AT-PK-05 asserts the off line comes first)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"name": "an empty store without a session id",
+   "setup": [{"mkdir": "$TMP/work"}],
+   "argv": ["status", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+    "stdout_has": ["\\Aok: no compactions in the last 7 days, no open alerts\\nwatcher: shadow · "]}},
+  {"name": "every compaction saved, one info alert",
+   "setup": [
+    {"write": "$WATCH/$SID/compactions.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-21T13:00:00+03:00", "ev": "compaction", "sid": "$SID", "actor": "main", "writer": "helper",
+      "nonce": "a0a00001", "copy": "saved", "copy_path": "repo/general/compact/a.md", "precomputed": false},
+     {"v": 1, "ts": "2026-10-21T13:10:00+03:00", "ev": "compaction", "sid": "$SID", "actor": "main", "writer": "helper",
+      "nonce": "a0a00002", "copy": "failed:io", "copy_path": null, "precomputed": false},
+     {"v": 1, "ts": "2026-10-21T13:12:00+03:00", "ev": "compaction", "sid": "$SID", "actor": "main", "writer": "helper",
+      "nonce": "a0a00002", "copy": "late", "copy_path": "repo/general/compact/b.md", "precomputed": false},
+     {"v": 1, "ts": "2026-10-21T13:20:00+03:00", "ev": "compaction", "sid": "$SID", "actor": "main", "writer": "helper",
+      "nonce": "a0a00003", "copy": "failed:io", "copy_path": null, "precomputed": true},
+     {"v": 1, "ts": "2026-10-21T13:30:00+03:00", "ev": "compaction", "sid": "$SID", "actor": "a9a00b3f36332744e", "writer": "helper",
+      "nonce": "a0a00004", "copy": "failed:io", "copy_path": null, "precomputed": false}]},
+    {"write": "$WATCH/$SID.alerts.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-21T13:40:00+03:00", "ev": "alert", "sid": "$SID", "actor": "main", "writer": "classic",
+      "alert_id": "a15-00000001", "rule": "A-15", "severity": "info", "key": {"session_id": "$SID"}, "evidence": {}}]}
+   ],
+   "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+    "stdout_has": ["\\Aok: 2/2 compactions saved this session, no open alerts\\nwatcher: shadow · ",
+                   "^Alerts this session: 1 \\(critical 0, warn 0, info 1\\)$"]}},
+  {"name": "a compaction without its copy and no open alert",
+   "setup": [
+    {"write": "$WATCH/$SID/compactions.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-21T13:00:00+03:00", "ev": "compaction", "sid": "$SID", "actor": "main", "writer": "helper",
+      "nonce": "a0a00001", "copy": "saved", "copy_path": "repo/general/compact/a.md", "precomputed": false},
+     {"v": 1, "ts": "2026-10-21T13:12:00+03:00", "ev": "compaction", "sid": "$SID", "actor": "main", "writer": "helper",
+      "nonce": "a0a00002", "copy": "exists", "copy_path": "repo/general/compact/b.md", "precomputed": false},
+     {"v": 1, "ts": "2026-10-21T13:50:00+03:00", "ev": "compaction", "sid": "$SID", "actor": "main", "writer": "helper",
+      "nonce": "a0a00005", "copy": "failed:io", "copy_path": null, "precomputed": false}]}
+   ],
+   "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+    "stdout_has": ["\\Aattention: 2/3 compactions saved this session, no open alerts\\nwatcher: shadow · "]}},
+  {"name": "open alerts: the count and the rules",
+   "setup": [
+    {"write": "$WATCH/$SID.alerts.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-21T13:40:00+03:00", "ev": "alert", "sid": "$SID", "actor": "main", "writer": "classic",
+      "alert_id": "a15-00000001", "rule": "A-15", "severity": "info", "key": {"session_id": "$SID"}, "evidence": {}},
+     {"v": 1, "ts": "2026-10-21T13:51:00+03:00", "ev": "alert", "sid": "$SID", "actor": "main", "writer": "classic",
+      "alert_id": "a05-00000002", "rule": "A-05", "severity": "warn", "key": {"session_id": "$SID"}, "evidence": {}},
+     {"v": 1, "ts": "2026-10-21T13:52:00+03:00", "ev": "alert", "sid": "$SID", "actor": "main", "writer": "classic",
+      "alert_id": "a01-00000003", "rule": "A-01", "severity": "critical", "key": {"session_id": "$SID"}, "evidence": {}},
+     {"v": 1, "ts": "2026-10-21T13:53:00+03:00", "ev": "alert", "sid": "$SID", "actor": "main", "writer": "classic",
+      "alert_id": "a05-00000004", "rule": "A-05", "severity": "warn", "key": {"session_id": "$SID"}, "evidence": {}}]}
+   ],
+   "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+    "stdout_has": ["\\Aattention: 3 open alerts \\(A-01, A-05\\); 2/3 compactions saved this session\\nwatcher: shadow · "]}},
+  {"name": "without a session id: every session's last 7 days",
+   "setup": [
+    {"write": "$WATCH/5e55a0ff-0000-4000-8000-0000000000a1/compactions.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-20T10:00:00+03:00", "ev": "compaction", "sid": "5e55a0ff-0000-4000-8000-0000000000a1", "actor": "main",
+      "writer": "helper", "nonce": "b0b00001", "copy": "saved", "copy_path": "repo/general/compact/c.md", "precomputed": false},
+     {"v": 1, "ts": "2026-10-01T10:00:00+03:00", "ev": "compaction", "sid": "5e55a0ff-0000-4000-8000-0000000000a1", "actor": "main",
+      "writer": "helper", "nonce": "b0b00002", "copy": "failed:io", "copy_path": null, "precomputed": false}]},
+    {"write": "$WATCH/5e55a0ff-0000-4000-8000-0000000000a1.alerts.jsonl", "jsonl": [
+     {"v": 1, "ts": "2026-10-20T10:05:00+03:00", "ev": "alert", "sid": "5e55a0ff-0000-4000-8000-0000000000a1", "actor": "main",
+      "writer": "classic", "alert_id": "a11-00000005", "rule": "A-11", "severity": "warn", "key": {}, "evidence": {}},
+     {"v": 1, "ts": "2026-10-01T10:05:00+03:00", "ev": "alert", "sid": "5e55a0ff-0000-4000-8000-0000000000a1", "actor": "main",
+      "writer": "classic", "alert_id": "a01-00000006", "rule": "A-01", "severity": "critical", "key": {}, "evidence": {}}]}
+   ],
+   "argv": ["status", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0,
+    "stdout_has": ["\\Aattention: 4 open alerts \\(A-01, A-05, A-11\\); 3/4 compactions saved in the last 7 days\\nwatcher: shadow · "]}}
+ ]
+}

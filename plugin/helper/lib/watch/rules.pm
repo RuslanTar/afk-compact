@@ -18,6 +18,7 @@ use watch::alerts;
 use watch::cache;
 use watch::ctx;
 use watch::io;
+use watch::json;
 use watch::spec;
 use watch::hturn;
 
@@ -432,10 +433,7 @@ sub _derive {
     $pc = $$pc if ref $pc eq q(SCALAR);
     $C->{precompute} = 1 if !$B && $pc;
     if ($roll) {
-        my $iv = $roll->{idle};
-        $iv = ($$iv ? 'true' : 'false') if ref $iv eq 'SCALAR';
-        $C->{idle} = (defined $iv && !ref $iv && $iv =~ /\A(?:true|false|unknown)\z/) ? $iv
-                    : (defined $iv && !ref $iv && $iv eq '1') ? 'true' : (defined $iv && !ref $iv && $iv eq '0') ? 'false' : undef;
+        $C->{idle} = rollup_idle($roll);
         $C->{idle_source} = $roll->{idle_source} if defined $roll->{idle_source} && !ref $roll->{idle_source};
     }
     if (defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy}) { $copy = $S->{rollup}{$rk}{copy} }
@@ -490,6 +488,16 @@ sub _derive {
     }
 }
 
+# rollup_idle(rollup row) -> its idle as `true`, `false` or `unknown`, else undef.
+sub rollup_idle {
+    my ($roll) = @_;
+    return undef unless ref $roll eq 'HASH';
+    my $iv = $roll->{idle};
+    $iv = ($$iv ? 'true' : 'false') if ref $iv eq 'SCALAR';
+    return (defined $iv && !ref $iv && $iv =~ /\A(?:true|false|unknown)\z/) ? $iv
+         : (defined $iv && !ref $iv && $iv eq '1') ? 'true' : (defined $iv && !ref $iv && $iv eq '0') ? 'false' : undef;
+}
+
 # --- rules ------------------------------------------------------------------
 
 sub evaluate {
@@ -505,6 +513,7 @@ sub evaluate {
     my $once = sub { my $rule = shift; return ($ex->{by_rule}{$rule} // 0) ? 'info' : 'warn' };
     # A-23 of the idle compactions held at earlier Stops (below), before this Stop's own.
     my $held = _a23_held($ctx, $S, $sess, $R);
+    my $obs = observed_from($ctx);
 
     for my $c (@$C) {
         tick($ctx);
@@ -512,7 +521,13 @@ sub evaluate {
         my @idp = ($c->{id});
         my %k = (key => $c->{key}, actor => $c->{actor});
         my $main_nf = $c->{main} && !$c->{precompute};
-        if ($main_nf && $c->{copy_bad}) {
+        # 0.1.3 alert noise: a boundary from before this session's first hook row (observed_from;
+        # history the sweep reads from offset 0: a session already running at the install, or
+        # resumed or forked after it) with no hook row or dispatch of its own was never
+        # observed, so it raises no A-01, A-05 or hookless A-15.
+        my $hist = $B ? history_boundary($B->{ts_epoch}, $P, $D, $obs) : 0;
+        my $idle = idle_compaction($S, $c);
+        if ($main_nf && $c->{copy_bad} && !$hist) {
             $R->(rule => 'A-01', severity => 'critical', id_parts => \@idp, %k,
                  evidence => { copy => ($c->{copy} =~ /\Afailed/ ? 'failed' : $c->{copy}), line => ($B ? $B->{line} : undef) });
         }
@@ -536,10 +551,12 @@ sub evaluate {
             $R->(rule => 'A-04', severity => 'warn', id_parts => \@idp, %k,
                  evidence => { fabricated_check_tokens => $P->{fabricated_check_tokens}, measured => $P->{measured} });
         }
+        # A-05 skips an idle compaction: it runs on the idle timer, not at a size, so its band
+        # says nothing about the triggers.
         if ($c->{main} && !$B && !$c->{precompute} && ($c->{pre_src} // '') eq 'rollup') {
             # No swept boundary (the P-only path): the band from the joined rollup sizes.
             my $bp = band($th, $c->{pre});
-            if (defined $bp && ($c->{trigger} // '') eq 'auto' && $bp =~ /\A(?:above-softmax|at-native|below-target)\z/) {
+            if (defined $bp && !$idle && ($c->{trigger} // '') eq 'auto' && $bp =~ /\A(?:above-softmax|at-native|below-target)\z/) {
                 $R->(rule => 'A-05', severity => 'warn', id_parts => \@idp, %k,
                      evidence => { band_position => $bp, tokens_before => $c->{pre}, target => $th->{target},
                                    soft_max => $th->{soft_max}, native_trigger => $th->{native}, source => 'rollup' });
@@ -548,7 +565,7 @@ sub evaluate {
         if ($c->{main} && $B && !$c->{precompute}) {
             my $bp = band($th, $B->{pre});
             $B->{band_position} = $bp;
-            if (defined $bp && ($c->{trigger} // '') eq 'auto' && $bp =~ /\A(?:above-softmax|at-native|below-target)\z/) {
+            if (defined $bp && !$idle && !$hist && ($c->{trigger} // '') eq 'auto' && $bp =~ /\A(?:above-softmax|at-native|below-target)\z/) {
                 $R->(rule => 'A-05', severity => 'warn', id_parts => \@idp, %k,
                      evidence => { band_position => $bp, tokens_before => $B->{pre}, target => $th->{target},
                                    soft_max => $th->{soft_max}, native_trigger => $th->{native} });
@@ -586,7 +603,7 @@ sub evaluate {
             }
             $prev_chars->{$slot} = $P->{summary_chars};
         }
-        if ($B && (!$P && !_pre_near($S, $B->{ts_epoch}))) {
+        if ($B && !$hist && (!$P && !_pre_near($S, $B->{ts_epoch}))) {
             $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'hookless'], %k,
                  evidence => { hookless_boundary => \1, line => $B->{line} });
         }
@@ -712,6 +729,73 @@ sub _pre_near {
     return 1 unless defined $t;
     for my $r (rows_of($S, 'precompact'), rows_of($S, 'postcompact')) {
         return 1 if defined _t($r) && abs(_t($r) - $t) <= $JOIN_S;
+    }
+    return 0;
+}
+
+# observed_from(ctx) -> epoch of this session's first hook row, or undef when it has
+# none yet: the time of the first row in its classic or mod stream, whichever is earliest,
+# leaving out the rows the Stop writes itself (sweep, sweep_partial, watch_error,
+# precompute_or_failed); not the rollup, whose rows carry the compaction's own time when
+# reconcile writes them late. The plugin writes a session's rows from its first hook on
+# (SessionStart writes before any compaction), so a boundary before that time ran while the
+# plugin was not loaded in that process, or under a store this install does not read. Per
+# session, not store-wide: Claude Code loads plugins when a process starts, so a session
+# already running at the install compacts unobserved until it is resumed. The streams are
+# append-only, so their first rows never change. 0.1.3: a session whose streams hold only the
+# Stop's own rows (no SessionStart, mod or preamble row before its first plugin Stop, e.g. the
+# plugin loaded mid-session on the classic path) is observed from the earliest of those rows:
+# the first plugin Stop ran then, so what its sweep found before that is history too.
+our $OBS_HEAD_LINES = 64;
+my %OWN_ROW = map { $_ => 1 } qw(sweep sweep_partial watch_error precompute_or_failed);
+sub observed_from {
+    my ($ctx) = @_;
+    my ($best, $own);
+    for my $p (watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx)) {
+        next if -l $p;
+        open(my $fh, '<:raw', $p) or next;
+        my $n = 0;
+        while (defined(my $line = <$fh>)) {
+            last if ++$n > $OBS_HEAD_LINES;
+            (my $raw = $line) =~ s/[\r\n]+\z//;
+            my $r = eval { watch::json::decode($raw) };
+            next unless ref $r eq 'HASH';
+            my $t = watch::io::parse_iso($r->{ts}) // next;
+            if ($OWN_ROW{ $r->{ev} // '' }) { $own = $t if !defined $own || $t < $own; next }
+            $best = $t if !defined $best || $t < $best;
+            last;
+        }
+        close $fh;
+    }
+    return $best // $own;
+}
+
+# history_boundary(boundary epoch, P, D, observed_from) -> 1 for a boundary from before the
+# session's first hook row (observed_from) with no PostCompact row and no dispatch of its own:
+# the plugin never observed that compaction (0.1.3 alert noise: no A-01, A-05 or hookless A-15).
+# P and D are anything true when present (the rows, or the flags a sweep record keeps).
+sub history_boundary {
+    my ($bt, $P, $D, $obs) = @_;
+    return ($P || $D || !defined $obs || !defined $bt || $bt >= $obs) ? 0 : 1;
+}
+
+# idle_compaction(S, compaction) -> 1 for an idle compaction: the rollup's settled idle (mod
+# OR the native notice, IC-1 D1), or the mod's dispatch record says idle. A swept boundary
+# whose dispatch an earlier P-only record already took (the sweep lagged behind the hooks in a
+# long transcript) has no D of its own: a main mod dispatch marked idle from $JOIN_S before
+# it to 1 s after it is that compaction's.
+sub idle_compaction {
+    my ($S, $c) = @_;
+    return 1 if ($c->{idle} // '') eq 'true';
+    my $yes = sub { my $i = shift; $i = $$i if ref $i eq 'SCALAR'; return (defined $i && !ref $i && ($i eq '1' || $i eq 'true')) ? 1 : 0 };
+    return $yes->($c->{D}{idle}) if $c->{D};
+    my $t = $c->{B} ? $c->{B}{ts_epoch} : undef;
+    return 0 unless defined $t;
+    for my $D (@{ $S->{disp_list} }) {
+        my $dt = _t($D) // next;
+        next if $dt > $t + 1 || $t - $dt > $JOIN_S;
+        next unless ($D->{channel} // '') =~ /\Amod-/ && !defined $D->{agent_id} && ($D->{trigger} // '') ne 'precompute';
+        return 1 if $yes->($D->{idle});
     }
     return 0;
 }
@@ -1012,7 +1096,12 @@ sub _session_rules {
         $R->(rule => 'A-25', severity => 'warn', id_parts => [$d], evidence => { rows => $day{$d}, date => $d });
     }
     tick($ctx);
-    # A-11: an item listed running for >= stall_min whose output has not moved.
+    # A-11: an item listed running for >= stall_min whose output has not moved. 0.1.3 alert
+    # noise: only an item with a known output path is checked; without one (every teammate,
+    # workflow, subagent and monitor) the watcher cannot see progress, and "quiet" was every
+    # such item (107 of 107 on 0.1.2). A shell whose path the result text did not give has the
+    # file Claude Code writes for every background shell (task_output); it counts only when that
+    # file exists.
     my @slots = @{ $S->{bg} };
     if (@slots) {
         my %first;
@@ -1027,16 +1116,61 @@ sub _session_rules {
             next unless defined $t->{id} && ($t->{status} // 'running') =~ /\A(?:running|pending)\z/;
             next unless defined $first{ $t->{id} } && $now - $first{ $t->{id} } >= $stall_s;
             my $out = $t->{output_path} // $t->{outputFilePath};
+            my $derived;
+            unless (defined $out && !ref $out && length $out) {
+                $out = task_output($ctx, $t) // next;
+                $derived = 1;
+            }
             my $quiet = 1;
-            if (defined $out && !ref $out && -e $out) {
+            if (-e $out) {
                 my $mt = (stat $out)[9];
                 $quiet = $now - $mt >= 900 ? 1 : 0;
             }
             next unless $quiet;
             $R->(rule => 'A-11', severity => 'warn', id_parts => [$t->{id}],
-                 evidence => { output_known => watch::ctx::B(defined $out), minutes => int(($now - $first{ $t->{id} }) / 60) });
+                 evidence => { output_known => \1, minutes => int(($now - $first{ $t->{id} }) / 60),
+                               ($derived ? (source => 'derived') : ()) });
         }
     }
+}
+
+# task_output(ctx, task) -> the output file Claude Code writes for a background shell with no
+# recorded path, when it exists: <tmp>/claude-<uid>/<project>/<sid>/tasks/<id>.output, where
+# <tmp> is CLAUDE_CODE_TMPDIR, else /tmp (Claude Code 2.1.316 does not read TMPDIR here; on
+# macOS the recorded paths read /private/tmp, the same folder), and <project> is the session's
+# project folder name, the one its transcript sits in under ~/.claude/projects. Without a
+# transcript path (another session, lib/watch/supersede.pm) the folder is found by session id.
+# A shell's file is a regular file (a subagent's is a link to its transcript). undef otherwise.
+sub task_output {
+    my ($ctx, $t) = @_;
+    return undef unless ($t->{type} // '') eq 'shell' && defined $t->{id} && !ref $t->{id} && $t->{id} =~ /\A[0-9A-Za-z_-]{1,64}\z/;
+    for my $d (task_dirs($ctx)) {
+        my $p = "$d/$t->{id}.output";
+        return $p if -f $p && !-l $p;
+    }
+    return undef;
+}
+
+sub task_dirs {
+    my ($ctx) = @_;
+    return @{ $ctx->{_task_dirs} } if ref $ctx->{_task_dirs} eq 'ARRAY';
+    my $sid = $ctx->{sid} // '';
+    my @d;
+    if ($sid =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/) {
+        # ctx cc_tmpdir: the cases' own folder (core passes none; the hook has Claude Code's env)
+        my $base = $ctx->{cc_tmpdir} // $ENV{CLAUDE_CODE_TMPDIR};
+        $base = '/tmp' unless defined $base && length $base;
+        $base =~ s{/+\z}{};
+        my $root = "$base/claude-$<";
+        my $tp = ref $ctx->{payload} eq 'HASH' ? $ctx->{payload}{transcript_path} : undef;
+        if (defined $tp && !ref $tp && $tp =~ m{([^/]+)/\Q$sid\E\.jsonl\z} && -d "$root/$1/$sid/tasks") {
+            push @d, "$root/$1/$sid/tasks";
+        } else {
+            for my $e (watch::io::list_dir($root)) { push @d, "$root/$e/$sid/tasks" if -d "$root/$e/$sid/tasks" }
+        }
+    }
+    $ctx->{_task_dirs} = \@d;
+    return @d;
 }
 
 # 0.1.3 hook speed: the watch folder's size (A-24) is walked at most once per WATCH_MB_EVERY_S per

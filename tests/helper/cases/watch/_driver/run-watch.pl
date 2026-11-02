@@ -304,7 +304,9 @@ sub run_case {
         local $ENV{STORE_TEST_NOW} = watch::io::iso($now);
         my %ctxbase = (sid => $T::SID, watch => $v{WATCH}, root => $v{ROOT}, plugin_root => $v{PLUGIN},
                        settings => { %{ $case->{settings} || {} } }, now => $now, pid => 4242,
-                       pid_lstart => 'Tue Oct 21 13:00:00 2026', cc_version => '2.1.306');
+                       pid_lstart => 'Tue Oct 21 13:00:00 2026', cc_version => '2.1.306',
+                       # 0.1.3: Claude Code's temp root for task output files (rules.pm task_dirs), never /tmp
+                       cc_tmpdir => "$tmp/cctmp");
         my $payload_tp = $s->{transcript} ? sub_vars($s->{transcript}, \%v) : $tpath;
         # HOME-GUARD: an in-process step runs the watcher's code here, which may start children of
         # its own (git), and a `code` step may start one itself; a `cli` step is checked again

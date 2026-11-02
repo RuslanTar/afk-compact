@@ -26,7 +26,8 @@ use watch::ctx;
 use watch::io;
 use watch::json;
 
-our $V = 1;
+# 2 (0.1.3): the alerts log keeps its `alert_closed` rows too; a version 1 cache had skipped them.
+our $V = 2;
 my @SRC = qw(classic mod rollup alerts);
 my @DIR = qw(dispatch events);
 
@@ -62,7 +63,7 @@ sub load {
     my $sig = watch::io::fnv8(join(',', $V, sort @kinds));
     my $dir = dir_of($ctx);
     my %C = (ctx => $ctx, dir => $dir, rows => _empty_rows(), new => '', complete => 1, rebuilt => 0,
-             kinds => { map { $_ => 1 } @kinds }, kind_re => _ev_re(@kinds), alert_re => _ev_re('alert'));
+             kinds => { map { $_ => 1 } @kinds }, kind_re => _ev_re(@kinds), alert_re => _ev_re('alert', 'alert_closed'));
     my %streams = _streams($ctx);
     my $st = watch::io::read_json_file("$dir/state.json");
     my $ok = ref $st eq 'HASH' && ($st->{v} // 0) == $V && ($st->{kinds} // '') eq $sig
@@ -146,7 +147,7 @@ sub _read_stream {
         next unless $raw =~ /\S/;
         my $r = eval { watch::json::decode($raw) };
         next unless ref $r eq 'HASH';
-        if ($name eq 'alerts') { next unless ($r->{ev} // '') eq 'alert' }
+        if ($name eq 'alerts') { next unless ($r->{ev} // '') =~ /\Aalert(?:_closed)?\z/ }
         elsif ($name ne 'rollup') { next unless $C->{kinds}{ $r->{ev} // '' } }
         push @{ $C->{rows}{$name} }, $r;
         $C->{new} .= '{"s":"' . $name . '","r":' . $raw . "}\n";

@@ -294,6 +294,8 @@ our %SCHEMA = (
                    lost_U => 'int', lost_D => 'int', lost_X => 'int', rules => [list => 'word'], hard => 'bool',
                    chars => 'int', growth => 'num', mb => 'num', kind => 'word', read_share => 'num', prefix_read => 'num' }],
     },
+    # 0.1.3 (lib/watch/supersede.pm): an alert closed by a later row; the reason is a fixed text
+    alert_closed => { alert_id => 'word', rule => 'rule', reason => [enum => 'superseded: rule changed in 0.1.3'] },
     watch_error => { stage => 'word', error_class => 'word' },
     # --- other rows of MOD-SPEC (kebab-case there, snake_case on disk) and of the built code ---
     bypass_suspected => { nonce => 'nonce', causes => [list => 'word'] },
