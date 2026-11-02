@@ -42,6 +42,9 @@ use skills::approvals;
 
 my %STATUS = map { $_ => 1 } qw(in-progress blocked completed);
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
+# The lint's advisories that name body line numbers (skills::lint, skills::approvals): after
+# publish moves approval lines they keep the draft's numbers (run).
+my %DRAFT_LINE_ADVISORY = map { $_ => 1 } qw(secret-warn store-path code-block log-lines hash-lines approval-unchecked);
 # Frontmatter keys and their order: the spec's frontmatter_keys_handoff (TPL §3); empty
 # values are omitted. The list is read at publish time (fail closed: spec-missing).
 
@@ -149,6 +152,7 @@ sub run {
     my ($mbody, $moved, $keep) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
                                                                $prev_text, $own_text, $extra{'ledger.md'});
     my %rules;
+    my $draft_adv = $res->{advisory};
     if (@$moved) {
         $rules{ $_->{rule} } = 1 for @$moved;
         if (!@$keep) {
@@ -161,6 +165,17 @@ sub run {
     $row->{size_band} = _band($row->{bytes});
     my @b = @$keep;
     my @a = @{ $res->{advisory} };
+    # One numbering per output: the moved-line ADVISORY lines and the skill's "edit those body
+    # lines" read the draft (body.md), so an advisory that names body lines keeps the draft lint's
+    # entry; the moved text exists only in memory and the written file adds a header (integration
+    # review: secret-warn printed lines=13,35 for draft lines 19,34). A rule the moved text no
+    # longer has is dropped; one only the moved text has keeps its own entry.
+    if ($draft_adv != $res->{advisory}) {
+        my %first;
+        push @{ $first{ $_->[0] } }, $_ for grep { $DRAFT_LINE_ADVISORY{ $_->[0] } } @$draft_adv;
+        my %done;
+        @a = map { !$DRAFT_LINE_ADVISORY{ $_->[0] } || !$first{ $_->[0] } ? ($_) : $done{ $_->[0] }++ ? () : @{ $first{ $_->[0] } } } @a;
+    }
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
     $row->{acuity} = $res->{acuity} // '-';
