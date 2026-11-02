@@ -346,6 +346,8 @@ our %SCHEMA = (
     skip => { why => 'word', ht => 'hash' },
     smoke_fail => { check => 'word', version => 'version' },
     smoke_pass => { version => 'version' },
+    stop_timing => { ms => 'int', start_ms => 'int', reconcile_ms => 'int', reconcile_budget_ms => 'int', gsd => 'word',
+                     gsd_ms => 'int', watch_ms => 'int', watch_window_ms => 'int', cut => [list => 'word'] },
     sweep_evidence => { copied => 'int', dup => 'int', ref_only => 'int', redacted => 'int', withheld => 'int', ms => 'num' },
     sweep_partial => { file => 'hash', reason => 'word' },
     test_mode => {},
