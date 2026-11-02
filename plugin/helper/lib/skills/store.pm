@@ -73,7 +73,7 @@ sub integrity {
         $scope = $det->{scope};
         $nonce = $det->{nonce};
     }
-    if ($o{alias} && !$marker && !$sentinel && ($fm->{kind} // '') eq 'handoff' && $writer !~ /\A(?:mod|postcompact-fallback)\z/) {
+    if ($o{alias} && !$marker && !$sentinel && ($fm->{kind} // '') eq 'handoff' && $writer !~ /\A(?:mod|postcompact|postcompact-fallback)\z/) {
         my $f = skills::core::detect_former($d->{body});
         if ($f && (!defined $fm->{nonce} || $fm->{nonce} eq $f->{nonce})) {
             ($marker, $sentinel, $scope, $nonce, $former) = (1, 1, $f->{scope}, $f->{nonce}, $f->{name});
@@ -82,7 +82,7 @@ sub integrity {
     my $res;
     if ($scope && $scope eq 'sub') {
         $res = 's=sub';
-    } elsif ($writer eq 'mod' || $writer eq 'postcompact-fallback') {
+    } elsif ($writer =~ /\A(?:mod|postcompact|postcompact-fallback)\z/) {    # postcompact-fallback: before 0.1.3
         my $v = $fm->{verdict} // ($det ? $det->{verdict} : '') // '';
         $res = $v =~ /\Aok(?:-trailer|-unclosed)?\z/ ? 'ok' : 'unshaped';
     } elsif (!$marker && !defined $fm->{kind}) {

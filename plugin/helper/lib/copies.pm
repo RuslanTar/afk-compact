@@ -406,6 +406,12 @@ sub prev_copy {
     return @$c ? $c->[-1]{path} : undef;
 }
 
+# The writer of a copy the classic PostCompact hook saved, the plugin's main saver (MOD-SPEC
+# §5.3), or that reconcile saved later from its stash: `postcompact`. Copies before 0.1.3 call it
+# `postcompact-fallback` (the same path), so readers take both; `mod` is the mod's after-step.
+our $POSTCOMPACT = 'postcompact';
+sub postcompact_writer { my ($w) = @_; return defined $w && !ref $w && ($w eq 'postcompact' || $w eq 'postcompact-fallback') ? 1 : 0 }
+
 # save(%a) -> {exit, line1, line2, result, path, verdict, id6, sha256}
 # a: sid text nonce writer scope agent tokens cwd transcript trigger dispatch
 #    seat_state channel precomputed scan verdict_ctx late queue_lane evidence where
@@ -495,6 +501,8 @@ sub save {
                 transcript_path     => $a{transcript},
                 claude_pid          => $c->{pid},
                 cc_version          => rc::cc_version(),
+                plugin_version      => ctx::version(),
+                plugin_root         => ctx::root(),
                 repository          => $bk->{repo},
                 bucket              => $bk->{rel},
                 bucket_source       => $bk->{source},
@@ -535,7 +543,7 @@ sub save {
         my $result = $out->{match} ? 'exists' : 'mismatch';
         rc::emit('copy', [nonce => $nonce, id6 => $id6, result => $result, slot => $slot, rel_path => $rel, writer => $a{writer}]);
         my $pv = $out->{fm}{verdict};
-        if (($a{writer} // '') eq 'mod' && ($out->{fm}{writer} // '') eq 'postcompact-fallback' && defined $pv && $pv ne $verdict) {
+        if (($a{writer} // '') eq 'mod' && postcompact_writer($out->{fm}{writer}) && defined $pv && $pv ne $verdict) {
             rc::emit('verdict_mismatch', [nonce => $nonce, postcompact => $pv, after_step => $verdict]);
         }
         return { %ret, exit => 0, result => $result, path => $out->{path}, rel => $rel,

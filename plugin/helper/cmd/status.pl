@@ -26,6 +26,9 @@
 # its source and default; a warning per saved ""), also without a session id, and the user-run
 # `settings reset <key> --apply` line.
 # 0.1.3 (alert noise): a one-line verdict comes before the watcher line (`ok: …` or `attention: …`).
+# 0.1.3 version skew: `plugin: <version> · <folder>` after the watcher lines, then `plugin notice: …`
+# when sessions started since this one run another plugin version (lib/plugver.pm); with no log
+# folder (a refused root) the version line still follows the refusal line.
 use strict;
 use warnings;
 use utf8;
@@ -73,10 +76,10 @@ sub run {
     if (!defined rc::watch()) {
         # the roots that refused it, with the fix for one in git (a home folder that is a dotfiles
         # repository refuses the default ~/.local/state/<plugin>/ root until it is ignored there)
-        args::out('status: no log folder (' . (rc::root_reason('log_dir') // 'unset') . ')', root_lines());
+        args::out('status: no log folder (' . (rc::root_reason('log_dir') // 'unset') . ')', plugin_lines(), root_lines());
         return 0;
     }
-    push @out, verdict_lines($sid), watcher_lines();
+    push @out, verdict_lines($sid), watcher_lines(), plugin_lines();
     if (!defined $sid) {
         push @out, "session: unknown (no session id); this session's compactions, escalations, halt, policy and hook rows are not shown";
         push @out, sprintf('thresholds: settings only (target %s · soft max %s · min_window %s)',
@@ -492,6 +495,15 @@ sub _drift_text {
 # The first line: the watcher state, the size of its logs and the number of sessions; with
 # `off` what stays written. The first-run notice line while its marker is missing (the mod
 # claims it at session.start; a session where the mod never ran shows it here).
+# 0.1.3 version skew: this session's plugin copy (its version and folder), then the notice when
+# sessions started since run another version (lib/plugver.pm); also without a session id.
+sub plugin_lines {
+    my @l = ('plugin: ' . ctx::version() . ' · ' . util::abbrev(ctx::root()));
+    my $n = plugver::line();
+    push @l, "plugin notice: $n" if defined $n;
+    return @l;
+}
+
 sub watcher_lines {
     my $w = settings::trim(lc(rc::val('watcher') // 'shadow'));
     my $brand = ctx::brand();

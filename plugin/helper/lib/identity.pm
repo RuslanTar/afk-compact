@@ -198,7 +198,8 @@ our $CACHED;
 sub claude_pid {
     return $CACHED if $CACHED;
     if (util::test_mode() && defined $ENV{STORE_TEST_CLAUDE_PID} && $ENV{STORE_TEST_CLAUDE_PID} =~ /^(\d+):(.*)$/) {
-        $CACHED = { pid => 0 + $1, lstart => $2, found => 1 };
+        # STORE_TEST_CLAUDE_FOUND=0: the walk's verdict when it did not find Claude Code (the pid is then a fallback)
+        $CACHED = { pid => 0 + $1, lstart => $2, found => (($ENV{STORE_TEST_CLAUDE_FOUND} // '') eq '0' ? 0 : 1) };
         $START{$1} = $2;
         return $CACHED;
     }

@@ -26,7 +26,8 @@ use skills::store;
 
 # The HDN §6 keys, plus reuse_window_min (D-14) and store_root (U-04). Exactly these are
 # printed. handoff_turn and resumed only when a plugin handoff turn is open (D-18 B8);
-# trimmed only when the reply leaves list entries out (U-04).
+# trimmed only when the reply leaves list entries out (U-04); plugin_notice only when sessions
+# started since this one run another plugin version (0.1.3, lib/plugver.pm).
 our @KEYS = qw(checked_at session repo worktree branch head porcelain ahead behind in_progress
                store_root bucket stem stage nonce previous_handoff previous_kind previous_sid8 previous_stamp
                own_previous_handoff carry_notice next_ids own_latest newer_foreign ownership gsd
@@ -270,6 +271,8 @@ sub run {
         mode              => \%mode,
         export_target     => $export_target,
     );
+    my $pn = eval { plugver::line() };
+    $out{plugin_notice} = $pn if defined $pn;
     if ($ht) {
         $out{handoff_turn} = { ht => $ht->{ht}, max_calls => $ht->{max_calls} };
         $out{resumed} = \1 if $resumed;

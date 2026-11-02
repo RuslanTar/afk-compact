@@ -1,0 +1,193 @@
+{
+ "id": "V013-VS-04-skew-stale-unreadable",
+ "note": "0.1.3 version skew (lib/plugver.pm): no notice when the newest load is more than 7 days old (2026-10-14 12:00 against now 2026-10-21 14:05), when the newer record that names another version cannot be read (its version is taken from the content, never the name alone), or when the loads folder is not a folder; a load dated more than 10 minutes ahead (a clock that ran ahead) is not read. With the store refused (root in git), status still prints the version line. status still shows the version line and exits 0.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "manifest": {
+  "version": "0.1.0"
+ },
+ "steps": [
+  {
+   "name": "the newest load is older than 7 days: no notice",
+   "setup": [
+    {
+     "sha_tag": "user\n$PLUGIN_PARENT",
+     "var": "UTAG"
+    },
+    {
+     "touch": "$PLUGIN/.claude-plugin/plugin.json",
+     "at": "2026-10-01T00:00:00+03:00"
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1791968400_515151-1791968395_0.1.2_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.2",
+      "plugin_root": "$PLUGIN_PARENT/0.1.2",
+      "host": "$HOST",
+      "session_id": "51515151-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "2026-10-14T12:00:00+03:00"
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin: 0\\.1\\.0 · \\S+$"
+    ],
+    "stdout_lacks": [
+     "^plugin notice:"
+    ]
+   }
+  },
+  {
+   "name": "within 7 days the same record gives the notice",
+   "now": "2026-10-21T11:59:00+03:00",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.0; sessions started since 2026-10-14 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins$"
+    ]
+   }
+  },
+  {
+   "name": "a load dated more than 10 minutes ahead is not read",
+   "now": "2026-10-21T11:59:00+03:00",
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/loads/1792574340_717171-1792574330_0.1.4_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.4",
+      "plugin_root": "$PLUGIN_PARENT/0.1.4",
+      "host": "$HOST",
+      "session_id": "71717171-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "2026-10-21T12:19:00+03:00"
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.0; sessions started since 2026-10-14 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins$"
+    ],
+    "stdout_lacks": [
+     "0\\.1\\.4"
+    ]
+   }
+  },
+  {
+   "name": "five minutes ahead: taken",
+   "now": "2026-10-21T12:14:00+03:00",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.0; sessions started since 2026-10-21 12:19 \\+0300 run 0\\.1\\.4: /reload-plugins$"
+    ]
+   }
+  },
+  {
+   "name": "a newer record that cannot be read: not taken",
+   "setup": [
+    {
+     "rename": "$ROOT/.sessions/loads/1792574340_717171-1792574330_0.1.4_$UTAG.json",
+     "to": "$TMP/gone.json"
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792573200_616161-1792573195_0.1.2_$UTAG.json",
+     "content": "{not json\n"
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin: 0\\.1\\.0 · \\S+$"
+    ],
+    "stdout_lacks": [
+     "^plugin notice:"
+    ]
+   }
+  },
+  {
+   "name": "the loads folder is a file: no notice, status works",
+   "setup": [
+    {
+     "rename": "$ROOT/.sessions/loads",
+     "to": "$ROOT/.sessions/loads-old"
+    },
+    {
+     "write": "$ROOT/.sessions/loads",
+     "content": "x\n"
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin: 0\\.1\\.0 · \\S+$"
+    ],
+    "stdout_lacks": [
+     "^plugin notice:"
+    ]
+   }
+  },
+  {
+   "name": "the store refused (HOME is a git work tree, a dotfiles repository, so the default root is in git): the version line still prints",
+   "setup": [
+    {
+     "git": [
+      "init",
+      "-q",
+      "$HOME"
+     ]
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Astatus: no log folder \\(root-in-git\\)\\nplugin: 0\\.1\\.0 · \\S+$"
+    ],
+    "stdout_lacks": [
+     "^plugin notice:"
+    ]
+   }
+  }
+ ],
+ "plugin_at": "$HOME/.claude/plugins/cache/m/$BRAND/0.1.0"
+}

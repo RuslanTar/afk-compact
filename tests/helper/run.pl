@@ -39,6 +39,8 @@
 #   case / step "options"  {key: value}: plugin options in $HOME/.claude/settings.json
 #                            (pluginConfigs["<brand>@m"].options, merged), for file-only keys
 #   case "stage_overlay"   {"<path under plugin/>": "<file>"}: a staged copy with those files replaced
+#   case "plugin_at"       "<folder>": the staged copy moved there ($PLUGIN its real path, $PLUGIN_PARENT
+#                            the folder above it); setup sha_tag <text> + var: 8 hex of its sha256
 #   a step without argv, lib or setup that holds a setup action runs as a setup step
 #   setup: write with content | content_parts (mode 0600 unless given); repo {recipe} + at;
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
@@ -735,6 +737,15 @@ sub run_case {
         }
         $V{PLUGIN} = $dst;
     }
+    # "plugin_at": "<folder>": this case runs against a copy of its staged plugin at that folder
+    # (by real path), e.g. Claude Code's plugin cache layout <config>/plugins/cache/<m>/<name>/<version>
+    # (0.1.3 version skew: the install scope comes from the copy's folder)
+    if (defined $case->{plugin_at} && !ref $case->{plugin_at}) {
+        my $dst = subst($case->{plugin_at}, \%V);
+        copy_tree($V{PLUGIN}, $dst);
+        $V{PLUGIN} = Cwd::abs_path($dst) // $dst;
+    }
+    $V{PLUGIN_PARENT} = util::dirname($V{PLUGIN});
     # The launcher by its real path: the one the helper itself prints in the commands it
     # writes (ctx::store_cmd, from the real path of main.pl; the temp folder may be a link).
     $V{STORE} = "$V{PLUGIN}/$LAUNCHER_DIR/$BRAND-store";
@@ -992,7 +1003,7 @@ sub make_repo {
 sub is_setup_action {
     my ($s) = @_;
     return scalar grep { exists $s->{$_} } qw(write copy mkdir symlink hardlink rename stub bin_mirror repo dispatch transcript run git bigfile age
-                                               tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha append);
+                                               tempfiles secret_files repo_fixture paths fixture_setup touch normalized_sha sha_tag append);
 }
 
 # ---------------------------------------------------------------- fixture recipes (tests/fixtures/README.md)
@@ -1229,6 +1240,12 @@ sub setup {
         open(my $fh, '>>:raw', $s->{to}) or die "append $s->{to}: $!\n";
         print $fh $t;
         close $fh;
+        return;
+    }
+    if (exists $s->{sha_tag}) {
+        # {"sha_tag": text, "var": NAME}: NAME = the first 8 hex of the text's sha256 (a load
+        # record's scope tag, lib/plugver.pm)
+        $V->{ $s->{var} // 'TAG' } = substr(sha::hex256($s->{sha_tag}), 0, 8);
         return;
     }
     if (exists $s->{normalized_sha}) {

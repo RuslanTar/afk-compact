@@ -1,4 +1,4 @@
-# cmd/save-copy.pl: `save-copy --sid S --nonce N|- --from FILE --writer mod|postcompact-fallback
+# cmd/save-copy.pl: `save-copy --sid S --nonce N|- --from FILE --writer mod|postcompact
 # --scope main|sub|unknown [--agent ID] [--tokens B,A] [--cwd DIR] [--transcript PATH]`
 # (MOD-SPEC §2.6, §5.3; BUILD-PLAN §3.1). Owner: WP-core.
 # line 1 `VERDICT <v> marker_line=<n|-> sentinel_from_end=<k|->`; line 2 one of
@@ -16,7 +16,9 @@ sub run {
     args::need($opt, qw(nonce from writer scope));
     my $nonce = $opt->{nonce} eq '-' ? undef : $opt->{nonce};
     die "usage: --nonce is 8 lowercase hex or -\n" if defined $nonce && !nonce::valid($nonce);
-    die "usage: --writer mod|postcompact-fallback\n" unless $opt->{writer} =~ /^(mod|postcompact-fallback)$/;
+    die "usage: --writer mod|postcompact\n" unless $opt->{writer} =~ /^(mod|postcompact|postcompact-fallback)$/;
+    # the label before 0.1.3 names the same path: written under its new name
+    $opt->{writer} = $copies::POSTCOMPACT if copies::postcompact_writer($opt->{writer});
     die "usage: --scope main|sub|unknown\n" unless $opt->{scope} =~ /^(main|sub|unknown)$/;
     my $tokens;
     if (defined $opt->{tokens}) {

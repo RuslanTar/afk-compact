@@ -1,0 +1,145 @@
+{
+ "id": "V013-VS-07-scope-folder",
+ "note": "0.1.3 version skew (lib/plugver.pm), install scope: a copy outside Claude Code's plugin cache (a --plugin-dir run, a checkout) has the folder scope: its loads are compared only with loads of the same folder (tag: sha256 over `dir` and the folder). A newer load from another folder gives no notice; one from this folder does. A process with no record of its own takes the folder scope as well, and its first start writes it.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "manifest": {
+  "version": "0.1.3"
+ },
+ "plugin_at": "$TMP/co/plugin",
+ "steps": [
+  {
+   "name": "another folder's newer load: no notice",
+   "setup": [
+    {
+     "sha_tag": "dir\n$PLUGIN",
+     "var": "DTAG"
+    },
+    {
+     "sha_tag": "dir\n/opt/other/plugin",
+     "var": "OTAG"
+    },
+    {
+     "touch": "$PLUGIN/.claude-plugin/plugin.json",
+     "at": "2026-10-01T00:00:00+03:00"
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792562405_424242-1792562400_0.1.3_$DTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN",
+      "host": "$HOST",
+      "session_id": "$SID",
+      "source": "startup",
+      "ts": "2026-10-21T09:00:05+03:00",
+      "scope": "dir"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792573200_515151-1792573195_0.1.4_$OTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.4",
+      "plugin_root": "/opt/other/plugin",
+      "host": "$HOST",
+      "session_id": "51515151-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "2026-10-21T12:00:00+03:00",
+      "scope": "dir"
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin: 0\\.1\\.3 · /\\S+/co/plugin$"
+    ],
+    "stdout_lacks": [
+     "^plugin notice:"
+    ]
+   }
+  },
+  {
+   "name": "a newer load of this folder: the notice",
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/loads/1792576800_616161-1792576790_0.1.4_$DTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.4",
+      "plugin_root": "$PLUGIN",
+      "host": "$HOST",
+      "session_id": "61616161-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "2026-10-21T13:00:00+03:00",
+      "scope": "dir"
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.3; sessions started since 2026-10-21 13:00 \\+0300 run 0\\.1\\.4: /reload-plugins$"
+    ]
+   }
+  },
+  {
+   "name": "a process with no record takes the folder scope too",
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "959595:Tue Oct 21 13:30:00 2026"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.3; sessions started since 2026-10-21 13:00 \\+0300 run 0\\.1\\.4: /reload-plugins$"
+    ]
+   }
+  },
+  {
+   "name": "its first start writes a record of the folder scope",
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "959595:Tue Oct 21 13:30:00 2026"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "95959595-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/w.jsonl",
+    "cwd": "$TMP",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads/1792580712_959595-1792578600_0.1.3_$DTAG.json",
+      "json": {
+       "plugin_version": "0.1.3",
+       "scope": "dir",
+       "plugin_root": "$PLUGIN"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

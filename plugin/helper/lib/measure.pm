@@ -2,7 +2,8 @@ package measure;
 # lib/measure.pm: facts measured by code (MOD-SPEC §2.6 `measure --compact`, §10
 # measured block). Order: the git header line; this session's GSD lines (lib/gsd.pm: from its
 # own transcript, never from the worktree alone; none for a session that worked with neither GSD
-# nor a driver skill; right after the git header line); the porcelain list (<= 20 lines); in-flight
+# nor a driver skill; right after the git header line); the plugin line when this session runs
+# another plugin version than sessions started since (0.1.3, lib/plugver.pm); the porcelain list (<= 20 lines); in-flight
 # inventory (every listed id);
 # evidence map (<= 8 rows from this compaction's checkpoint or sweep); the Queued: line when
 # queue_cmd is set. <= 3,000 B, cut at a line boundary with `(+N lines)`: cap() keeps lines from the
@@ -50,6 +51,13 @@ sub inflight_lines {
     }
     push @out, "  $_ · cron · scheduled" for @c;
     return @out;
+}
+
+# 0.1.3 version skew (lib/plugver.pm): one line, only when sessions started since this session
+# run another plugin version; /reload-plugins is the user's command, so the model relays it.
+sub plugin_lines {
+    my $l = plugver::line();
+    return defined $l ? ("plugin: $l (tell the user)") : ();
 }
 
 sub evidence_lines {
@@ -159,7 +167,7 @@ sub compact {
     # The GSD lines go right after the git header line: the cap (it keeps lines from the top) cuts
     # every later line (Queued:, evidence, in flight, approvals, porcelain) before them, so the
     # re-enter command survives.
-    my @l = (shift @gl, gsd_lines($o{gsd} // gsd_session($sid, $cwd, $wt, $o{transcript}, $left->($gsd::SCAN_MS))), @gl);
+    my @l = (shift @gl, gsd_lines($o{gsd} // gsd_session($sid, $cwd, $wt, $o{transcript}, $left->($gsd::SCAN_MS))), plugin_lines(), @gl);
     push @l, @{ $o{approvals} } if ref $o{approvals} eq 'ARRAY';
     push @l, inflight_lines(defined $sid_dir ? sidecar::newest($sid_dir) : undef);
     push @l, evidence_lines($o{evidence_rows} || (defined $sid_dir ? _evidence_rows($sid_dir, $nonce) : []));
