@@ -2979,11 +2979,12 @@ sub builtin {
         # AT-TX-11 H half (T-TEXT E3) and text-to-core C-1: resumeblock::build over a stand-in
         # protocol of protocol_chars, the fixed lines (frame_chars, default 300) and a measured block of
         # remeasure_bytes keeps the block
-        # untrimmed within max; the tags it asks the asset for are exactly `tags`.
+        # untrimmed within max; the tags it asks the asset for are exactly `tags`, and the
+        # [resumed] line's runtime text is `resume_line` when given (0.1.3 resume-text A).
         for my $l (qw(measure resumeblock)) { require "$l.pm" }
         no warnings qw(redefine once);
-        my @seen;
-        local *assemble::asset = sub { my ($n, $tags, $rt) = @_; @seen = @{ $tags || [] };
+        my (@seen, $line);
+        local *assemble::asset = sub { my ($n, $tags, $rt) = @_; @seen = @{ $tags || [] }; $line = $rt->{resume_line};
                                        return ('P' x ($a->{protocol_chars} // 3000)) . "\n" . ('F' x ($a->{frame_chars} // 300)) . "\n" . ($rt->{remeasure} // '') };
         local %rc::R = (settings => { values => { unattended_prod_reads => $a->{reads} // 'forbid' } });
         # D-22: a main Stop of this session (restart::note_stop, as on_Stop keeps it) in stop_mode,
@@ -3001,6 +3002,7 @@ sub builtin {
         push @e, 'block is ' . length($t) . " chars > $a->{max}" if defined $a->{max} && length($t) > $a->{max};
         push @e, 'the measured block was trimmed' if $a->{untrimmed} && index($t, $re) < 0;
         push @e, 'tags [' . join(',', @seen) . '], want [' . join(',', @{ $a->{tags} }) . ']' if $a->{tags} && join(',', @seen) ne join(',', @{ $a->{tags} });
+        push @e, 'resume_line ' . ($line // 'none') . ", want $a->{resume_line}" if defined $a->{resume_line} && ($line // '') ne $a->{resume_line};
         return @e;
     }
     if ($name eq 'bd2_pins') {

@@ -121,7 +121,10 @@ RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-2
            "lane_basis": "999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed",
            # 0.1.2 question carry [question]: the open question at its longest (question.ts
            # QUESTION_MAX, 240 chars, one line).
-           "question": "q" * 239 + "?"}
+           "question": "q" * 239 + "?",
+           # 0.1.3 resume-text A [resumed]: the first line at its longest (resume.ts resumeLine with
+           # a Step 1 clipped to STEP1_MAX, 100 chars with its "…").
+           "resume_line": "Resumed · step 1: " + "s" * 99 + "…"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
          "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt", "turn": "handoff-turn.txt"}
@@ -145,9 +148,11 @@ FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
 # in the list so older golden names stay.
 # 2026-10-31: resume-context gains [auto-mode] (D-22, root: in auto permission mode the classifier
 # blocks a gated outward action a carried approval covers, so the block asks first), last in the list.
+# 0.1.3: resume-context gains [resumed] (resume-text A: one code-rendered first line) and
+# [question-timeout] (resume-text B: the carried question's dialog timed out), last in the list.
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
         "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow", "driver",
-                "idle-done", "idle-off", "idle-done-off", "handoff-ack", "question", "auto-mode"],
+                "idle-done", "idle-off", "idle-done-off", "handoff-ack", "question", "auto-mode", "resumed", "question-timeout"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
 # CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
@@ -162,12 +167,17 @@ TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "s
 # [idle] and [idle-done], so they join the idle group, and [driver] never joins [idle-done-off].
 EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"),
                      (("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off", "midturn"), "most"),
-                     (("driver", "idle-halt"), "most"), (("driver", "idle-done"), "most"), (("driver", "idle-done-off"), "most")]}
+                     (("driver", "idle-halt"), "most"), (("driver", "idle-done"), "most"), (("driver", "idle-done-off"), "most"),
+                     # 0.1.3 resume-text A: the handoff ack is the block's one first line, and a
+                     # person's return ([idle-again]) gets no second [resumed] line.
+                     (("resumed", "handoff-ack"), "most"), (("resumed", "idle-again"), "most")]}
 # A tag that is kept only beside one of these (owner xxxxxxxx-37: [idle-again] goes with an idle
 # block, [idle] or [idle-halt]); combos() skips it alone, as it skips an EXCLUSIVE break.
 # Owner 2026-10-30 07:49: [handoff-ack] is kept only beside [handoff], the path it names.
 NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"),
-                        "handoff-ack": ("handoff",)}}
+                        "handoff-ack": ("handoff",),
+                        # 0.1.3 resume-text B: [question-timeout] only marks a carried [question].
+                        "question-timeout": ("question",)}}
 # CDN Review item 9: a cited step must exist and still start with the same word.
 STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
               ("res", 3): "Background"}
@@ -372,8 +382,12 @@ def combos(asset):
 # Owner 2026-10-30 07:49: [handoff-ack] only beside [handoff] and a prod line (2 goldens).
 # 0.1.2 [question]: only beside [prod-forbid] (1 golden: goldens.gen.ts had 13 KB left under the 1 MiB).
 # D-22 [auto-mode]: only beside a prod line and [midturn] (4 goldens).
+# 0.1.3 [resumed]: only beside a prod line and [midturn] or [idle] (6 goldens); [question-timeout]
+# only beside [question] and [prod-forbid] (1 golden).
 GOLDEN_SPARSE = {"res": {"handoff-ack": {"handoff", "prod-forbid", "prod-allow"},
-                         "question": {"prod-forbid"},
+                         "question": {"prod-forbid", "question-timeout"},
+                         "question-timeout": {"question", "prod-forbid"},
+                         "resumed": {"prod-forbid", "prod-allow", "midturn", "idle"},
                          "driver": {"prod-forbid", "prod-allow", "midturn", "idle"},
                          "idle-done": {"prod-forbid", "prod-allow", "idle-again"},
                          "idle-off": {"prod-forbid", "prod-allow", "idle-again"},
@@ -812,6 +826,10 @@ PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "
 PROTOCOL_ROWS += tuple(b + ["driver"] for b in PROTOCOL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
 # 0.1.2 question carry: [question] can join any block, so every row is checked again with it.
 PROTOCOL_ROWS += tuple(b + ["question"] for b in PROTOCOL_ROWS)
+# 0.1.3 resume-text: [question-timeout] joins any [question] row, and [resumed] any row without
+# [handoff-ack] or [idle-again] (EXCLUSIVE).
+PROTOCOL_ROWS += tuple(b + ["question-timeout"] for b in PROTOCOL_ROWS if "question" in b)
+PROTOCOL_ROWS += tuple(b + ["resumed"] for b in PROTOCOL_ROWS if not {"handoff-ack", "idle-again"} & set(b))
 # D-22 [auto-mode] can join any block too (the mod saw auto permission mode), so every row is
 # checked again with it.
 for base in PROTOCOL_ROWS + tuple(b + ["auto-mode"] for b in PROTOCOL_ROWS):
@@ -826,6 +844,8 @@ TOTAL_ROWS = (["midturn", "nonok"], ["midturn", "nonok", "handoff-partial"], ["i
 TOTAL_ROWS += tuple([t, "idle-again", "nonok", "handoff", "handoff-ack"] for t in ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"))
 TOTAL_ROWS += tuple(b + ["driver"] for b in TOTAL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
 TOTAL_ROWS += tuple(b + ["question"] for b in TOTAL_ROWS)
+TOTAL_ROWS += tuple(b + ["question-timeout"] for b in TOTAL_ROWS if "question" in b)
+TOTAL_ROWS += tuple(b + ["resumed"] for b in TOTAL_ROWS if not {"handoff-ack", "idle-again"} & set(b))
 for base in TOTAL_ROWS + tuple(b + ["auto-mode"] for b in TOTAL_ROWS):
     tags, resume_total = longest("res", [base + [p] for p in PROD])
     bad |= check(f"resume block total {res_label(tags)}", resume_total, "resume block total")

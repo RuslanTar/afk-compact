@@ -2,7 +2,8 @@ package resumeblock;
 # lib/resumeblock.pm: the post-compaction resume block (MOD-SPEC §3.4):
 # resume-context.txt with [midturn]/[nonok], exactly one of [prod-forbid]/[prod-allow], and
 # [driver] when the re-measure names this session's Active driver (lib/gsd.pm; owner 2026-10-26),
-# [auto-mode] when the newest main Stop ran in auto permission mode (D-22),
+# [auto-mode] when the newest main Stop ran in auto permission mode (D-22), [resumed] with the
+# fixed first line (0.1.3 resume-text A: this path reads no Step 1, see $RESUMED_FALLBACK),
 # @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@ (C-5). Total soft
 # 6,500 chars (compaction-rem-6; soft since the owner overturned ratify xxxxxxxx#R3 on 2026-10-23,
 # SPEC-DELTAS RP-2): a block over it logs resume_block_over_soft {nonce, chars}. Hard runtime cap
@@ -15,6 +16,10 @@ use utf8;
 
 our $MAX_CHARS = 9500;
 our $SOFT_CHARS = 6500;
+# 0.1.3 resume-text A: the [resumed] line's fixed text, as resume.ts RESUMED_FALLBACK. The classic
+# SessionStart(compact) payload has no summary, and its copy is saved by PostCompact around the
+# same time (the saved-copy line says pending), so this path has no Step 1 to show.
+our $RESUMED_FALLBACK = 'Resumed after compaction';
 
 sub build {
     my (%a) = @_;
@@ -38,12 +43,15 @@ sub build {
     # a carried approval covers, so [auto-mode] asks first. The mode is the newest main Stop's,
     # which on_Stop already keeps (restart::note_stop, D10); no new probe.
     push @tags, 'auto-mode' if auto_mode(rc::sid_dir());
+    # 0.1.3 resume-text A: one fixed first line before any tool call (no handoff ack or idle-again here).
+    push @tags, 'resumed';
     my $max = 3000;
     my $text;
     for (1 .. 12) {
         $text = assemble::asset('res', \@tags, { session_id => $a{sid}, saved_copy => $a{saved_copy},
                                                   measured_at => $a{measured_at} // util::iso(util::now()),
-                                                  remeasure => $re, (defined $store ? (store => $store) : ()) },
+                                                  remeasure => $re, resume_line => $RESUMED_FALLBACK,
+                                                  (defined $store ? (store => $store) : ()) },
                                 defined $store ? [] : ['store']);
         last if length($text) <= $MAX_CHARS;
         $max -= 400;

@@ -29,6 +29,9 @@ const CAPPED = { ['cont:' + SID_A]: [T0 - 50 * 60000, T0 - 30 * 60000, T0 - 10 *
 const CAP3 = { max_auto_continues_per_hour: 3 }
 /** Owner 2026-10-30 07:49: the `[handoff-ack]` line's start for SHOWN (a report not sent). */
 const ACK = 'Its report was not sent: that report is only `✓ Handoff saved: ' + SHOWN + '`'
+/** 0.1.3 resume-text A: the `[resumed]` first line's start; never beside the ack or a finishable partial. */
+const RESUMED_LINE = 'Main session: your first line, before any tool call, is exactly "'
+const RESUMED = hasTag('resume-context', 'resumed')
 
 /** A main turn that crosses the soft max (nudge) and ends with `answer` at `end` tokens. */
 async function lastCycleTurn($: Engine, w: World, answer = 'Checkpoint: clean · Step 1: run the tests', end = 640000): Promise<{ context?: readonly string[] }> {
@@ -467,6 +470,8 @@ test('native auto during the handoff turn after its publish: [handoff] and [hand
   const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
   expect(block).toContain('A handoff was saved just before this compaction: ' + SHOWN + '.')
   if (hasTag('resume-context', 'handoff-ack')) expect(block).toContain(ACK)
+  // 0.1.3 resume-text A: the ack is the block's one first line, so no [resumed] line beside it.
+  if (hasTag('resume-context', 'handoff-ack')) expect(block).not.toContain(RESUMED_LINE)
   await w.advance(COMPACT_LINE_DELAY_MS)
   expect(w.compactLines.length).toBe(1)
 })
@@ -517,6 +522,8 @@ test('race before the publish, finish, answer without the report, native auto: [
   const first = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)?.text ?? ''
   expect(first).not.toContain('Handoff saved: ' + SHOWN)
   if (hasTag('resume-context', 'handoff-partial')) expect(first).toContain('Compaction cut off the plugin\'s handoff turn')
+  // 0.1.3 resume-text A: a draft that can be finished gives the receipt as the first line: no [resumed] line.
+  expect(first).not.toContain(RESUMED_LINE)
   w.publish(ht, PUBLISHED)
   w.tokens = 60000
   await w.turnEnd($, 'Published after the compaction.')
@@ -527,6 +534,8 @@ test('race before the publish, finish, answer without the report, native auto: [
   expect(second).toContain('A handoff was saved just before this compaction: ' + SHOWN + '.')
   expect(second).not.toContain(ACK)
   expect(second).not.toContain('Handoff saved')
+  // [handoff] without the ack: the [resumed] line is the first line.
+  if (RESUMED) expect(second).toContain(RESUMED_LINE)
 })
 
 test('AT-LT-12, AT-LT-13: a second last cycle gets a new ht (first file unchanged); a third within 60 min: why=cap', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {

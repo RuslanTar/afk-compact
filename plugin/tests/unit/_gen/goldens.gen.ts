@@ -7,8 +7,9 @@
 import { ROWS as ROWS_1 } from './goldens.handoff-instructions.gen'
 import { ROWS as ROWS_2 } from './goldens.subagent-instructions.gen'
 import { ROWS as ROWS_3 } from './goldens.resume-context.gen'
-import { ROWS as ROWS_4 } from './goldens.checkpoint-nudge.gen'
-import { ROWS as ROWS_5 } from './goldens.handoff-turn.gen'
+import { ROWS as ROWS_4 } from './goldens.resume-context.2.gen'
+import { ROWS as ROWS_5 } from './goldens.checkpoint-nudge.gen'
+import { ROWS as ROWS_6 } from './goldens.handoff-turn.gen'
 
 export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = {
  "draft_state": "present",
@@ -28,6 +29,7 @@ export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = {
  "question": "The dialog timed out. Which database should I use for the retry queue, Postgres or SQLite?",
  "queue_add": "\"/p/scripts/afk-compact-store\" queue-add --sid 5e55a001-0c0f-4f1e-9a00-00000000a001 --nonce 1a2b3c4d",
  "remeasure": "Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1\nIn flight: none listed\nEvidence: none",
+ "resume_line": "Resumed \u00b7 step 1: `bin/rails test test/models/retry_test.rb`",
  "saved_copy": "~/.claude/handoffs/example-repo/LAB-123/compact/2026-10-21_14-05-12_5e55a001_c2-1a2b3c.md",
  "session_id": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "store": "\"/p/scripts/afk-compact-store\"",
@@ -36,6 +38,6 @@ export const GOLDEN_RUNTIME: Readonly<Record<string, string>> = {
 
 export type Golden = { asset: string; tags: readonly string[]; parts: readonly string[] }
 
-export const GOLDENS: readonly Golden[] = [...ROWS_1, ...ROWS_2, ...ROWS_3, ...ROWS_4, ...ROWS_5]
+export const GOLDENS: readonly Golden[] = [...ROWS_1, ...ROWS_2, ...ROWS_3, ...ROWS_4, ...ROWS_5, ...ROWS_6]
 
-export const GOLDEN_COUNT = 331
+export const GOLDEN_COUNT = 338

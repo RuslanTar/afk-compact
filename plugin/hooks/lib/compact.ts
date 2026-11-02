@@ -17,10 +17,10 @@ import type { HandoffState } from './helper'
 import { checkpoint, dispatch, failClass, handoffState, handoffTurnSupersede, prevCopy, saveCopy, sweep } from './helper'
 import { escalate, helperMissing, log, skipClass, stamp, toastOnce, vettedWatch } from './log'
 import { drawNonce } from './nonce'
-import { carriedQuestion } from './question'
+import { carriedQuestion, carriedTimedOut } from './question'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
-import { buildBlockWith, claimedElsewhere, claimedWhere, logLane, logOutcome, openEpisode, persistPending, prodAllowed, settleRecords } from './resume'
+import { buildBlockWith, claimedElsewhere, claimedWhere, logLane, logOutcome, openEpisode, persistPending, prodAllowed, settleRecords, step1Of } from './resume'
 import type { LaneFacts } from './lane'
 import { laneFacts, measuredRunning } from './lane'
 import { armDigest } from './digest'
@@ -424,9 +424,10 @@ export function summaryText(text: string): string | undefined {
 
 /**
  * The hooks side's copy of this compaction (the classic PostCompact hook saves it first): this
- * session's newest main copy when its frontmatter names this nonce, with its path and verdict.
+ * session's newest main copy when its frontmatter names this nonce, with its path and verdict, and
+ * its body (the summary text after the frontmatter), which the `[resumed]` line's Step 1 is read from.
  */
-async function hooksCopy(d: Deps, sid: string, nonce: string): Promise<{ path: string; verdict: Verdict } | undefined> {
+async function hooksCopy(d: Deps, sid: string, nonce: string): Promise<{ path: string; verdict: Verdict; body: string } | undefined> {
   const path = await prevCopy(d, sid)
   const file = path === undefined ? undefined : expand(path, await d.home())
   const raw = file === undefined ? undefined : await d.read(file)
@@ -435,7 +436,7 @@ async function hooksCopy(d: Deps, sid: string, nonce: string): Promise<{ path: s
   const head = raw.slice(0, end + 1)
   const verdict = /^verdict: (\S+)$/m.exec(head)?.[1]
   if (/^nonce: (\S+)$/m.exec(head)?.[1] !== nonce || verdict === undefined || !isVerdict(verdict)) return undefined
-  return { path, verdict }
+  return { path, verdict, body: raw.slice(end + 5) }
 }
 
 /** MOD-SPEC §5.2: the after-step, main and subagent. */
@@ -456,6 +457,8 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   // Away digest phase 1: the lane facts of an idle compaction's summary (the model's own Status
   // and step marks, parsed; no text kept).
   let facts: LaneFacts | undefined
+  // 0.1.3 resume-text A: the summary's Step 1 for the block's `[resumed]` line (one line, no text kept beyond it).
+  let step1: string | undefined
   // PRIV-04: the raw summary is stashed only under the watch folder the helper vetted (ident);
   // refused (null) or unknown (no helper answer) means no stash, never the options' folder.
   const stash = await vettedWatch(d, a.sid)
@@ -470,12 +473,15 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
       notSaved = undefined
       verdict = hooks.verdict
       counted = true
+      // Review round 2: the `[resumed]` line's Step 1 from that copy too.
+      step1 = step1Of(hooks.body)
     } else escalate(d, 'copy-failed')
   } else {
     const det = detectSummary(text, d.name, { dispatchNonce: a.nonce, scope: main ? 'main' : 'sub' })
     verdict = det.verdict
     chars = det.normalized.length
     if (main && a.idle === true) facts = laneFacts(text)
+    if (main) step1 = step1Of(text)
     const file = stash !== undefined ? `${stash}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
     // MOD-SPEC §5.8 item 4: the orphan index marker goes first, so a stash this session leaves
     // behind is found by another session's cross-session finish. Empty; an existing one is fine.
@@ -532,7 +538,8 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     ...(a.idle === true ? { idle: true, halt: s.halt.active, ...(facts !== undefined ? { lane: facts } : {}) } : {}),
     // Question carry (question.ts): a main turn's question no person's turn has followed yet, or
     // the running turn's timed-out dialog.
-    ...(question !== undefined ? { question } : {}),
+    ...(question !== undefined ? { question, ...(carriedTimedOut(s) ? { questionTimedOut: true } : {}) } : {}),
+    ...(step1 !== undefined ? { step1 } : {}),
   }
   const built = await buildBlockWith(d, a.sid, blockArgs)
   // The idle episode of this compaction (a compaction that is not idle closes the one before).

@@ -341,6 +341,10 @@ test('AT-ID-03: a composer prompt 300 s after a task-notification turn took the 
   let t = await personTurn($, w, 'back again')
   expect(t.block).toBe(undefined)
   const again = t.ctx
+  // 0.1.3 resume-text A: the background result's turn got the [resumed] first line; the block again
+  // on the person's return gets none (that turn printed it).
+  if (hasTag('resume-context', 'resumed')) expect(first).toContain('Main session: your first line, before any tool call, is exactly "')
+  if (AGAIN) expect(again).not.toContain('Main session: your first line, before any tool call, is exactly "')
   expect(w.callsOf('measure').length).toBe(measures + 1)
   expect(w.callsOf('measure').some(c => c.args.includes('--brief'))).toBe(false)
   expect(again).toContain(SID_A)

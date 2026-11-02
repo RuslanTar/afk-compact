@@ -195,7 +195,7 @@ End with the verdict: `Needs you:` and numbered items in plain language, or the 
 - the options and your recommendation;
 - what it blocks.
 
-Write owner steps as a walk-through: where, what, the exact command. Never shorten questions or owner steps to fit the report. Ask only questions the user owns. Settle agent-raised ones yourself, or label your choice `proposed`. Ask in the report text, not with a prompt that holds the turn open. A timeout or a missing reply is not an answer.
+Write owner steps as a walk-through: where, what, the exact command. Never shorten questions or owner steps to fit the report. Ask only questions the user owns. Settle agent-raised ones yourself, or label your choice `proposed`. Ask in the report text, not with a prompt that holds the turn open. A timeout or a missing reply is not an answer; never ask that question in a dialog again before the user's next own message: list it under `Needs you`.
 
 ## R9 Proceed or stop
 

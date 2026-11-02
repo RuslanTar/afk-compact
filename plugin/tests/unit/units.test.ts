@@ -15,7 +15,7 @@ import { QUESTION_MAX } from '../../hooks/lib/question'
 import type { Deps } from '../../hooks/lib/deps'
 import { cacheSOf, compactMinOf, envTruthy } from '../../hooks/lib/deps'
 import { checkpoint } from '../../hooks/lib/helper'
-import { BLOCK_MAX, BLOCK_SOFT, fitBlock, keepGsdLines, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
+import { BLOCK_MAX, BLOCK_SOFT, STEP1_MAX, fitBlock, keepGsdLines, prodAllowed, storeRuntime } from '../../hooks/lib/resume'
 import { isoLocal, makeRow, stamp, zoneOfPath } from '../../hooks/lib/log'
 
 const NAME = 'x'.repeat(14)
@@ -122,6 +122,8 @@ const WORST = {
   lane_basis: '999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed',
   // 0.1.2 question carry [question]: the open question at its longest (question.ts QUESTION_MAX).
   question: 'q'.repeat(QUESTION_MAX - 1) + '?',
+  // 0.1.3 resume-text A [resumed]: the first line at its longest (resume.ts resumeLine, STEP1_MAX).
+  resume_line: 'Resumed · step 1: ' + 's'.repeat(STEP1_MAX - 1) + '…',
   // The shadow trial's fork texts (TRIAL-DUAL-HANDOFF §4.2): read at run time from local files.
   old_skill: '# Old skill\nStep 1.', old_template: '# Template', trial_facts: 'Repository: r', trial_tail: 'Last reply:\ndone',
 }
@@ -130,7 +132,7 @@ const TAGS: Record<string, Tag[]> = {
   'handoff-instructions': ['midturn', 'auto', 'chain', 'handoff', 'measured'],
   'subagent-instructions': ['fallback'],
   'resume-context': ['midturn', 'nonok', 'handoff', 'handoff-partial', 'idle', 'idle-halt', 'idle-again', 'prod-forbid', 'prod-allow', 'driver', 'idle-done',
-    'idle-off', 'idle-done-off', 'handoff-ack', 'question', 'auto-mode'],
+    'idle-off', 'idle-done-off', 'handoff-ack', 'question', 'auto-mode', 'resumed', 'question-timeout'],
   'checkpoint-nudge': ['continue', 'halt', 'halt-handoff', 'queue'],
   'handoff-turn': ['submit', 'submit-halt', 'submit-pre', 'submit-idle', 'near', 'spent', 'imminent'],
   'trial-old-handoff': ['trial-tail'],
@@ -157,6 +159,9 @@ function combos(tags: Tag[]): Tag[][] {
   // Owner 2026-10-26 [driver]: never with [idle-halt] (auto-continue is paused); a measured driver
   // keeps the work lane working, so never with [idle-done] either (lane.ts).
   out = out.filter(c => !(has(c, 'driver') && (has(c, 'idle-halt') || has(c, 'idle-done') || has(c, 'idle-done-off'))))
+  // 0.1.3 resume-text: [resumed] never beside [handoff-ack] or [idle-again]; [question-timeout] only beside [question].
+  out = out.filter(c => !(has(c, 'resumed') && (has(c, 'handoff-ack') || has(c, 'idle-again'))))
+  out = out.filter(c => !has(c, 'question-timeout') || has(c, 'question'))
   out = out.filter(c => [has(c, 'submit-halt'), has(c, 'submit-pre'), has(c, 'submit-idle')].filter(Boolean).length <= 1)
   return out
 }
@@ -210,19 +215,28 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // release-0.1.0's [driver] line names the workflow file a GSD loop command loads; 4,907 since
   // [handoff-ack] and [handoff-partial] carry the one-line handoff ack, owner 2026-10-30 07:49; 5,373
   // since the 0.1.2 question carry's [question] line quotes an open question of up to 240 chars;
-  // 5,580 since D-22's [auto-mode] line, root 2026-10-31).
-  test('resume protocol ≤5,580 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // 5,580 since D-22's [auto-mode] line, root 2026-10-31; 5,846 since the 0.1.3 resume-text lane's
+  // [resumed] first line, step 6's no-dialog clause and the [question-timeout] note; 5,874 since its
+  // review round 1's edits to [handoff-ack], [handoff-partial] and [question-timeout]).
+  test('resume protocol ≤5,874 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 5580).toBe(true)
+      expect(s.length <= 5874).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
+  // 0.1.3 resume-text (review of its first build: the two new tags took this test from about 0.7 s
+  // to 1.7 s alone, 6.4 s once under load against the kit's 5 s): [resumed] and [question-timeout]
+  // each only add one line of fixed text (WORST's longest `@resume_line@`), so a combination
+  // without one where it may join renders a block contained in the one with it; only those with
+  // it are rendered, which bounds the rest (fitBlock trims only over BLOCK_MAX).
+  const fullest = (c: Tag[]): boolean => (c.includes('resumed') || c.includes('handoff-ack') || c.includes('idle-again'))
+    && (c.includes('question-timeout') || !c.includes('question'))
   test('AT-TX-11 (U half): every shipped resume protocol beside a 3,000-byte measured block goes out untrimmed (≤BLOCK_MAX 9,500; soft 6,500)', () => {
     const measured = Array.from({ length: 30 }, (_, i) => 'm'.repeat(98) + String(i % 10)).join('\n').slice(0, 3000)
     let worst: Tag[] = []
     let worstLen = 0
-    for (const tags of combos(TAGS['resume-context'] ?? [])) {
+    for (const tags of combos(TAGS['resume-context'] ?? []).filter(fullest)) {
       const render = (m: string) => assembleText(text('resume-context'), tags, { ...WORST, remeasure: m })
       const block = fitBlock(render, measured)
       expect(block).toBe(render(measured))
@@ -279,7 +293,8 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const s = assembleText(text('resume-context'), ['handoff', 'handoff-ack', 'prod-forbid'], r)
     const line = s.split('\n').find(l => l.startsWith('Its report was not sent: ')) ?? ''
     expect(line).toContain('that report is only `✓ Handoff saved: ' + path + '` (+ ` · Needs you: <n> questions (in the handoff)` for open user-owned questions), as your first line')
-    expect(line).toContain('no recap of it; the rest of this block applies.')
+    // 0.1.3 resume-text review round 1: the ack replaces [resumed], so it too comes before any tool call.
+    expect(line).toContain('as your first line, before any tool call; no recap of it; the rest of this block applies.')
     // Review of the first build: the ack limits the report, never the reply (auto-continue's
     // "Continue from Step 1", an idle line and a new prompt still apply).
     expect(/say only/i.test(s)).toBe(false)
@@ -290,7 +305,8 @@ describe('AT-P-07 assembler (14-character name)', () => {
     expect(idle).toContain(line)
     const p = assembleText(text('resume-context'), ['handoff-partial', 'prod-forbid'], { ...WORST, draft_state: 'present', handoff_finish: '`fin`' })
     const pl = p.split('\n').find(l => l.startsWith('Compaction cut off the plugin\'s handoff turn')) ?? ''
-    expect(pl).toContain('run `fin` once and relay its receipt; `Wrote handoff to: <path>` as only `✓ Handoff saved: <path>`')
+    // 0.1.3 resume-text review round 1: the finish is the first call, so its receipt is the first line after one call.
+    expect(pl).toContain('run `fin` once, as your first call, and relay its receipt; `Wrote handoff to: <path>` as only `✓ Handoff saved: <path>`')
     expect(pl).toContain('as your first line. Never start a second handoff.')
     // Without either tag, no ack rule.
     expect(assembleText(text('resume-context'), ['prod-forbid'], WORST)).not.toContain('Handoff saved')
