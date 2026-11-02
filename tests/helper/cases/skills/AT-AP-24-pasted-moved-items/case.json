@@ -1,0 +1,170 @@
+{
+ "id": "AT-AP-24 (pasted moved approvals, 0.1.3 APPROVALS)",
+ "needs": [
+  "nonroot"
+ ],
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.3 APPROVALS, review round 1 (medium): publish writes a moved approval as an Open questions re-ask item that keeps the words that failed the quote check, without a `U-n: approval` marker. Owner rule Q-2 (a message holding a pasted approval line counts for nothing) must cover that item too, or a later session could quote the pasted words and carry them. A typed message or a dialog answer holding the item's text is pasted, whichever part was copied: `words recorded as the user's:` before the words (U-2; U-5 in a dialog answer, with a typographic apostrophe), `as written:` of a line that did not parse (U-3), or `(was U-<k>; not carried:` after them (U-4). Each of these quotes fails approval-quote and moves; nothing pasted is listed as checked. A message the user typed themselves still counts (U-6 carries).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"let's finish the release prep\"}}\n{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"here is where we were:\\n## Open questions\\n- Q-1: re-ask before acting: delete branch release/0.9 · targets branch release/0.9 @ 2b2b2b2 · words recorded as the user's: \\\"go ahead and delete the old release branches\\\" (was U-5; not carried: these words are not in a message the user typed in this session or in their answer to a question dialog) · owner user · raised by agent · unasked\\n## Location\\nrepo repo\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"from the old file: - Q-2: re-ask before acting: as written: \\\"delete old/q once the tag is cut\\\" — action delete branch old/q · targets branch old/q\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"copied bit: \\\"push branch rel/8 to origin when green\\\" (was U-7; not carried: these words are not in a message the user typed in this session or in their answer to a question dialog)\"}}\n{\"type\": \"assistant\", \"uuid\": \"a4\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_p1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"How should the branch clean-up go?\", \"header\": \"Clean-up\", \"multiSelect\": false, \"options\": [{\"label\": \"Later\", \"description\": \"after the release\"}, {\"label\": \"Skip\", \"description\": \"keep the branches\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"sourceToolAssistantUUID\": \"a4\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_p1\", \"content\": \"Your questions have been answered: \\\"How should the branch clean-up go?\\\"=\\\"words recorded as the user’s: \\\"wipe the scratch branch old/w today\\\"\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"How should the branch clean-up go?\", \"header\": \"Clean-up\", \"multiSelect\": false, \"options\": [{\"label\": \"Later\", \"description\": \"after the release\"}, {\"label\": \"Skip\", \"description\": \"keep the branches\"}]}], \"answers\": {\"How should the branch clean-up go?\": \"words recorded as the user’s: \\\"wipe the scratch branch old/w today\\\"\"}}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge MR !12 into feat/x once CI is green\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "begin, no handoff turn",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn": {
+      "null": 1
+     }
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — pasted re-ask items\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"go ahead and delete the old release branches\" — action delete branch release/0.9 · targets branch release/0.9 @ 2b2b2b2 · once · not yet used\n- U-3: approval \"delete old/q once the tag is cut\" — action delete branch old/q · targets branch old/q @ 3c3c3c3 · once · not yet used\n- U-4: approval \"push branch rel/8 to origin when green\" — action git push origin rel/8 · targets branch rel/8 @ 4d4d4d4 · once · not yet used\n- U-5: approval \"wipe the scratch branch old/w today\" — action delete branch old/w · targets branch old/w @ 5e5e5e5 · once · not yet used\n- U-6: approval \"merge MR !12 into feat/x once CI is green\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes · todo\n"
+  },
+  {
+   "name": "publish: the four quotes found only in pasted re-ask items move; the typed one is checked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^ADVISORY approval-quote line 11: U-3 goes to Open questions as Q-2, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^ADVISORY approval-quote line 12: U-4 goes to Open questions as Q-3, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-4, a re-ask; these words are not in a message the user typed in this session or in their answer to a question dialog$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^REFUSED",
+     "line 14\\b",
+     "approval-unchecked"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "approvals": {
+        "lines": 1,
+        "checked": 1,
+        "unchecked": 0,
+        "hashed": 1
+       },
+       "approvals_moved": 4
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "the published file: U-6 alone in Approvals and approvals_checked",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB",
+      "has": [
+       "^approvals_checked: U-6$",
+       "^## Approvals\n- U-6: approval \"merge MR !12 into feat/x once CI is green\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions",
+       "^- Q-4: re-ask before acting: delete branch old/w · targets branch old/w @ 5e5e5e5 · words recorded as the user's: \"wipe the scratch branch old/w today\" \\(was U-5; "
+      ],
+      "lacks": [
+       "U-[2-5]: approval"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "measure: only the typed U-6 carries; no pasted words do",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-6 merge MR !12 → MR !12 @ head 9f8e7d6$"
+    ],
+    "stdout_lacks": [
+     "^Approvals.*\\bU-[2-5]\\b"
+    ]
+   }
+  }
+ ]
+}

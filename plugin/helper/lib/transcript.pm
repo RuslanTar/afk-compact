@@ -175,8 +175,8 @@ sub last_prompt_epoch {
 #
 # Owner-ruled quote sources (owner xxxxxxxx-09 "Quote src", 2026-10-26: all four kept as built,
 # no longer provisional): Q-1 code checks each quote against the user's own rows at all (O-3);
-# Q-2 a message that holds an approval line (`U-n: approval`) was pasted, so none of its words
-# count ($PASTED); Q-3 rows stamped with another session's id do not count ("Own rows only"
+# Q-2 a message that holds an approval line (`U-n: approval`) or a moved approval's re-ask item
+# was pasted, so none of its words count ($PASTED); Q-3 rows stamped with another session's id do not count ("Own rows only"
 # below); Q-4 quotes match whole words only. SDK-origin rows (`claude -p`, Agent SDK hosts) count
 # as the user's words (owner xxxxxxxx-12 "Count, log origin"; their count is logged, see above).
 # Only the last $QUOTE_SCAN_MAX bytes are read; a quote not found in a longer file is undef for
@@ -231,7 +231,11 @@ our $ASK_TOOL = 'AskUserQuestion';
 our $ASK_KEEP = 256;                  # dialogs awaiting their answer, at most
 my $NOTES_ONLY = '(notes only)';      # the answer value of a question with a note and no option
 my $NOT_TYPED = qr/\A\s*<(?:task-notification|local-command-stdout|local-command-stderr|bash-stdout|bash-stderr|system-reminder|local-command-caveat)\b/;
-my $PASTED = qr/\bU-[0-9]+:[ \t]*approval\b/;
+# Q-2 also covers the re-ask item publish writes for a moved approval (0.1.3 APPROVALS,
+# skills::approvals::move_lines: `words recorded as the user's:` before the words, `as written:`
+# for a line that did not parse, `(was U-<k>; not carried:` after them): those words failed the
+# quote check, so a message pasting them must not make them count.
+my $PASTED = qr/\bU-[0-9]+:[ \t]*approval\b|\bwords recorded as the user['\x{2019}]s:|\bre-ask before acting:[ \t]*as written:|\(was U-[0-9]+; not carried:/;
 # Matching item: an item line of a numbered list (an optional `-`/`*`/`+` bullet and a bold
 # mark around the number), its number and its text.
 my $ITEM_RE = qr/\A[ \t]*(?:[-*+][ \t]+)?(?:\*\*|__)?([0-9]{1,3})[.):](?:\*\*|__)?(?:[ \t]+(.*))?\z/s;

@@ -22,7 +22,7 @@ package skills::publish;
 # frontmatter says `requested_by: plugin` (AC-4).
 # 0.1.3 APPROVALS: an own approval line of `## Approvals` failing approval-quote or
 # approval-plugin-turn moves to `## Open questions` as a re-ask instead of refusing (one ADVISORY
-# line each; skills::approvals::move_lines); the row gains `approvals_moved` (a count).
+# line each; skills::approvals::move_lines); a written row gains `approvals_moved` (a count).
 use strict;
 use warnings;
 use utf8;
@@ -144,7 +144,8 @@ sub run {
     # linted again and published (its approvals, checks and hashes are the moved text's); when
     # something else blocks, publish refuses as before and the ADVISORY lines say what publish will
     # move once the rest passes.
-    my ($mbody, $moved, $keep) = skills::approvals::move_lines($body, $res->{blocking});
+    # Q numbers go on above the chain's (spec §4): the base, the own file and the stage's ledger.
+    my ($mbody, $moved, $keep) = skills::approvals::move_lines($body, $res->{blocking}, $prev_text, $own_text, $extra{'ledger.md'});
     my %rules;
     if (@$moved) {
         $rules{ $_->{rule} } = 1 for @$moved;
@@ -153,7 +154,6 @@ sub run {
             $res = $lint->($body);
             $keep = $res->{blocking};
         }
-        $row->{approvals_moved} = scalar @$moved;
     }
     $row->{bytes} = skills::util::blen($body);
     $row->{size_band} = _band($row->{bytes});
@@ -183,9 +183,15 @@ sub run {
         skills::cli::say("  why: $t->{why} · fix: $t->{fix}");
     };
     for (@b) { skills::cli::say("LINT $_->[0] $_->[1]"); $why->($_->[0]) }
+    # A moved line needs no Edit: its why/fix line says so (the rule's own fix asks for a rewrite,
+    # and a second publish of a written stage is refused as already-published).
+    my $moved_fix = @b ? 'none needed: publish moves the line once the LINT lines are fixed'
+                       : 'none needed: the handoff is written with the line moved; list it in the report';
     for (@$moved) {
         skills::cli::say("ADVISORY $_->{rule} line $_->{line}: $_->{id} goes to Open questions as $_->{q}, a re-ask; $_->{why}");
-        $why->($_->{rule});
+        next if !%$texts || $told{"moved $_->{rule}"}++;
+        my $t = $texts->{ $_->{rule} } or die "lint id $_->{rule} has no lint_texts entry in the spec\n";
+        skills::cli::say("  why: $t->{why} · fix: $moved_fix");
     }
     for (@a) { skills::cli::say("ADVISORY $_->[0] $_->[1]"); $why->($_->[0]) }
     if (@b) {
@@ -194,6 +200,8 @@ sub run {
         $ctx->log('handoff_publish', $row);
         die skills::cli::refuse(sprintf('lint (%d blocking); draft kept at %s/body.md', scalar @b, $dir));
     }
+    # Only a written file holds moved lines (a refused draft is kept as written).
+    $row->{approvals_moved} = scalar @$moved if @$moved;
 
     # ---- file the stage into evidence/<stem>/
     my $now = skills::util::now();

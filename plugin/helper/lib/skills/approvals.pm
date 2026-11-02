@@ -939,29 +939,39 @@ our %MOVE_WHY = (
     short => 'a quote under 4 words counts only as the user\'s whole message, or one line of a numbered reply, answering your message that names its target',
     long => 'these words are not in a message the user typed in this session or in their answer to a question dialog',
     plugin => 'the plugin asked for this handoff, not the user, so an approval in it may only be written in the context-only form',
+    dup => 'another line of Approvals already has this id, and each id may hold one line',
 );
 
-# move_why(rule, line) -> the plain-words reason a line failing `rule` cannot carry.
+# move_why(rule, line) -> the plain-words reason a line failing `rule` cannot carry. In a plugin
+# handoff turn a line already in the plain context-only form fails only as a second line with one
+# id (lint, "One line per id"), so that is its reason.
 sub move_why {
     my ($rule, $l) = @_;
-    return $MOVE_WHY{plugin} if $rule eq 'approval-plugin-turn';
+    if ($rule eq 'approval-plugin-turn') {
+        my $e = parse_context_line($l);
+        return $e && !$e->{question} && !$e->{denied} ? $MOVE_WHY{dup} : $MOVE_WHY{plugin};
+    }
     my ($q) = ($l // '') =~ /\bU-[0-9]+:\s*approval\s+"(.+?)"/;
     my @w = grep { length } split /\s+/, $q // '';
     my $sw = do { no warnings 'once'; $transcript::SHORT_WORDS } // 4;
     return @w && @w < $sw ? $MOVE_WHY{short} : $MOVE_WHY{long};
 }
 
-# move_lines(body, [[rule, where]…]) -> (new body, [{line, id, q, rule, why}…], [[rule, where]…] kept)
+# move_lines(body, [[rule, where]…], other texts…) -> (new body, [{line, id, q, rule, why}…], [[rule, where]…] kept)
 # Each blocking item of %MOVE_RULES on an own approval line of `## Approvals` moves that line to
 # `## Open questions` as `- Q-<n>: re-ask before acting: <action> · targets <…> · words recorded as
-# the user's: "<…>" (was U-<k>; not carried: <why>) · owner user · raised by agent · unasked`
-# (the next free Q number, in line order; never `U-<k>:`, so no ledger or approval reader takes
-# it). A lone `none` there is replaced; the item goes before a `Queued:` line (queue.md: that line
-# stays last) and after a table with a blank line between. A section left
-# with no line is dropped. Any other item is kept (it still refuses); without an Open questions
-# section nothing moves.
+# the user's: "<…>"[ (answer to "<…>")][ · denied <how> <stamp>] (was U-<k>; not carried: <why>)
+# · owner user · raised by agent · unasked` (a line that does not parse: `as written: <its text
+# after U-<k>: approval>`). Never `U-<k>:`, so no ledger or approval reader takes it; a message
+# that pastes it never counts as the user's words (transcript.pm, $PASTED). Q numbers: the next
+# free one above every Q-<n> in the body and the other texts (the base, the own file and the
+# stage's ledger.md: spec §4 keeps ids across a chain), in line order. A denied context line keeps
+# its denial note (AC-2: the next session sees the action was refused). A lone `none` there is
+# replaced; the item goes before a `Queued:` line (queue.md: that line stays last) and after a
+# table with a blank line between. A section left with no line is dropped. Any other item is
+# kept (it still refuses); without an Open questions section nothing moves.
 sub move_lines {
-    my ($body, $items) = @_;
+    my ($body, $items, @other) = @_;
     my @lines = split /\n/, $body // '', -1;
     my $in = section_lines(\@lines);
     my $tag_re = skills::spec::regex_at('carry.tag_re');
@@ -978,7 +988,7 @@ sub move_lines {
     my ($oq) = grep { $lines[$_] =~ /\A##\s/ && index($lines[$_], $OPEN_HEADING) == 0 } 0 .. $#lines;
     return ($body, [], $items || []) unless %mv && defined $oq;
     my $qn = 0;
-    for (@lines) { while (/\bQ-([0-9]+)\b/g) { $qn = $1 if $1 > $qn } }
+    for (@lines, grep { defined } @other) { while (/\bQ-([0-9]+)\b/g) { $qn = $1 if $1 > $qn } }
     my (@moved, @add);
     for my $i (sort { $a <=> $b } keys %mv) {
         my $l = $lines[$i];
@@ -989,6 +999,10 @@ sub move_lines {
         if ($e) {
             my ($ask) = $l =~ /"\Q$e->{quote}\E"( \(answer to ".+?"\))? — action /;
             $what = "$e->{action} · targets $e->{targets_text} · words recorded as the user's: \"$e->{quote}\"" . ($ask // '');
+            if ($e->{denied}) {
+                my ($dn) = $l =~ /( · denied [^·]+?)(?: · given .+)?\z/;
+                $what .= $dn if defined $dn;
+            }
         } else {
             (my $rest = $l) =~ s/\A.*?\bU-[0-9]+:\s*approval\s*//;
             $what = "as written: $rest";
