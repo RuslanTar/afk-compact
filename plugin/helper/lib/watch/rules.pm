@@ -736,7 +736,7 @@ sub _pre_near {
 # observed_from(ctx) -> epoch of this session's first hook row, or undef when it has
 # none yet: the time of the first row in its classic or mod stream, whichever is earliest,
 # leaving out the rows the Stop writes itself (sweep, sweep_partial, watch_error,
-# precompute_or_failed); not the rollup, whose rows carry the compaction's own time when
+# precompute_or_failed, and the stop_timing row it writes last, cmd/hook.pl); not the rollup, whose rows carry the compaction's own time when
 # reconcile writes them late. The plugin writes a session's rows from its first hook on
 # (SessionStart writes before any compaction), so a boundary before that time ran while the
 # plugin was not loaded in that process, or under a store this install does not read. Per
@@ -747,7 +747,7 @@ sub _pre_near {
 # plugin loaded mid-session on the classic path) is observed from the earliest of those rows:
 # the first plugin Stop ran then, so what its sweep found before that is history too.
 our $OBS_HEAD_LINES = 64;
-my %OWN_ROW = map { $_ => 1 } qw(sweep sweep_partial watch_error precompute_or_failed);
+my %OWN_ROW = map { $_ => 1 } qw(sweep sweep_partial watch_error precompute_or_failed stop_timing);
 sub observed_from {
     my ($ctx) = @_;
     my ($best, $own);
