@@ -55,8 +55,8 @@ sub lines {
 }
 
 # 0.1.3 alert noise: the one-line verdict that opens `status` (cmd/status.pl), or undef while
-# the watcher is off. With a session id it reads this session: its main compactions in the
-# rollup (precomputed ones left out) with a saved copy, and its open alerts, the warn and
+# the watcher is off. With a session id it reads this session: its main and unattributed
+# compactions in the rollup (precomputed ones left out) with a saved copy, and its open alerts, the warn and
 # critical ones (an info alert is a note and asks for nothing). Without one it reads the store
 # over the last 7 days, as the 7-day counts do. `ok` only when every compaction has its copy
 # and no alert is open; else `attention`, with the open alerts by rule.
@@ -102,7 +102,7 @@ sub verdict {
     return sprintf('attention: %d open alert%s (%s); %s', $n, ($n == 1 ? '' : 's'), join(', ', sort keys %open), $copies);
 }
 
-# The main compaction rows of one rollup stream (precomputed ones and core's
+# The main and unattributed compaction rows of one rollup stream (precomputed ones and core's
 # `compaction_boundary` rows left out), one per compaction: the last row of a nonce counts (a
 # late copy from reconcile after the first row); rows without a nonce count each.
 sub _rollup_rows {
@@ -111,7 +111,10 @@ sub _rollup_rows {
     my (%by, @order);
     my $i = 0;
     for my $r (@{ watch::io::read_jsonl($p) }) {
-        next unless ($r->{ev} // 'compaction') eq 'compaction' && ($r->{actor} // '') eq 'main';
+        # An unattributed compaction (no boundary or dispatch proves its scope; its copy goes to
+        # compact/unattributed/) counts too: status's compactions block lists it in this session,
+        # and the verdict said `no compactions` beside it (0.1.3 integration review).
+        next unless ($r->{ev} // 'compaction') eq 'compaction' && ($r->{actor} // '') =~ /\A(?:main|unattributed)\z/;
         my $pc = $r->{precomputed};
         $pc = $$pc if ref $pc eq 'SCALAR';
         next if $pc && !ref $pc;
