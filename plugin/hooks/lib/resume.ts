@@ -83,9 +83,10 @@ export const STEP1_MAX = 100
 export const RESUMED_FALLBACK = 'Resumed after compaction'
 /**
  * Step 1's tail after the step (and what follows it): `— for "<the user's latest request>"`, as
- * lane.ts cuts it, or the template's other form, `— proposed…` / `| proposed` (real copy xxxxxxxx c1).
+ * lane.ts cuts it, or its free form `— for the …` (review round 2: 5 of 89 real copies), or the
+ * template's other form, `— proposed…` / `| proposed` (real copy xxxxxxxx c1).
  */
-const STEP1_TAIL = /\s+(?:—\s+(?:for\s+"|proposed\b).*|\|\s*proposed\s*)$/
+const STEP1_TAIL = /\s+(?:—\s+(?:for\s+(?:"|the\s)|proposed\b).*|\|\s*proposed\s*)$/
 const STEP1_LINE = /^\s*Step 1:[ \t]*(.*)$/
 /** A cut Step 1 ends at its last space when that keeps at least this many chars (else mid-word: a long path). */
 const STEP1_WORD_MIN = 60
@@ -117,7 +118,8 @@ export function clipStep1(text: string): string {
  * fixed form.
  */
 export function step1Of(summary: string): string | undefined {
-  const lines = summary.split('\n')
+  // CRLF line ends too (review round 2): `Step 1: x\r` misses STEP1_LINE's `$`.
+  const lines = summary.split(/\r?\n/)
   const at = lines.findIndex(l => l.trim().toLowerCase().startsWith('## resume here'))
   if (at < 0) return undefined
   const rest = lines.slice(at + 1)
@@ -131,9 +133,25 @@ export function step1Of(summary: string): string | undefined {
   return undefined
 }
 
-/** The `[resumed]` line: `Resumed · step 1: <Step 1>`, or the fixed RESUMED_FALLBACK. */
+/**
+ * The `[resumed]` line: `Resumed · step 1: <Step 1>`, or the fixed RESUMED_FALLBACK. The asset puts
+ * the line in double quotes, so a double quote of the Step 1 shows as a single one (review round 2:
+ * 7 of 89 real Step 1 lines hold one, which nested the quotes).
+ */
 export function resumeLine(step1: string | undefined): string {
-  return step1 !== undefined && step1 !== '' ? `Resumed · step 1: ${step1}` : RESUMED_FALLBACK
+  return step1 !== undefined && step1 !== '' ? `Resumed · step 1: ${step1.replace(/"/g, "'")}` : RESUMED_FALLBACK
+}
+
+/**
+ * 0.1.3 resume-text B (review round 2): the block goes to a person's own prompt written after it
+ * was built, so the person wrote since the dialog timed out and `[question-timeout]` is stale (step
+ * 6 already lets a dialog follow their message). The question itself stays listed.
+ */
+export function personWrote(a: BlockArgs): BlockArgs {
+  if (a.questionTimedOut === undefined) return a
+  const b = { ...a }
+  delete b.questionTimedOut
+  return b
 }
 
 /** The helper's `Active driver:` line (lib/gsd.pm) in a re-measure: `[driver]` is kept. */
@@ -278,9 +296,11 @@ export async function buildBlockWith(
   }
   // 0.1.3 resume-text A: one code-rendered first line, unless the block already fixes the first
   // line (the handoff ack; a raced handoff's receipt when its draft can be finished) or an earlier
-  // turn printed it ([idle-again]: a background result's turn took this block first).
+  // turn printed it ([idle-again]: a background result's turn took this block first). Not in a
+  // headless load either (review round 2): session.start's `isInteractive` false (`claude -p`, the
+  // Agent SDK) or a compaction call rejected as headless; a script there reads the reply.
   const partialFirst = h !== undefined && !('published' in h) && runtime.draft_state === 'present'
-  if (!tags.includes('handoff-ack') && !partialFirst && a.again === undefined) {
+  if (!tags.includes('handoff-ack') && !partialFirst && a.again === undefined && !d.state.headless) {
     tags.push('resumed')
     runtime.resume_line = resumeLine(a.step1)
   }
@@ -318,6 +338,7 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   s.ctxSeen = true
   const human = isHuman(s.turnOrigin)
   // AT-RP-02: once per session id in this load, a block the classic SessionStart(resume) armed.
+  let restored = false
   if (!s.pending && s.restoreChecked !== sid) {
     s.restoreChecked = sid
     const r = await restorePending(d, sid)
@@ -325,6 +346,7 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
     // settled the record as replaced. A restored idle block opens its idle episode (away digest).
     if (!s.pending && r) {
       s.pending = r
+      restored = true
       if (r.args.idle === true && !r.args.midturn) openEpisode(s, sid, r.nonce, r.args, r.remeasure, r.measuredAt, true)
     }
   }
@@ -343,7 +365,10 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
     return undefined
   }
   if (c.result === 'failed') await helperMissing(d, sid, 'claim')
-  const args = haltNow(d, pend.args)
+  // A person's prompt of a later turn than the block's build, or of a later process (a restored
+  // record), gets no timeout mark; a mid-turn compaction's block in that same turn keeps it.
+  const back = human && (restored || pend.turnSeq < s.turnSeq)
+  const args = back ? personWrote(haltNow(d, pend.args)) : haltNow(d, pend.args)
   const out = await freshBlock(d, pend, args)
   if (pend.args.idle === true) await laneShown(d, pend, out, human)
   await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:prompt.context')
@@ -529,7 +554,8 @@ export async function againFor(d: Deps, kind: string, startsTurn: boolean): Prom
     // prompt that starts its own turn clears halt at that turn's start (IC-1 D6), after this hook;
     // one typed into a running turn does not.
     const args = startsTurn ? { ...r.pend.args, ...(r.pend.args.idle === true ? { halt: false } : {}) } : haltNow(d, r.pend.args)
-    const out = await freshBlock(d, { ...r.pend, remeasure: r.remeasure, measuredAt: r.measuredAt }, { ...args, again: r.usedAt }, true)
+    // A person's prompt: no timeout mark (review round 2).
+    const out = await freshBlock(d, { ...r.pend, remeasure: r.remeasure, measuredAt: r.measuredAt }, personWrote({ ...args, again: r.usedAt }), true)
     return { text: out.block, held: r, row: { nonce: r.pend.nonce, age_s: Math.round(((await d.now()) - r.usedAt) / 1000), remeasured: out.remeasured } }
   } catch {
     // Nothing went beside the prompt: the next prompt of a person's gets it.
@@ -566,6 +592,7 @@ async function freshBlock(
   // Away digest phase 1: an idle block is built again at delivery (from its stored measure, no
   // helper call), so its lane is read with the agents running now, whatever its age.
   const changed = (args.halt === true) !== (pend.args.halt === true) || args.again !== pend.args.again || args.idle === true
+    || args.questionTimedOut !== pend.args.questionTimedOut
   const at = pend.measuredAt ?? pend.builtAt
   const stored = async () => changed
     ? { ...(await buildBlockWith(d, pend.sid, args, pend.remeasure ?? null, at)), remeasured: false }

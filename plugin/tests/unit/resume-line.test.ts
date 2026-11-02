@@ -13,7 +13,7 @@ import { assembleText, hasTag } from '../../hooks/lib/assemble'
 import { assetText } from '../../hooks/lib/assets.gen'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, PENDING_FILE, RESUMED_FALLBACK, STEP1_MAX, clipStep1, pendingRecord, resumeLine, step1Of } from '../../hooks/lib/resume'
-import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
+import { HOME, SID_A, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 const RESUMED = hasTag('resume-context', 'resumed')
 const TIMEOUT = hasTag('resume-context', 'question-timeout')
@@ -53,6 +53,21 @@ describe('resume line (A): Step 1 as code reads it', () => {
     expect(step1Of('## Resume here\nStep 1: `make lint` | proposed\n')).toBe('`make lint`')
     expect(step1Of('## Resume here\nStep 1:\nGate: none')).toBeUndefined()
     expect(step1Of('no step here')).toBeUndefined()
+  })
+
+  // Review round 2: 5 of 89 real copies write the tail freely (`— for the 0.1.1 gate…`).
+  test('a free `— for the …` tail is cut too; `— for each …` inside the step is kept', () => {
+    expect(step1Of('## Resume here\nStep 1: `make gate` — for the 0.1.1 gate (U-3) | proposed\n')).toBe('`make gate`')
+    expect(step1Of('## Resume here\nStep 1: report — for the owner\'s "ship it?"\n')).toBe('report')
+    expect(step1Of('## Resume here\nStep 1: rerun — for each red case, read its log\n')).toBe('rerun — for each red case, read its log')
+  })
+
+  test('a summary with CRLF line ends gives its Step 1 (review round 2)', () => {
+    expect(step1Of('## Resume here\r\nStatus: working\r\nStep 1: `npm test`\r\nGate: none\r\n')).toBe('`npm test`')
+  })
+
+  test('a double quote of the Step 1 shows as a single one inside the quoted line (review round 2)', () => {
+    expect(resumeLine('act per that row\'s "on finish" in In flight')).toBe('Resumed · step 1: act per that row\'s \'on finish\' in In flight')
   })
 
   test('a long Step 1 keeps its start within STEP1_MAX, `…` after it; the line names it, else the fixed form', () => {
@@ -129,6 +144,40 @@ describe('resume line (A): the block', () => {
     const b = await nextBlock($, w)
     expect(b).toBeDefined()
     expect(resumedLine(b)).toBe(RESUMED ? lineFor('Resumed after compaction') : undefined)
+  })
+
+  // Review round 2: the mod found no summary, but the classic PostCompact hook saved a copy of this
+  // compaction first (the block takes its path and verdict): its Step 1 fills the line.
+  test('summary not found, the hooks side\'s copy of this nonce: the line takes that copy\'s Step 1', async ($, on) => {
+    const w = new World().install(on)
+    w.summaryMode = 'missing'
+    w.atCompact = () => {
+      const n = markerNonce(w, w.compacts[w.compacts.length - 1]?.instructions) ?? ''
+      const rel = `/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-${n.slice(0, 6)}.md`
+      w.prevCopy = '~' + rel
+      w.files.set(HOME + rel, `---\nkind: compact-summary\nnonce: ${n}\nsession_id: ${SID_A}\nactor: main\nverdict: ok\n---\n` +
+        '# LAB-42\n## Resume here\nStatus: working\nStep 1: `make check` — for "finish it"\nGate: none\n')
+    }
+    await w.start($)
+    await w.userTurn($)
+    await raiseCompact($, { trigger: 'auto' })
+    const b = await nextBlock($, w)
+    expect(b).toContain('saved copy of this summary: ~/.claude/handoffs/r/LAB-42/compact/')
+    expect(resumedLine(b)).toBe(RESUMED ? lineFor('Resumed · step 1: `make check`') : undefined)
+  })
+
+  // Review round 2: a headless load (`claude -p`, the Agent SDK: session.start `isInteractive`
+  // false) gets no [resumed] line; a script reads its reply.
+  test('a headless load: the block has no [resumed] line', async ($, on) => {
+    const w = new World().install(on)
+    w.interactive = false
+    w.resumeHere = 'Status: working\nStep 1: `npm test`\nGate: none\n'
+    await w.start($)
+    await w.userTurn($)
+    await raiseCompact($, { trigger: 'auto' })
+    const b = await nextBlock($, w)
+    expect(b).toBeDefined()
+    expect(resumedLine(b)).toBeUndefined()
   })
 
   test('a subagent compaction gets no block (subagent behaviour unchanged)', async ($, on) => {
@@ -274,6 +323,74 @@ describe('no re-ask after a timeout (B)', () => {
     const b = await nextBlock($, w) ?? ''
     expect(b).not.toContain('Open question: ')
     expect(b).not.toContain(TIMED)
+  })
+
+  // Review round 2 (mutant b6: restore dropping the mark survived): a restored record with the mark
+  // beside a question renders [question-timeout] when a turn no person started takes it.
+  test('a restored record with the mark and its question: a background turn\'s block carries [question-timeout]', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    await w.turnEnd($, 'Went on.')
+    await raiseCompact($, { trigger: 'auto' })
+    await $.session.end({ reason: 'prompt_input_exit', sessionId: SID_A, resume: { id: SID_A } } as never)
+    w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, w.files.get(`${WATCH}/${SID_A}/${PENDING_FILE}`) ?? '')
+    await w.userTurn($, 'background result', 'task-notification')
+    const lines = (await nextBlock($, w) ?? '').split('\n')
+    const q = lines.findIndex(l => l.startsWith('Open question: '))
+    expect(q >= 0).toBe(true)
+    if (TIMEOUT) expect(lines[q + 1]).toBe(TIMED)
+  })
+
+  // Review round 2: the person came back, so they wrote since the timeout; the question stays listed.
+  test('the block on the person\'s own prompt after the build: the question, no [question-timeout]; a restored record too', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    await w.turnEnd($, 'Went on.')
+    await raiseCompact($, { trigger: 'auto' })
+    await w.userTurn($, 'back, go on')
+    let b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Which database?"')
+    expect(b).not.toContain(TIMED)
+    // The same through a record restored after `claude --resume`, taken by the person's first prompt.
+    await w.turnEnd($, 'Went on.')
+    await $.tool.call(ask('Which cache?'))
+    await w.turnEnd($, 'Went on.')
+    await raiseCompact($, { trigger: 'auto' })
+    await $.session.end({ reason: 'prompt_input_exit', sessionId: SID_A, resume: { id: SID_A } } as never)
+    w.files.set(`${WATCH}/${SID_A}/${ARMED_FILE}`, w.files.get(`${WATCH}/${SID_A}/${PENDING_FILE}`) ?? '')
+    await w.userTurn($, 'resumed it')
+    b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Which cache?"')
+    expect(b).not.toContain(TIMED)
+  })
+
+  test('an idle block a background turn took keeps the mark; the block again beside the person\'s prompt drops it, the question stays', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    w.tokens = 150000
+    await w.turnEnd($, 'Went on.')
+    await w.advance(1600 * 1000)
+    await raiseCompact($, { trigger: 'auto' })
+    await w.advance(1000 * 1000)
+    await w.userTurn($, 'Background task finished.', 'task-notification')
+    const first = await nextBlock($, w) ?? ''
+    await w.turnEnd($, 'Handled the result.')
+    expect(first).toContain('"Which database?"')
+    if (TIMEOUT) expect(first).toContain(TIMED)
+    await w.advance(300 * 1000)
+    await w.userTurn($, 'back again')
+    const again = (w.submitContexts[w.submitContexts.length - 1] ?? []).join('\n')
+    expect(again).toContain('"Which database?"')
+    expect(again).not.toContain(TIMED)
   })
   // Review of the first build: step 6, [question] and the resume skill's R8 tell the model to list
   // the open question last in a later turn; a turn no person started that does so re-words the

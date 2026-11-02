@@ -424,9 +424,10 @@ export function summaryText(text: string): string | undefined {
 
 /**
  * The hooks side's copy of this compaction (the classic PostCompact hook saves it first): this
- * session's newest main copy when its frontmatter names this nonce, with its path and verdict.
+ * session's newest main copy when its frontmatter names this nonce, with its path and verdict, and
+ * its body (the summary text after the frontmatter), which the `[resumed]` line's Step 1 is read from.
  */
-async function hooksCopy(d: Deps, sid: string, nonce: string): Promise<{ path: string; verdict: Verdict } | undefined> {
+async function hooksCopy(d: Deps, sid: string, nonce: string): Promise<{ path: string; verdict: Verdict; body: string } | undefined> {
   const path = await prevCopy(d, sid)
   const file = path === undefined ? undefined : expand(path, await d.home())
   const raw = file === undefined ? undefined : await d.read(file)
@@ -435,7 +436,7 @@ async function hooksCopy(d: Deps, sid: string, nonce: string): Promise<{ path: s
   const head = raw.slice(0, end + 1)
   const verdict = /^verdict: (\S+)$/m.exec(head)?.[1]
   if (/^nonce: (\S+)$/m.exec(head)?.[1] !== nonce || verdict === undefined || !isVerdict(verdict)) return undefined
-  return { path, verdict }
+  return { path, verdict, body: raw.slice(end + 5) }
 }
 
 /** MOD-SPEC §5.2: the after-step, main and subagent. */
@@ -472,6 +473,8 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
       notSaved = undefined
       verdict = hooks.verdict
       counted = true
+      // Review round 2: the `[resumed]` line's Step 1 from that copy too.
+      step1 = step1Of(hooks.body)
     } else escalate(d, 'copy-failed')
   } else {
     const det = detectSummary(text, d.name, { dispatchNonce: a.nonce, scope: main ? 'main' : 'sub' })
