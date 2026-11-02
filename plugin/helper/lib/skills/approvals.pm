@@ -825,7 +825,7 @@ sub _default_branches {
 # transcript's denied calls, transcript::denied_calls, read in memory only).
 sub lint {
     my ($lines, %a) = @_;
-    my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, context => 0, classes => [], origins => {});
+    my %r = (blocking => [], advisory => [], checked => [], lines => 0, unchecked => 0, context => 0, classes => [], origins => {}, why => {});
     return \%r unless enabled();
     my $in = section_lines($lines);
     my ($tag_re, $note) = ($a{tag_re}, $a{note} // '');
@@ -836,7 +836,7 @@ sub lint {
     # standing and a state, the opposite).
     my $shape = $cx_only ? 'approval-plugin-turn' : 'approval-shape';
     my $dn_ok = !$cx_only && denied_enabled();
-    my @own;
+    my (@own, @dup);
     for my $i (0 .. $#$lines) {
         my $l = $lines->[$i];
         my $tagged = $tag_re && $l =~ $tag_re ? 1 : 0;
@@ -874,9 +874,16 @@ sub lint {
             }
         }
         # One line per id (REVIEW-NIGHT-3 R3-05): approvals_checked lists ids, so a second line
-        # with a checked line's id would ride on its check.
-        if (grep { $_->{id} eq $e->{id} } @own) { push @{ $r{blocking} }, [ $shape, $where ]; next }
+        # with a checked line's id would ride on its check. In a plugin handoff turn (0.1.3
+        # APPROVALS, review round 2) such a line, already the plain context-only form, waits for
+        # the quote check: when the earlier line fails its quote (publish moves it), this one is
+        # the id's only line and stays or moves on its own check.
         $e->{where} = $where;
+        if (grep { $_->{id} eq $e->{id} } @own, @dup) {
+            if ($cx_only) { push @dup, $e; next }
+            push @{ $r{blocking} }, [ $shape, $where ];
+            next;
+        }
         push @own, $e;
     }
     # AC-2: a usable line whose action this session was refused for (see _denied).
@@ -893,23 +900,41 @@ sub lint {
         }
     }
     my @ask;
-    for my $e (@own) {
+    for my $e (@own, @dup) {
         if ($e->{context}) { if (_carried_context($e, $a{chain})) { $e->{ok} = 1; next } }
         elsif (my $d = _carried($e, $a{chain})) { $e->{ok} = 1; $e->{origin} = _origin_word($d->{origins}{ $e->{id} }); next }
         push @ask, $e;
     }
     if (@ask) {
         my ($fok, $floor) = ref $a{quote_floor} eq 'ARRAY' ? @{ $a{quote_floor} } : (1, undef);
-        my @org;
+        my (@org, @why);
         my $res = defined $a{transcript} && $fok
-            ? skills::core::quotes_found($a{transcript}, [ map { _ask($_) } @ask ], $a{sid}, after => $floor, origins => \@org)
+            ? skills::core::quotes_found($a{transcript}, [ map { _ask($_) } @ask ], $a{sid}, after => $floor, origins => \@org, why => \@why)
             : undef;
         for my $k (0 .. $#ask) {
             my $v = $res ? $res->[$k] : undef;
-            if (!defined $v) { push @{ $r{advisory} }, [ 'approval-unchecked', $ask[$k]{where} ]; $r{unchecked}++ }
-            elsif ($v) { $ask[$k]{ok} = 1; $ask[$k]{origin} = _origin_word($org[$k]) }
-            else { push @{ $r{blocking} }, [ 'approval-quote', $ask[$k]{where} ] }
+            $ask[$k]{quote_res} = $v;
+            if ($v) { $ask[$k]{ok} = 1; $ask[$k]{origin} = _origin_word($org[$k]) }
+            elsif (defined $v) { $ask[$k]{failed} = 1; $ask[$k]{why} = $why[$k] }
         }
+    }
+    # The verdict of a quote check: approval-unchecked, or approval-quote with the reason
+    # (`why`: copy, claim or pasted, else none; move_why words it).
+    my $verdict = sub {
+        my ($e) = @_;
+        return unless exists $e->{quote_res};
+        if (!defined $e->{quote_res}) { push @{ $r{advisory} }, [ 'approval-unchecked', $e->{where} ]; $r{unchecked}++ }
+        elsif ($e->{failed}) { push @{ $r{blocking} }, [ 'approval-quote', $e->{where} ]; $r{why}{ $e->{where} } = $e->{why} if defined $e->{why} }
+    };
+    $verdict->($_) for @own;
+    # A waiting line (plugin turn): a duplicate while the id's earlier line stays, else on its own.
+    my %hold = map { ($_->{id} => $_) } @own;
+    for my $e (@dup) {
+        my $h = $hold{ $e->{id} };
+        if ($h && !$h->{failed}) { push @{ $r{blocking} }, [ $shape, $e->{where} ]; next }
+        $hold{ $e->{id} } = $e;
+        push @own, $e;
+        $verdict->($e);
     }
     my %cls;
     # A context-only line is never checked: it grants nothing, here or after a resume.
@@ -921,6 +946,168 @@ sub lint {
     }
     $r{classes} = [ sort keys %cls ];
     return \%r;
+}
+
+# ---- moved approvals (0.1.3 APPROVALS)
+# On 0.1.2, 8 of 15 publish calls were refused, each by approval-quote or approval-plugin-turn;
+# the model went round between the two rules or deleted the whole section. Publish now moves such
+# a line out of `## Approvals` into `## Open questions` as a re-ask (the user's words kept as
+# context, the action, its targets and the rule in plain words) and publishes; the line is gone
+# from the section, so it is never listed in approvals_checked, never hashed and never measured
+# as an approval (the made-up-quote guard holds: nothing outside `## Approvals` counts). Only an
+# own (untagged) approval line inside the section moves; a tagged line, a line outside the section,
+# a shape fault of a handoff the user asked for and approval-denied still refuse.
+our %MOVE_RULES = map { $_ => 1 } qw(approval-quote approval-plugin-turn);
+our $OPEN_HEADING = '## Open questions';
+# The rule each moved line broke, in plain words (the Open questions item and the ADVISORY line).
+our %MOVE_WHY = (
+    short => 'a quote under 4 words counts only as the user\'s whole message, or one line of a numbered reply, answering your message that names its target',
+    long => 'these words are not in a message the user typed in this session or in their answer to a question dialog',
+    plugin => 'the plugin asked for this handoff, not the user, so an approval in it may only be written in the context-only form',
+    dup => 'another line of Approvals already has this id, and each id may hold one line',
+    copy => 'these words are only in messages copied from another session (a fork or a background copy), not typed in this session',
+    claim => 'these words come before another session took this one over by resuming its handoff, and only messages after that count',
+    pasted => 'the message holding these words also holds an approval line or a re-ask item, so it was pasted and none of its words count',
+);
+
+# move_why(rule, line, reason) -> the plain-words reason a line failing `rule` cannot carry. In a
+# plugin handoff turn a line already in the plain context-only form fails only as a second line
+# with one id (lint, "One line per id"), so that is its reason. An approval-quote line whose words
+# are only in a row that does not count for another reason (lint's `why`: copy, claim, pasted;
+# review round 2) gets that reason, else the plain rule (a short quote's, or a longer one's).
+sub move_why {
+    my ($rule, $l, $why) = @_;
+    if ($rule eq 'approval-plugin-turn') {
+        my $e = parse_context_line($l);
+        return $e && !$e->{question} && !$e->{denied} ? $MOVE_WHY{dup} : $MOVE_WHY{plugin};
+    }
+    return $MOVE_WHY{$why} if defined $why && $why =~ /\A(?:copy|claim|pasted)\z/;
+    my ($q) = ($l // '') =~ /\bU-[0-9]+:\s*approval\s+"(.+?)"/;
+    my @w = grep { length } split /\s+/, $q // '';
+    my $sw = do { no warnings 'once'; $transcript::SHORT_WORDS } // 4;
+    return @w && @w < $sw ? $MOVE_WHY{short} : $MOVE_WHY{long};
+}
+
+# move_lines(body, [[rule, where]…], {where => reason}, other texts…) -> (new body, [{line, id, q,
+# rule, why, refs => [line…], see => [line…]}…], [[rule, where]…] kept)
+# Each blocking item of %MOVE_RULES on an own approval line of `## Approvals` moves that line to
+# `## Open questions` as `- Q-<n>: re-ask before acting: <action> · targets <…> · words recorded as
+# the user's: "<…>"[ (answer to "<…>")][ · denied <how> <stamp>] (was U-<k>; not carried: <why>)
+# · owner user · raised by agent · unasked` (a line that does not parse: `as written: <its text
+# after U-<k>: approval>`). Never `U-<k>:`, so no ledger or approval reader takes it; a message
+# that pastes it never counts as the user's words (transcript.pm, $PASTED). Q numbers: the next
+# free one above every Q-<n> in the body and the other texts (the base, the own file and the
+# stage's ledger.md: spec §4 keeps ids across a chain), in line order. A denied context line keeps
+# its denial note (AC-2: the next session sees the action was refused). A lone `none` there is
+# replaced; the item goes before a `Queued:` line (queue.md: that line stays last) and after a
+# table with a blank line between. A section left with no line is dropped. Any other item is
+# kept (it still refuses); without an Open questions section nothing moves.
+# References (review round 2): elsewhere in the file (not in `## Approvals`, not on a tagged line
+# or a re-ask item) an exact `U-<k>` token of a moved id, outside double quotes and backticks and
+# not an end of an id range, now reads its `Q-<m>` (refs: the draft's line numbers), unless the
+# id is moved twice or a kept line still holds it (`- U-<k>:`); when `## Approvals` is dropped, a
+# "see Approvals" pointer reads "see Open questions" (see, on the last moved line's entry).
+sub move_lines {
+    my ($body, $items, $reasons, @other) = @_;
+    my @lines = split /\n/, $body // '', -1;
+    my $in = section_lines(\@lines);
+    my $tag_re = skills::spec::regex_at('carry.tag_re');
+    my (%mv, @keep);
+    for my $it (@{ $items || [] }) {
+        my ($n) = $MOVE_RULES{ $it->[0] } && ($it->[1] // '') =~ /\Aline ([0-9]+)\z/ ? ($1) : ();
+        my $i = defined $n ? $n - 1 : -1;
+        if ($i >= 0 && $in->{$i} && is_approval_line($lines[$i]) && !($tag_re && $lines[$i] =~ $tag_re)) {
+            $mv{$i} //= $it->[0];
+            next;
+        }
+        push @keep, $it;
+    }
+    my ($oq) = grep { $lines[$_] =~ /\A##\s/ && index($lines[$_], $OPEN_HEADING) == 0 } 0 .. $#lines;
+    return ($body, [], $items || []) unless %mv && defined $oq;
+    my $qn = 0;
+    for (@lines, grep { defined } @other) { while (/\bQ-([0-9]+)\b/g) { $qn = $1 if $1 > $qn } }
+    my (@moved, @add);
+    for my $i (sort { $a <=> $b } keys %mv) {
+        my $l = $lines[$i];
+        my $why = move_why($mv{$i}, $l, ref $reasons eq 'HASH' ? $reasons->{ 'line ' . ($i + 1) } : undef);
+        my $e = parse_line($l) // parse_context_line($l);
+        my ($id) = $l =~ /\b(U-[0-9]+):\s*approval\b/;
+        my $what;
+        if ($e) {
+            my ($ask) = $l =~ /"\Q$e->{quote}\E"( \(answer to ".+?"\))? — action /;
+            $what = "$e->{action} · targets $e->{targets_text} · words recorded as the user's: \"$e->{quote}\"" . ($ask // '');
+            if ($e->{denied}) {
+                my ($dn) = $l =~ /( · denied [^·]+?)(?: · given .+)?\z/;
+                $what .= $dn if defined $dn;
+            }
+        } else {
+            (my $rest = $l) =~ s/\A.*?\bU-[0-9]+:\s*approval\s*//;
+            $what = "as written: $rest";
+        }
+        # Never an approval line outside the section (approval-shape reads `U-<k>: approval`).
+        $what =~ s/\b(U-[0-9]+):(\s*approval\b)/$1$2/g;
+        my $q = 'Q-' . ++$qn;
+        push @add, "- $q: re-ask before acting: $what (was $id; not carried: $why) · owner user · raised by agent · unasked";
+        push @moved, { line => $i + 1, id => $id, q => $q, rule => $mv{$i}, why => $why };
+    }
+    # References to a moved id, and "see Approvals" pointers once the section is dropped.
+    my %n_id;
+    $n_id{ $_->{id} }++ for grep { defined $_->{id} } @moved;
+    my %to = map { ($_->{id} => $_) } grep { defined $_->{id} && $n_id{ $_->{id} } == 1 } @moved;
+    for my $i (grep { !$mv{$_} } 0 .. $#lines) {
+        delete $to{$1} if $lines[$i] =~ /\A\s*(?:[-*+]\s+)?(U-[0-9]+):/;
+    }
+    my $drop = !grep { $lines[$_] =~ /\S/ && !$mv{$_} } keys %$in;
+    my @see;
+    for my $i (0 .. $#lines) {
+        next if $in->{$i} || $mv{$i} || ($tag_re && $lines[$i] =~ $tag_re) || $lines[$i] =~ /\(was U-[0-9]+; not carried:/;
+        my @seg = split /("[^"]*"|“[^”]*”|`[^`]*`)/, $lines[$i], -1;
+        my $pt = 0;
+        for my $k (grep { $_ % 2 == 0 } 0 .. $#seg) {
+            $seg[$k] =~ s{(?<![\w-])(?<!\.\.)(?<!–)(U-[0-9]+)(?![\w-])(?!\.\.|–)}{
+                my $m = $to{$1};
+                if ($m) { push @{ $m->{refs} }, $i + 1 unless @{ $m->{refs} || [] } && $m->{refs}[-1] == $i + 1; $m->{q} } else { $1 }
+            }ge if %to;
+            $pt += $seg[$k] =~ s/\b([Ss]ee (?:the )?)(## )?Approvals\b/$1$2Open questions/g if $drop;
+        }
+        push @see, $i + 1 if $pt;
+        $lines[$i] = join '', @seg;
+    }
+    $moved[-1]{see} = \@see if @see;
+    # Open questions: its body runs to the next main heading.
+    my $end = $oq + 1;
+    $end++ while $end <= $#lines && !($lines[$end] =~ /\A##\s/ && $lines[$end] !~ /\A###/);
+    my @sec = @lines[ $oq + 1 .. $end - 1 ];
+    my @body_idx = grep { $sec[$_] =~ /\S/ } 0 .. $#sec;
+    if (@body_idx == 1 && $sec[ $body_idx[0] ] =~ /\A\s*none\s*\z/) {
+        splice @sec, $body_idx[0], 1, @add;
+    } else {
+        my ($qd) = grep { $sec[$_] =~ /\A[\s>|*-]*Queued:/ } 0 .. $#sec;
+        my $at = defined $qd ? $qd : (@body_idx ? $body_idx[-1] + 1 : 0);
+        my @ins = @add;
+        unshift @ins, '' if $at > 0 && $sec[ $at - 1 ] =~ /\A\s*\|/;
+        splice @sec, $at, 0, @ins;
+    }
+    splice @lines, $oq + 1, $end - $oq - 1, @sec;
+    # The moved lines leave `## Approvals`: a line before Open questions keeps its index, one
+    # after it shifts by the lines Open questions gained (the spec puts Approvals first).
+    my %gone = map { $_ => 1 } keys %mv;
+    my @out;
+    my $shift = scalar(@sec) - ($end - $oq - 1);
+    for my $i (0 .. $#lines) {
+        my $orig = $i <= $oq ? $i : $i > $oq + scalar(@sec) ? $i - $shift : undef;
+        next if defined $orig && $gone{$orig};
+        push @out, $lines[$i];
+    }
+    # An `## Approvals` left with no line is dropped (the template omits an empty section).
+    my $ai = section_lines(\@out);
+    my ($ah) = grep { $out[$_] =~ /\A\Q$HEADING\E\s*\z/ } 0 .. $#out;
+    if (defined $ah && !grep { $out[$_] =~ /\S/ } keys %$ai) {
+        my @drop = ($ah, keys %$ai);
+        my %d = map { $_ => 1 } @drop;
+        @out = map { $out[$_] } grep { !$d{$_} } 0 .. $#out;
+    }
+    return (join("\n", @out), \@moved, \@keep);
 }
 
 # One quote check's ask: the quote, the targets and the action (the matching-item rule reads the

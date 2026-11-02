@@ -20,6 +20,9 @@ package skills::publish;
 # 0.1.2 (D-8): in a stage bound to a plugin handoff turn every own approval is context only
 # (skills/approvals.pm): no approvals_checked and no line-hash record, so nothing carries; the
 # frontmatter says `requested_by: plugin` (AC-4).
+# 0.1.3 APPROVALS: an own approval line of `## Approvals` failing approval-quote or
+# approval-plugin-turn moves to `## Open questions` as a re-ask instead of refusing (one ADVISORY
+# line each; skills::approvals::move_lines); a written row gains `approvals_moved` (a count).
 use strict;
 use warnings;
 use utf8;
@@ -116,22 +119,48 @@ sub run {
     # outside the store).
     my @achain = grep { defined } skills::approvals::chain_doc($own_path, $ctx, $s->{session_id});
     my $transcript = skills::approvals::transcript_path($ctx, $s->{session_id}, $s->{cwd}, $s->{worktree});
-    my $res = eval { skills::lint::lint({
-        body => $body, recipes => \%recipes, extra => \%extra, previous => $prev_text,
-        previous_kind => $s->{previous_kind}, own_previous => $own_text,
-        repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($body, $m, $xplan) : undef),
-        jobs => $jobs, times => skills::stage::printed_times($dir, $s), evidence => $ev, bucket => $s->{bucket},
-        brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
-        queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
-        quote_floor => [ skills::approvals::quote_floor($ctx, $s->{session_id}) ],
-        approval_context_only => (defined $ht ? 1 : 0),
-    }) };
-    if (!$res) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
+    my $times = skills::stage::printed_times($dir, $s);
+    my $floor = [ skills::approvals::quote_floor($ctx, $s->{session_id}) ];
+    my $lint = sub {
+        my ($text) = @_;
+        my $r = eval { skills::lint::lint({
+            body => $text, recipes => \%recipes, extra => \%extra, previous => $prev_text,
+            previous_kind => $s->{previous_kind}, own_previous => $own_text,
+            repo_mode => ($repo ? 1 : 0), export_text => ($repo ? skills::export::body($text, $m, $xplan) : undef),
+            jobs => $jobs, times => $times, evidence => $ev, bucket => $s->{bucket},
+            brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
+            queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
+            quote_floor => $floor,
+            approval_context_only => (defined $ht ? 1 : 0),
+        }) };
+        if (!$r) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
+        return $r;
+    };
+    my $res = $lint->($body);
+    # 0.1.3 APPROVALS: an own approval line of `## Approvals` that fails approval-quote or
+    # approval-plugin-turn no longer refuses: it moves to `## Open questions` as a re-ask
+    # (skills::approvals::move_lines) and one ADVISORY line per moved approval says so, with the
+    # draft's line number and the rule in plain words. When nothing else blocks, the moved text is
+    # linted again and published (its approvals, checks and hashes are the moved text's); when
+    # something else blocks, publish refuses as before and the ADVISORY lines say what publish will
+    # move once the rest passes.
+    # Q numbers go on above the chain's (spec §4): the base, the own file and the stage's ledger.
+    # The reason a quote failed (copy, claim, pasted: review round 2) comes from the lint.
+    my ($mbody, $moved, $keep) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
+                                                               $prev_text, $own_text, $extra{'ledger.md'});
+    my %rules;
+    if (@$moved) {
+        $rules{ $_->{rule} } = 1 for @$moved;
+        if (!@$keep) {
+            $body = $mbody;
+            $res = $lint->($body);
+            $keep = $res->{blocking};
+        }
+    }
     $row->{bytes} = skills::util::blen($body);
     $row->{size_band} = _band($row->{bytes});
-    my @b = @{ $res->{blocking} };
+    my @b = @$keep;
     my @a = @{ $res->{advisory} };
-    my %rules;
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
     $row->{acuity} = $res->{acuity} // '-';
@@ -156,6 +185,19 @@ sub run {
         skills::cli::say("  why: $t->{why} · fix: $t->{fix}");
     };
     for (@b) { skills::cli::say("LINT $_->[0] $_->[1]"); $why->($_->[0]) }
+    # A moved line needs no Edit: its why/fix line says so (the rule's own fix asks for a rewrite,
+    # and a second publish of a written stage is refused as already-published).
+    my $moved_fix = @b ? 'none needed: publish moves the line once the LINT lines are fixed'
+                       : 'none needed: the handoff is written with the line moved; list it in the report';
+    for (@$moved) {
+        # Review round 2: the draft lines whose references now read the new id or Open questions.
+        my $refs = $_->{refs} ? sprintf('; line%s %s cite%s %s instead', (@{ $_->{refs} } > 1 ? ('s', join(', ', @{ $_->{refs} }), '') : ('', $_->{refs}[0], 's')), $_->{q}) : '';
+        my $see = $_->{see} ? sprintf('; line%s %s say%s see Open questions instead', (@{ $_->{see} } > 1 ? ('s', join(', ', @{ $_->{see} }), '') : ('', $_->{see}[0], 's'))) : '';
+        skills::cli::say("ADVISORY $_->{rule} line $_->{line}: $_->{id} goes to Open questions as $_->{q}, a re-ask; $_->{why}$refs$see");
+        next if !%$texts || $told{"moved $_->{rule}"}++;
+        my $t = $texts->{ $_->{rule} } or die "lint id $_->{rule} has no lint_texts entry in the spec\n";
+        skills::cli::say("  why: $t->{why} · fix: $moved_fix");
+    }
     for (@a) { skills::cli::say("ADVISORY $_->[0] $_->[1]"); $why->($_->[0]) }
     if (@b) {
         $row->{result} = 'REFUSED:lint';
@@ -163,6 +205,8 @@ sub run {
         $ctx->log('handoff_publish', $row);
         die skills::cli::refuse(sprintf('lint (%d blocking); draft kept at %s/body.md', scalar @b, $dir));
     }
+    # Only a written file holds moved lines (a refused draft is kept as written).
+    $row->{approvals_moved} = scalar @$moved if @$moved;
 
     # ---- file the stage into evidence/<stem>/
     my $now = skills::util::now();

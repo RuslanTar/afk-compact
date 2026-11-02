@@ -64,7 +64,7 @@
   },
   {
    "write": "$STAGE/body.md",
-   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-3: approval \"1. publish yourself.\" — action publish the package to npm · targets package afk-compact @ 0.1.0 · once · not yet used\n- U-4: approval \"publish yourself\" — action publish the package to npm · targets package afk-compact @ 0.1.0 · once · not yet used\n- U-5: approval \"yes\" — action git push origin feat/w · targets branch feat/w @ 1a2b3c4 · once · not yet used\n- U-6: approval \"yes\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-7: approval \"1. yes\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-8: approval \"ok\" — action git push origin feat/v · targets branch feat/v @ 1a2b3c4 · once · not yet used\n- U-9: approval \"merge it\" — action merge MR !31 · targets MR !31 @ head 1f1f1f1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — approvals recorded, push pending\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-3: approval \"1. publish yourself.\" — action publish the package to npm · targets package afk-compact @ 0.1.0 · once · not yet used\n- U-4: approval \"publish yourself\" — action publish the package to npm · targets package afk-compact @ 0.1.0 · once · not yet used\n- U-5: approval \"yes\" — action git push origin feat/w · targets branch feat/w @ 1a2b3c4 · once · not yet used\n- U-6: approval \"yes\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-7: approval \"1. yes\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-8: approval \"ok\" — action git push origin feat/v · targets branch feat/v @ 1a2b3c4 · once · not yet used\n- U-9: approval \"merge it\" — action merge MR !31 · targets MR !31 @ head 1f1f1f1 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window` (checked 14:05)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "name": "matching item: a numbered line counts only for the item that names the target, or when it holds the action or a target",
@@ -81,17 +81,18 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT approval-quote line 10$",
-     "^LINT approval-quote line 13$",
-     "^LINT approval-quote line 15$",
-     "^LINT approval-quote line 16$",
-     "^REFUSED: lint \\(4 blocking\\)"
+     "^LINT time-format line 31$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; ",
+     "^ADVISORY approval-quote line 13: U-5 goes to Open questions as Q-2, a re-ask; ",
+     "^ADVISORY approval-quote line 15: U-7 goes to Open questions as Q-3, a re-ask; ",
+     "^ADVISORY approval-quote line 16: U-8 goes to Open questions as Q-4, a re-ask; ",
+     "^REFUSED: lint \\(1 blocking\\)"
     ],
     "stdout_lacks": [
-     "approval-quote line 11$",
-     "approval-quote line 12$",
-     "approval-quote line 14$",
-     "approval-quote line 17$",
+     "approval-quote line 11\\b",
+     "approval-quote line 12\\b",
+     "approval-quote line 14\\b",
+     "approval-quote line 17\\b",
      "approval-unchecked",
      "approval-shape"
     ]

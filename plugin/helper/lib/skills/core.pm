@@ -38,7 +38,7 @@ package skills::core;
 #   rc::sid_dir(), rc::mode($cwd)      -> <watch>/<sid>; the D-12 mode record (repomode::decide)
 #   handoff_turn::open_for_begin / bind_stage / stage_of / mark_published / record (D-18 B7, B8)
 #   sidecar::newest($sid_dir)          -> the slot of the highest seq (DP-13)
-#   transcript::quotes_found($path, [{quote, targets, action}], $sid, since => $epoch [, origins => \@kinds])
+#   transcript::quotes_found($path, [{quote, targets, action}], $sid, since => $epoch [, origins => \@kinds] [, why => \@reasons])
 #                                        -> [1|0|undef…] | undef (AP-4; origins: owner xxxxxxxx-12)
 #   sessions::own_start($sid)          -> {since, until, coarse} from the session's per-process
 #                                        records | undef (review of bcdaca6: coarse = no milliseconds)
@@ -200,9 +200,11 @@ sub quotes_found {
     # or after it count, and a coarse start's order-only window ends there too (fail closed).
     if (defined $o{after} && $o{after} > $s->{since}) {
         my $f = $s->{coarse} && $s->{until} > $o{after} ? $s->{until} : $o{after};
-        %w = (since => $f);
+        %w = (since => $f, start => $s->{since});
     }
     $w{origins} = $o{origins} if ref $o{origins} eq 'ARRAY';
+    # `why` (0.1.3 APPROVALS): the reason each quote not found failed (transcript::quotes_found).
+    $w{why} = $o{why} if ref $o{why} eq 'ARRAY';
     my $r = transcript::quotes_found($path, $asks, $sid, %w);
     return ref $r eq 'ARRAY' ? $r : undef;
 }
