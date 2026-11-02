@@ -23,7 +23,8 @@ test('AT-M1-06: main auto mid-turn: dispatch resolves before next; marker nonce 
   expect(w.flag(d[0], '--midturn')).toBe('true')
   expect(instr.startsWith('keep the SQL\n\nThe user\'s ')).toBe(true)
   expect(instr).toContain('This began mid-turn: the last step is [unverified] unless shown done.')
-  expect(instr.endsWith('Replace, never extend, the earlier summary.\n')).toBe(true)
+  // 0.1.3 small fixes: the closing-line rule is the last line, after the size aim
+  expect(instr.endsWith('Replace, never extend, the earlier summary.\nLast line before </summary>: ' + sentinelText(w.name, nonce ?? '') + '\n')).toBe(true)
   expect(w.callsOf('checkpoint').length).toBe(1)
 })
 
@@ -495,6 +496,29 @@ test('QA-B3 (mod part): queue_cmd unset: no [queue] line and no queue tag', asyn
   await raiseCompact($, { trigger: 'auto' })
   expect(w.compacts[0]?.instructions ?? '').not.toContain(QUEUE_LINE)
   expect((w.flag(w.callsOf('dispatch')[0], '--tags') ?? '').split(',')).not.toContain('queue')
+})
+
+// 0.1.3 (root decision on the small-fixes review): a summary complete but for its closing line
+// reads ok-unclosed, an ok verdict: no fallback note, no toast, never toward the 2-in-a-row halt;
+// the compaction line names the word. A summary cut inside its body stays truncated.
+test('ok-unclosed: complete but for the closing line: no nonok note or toast, two in a row never halt, the line names the word; cut in the body still halts', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  w.summaryMode = 'unclosed'
+  await raiseCompact($, { trigger: 'auto' })
+  await w.advance(COMPACT_LINE_DELAY_MS)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.advance(COMPACT_LINE_DELAY_MS)
+  expect(w.rowsOf('halt')).toEqual([])
+  expect(w.toasts.some(t => t.includes('not in handoff format'))).toBe(false)
+  const block = (await $.prompt.context({ blocks: [] })).blocks.find(b => b.name === `${w.name}-resume`)
+  expect(block?.text).toBeDefined()
+  expect(block?.text).not.toContain('Summary not in handoff format')
+  expect(w.compactLines[0]).toBe(`${w.name}: compaction ok-unclosed · copy saved`)
+  w.summaryMode = 'truncated'
+  await raiseCompact($, { trigger: 'auto' })
+  await raiseCompact($, { trigger: 'auto' })
+  expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['2-nonok', true]])
 })
 
 // Owner 2026-10-30 07:52 ("not clear if the compaction went well"): one dim transcript line after

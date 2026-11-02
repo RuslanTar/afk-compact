@@ -36,6 +36,9 @@ use skills::spec;
 use skills::core;
 use skills::approvals;
 
+# The most line numbers `ADVISORY secret-warn` names (0.1.3); the rest are counted as +<n>.
+our $WARN_LINES_MAX = 10;
+
 # Ephemeral locations (TPL §5 "Rule").
 my $PATH_CH = qr{[^\s`'"<>()\[\],;]};
 # An ephemeral path starts the path: `/tmp/` inside a longer path is not one.
@@ -354,13 +357,17 @@ sub lint {
     }
 
     # ---- secrets: HARD blocks; WARN is advisory with rule ids (D-13)
-    my (%warn);
+    # 0.1.3: a WARN hit names its line numbers too (body.md's bare, another file's as <file>:<n>)
+    my (%warn, @warn_at);
     my @texts = ([ 'body.md', $body ], (map { [ "restart/$_", $in->{recipes}{$_} ] } sort keys %{ $in->{recipes} || {} }),
                  (map { [ $_, $in->{extra}{$_} ] } sort keys %{ $in->{extra} || {} }));
     for my $t (@texts) {
-        my $hits = skills::core::secrets_scan($t->[1]);
+        my $hits = skills::core::secrets_scan($t->[1], lines => 1);
         my %hard = map { $_->{rule} => 1 } grep { $_->{class} eq 'HARD' } @$hits;
-        $warn{ $_->{rule} } = 1 for grep { $_->{class} ne 'HARD' } @$hits;
+        my @w = grep { $_->{class} ne 'HARD' } @$hits;
+        $warn{ $_->{rule} } = 1 for @w;
+        my %ln = map { $_ => 1 } map { @{ $_->{lines} || [] } } @w;
+        push @warn_at, map { $t->[0] eq 'body.md' ? $_ : "$t->[0]:$_" } _by_number(keys %ln);
         push @block, [ 'secret-hard', "$t->[0] rules=" . join(',', sort keys %hard) ] if %hard;
     }
 
@@ -433,7 +440,10 @@ sub lint {
         push @adv, [ 'changes', "n=$chg" ] if $chg > 15;
         push @adv, [ 'must-read', "n=$mr" ] if $mr > 3;
     }
-    push @adv, [ 'secret-warn', 'rules=' . join(',', sort keys %warn) ] if %warn;
+    if (%warn) {
+        my @at = @warn_at > $WARN_LINES_MAX ? (@warn_at[0 .. $WARN_LINES_MAX - 1], '+' . (@warn_at - $WARN_LINES_MAX)) : @warn_at;
+        push @adv, [ 'secret-warn', 'rules=' . join(',', sort keys %warn) . (@at ? ' lines=' . join(',', @at) : '') ];
+    }
     # Dev-1 D2: a recipe whose command: differs from the plugin's job record of its task.
     for my $name (sort keys %{ $in->{recipes} || {} }) {
         my $t = $in->{recipes}{$name};
@@ -486,6 +496,9 @@ sub _foreign_carried {
     }
     return \%c;
 }
+
+# numbers ascending (lint() holds a lexical $b, the brand, so it cannot sort with $a and $b itself)
+sub _by_number { return sort { $a <=> $b } @_ }
 
 sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }
 

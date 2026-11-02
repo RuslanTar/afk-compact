@@ -84,7 +84,7 @@ sub integrity {
         $res = 's=sub';
     } elsif ($writer eq 'mod' || $writer eq 'postcompact-fallback') {
         my $v = $fm->{verdict} // ($det ? $det->{verdict} : '') // '';
-        $res = ($v eq 'ok' || $v eq 'ok-trailer') ? 'ok' : 'unshaped';
+        $res = $v =~ /\Aok(?:-trailer|-unclosed)?\z/ ? 'ok' : 'unshaped';
     } elsif (!$marker && !defined $fm->{kind}) {
         $res = 'legacy';
     } elsif ($marker && !$sentinel) {

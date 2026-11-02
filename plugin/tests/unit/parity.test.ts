@@ -8,7 +8,7 @@ import type { AssetName } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assemble } from '../../hooks/lib/assemble'
 import type { DetectContext } from '../../hooks/lib/detect'
-import { detectSummary } from '../../hooks/lib/detect'
+import { detectSummary, isOk } from '../../hooks/lib/detect'
 import type { Deps, RunResult } from '../../hooks/lib/deps'
 import { LAUNCHER_DIR, launcherPath, storeWord } from '../../hooks/lib/deps'
 import { checkpoint, claim, handoffState, handoffTurnOpen, handoffTurnSupersede, ident, logJobs, measure, parseHandoffState, parseSave, prevCopy } from '../../hooks/lib/helper'
@@ -111,6 +111,24 @@ describe('CC311-01 2.1.311 summaries: TS detector vs summaries/cc311', () => {
     const r = detectSummary(open?.text ?? '', BRAND.name, { dispatchNonce: open?.nonce ?? undefined, scope: 'main' })
     expect(r.normalized.startsWith('<system-reminder>\n')).toBe(true)
     expect(r.sha256).not.toBe(post?.normalized_sha256)
+  })
+})
+
+// 0.1.3 ok-unclosed (UNCL-01): no closing line; complete main (optional sections left out) and sub
+// bodies read ok-unclosed, an ok verdict; cut inside the body, an empty last section or the main
+// sections out of order stay truncated. The Perl detector reads the same table (UNCL-01).
+describe('UNCL-01 summaries with no closing line: TS detector vs summaries/unclosed', () => {
+  test('every entry gives its tuple; ok-unclosed is ok to readers, truncated is not', () => {
+    const g = CORPUS_GEN as unknown as Record<string, unknown>
+    const un = g['CORPUS_UNCLOSED'] as { file: string; text: string; verdict: string; marker_line: number | null; sentinel_from_end: number | null; nonce: string | null; scope: string | null; normalized_sha256: string }[] | undefined
+    expect(un?.length).toBe(7)
+    for (const c of un ?? []) {
+      const r = detectSummary(c.text, BRAND.name, { dispatchNonce: c.nonce ?? undefined, scope: c.scope === 'sub' ? 'sub' : 'main' })
+      expect({ file: c.file, verdict: r.verdict, sentinel_from_end: r.sentinel_from_end, sha: r.sha256 })
+        .toEqual({ file: c.file, verdict: c.verdict, sentinel_from_end: null, sha: c.normalized_sha256 })
+      expect({ file: c.file, ok: isOk(r.verdict) }).toEqual({ file: c.file, ok: c.verdict === 'ok-unclosed' })
+    }
+    expect((un ?? []).map(c => c.verdict)).toEqual(['ok-unclosed', 'truncated', 'truncated', 'ok-unclosed', 'truncated', 'truncated', 'ok-unclosed'])
   })
 })
 

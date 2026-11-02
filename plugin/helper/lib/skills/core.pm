@@ -16,7 +16,7 @@ package skills::core;
 #   identity::claude_pid()             -> {pid, lstart}
 #   identity::start_time($pid)         -> start time in the record format, or undef
 #   nonce::draw($sid)                  -> 8 lowercase hex
-#   secrets::scan($text)               -> [{rule, class}]
+#   secrets::scan($text [, lines => 1]) -> [{rule, class [, lines => [n, ...]]}] (0.1.3: lines)
 #   secrets::classify_file($path)      -> (copy | redact | withhold, [{rule, class}])
 #   secrets::redact($text)             -> ($redacted_text, [{rule, class}]) over every rule class
 #   evidence::copy($src,$dir,\%caps,$index) -> {status, copy, bytes, sha256, mtime, scan, rules}
@@ -240,10 +240,11 @@ sub session_ended {
 }
 
 sub secrets_scan {
-    my ($text) = @_;
-    my $r = secrets::scan($text);
+    my ($text, %o) = @_;
+    my $r = secrets::scan($text, ($o{lines} ? (lines => 1) : ()));
     return [] unless ref $r eq 'ARRAY';
-    return [ map { { rule => $_->{rule} // $_->{id} // 'unknown', class => uc($_->{class} // 'WARN') } } @$r ];
+    return [ map { { rule => $_->{rule} // $_->{id} // 'unknown', class => uc($_->{class} // 'WARN'),
+                     (ref $_->{lines} eq 'ARRAY' ? (lines => $_->{lines}) : ()) } } @$r ];
 }
 
 sub classify_file {

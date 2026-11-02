@@ -2,7 +2,8 @@
 # §6.3 (the list below, as folded on 2026-10-22; `bg` is a sidecar file, never exported) and
 # every `ev` the shipped code writes (found in the plugin source: rc::emit, log_row,
 # log_event/ctx::log, the mod's log()) has an export-schema entry, and every class in the
-# schema is one the transform knows. An `ev` not in the schema drops the whole row (counted).
+# schema is one the transform knows. An `ev` not in the schema drops the whole row (counted). Every
+# verdict of the spec is in the export enum, and the watcher's ok sets are the spec's ok_verdicts (0.1.3).
 use Cwd ();
 use File::Basename ();
 my $plugin = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../../plugin');
@@ -64,5 +65,19 @@ sub _check {
         my $r = watch::export::transform_row({ ev => 'not_a_known_event', ts => '2026-10-21T14:00:00.000+03:00', x => 1 }, $X);
         $E->ok((!defined $r ? 1 : 0), 'an unknown ev drops the row');
         $E->is($X->{dropped}{not_a_known_event}, 1, 'and counts it');
+        # 0.1.3 (ok-unclosed): every verdict of the spec is in the export enum (an unlisted one exports
+        # as `other`), and the watcher's ok sets (rules.pm, report.pm) are the spec's ok_verdicts
+        require JSON::PP;
+        my $spec = eval { JSON::PP::decode_json(watch::io::slurp("$plugin/assets/handoff-spec.json") // '') } || {};
+        my @sv = @{ $spec->{verdicts} || [] };
+        $E->ok((@sv >= 7 ? 1 : 0), 'the spec lists ' . scalar(@sv) . ' verdicts');
+        my (undef, @enum) = @{ $s->{verdict}{verdict} || [] };
+        my %en = map { $_ => 1 } @enum;
+        $E->ok(($en{$_} ? 1 : 0), "spec verdict $_ is in the export enum") for @sv;
+        my $okv = join ' ', sort @{ $spec->{ok_verdicts} || [] };
+        for my $m (qw(rules report)) {
+            my ($set) = (watch::io::slurp("$plugin/helper/lib/watch/$m.pm") // '') =~ /^my %OKV = map \{ \$_ => 1 \} qw\(([^)]*)\);/m;
+            $E->is(join(' ', sort split ' ', $set // ''), $okv, "watch/$m.pm %OKV is the spec's ok_verdicts");
+        }
     },
 };

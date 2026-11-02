@@ -23,10 +23,10 @@ A queued question (Questions shows its id) stays in full + · queued <id>; an un
 ## Work done and findings: <task>: <proposed|queued|implemented|tested|committed|pushed|in review|merged|deployed|published|installed> — <proof>; "done, blocked on X" stays blocked; Finding (incl. gotchas an open step needs): <conclusion> — <pointer>; Follow-up (out of scope, ≤3): <what> — <evidence>; logs: conclusion + reproducer; math: result + how; code only mid-edit, ≤5 lines; top 5 changes: behaviour — path#Symbol; commit range; tests: pass/fail, count, command; fail while another run shared its test DB/build dir: [unverified: overlapped] until re-run alone
 ## Evidence: cited temp paths, one Volatile: line
 ## Next steps: 1. <Step 1's command or edit> — done when <observable> · todo|done; gated (gate, or no approval covers it): ask user: <action> (! <cmd>); pending answer: <in full>, unless shown sent; a saved handoff's report: only `✓ Handoff saved: <path>` (+ ` · Needs you: <n> questions`)
-Last line before </summary>: ⟪/afk-compact n=1a2b3c4d⟫
 
 Ids: one per item, never ranges, never renumbered. Copy an earlier summary's U-, D-, X- and settled lines unchanged unless superseded (asks: latest status; convert another format's user rules, asks, decisions and rejected options); rewrite the rest, latest value only. Keep [from <sid8>] on another session's commands. Unasked work is proposed. No secrets, even quoted or in commands; say where they live.
 Measured facts below are the plugin's: contradict none, do not restate them ("see Measured facts"); take the GSD position, durable evidence paths and checked times only from them.
 Git: feature/LAB-123-retry @ 3f9c2e1, 2 modified, 0 untracked, ahead 1
 GSD: phase 2 of 4, plan 2.3 in progress (checked 2026-10-21 14:05 +0300)
 Aim for 6–10K characters, 12K with many live rows; cut Work done and Evidence first, never U-, D-, X-, In flight or questions. Replace, never extend, the earlier summary.
+Last line before </summary>: ⟪/afk-compact n=1a2b3c4d⟫

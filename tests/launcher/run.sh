@@ -52,7 +52,8 @@ case /$hg_t/ in
 */../*) echo "run.sh: HOME-GUARD: TMPDIR $hg_t has a .. part (applied after links); nothing written" >&2; exit 2 ;;
 esac
 # perl prints `in FOLDER` (the first folder TMPDIR lies at or under), `home HOME` (a home TMPDIR
-# is at or above) or `ok` on stdout; its stderr is not read (LC_ALL=C: no locale warning either)
+# is at or above), `root` (TMPDIR is the file system root, by its real path) or `ok` on stdout;
+# its stderr is not read (LC_ALL=C: no locale warning either)
 hg_hit=$(LC_ALL=C perl -e '
 use strict; use warnings; use Cwd ();
 my ($t, $home, @dirs) = @ARGV;
@@ -71,6 +72,8 @@ sub real {
 }
 sub ups { my @u; for (my $d = $_[0]; $d ne ""; $d =~ s{/[^/]*\z}{}) { push @u, $d } return (@u, "/") }
 my $rt = real($t);
+# 0.1.3: the file system root holds every home, known or not, and every path (a TMPDIR of /)
+if ($rt =~ m{\A/+\z}) { print "root"; exit 0 }
 my $tid = id($rt);
 for my $d (@dirs) {
   my $x = $d;
@@ -79,7 +82,7 @@ for my $d (@dirs) {
   my ($rd, $did) = (real($x), id($x));
   if (grep { $_ eq $rd || ($did ne "" && id($_) eq $did) } ups($rt)) { print "in $d"; exit 0 }
 }
-my @tw = map { (my $x = real($_)) =~ s{/+\z}{}; $x } "/tmp", $t;
+my @tw = grep { $_ ne "" } map { (my $x = real($_)) =~ s{/+\z}{}; $x } "/tmp", $t;
 my $ra = $acct ne "" ? real($acct) : "";
 my $aid = $ra ne "" ? id($ra) : "";
 for my $h (grep { m{\A/} } $home, $acct) {
@@ -98,6 +101,9 @@ ok) ;;
   exit 2 ;;
 "home "*)
   echo "run.sh: HOME-GUARD: TMPDIR $hg_t is at or above the real home ${hg_hit#home }; nothing written" >&2
+  exit 2 ;;
+root)
+  echo "run.sh: HOME-GUARD: TMPDIR $hg_t is at or above the real home (it is the file system root: every path would read as temp); nothing written" >&2
   exit 2 ;;
 *)
   echo "run.sh: HOME-GUARD: TMPDIR $hg_t could not be checked: $hg_hit; nothing written" >&2
@@ -596,6 +602,7 @@ case_30f() {
       "$C/cfg/t" "$C/xs/t" "$C/xc/t" "$C/xk/t" "$C/xd/t"
     ln -s "$x_h/.claude/t" "$C/L"
     ln -s "$x_h/.cache" "$C/lc"
+    ln -s / "$C/lroot"
     x_rows="rel/tmp|is not absolute
 $C/L/..|has a .. part
 $x_h/.claude/t|is in $x_h/.claude 
@@ -607,7 +614,9 @@ $C/cfg/t|is in $C/cfg
 $C/xs/t|is in $C/xs 
 $C/xc/t|is in $C/xc 
 $C/xk/t|is in $C/xk 
-$C/xd/t|is in $C/xd "
+$C/xd/t|is in $C/xd 
+/|is at or above the real home (it is the file system root:
+$C/lroot|is at or above the real home (it is the file system root:"
     # another case of the names, the same folders where the file system folds case (pwd -P keeps
     # the case as typed: only the device and inode compare sees them)
     if [ -d "$C/FH" ] && [ "$C/FH" -ef "$x_h" ]; then

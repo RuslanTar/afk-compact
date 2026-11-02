@@ -121,7 +121,7 @@ sub run {
     # last 5 compactions
     my $rolls = _bytes_deep(rollup::rows($d));
     my @last = @$rolls > 5 ? @$rolls[-5 .. -1] : @$rolls;
-    my $nonok = grep { defined $_->{verdict} && $_->{verdict} !~ /^ok(-trailer)?$/ } @last;
+    my $nonok = grep { defined $_->{verdict} && $_->{verdict} !~ /^ok(?:-trailer|-unclosed)?$/ } @last;
     # a kept rollup size that disagrees with the boundary row joined by nonce (PKG-RUNTIME E.2)
     my $jc = grep { $_->{join_conflict} } @$rolls;
     push @out, sprintf('compactions: %d in this session; last %d (%d not ok)%s:', scalar @$rolls, scalar @last, $nonok,

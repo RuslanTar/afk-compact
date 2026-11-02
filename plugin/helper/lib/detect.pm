@@ -132,7 +132,7 @@ sub _rstrip { my $s = $_[0]; $s =~ s/\s+$//; return $s }
 
 # scan(text) -> {lines, normalized, sha256, marker_line, nonce, scope,
 #   sentinel_from_end, sentinel_nonce, sentinel_place (inside | after-close | undef),
-#   has_main_heading, chars}
+#   has_main_heading, chars, unclosed (see unclosed)}
 sub scan {
     my ($text, %o) = @_;
     my ($b, $norm, $moved) = normalize($text);
@@ -158,12 +158,35 @@ sub scan {
             last;
         }
     }
+    $r{unclosed} = unclosed($b, $r{scope}, $sre);
     my @heads = spec::list('sections_main');
     my $first = $heads[0];
     if (defined $first) {
         $r{has_main_heading} = (grep { index($_, $first) == 0 } @$b) ? 1 : 0;
     }
     return \%r;
+}
+
+# unclosed(lines, scope, sentinel_re) -> 1 when no body line is in the sentinel grammar (any
+# nonce) and the body holds every section the spec's `unclosed_required` lists for the marker's
+# scope (sub, else main), in that order, with text under the last (or after a colon on its heading
+# line, as in `## Next steps: 1. ...`): a summary complete
+# but for its closing line (0.1.3: 3 of 77 saved summaries, each complete through Next steps);
+# else 0
+sub unclosed {
+    my ($b, $scope, $sre) = @_;
+    return 0 if grep { _rstrip($_) =~ $sre } @$b;
+    my $req = spec::has('unclosed_required') ? spec::get('unclosed_required') : undef;
+    my $heads = ref $req eq 'HASH' ? $req->{ ($scope // '') eq 'sub' ? 'sub' : 'main' } : undef;
+    return 0 unless ref $heads eq 'ARRAY' && @$heads;
+    my $j = 0;
+    for my $h (@$heads) {
+        $j++ while $j < @$b && index($b->[$j], $h) != 0;
+        return 0 if $j >= @$b;
+        $j++;
+    }
+    return 1 if substr($b->[$j - 1], length $heads->[-1]) =~ /:\s*\S/;
+    return (grep { /\S/ } @$b[$j .. $#$b]) ? 1 : 0;
 }
 
 # alias_scan(text, name) -> scan() with the marker and sentinel grammar written under a former
@@ -213,7 +236,7 @@ sub verdict {
     if ($scope eq 'sub' && (($m && $s->{scope} eq 'main') || $s->{has_main_heading})) { return 'scope-leak' }
     if ($scope eq 'main' && $m && $s->{scope} eq 'sub') { return 'scope-leak' }
     return 'unshaped' unless $m;
-    return 'truncated' unless defined $s->{sentinel_nonce} && $s->{sentinel_nonce} eq $s->{nonce};
+    return ($s->{unclosed} ? 'ok-unclosed' : 'truncated') unless defined $s->{sentinel_nonce} && $s->{sentinel_nonce} eq $s->{nonce};
     return 'ok-trailer' if $s->{sentinel_from_end} > 1;
     return 'ok';
 }

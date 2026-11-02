@@ -1,0 +1,8 @@
+file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatch	sentinel_place
+01-main-optional-sections-omitted.txt	ok-unclosed	1	-	1a2b3c4d	main	0b3930211b21281e140e11e8cd62f7525c5f704aa452425acef8842b1fe1d305		-
+02-main-cut-in-body.txt	truncated	1	-	1a2b3c4d	main	f8a1fbd24d86fc6fef05a3efc13ca47128f005c023e2038773b0aff5d17fab80		-
+03-main-next-steps-empty.txt	truncated	1	-	1a2b3c4d	main	2c8819505c40f9fe330b079ca3650720fa62948fb850f7b69b53533d51e9dbe4		-
+04-sub-complete.txt	ok-unclosed	1	-	5e6f7081	sub	9f988ae5330c708aea1eecfeb736578954970723265b83928a7bab94e7529649		-
+05-sub-cut-in-body.txt	truncated	1	-	5e6f7081	sub	265ccc65e1b19b3edd35d364127b6d2e549c30e8968007c2c78bb09a012d7a37		-
+06-main-out-of-order.txt	truncated	1	-	1a2b3c4d	main	322ff814f3d34842b23712da693b581203319b067cf66f8cac13e37d6e71a4b5		-
+07-main-inline-next-steps.txt	ok-unclosed	1	-	1a2b3c4d	main	abcd8f93eb130f73d91801707d2692933bfc401aaa621396c444610e5f37faef		-

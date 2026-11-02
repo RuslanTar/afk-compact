@@ -348,7 +348,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^ADVISORY secret-warn rules=\\S+$",
+     "^ADVISORY secret-warn rules=\\S+ lines=\\S+$",
      "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$",
      "^Export refused: secret-warn \\S+$"
     ],

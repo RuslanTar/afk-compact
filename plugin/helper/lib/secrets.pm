@@ -99,20 +99,45 @@ sub _user_spans {
     return (\%out, (grep { ($rules->[$_]{class} // '') eq 'HARD' } @un) ? 'HARD' : @un ? 'WARN' : '');
 }
 
-# scan(text) -> [{rule, class, count}] (no values)
+# scan(text [, lines => 1]) -> [{rule, class, count}] (no values); with `lines`, each hit also has
+# lines => [the 1-based numbers of the lines its matches start on, ascending, each once] (0.1.3:
+# publish names where a WARN hit is, never what; a stopped rule's hit has none)
 sub scan {
-    my ($text) = @_;
+    my ($text, %o) = @_;
     return [] unless defined $text && $text ne '';
     my @hits;
     my $all = rules();
     my ($u, $stopped) = _user_spans($text, [grep { $_->{user} } @$all]);
+    my $nl = $o{lines} ? _newlines($text) : undef;
     for my $r (@$all) {
         _check_deadline() unless $r->{user};
-        my $n = $r->{user} ? ($u->{ $r->{id} } ? $u->{ $r->{id} }[0] : 0) : scalar(my @s = _matches($text, $r));
-        push @hits, { rule => $r->{id}, class => $r->{class}, count => $n } if $n;
+        my ($n, @s);
+        if ($r->{user}) { my $x = $u->{ $r->{id} }; ($n, @s) = $x ? ($x->[0], @{ $x->[1] }) : (0) }
+        else { @s = _matches($text, $r); $n = scalar @s }
+        next unless $n;
+        push @hits, { rule => $r->{id}, class => $r->{class}, count => $n, ($nl ? (lines => _line_numbers($nl, \@s)) : ()) };
     }
     push @hits, { rule => $TIMEOUT_RULE, class => $stopped, count => 1 } if $stopped;
     return \@hits;
+}
+
+# _newlines(text) -> [offsets of each newline]; _line_numbers(newlines, [[start, end]...]) -> the
+# distinct 1-based line numbers the spans start on, ascending
+sub _newlines {
+    my ($text) = @_;
+    my @nl;
+    while ($text =~ /\n/g) { push @nl, $-[0] }
+    return \@nl;
+}
+sub _line_numbers {
+    my ($nl, $spans) = @_;
+    my %ln;
+    for my $sp (@$spans) {
+        my ($lo, $hi) = (0, scalar @$nl);
+        while ($lo < $hi) { my $m = int(($lo + $hi) / 2); if ($nl->[$m] < $sp->[0]) { $lo = $m + 1 } else { $hi = $m } }
+        $ln{ $lo + 1 } = 1;
+    }
+    return [ sort { $a <=> $b } keys %ln ];
 }
 
 sub has_hard { return scalar grep { $_->{class} eq 'HARD' } @{ $_[0] || [] } }

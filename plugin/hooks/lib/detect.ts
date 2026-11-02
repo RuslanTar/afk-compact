@@ -6,7 +6,7 @@ import { SPEC } from './spec.gen'
 import { strip } from './normalize'
 import { sha256 } from './normalize'
 
-export type Verdict = 'stale' | 'scope-leak' | 'unshaped' | 'truncated' | 'ok-trailer' | 'ok'
+export type Verdict = 'stale' | 'scope-leak' | 'unshaped' | 'ok-unclosed' | 'truncated' | 'ok-trailer' | 'ok'
 export type Scope = 'main' | 'sub' | 'manual'
 
 /** Reads one key of the spec-literals block, or undefined when the block or key is absent. */
@@ -153,7 +153,7 @@ export function detectSummary(raw: string, plugin: string, ctx: DetectContext = 
     if (ctx.scope === 'sub' && (scope === 'main' || hasResumeHeading())) return 'scope-leak'
     if (ctx.scope === 'main' && scope === 'sub') return 'scope-leak'
     if (nonce === null) return 'unshaped'
-    if (sentinelFromEnd === null || sentinelNonce !== nonce) return 'truncated'
+    if (sentinelFromEnd === null || sentinelNonce !== nonce) return unclosed(lines, scope, g.sentinel) ? 'ok-unclosed' : 'truncated'
     if (sentinelFromEnd > 1) return 'ok-trailer'
     return 'ok'
   }
@@ -164,9 +164,32 @@ export function detectSummary(raw: string, plugin: string, ctx: DetectContext = 
   }
 }
 
+/**
+ * 0.1.3: true when no body line is in the sentinel grammar (any nonce) and the body holds every
+ * section the spec's `unclosed_required` lists for the marker's scope (sub, else main), in that
+ * order, with text under the last (or after a colon on its heading line, `## Next steps: 1. ...`): a
+ * summary complete but for its closing line (3 of 77 saved summaries, each complete through Next
+ * steps). detect.pm `unclosed` and tools/fixtures-gen read the same.
+ */
+export function unclosed(lines: readonly string[], scope: Scope | null, sentinel: RegExp): boolean {
+  if (lines.some(l => sentinel.test(l.trimEnd()))) return false
+  const req = specValue('unclosed_required') as Record<string, unknown> | undefined
+  const heads = req !== undefined && req !== null && typeof req === 'object' ? req[scope === 'sub' ? 'sub' : 'main'] : undefined
+  if (!Array.isArray(heads) || heads.length === 0) return false
+  let j = 0
+  for (const h of heads) {
+    if (typeof h !== 'string') return false
+    while (j < lines.length && !(lines[j] ?? '').startsWith(h)) j++
+    if (j >= lines.length) return false
+    j++
+  }
+  if (/:\s*\S/.test((lines[j - 1] ?? '').slice((heads[heads.length - 1] as string).length))) return true
+  return lines.slice(j).some(l => l.trim() !== '')
+}
+
 /** A verdict readers treat as ok (CONSISTENCY §1). */
 export function isOk(v: Verdict): boolean {
-  return v === 'ok' || v === 'ok-trailer'
+  return v === 'ok' || v === 'ok-trailer' || v === 'ok-unclosed'
 }
 
 export type InstrMarker = { nonce: string; scope: 'main' | 'sub' }

@@ -1,6 +1,6 @@
 {
  "id": "AT-P5-01, AT-P5-02 (shapes)",
- "note": "P5-FOLD A1 / MOD-SPEC §5.1 (CORE-05): the first non-blank text after </summary> (the rest of that line, else the next non-blank line) that matches sentinel_re is moved into the body as its last line, so a summary ending '</summary>' + sentinel reads ok with sentinel_place after-close; another nonce there still reads truncated; a non-sentinel line first keeps everything outside (truncated, no sentinel); an unlisted line after the moved sentinel reads ok-trailer; marker absent stays unshaped; a sentinel before the tag is inside. The normalized body ends with the sentinel line (step 2)",
+ "note": "P5-FOLD A1 / MOD-SPEC §5.1 (CORE-05): the first non-blank text after </summary> (the rest of that line, else the next non-blank line) that matches sentinel_re is moved into the body as its last line, so a summary ending '</summary>' + sentinel reads ok with sentinel_place after-close; another nonce there still reads truncated; a non-sentinel line first keeps everything outside (no sentinel in the body: ok-unclosed for this complete sub body since 0.1.3, truncated before); an unlisted line after the moved sentinel reads ok-trailer; marker absent stays unshaped; a sentinel before the tag is inside. The normalized body ends with the sentinel line (step 2)",
  "steps": [
   {"name": "shapes", "lib": "detect_tsv", "args": {"tsv": "$CASE/s/expected.tsv"}},
   {"name": "the moved sentinel is the body's last line in the saved copy",

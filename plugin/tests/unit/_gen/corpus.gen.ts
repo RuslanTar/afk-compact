@@ -154,7 +154,7 @@ export const CORPUS: readonly CorpusEntry[] = [
  {
   "file": "13-sentinel-missing.txt",
   "text": "<summary>\n\u27eaafk-compact v1 n=1a2b3c4d s=main\u27eb\n# LAB-123 \u2014 retry worker drains, one flaky spec open\n## Resume here\nStatus: active \u00b7 State: retry worker implemented, one flaky spec left (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 for \"make the retry worker drain the queue\"\nGate: none \u00b7 Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" \u2014 scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" \u2014 scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries \u2014 because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id \u2014 because duplicates were seen in staging (agent)\nX-1 rejected a global mutex \u2014 it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release \u00b7 blocks nothing \u00b7 options now, next \u00b7 recommendation next \u00b7 raised by agent \u00b7 unasked\n## Location\nworktree example-repo, branch feature/LAB-123-retry, cwd example-repo\n## Work done and findings\nRetryWorker backoff: implemented \u2014 lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding \u2014 spec/workers/retry_worker_spec.rb:42\n## Evidence\nVolatile: none\n## Next steps\n1. `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 done when it passes 5 runs in a row\n</summary>\n",
-  "verdict": "truncated",
+  "verdict": "ok-unclosed",
   "marker_line": 1,
   "sentinel_from_end": null,
   "nonce": "1a2b3c4d",
@@ -683,7 +683,7 @@ export const CORPUS_P5: readonly CorpusEntry[] = [
  {
   "file": "08-after-close-text-then-sentinel.txt",
   "text": "<summary>\n\u27eaafk-compact v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n</summary>\nFixture engine sentence before the sentinel.\n\u27ea/afk-compact n=5e6f7081\u27eb\n",
-  "verdict": "truncated",
+  "verdict": "ok-unclosed",
   "marker_line": 1,
   "sentinel_from_end": null,
   "nonce": "5e6f7081",
@@ -908,5 +908,92 @@ export const CORPUS_CC311: readonly CorpusEntry[] = [
   "normalized_sha256": "0bad95fea35f5e7b4f2908523e21e3c0e57cfad963ede63579c76a03015f53a8",
   "dispatch": null,
   "sentinel_place": "inside"
+ }
+]
+// summaries/unclosed/expected.tsv (tests/fixtures/README.md "Corpus")
+export const CORPUS_UNCLOSED: readonly CorpusEntry[] = [
+ {
+  "file": "01-main-optional-sections-omitted.txt",
+  "text": "<summary>\n\u27eaafk-compact v1 n=1a2b3c4d s=main\u27eb\n# LAB-123 \u2014 retry worker drains, one flaky spec open\n## Resume here\nStatus: active \u00b7 State: retry worker implemented, one flaky spec left (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 for \"make the retry worker drain the queue\"\nGate: none \u00b7 Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" \u2014 scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" \u2014 scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries \u2014 because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id \u2014 because duplicates were seen in staging (agent)\nX-1 rejected a global mutex \u2014 it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release \u00b7 blocks nothing \u00b7 options now, next \u00b7 recommendation next \u00b7 raised by agent \u00b7 unasked\n## Work done and findings\nRetryWorker backoff: implemented \u2014 lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding \u2014 spec/workers/retry_worker_spec.rb:42\n## Next steps\n1. `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 done when it passes 5 runs in a row\n</summary>\n",
+  "verdict": "ok-unclosed",
+  "marker_line": 1,
+  "sentinel_from_end": null,
+  "nonce": "1a2b3c4d",
+  "scope": "main",
+  "normalized_sha256": "0b3930211b21281e140e11e8cd62f7525c5f704aa452425acef8842b1fe1d305",
+  "dispatch": null,
+  "sentinel_place": null
+ },
+ {
+  "file": "02-main-cut-in-body.txt",
+  "text": "<summary>\n\u27eaafk-compact v1 n=1a2b3c4d s=main\u27eb\n# LAB-123 \u2014 retry worker drains, one flaky spec open\n## Resume here\nStatus: active \u00b7 State: retry worker implemented, one flaky spec left (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 for \"make the retry worker drain the queue\"\nGate: none \u00b7 Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" \u2014 scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" \u2014 scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries \u2014 because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id \u2014 because duplicates were seen in staging (agent)\nX-1 rejected a global mutex \u2014 it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n</summary>\n",
+  "verdict": "truncated",
+  "marker_line": 1,
+  "sentinel_from_end": null,
+  "nonce": "1a2b3c4d",
+  "scope": "main",
+  "normalized_sha256": "f8a1fbd24d86fc6fef05a3efc13ca47128f005c023e2038773b0aff5d17fab80",
+  "dispatch": null,
+  "sentinel_place": null
+ },
+ {
+  "file": "03-main-next-steps-empty.txt",
+  "text": "<summary>\n\u27eaafk-compact v1 n=1a2b3c4d s=main\u27eb\n# LAB-123 \u2014 retry worker drains, one flaky spec open\n## Resume here\nStatus: active \u00b7 State: retry worker implemented, one flaky spec left (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 for \"make the retry worker drain the queue\"\nGate: none \u00b7 Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" \u2014 scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" \u2014 scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries \u2014 because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id \u2014 because duplicates were seen in staging (agent)\nX-1 rejected a global mutex \u2014 it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release \u00b7 blocks nothing \u00b7 options now, next \u00b7 recommendation next \u00b7 raised by agent \u00b7 unasked\n## Location\nworktree example-repo, branch feature/LAB-123-retry, cwd example-repo\n## Work done and findings\nRetryWorker backoff: implemented \u2014 lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding \u2014 spec/workers/retry_worker_spec.rb:42\n## Evidence\nVolatile: none\n## Next steps\n</summary>\n",
+  "verdict": "truncated",
+  "marker_line": 1,
+  "sentinel_from_end": null,
+  "nonce": "1a2b3c4d",
+  "scope": "main",
+  "normalized_sha256": "2c8819505c40f9fe330b079ca3650720fa62948fb850f7b69b53533d51e9dbe4",
+  "dispatch": null,
+  "sentinel_place": null
+ },
+ {
+  "file": "04-sub-complete.txt",
+  "text": "<summary>\n\u27eaafk-compact v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n## Findings\nthe two raw-hash callers predate the request id field\n## Produced but not yet delivered\nnone\n## Own background tasks\nnone\n## Next action\nreturn the report to the parent\n</summary>\n",
+  "verdict": "ok-unclosed",
+  "marker_line": 1,
+  "sentinel_from_end": null,
+  "nonce": "5e6f7081",
+  "scope": "sub",
+  "normalized_sha256": "9f988ae5330c708aea1eecfeb736578954970723265b83928a7bab94e7529649",
+  "dispatch": null,
+  "sentinel_place": null
+ },
+ {
+  "file": "05-sub-cut-in-body.txt",
+  "text": "<summary>\n\u27eaafk-compact v1 n=5e6f7081 s=sub\u27eb\n## Task as assigned\nFind every caller of RetryWorker.enqueue and list the ones that pass a raw hash\n## Constraints from the parent\nread-only; report paths and line numbers only\n## Report\n7 callers; 2 pass a raw hash: app/jobs/sync_job.rb:31, app/services/import.rb:88\n## Done\nsearched app/ and lib/ with rg; read each caller\n</summary>\n",
+  "verdict": "truncated",
+  "marker_line": 1,
+  "sentinel_from_end": null,
+  "nonce": "5e6f7081",
+  "scope": "sub",
+  "normalized_sha256": "265ccc65e1b19b3edd35d364127b6d2e549c30e8968007c2c78bb09a012d7a37",
+  "dispatch": null,
+  "sentinel_place": null
+ },
+ {
+  "file": "06-main-out-of-order.txt",
+  "text": "<summary>\n\u27eaafk-compact v1 n=1a2b3c4d s=main\u27eb\n# LAB-123 \u2014 retry worker drains, one flaky spec open\n## Resume here\nStatus: active \u00b7 State: retry worker implemented, one flaky spec left (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 for \"make the retry worker drain the queue\"\nGate: none \u00b7 Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## Next steps\n1. `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 done when it passes 5 runs in a row\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" \u2014 scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" \u2014 scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries \u2014 because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id \u2014 because duplicates were seen in staging (agent)\nX-1 rejected a global mutex \u2014 it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release \u00b7 blocks nothing \u00b7 options now, next \u00b7 recommendation next \u00b7 raised by agent \u00b7 unasked\n## Location\nworktree example-repo, branch feature/LAB-123-retry, cwd example-repo\n## Work done and findings\nRetryWorker backoff: implemented \u2014 lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding \u2014 spec/workers/retry_worker_spec.rb:42\n## Evidence\nVolatile: none\n</summary>\n",
+  "verdict": "truncated",
+  "marker_line": 1,
+  "sentinel_from_end": null,
+  "nonce": "1a2b3c4d",
+  "scope": "main",
+  "normalized_sha256": "322ff814f3d34842b23712da693b581203319b067cf66f8cac13e37d6e71a4b5",
+  "dispatch": null,
+  "sentinel_place": null
+ },
+ {
+  "file": "07-main-inline-next-steps.txt",
+  "text": "<summary>\n\u27eaafk-compact v1 n=1a2b3c4d s=main\u27eb\n# LAB-123 \u2014 retry worker drains, one flaky spec open\n## Resume here\nStatus: active \u00b7 State: retry worker implemented, one flaky spec left (checkpoint: clean)\nStep 1: `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 for \"make the retry worker drain the queue\"\nGate: none \u00b7 Don't: re-run the full suite before the flaky spec is fixed\nLive: nothing running known (not checked)\n## User constraints\nU-1 \"keep the public API of RetryWorker unchanged\" \u2014 scope lib/retry_worker.rb; ask: open\nU-2 \"no new gems\" \u2014 scope Gemfile; ask: done\n## Decisions and do-not-re-raise\nD-1 exponential backoff capped at 5 tries \u2014 because the upstream rate limit resets in 60 s (user)\nD-2 the job stays idempotent by request id \u2014 because duplicates were seen in staging (agent)\nX-1 rejected a global mutex \u2014 it serialised unrelated queues\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nQ-1 drop the legacy retry flag now or next release \u00b7 blocks nothing \u00b7 options now, next \u00b7 recommendation next \u00b7 raised by agent \u00b7 unasked\n## Location\nworktree example-repo, branch feature/LAB-123-retry, cwd example-repo\n## Work done and findings\nRetryWorker backoff: implemented \u2014 lib/retry_worker.rb#perform; tests: 41 pass, 1 flaky, `bin/test spec/workers`\nFinding: the flaky spec depends on wall-clock rounding \u2014 spec/workers/retry_worker_spec.rb:42\n## Evidence\nVolatile: none\n## Next steps: 1. `bin/test spec/workers/retry_worker_spec.rb:42` \u2014 done when it passes 5 runs in a row\n</summary>\n",
+  "verdict": "ok-unclosed",
+  "marker_line": 1,
+  "sentinel_from_end": null,
+  "nonce": "1a2b3c4d",
+  "scope": "main",
+  "normalized_sha256": "abcd8f93eb130f73d91801707d2692933bfc401aaa621396c444610e5f37faef",
+  "dispatch": null,
+  "sentinel_place": null
  }
 ]

@@ -524,11 +524,30 @@ sub _tmp_candidates {
     for my $l (reverse split /\n/, $t) {
         my $d = eval { skills::util::json_decode($l) } or next;
         my $p = ref $d eq 'HASH' ? ($d->{path} // $d->{p}) : undef;
-        next unless defined $p && !ref $p && !$seen{$p}++;
+        next unless defined $p && !ref $p;
+        # a shell assignment or a wait spec the path was cut with (`F=/tmp/x`, `exit:/tmp/x`)
+        $p = $1 if $p =~ m{\A[A-Za-z_][A-Za-z0-9_-]*[=:](/.*)\z}s;
+        next if $seen{$p}++;
         my @st = stat $p;
+        next if !@st && junk_path($p);
         push @out, { path => $p, exists => (@st ? \1 : \0), bytes => (@st ? $st[7] : undef) };
     }
     return (\@out, $unread);
+}
+
+# junk_path(path) -> 1 when a recorded path that names no file is a piece of a command, not a
+# file a handoff could keep or dispose of (0.1.3 small fixes; begin calls it only for a path that
+# does not exist, so a real file of any name stays): not absolute (`$S/tasks/x.output`,
+# `F=$S/...`: read against no known folder), an unexpanded shell or template variable (`$S`,
+# `${l.k}`, `$$`), a glob or brace pattern (`*`, `[`, `{`), a backslash (an escaped newline
+# `\n` from a script's text), or a `...` part (an elided path, `/var/folders/.../T`).
+sub junk_path {
+    my ($p) = @_;
+    return 1 unless defined $p && $p =~ m{\A/};
+    return 1 if $p =~ /\$(?:[A-Za-z_{(\$]|\z)/;
+    return 1 if $p =~ /[*\[\]{}\\]/;
+    return 1 if $p =~ m{(?:\A|/)\.\.\.(?:/|\z)};
+    return 0;
 }
 
 # begin-full.json's text: JSON with every object key and every list entry on its own line

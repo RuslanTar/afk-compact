@@ -19,7 +19,7 @@ use watch::json;
 use watch::export;
 use watch::rules;
 
-my %OKV = map { $_ => 1 } qw(ok ok-trailer);
+my %OKV = map { $_ => 1 } qw(ok ok-trailer ok-unclosed);
 my %SHAPED = map { $_ => 1 } qw(mod-hook mod-self classic);
 
 # --- loading ----------------------------------------------------------------

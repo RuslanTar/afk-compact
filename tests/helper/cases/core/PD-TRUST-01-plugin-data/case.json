@@ -1,0 +1,418 @@
+{
+  "id": "PD-TRUST-01",
+  "note": "0.1.3 (root decision on the small-fixes review): SessionStart keeps last-version in this plugin's own data folder, the name Claude Code derives from the plugin id <name>@<marketplace> (characters outside A-Z, a-z, 0-9, _ and - as -; the marketplace from CLAUDE_PLUGIN_ROOT: .../plugins/cache/<marketplace>/<name>/<version> installed, else inline for a --plugin-dir run): CLAUDE_PLUGIN_DATA when its last part is exactly that name, else that folder beside another plugin's (the codex plugin exports its own into session shells; a <brand>-<other> folder is another plugin's too), whose folder is never read or written; one record, so a version change is logged once whichever value a session sees. A folder named like ours outside plugins/data, or none: no record (a relative one or one with a .. part: the HOME guard keeps those out of a case); never the log folder",
+  "now": "2026-10-21T14:05:12+03:00",
+  "tz": "Etc/GMT-3",
+  "steps": [
+    {
+      "name": "codex's folder: not read, not written; this plugin's own folder beside it (inline) gets 2.1.305, no hint",
+      "env": {
+        "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.305",
+        "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/codex-openai-codex"
+      },
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 0
+          }
+        ],
+        "files": [
+          {
+            "path": "$TMP/cfg/plugins/data/codex-openai-codex/last-version",
+            "has": [
+              "\\A2\\.1\\.304\\n\\z"
+            ]
+          },
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
+            "has": [
+              "\\A2\\.1\\.305\\n\\z"
+            ]
+          },
+          {
+            "path": "$WATCH/last-version",
+            "exists": false
+          }
+        ]
+      },
+      "setup": [
+        {
+          "write": "$TMP/cfg/plugins/data/codex-openai-codex/last-version",
+          "text": "2.1.304\n"
+        }
+      ]
+    },
+    {
+      "name": "its own folder given (a trailing slash too), Claude Code 2.1.306: the same record, one hint",
+      "env": {
+        "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.306",
+        "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/$BRAND-inline/"
+      },
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1
+          },
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1,
+            "fields": {
+              "from": "2.1.305",
+              "to": "2.1.306"
+            }
+          }
+        ],
+        "files": [
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
+            "has": [
+              "\\A2\\.1\\.306\\n\\z"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "codex's folder again on 2.1.306: the same record, no second hint",
+      "env": {
+        "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.306",
+        "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/codex-openai-codex"
+      },
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1
+          },
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1,
+            "fields": {
+              "from": "2.1.305",
+              "to": "2.1.306"
+            }
+          }
+        ],
+        "files": [
+          {
+            "path": "$TMP/cfg/plugins/data/codex-openai-codex/last-version",
+            "has": [
+              "\\A2\\.1\\.304\\n\\z"
+            ]
+          },
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
+            "has": [
+              "\\A2\\.1\\.306\\n\\z"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a <brand>-<other> folder is another plugin's: not written; the own folder gets 2.1.307",
+      "env": {
+        "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.307",
+        "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/$BRAND-other"
+      },
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 2
+          },
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1,
+            "fields": {
+              "from": "2.1.306",
+              "to": "2.1.307"
+            }
+          }
+        ],
+        "files": [
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-other/last-version",
+            "exists": false
+          },
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
+            "has": [
+              "\\A2\\.1\\.307\\n\\z"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "installed from marketplace afk-market: its own folder is $BRAND-afk-market, written there",
+      "env": {
+        "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.308",
+        "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/$BRAND-afk-market",
+        "CLAUDE_PLUGIN_ROOT": "$TMP/cfg/plugins/cache/afk-market/$BRAND/0.1.3"
+      },
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 2
+          },
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1,
+            "fields": {
+              "from": "2.1.306",
+              "to": "2.1.307"
+            }
+          }
+        ],
+        "files": [
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-afk-market/last-version",
+            "has": [
+              "\\A2\\.1\\.308\\n\\z"
+            ]
+          },
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
+            "has": [
+              "\\A2\\.1\\.307\\n\\z"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "installed from afk-market, given the inline folder: that one is not its own; its own folder gets 2.1.309",
+      "env": {
+        "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.309",
+        "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/$BRAND-inline",
+        "CLAUDE_PLUGIN_ROOT": "$TMP/cfg/plugins/cache/afk-market/$BRAND/0.1.3"
+      },
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 3
+          },
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1,
+            "fields": {
+              "from": "2.1.308",
+              "to": "2.1.309"
+            }
+          }
+        ],
+        "files": [
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-afk-market/last-version",
+            "has": [
+              "\\A2\\.1\\.309\\n\\z"
+            ]
+          },
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
+            "has": [
+              "\\A2\\.1\\.307\\n\\z"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a folder named like ours outside plugins/data: not ours, no record anywhere",
+      "env": {
+        "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.310",
+        "CLAUDE_PLUGIN_DATA": "$TMP/elsewhere/$BRAND-inline"
+      },
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 3
+          },
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1,
+            "fields": {
+              "from": "2.1.308",
+              "to": "2.1.309"
+            }
+          }
+        ],
+        "files": [
+          {
+            "path": "$TMP/elsewhere/$BRAND-inline/last-version",
+            "exists": false
+          },
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
+            "has": [
+              "\\A2\\.1\\.307\\n\\z"
+            ]
+          },
+          {
+            "path": "$WATCH/last-version",
+            "exists": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "no CLAUDE_PLUGIN_DATA: no record",
+      "env": {
+        "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.311"
+      },
+      "argv": [
+        "hook",
+        "SessionStart"
+      ],
+      "stdin_json": {
+        "session_id": "$SID",
+        "transcript_path": "$TMP/proj/$SID.jsonl",
+        "cwd": "$TMP/work",
+        "hook_event_name": "SessionStart",
+        "source": "startup"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "rows": [
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 3
+          },
+          {
+            "file": "$WATCH/$SID.classic.jsonl",
+            "ev": "version_hint",
+            "count": 1,
+            "fields": {
+              "from": "2.1.308",
+              "to": "2.1.309"
+            }
+          }
+        ],
+        "files": [
+          {
+            "path": "$TMP/cfg/plugins/data/$BRAND-inline/last-version",
+            "has": [
+              "\\A2\\.1\\.307\\n\\z"
+            ]
+          },
+          {
+            "path": "$WATCH/last-version",
+            "exists": false
+          }
+        ]
+      }
+    }
+  ]
+}

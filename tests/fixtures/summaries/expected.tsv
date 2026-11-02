@@ -11,7 +11,7 @@ file	verdict	marker_line	sentinel_from_end	nonce	scope	normalized_sha256	dispatc
 10-foreign-header-then-ours.txt	ok	2	1	1a2b3c4d	main	a60d58f3056bd665ec411feaa3f60dd360afa83d8820d62742d872663864dba7		inside
 11-sentinel-closing-tag-blank-lines.txt	ok	1	1	1a2b3c4d	main	f345ccd3771ef1a47c3d8d82cd69f1187dd6c7cb2d5eea2a7545b8c398a7fed6		inside
 12-text-after-sentinel.txt	ok-trailer	1	2	1a2b3c4d	main	6cdbafe121097120716805da4b0eeb8c0b41cfb08989633c1a506799d499ecb5		inside
-13-sentinel-missing.txt	truncated	1	-	1a2b3c4d	main	44a1c9d80d80137f54704794133068798b8aa687167a590cbaaab0feac725ce5		-
+13-sentinel-missing.txt	ok-unclosed	1	-	1a2b3c4d	main	44a1c9d80d80137f54704794133068798b8aa687167a590cbaaab0feac725ce5		-
 14-sentinel-nonce-differs.txt	truncated	1	1	1a2b3c4d	main	dfb4c9a8f478ccf9b247b540953375e7cfd792053d9ace29284ba3f1a768d6b7		inside
 15-sentinel-fourth-from-end.txt	truncated	1	-	1a2b3c4d	main	493c7fb8742f5efad1ec7ecb4ac9c72b6121a46a8de4aec5287616c8b04b2411		-
 16-sentinel-third-from-end.txt	ok-trailer	1	3	1a2b3c4d	main	c4fce0057bdbc066499f7dc39e90500871eb82d87dc44577e5938a9357034f3a		inside

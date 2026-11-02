@@ -74,7 +74,7 @@
      "^ADVISORY hash-lines line \\d+$",
      "^ADVISORY changes n=16$",
      "^ADVISORY must-read n=4$",
-     "^ADVISORY secret-warn rules=key-value$",
+     "^ADVISORY secret-warn rules=key-value lines=517$",
      "^ADVISORY overlap \\d+%$",
      "\\nWrote handoff to: $ROOT/repo/LAB-7/$STEM.md\\n\\z"
     ],
