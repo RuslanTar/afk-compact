@@ -1,9 +1,11 @@
 package measure;
 # lib/measure.pm: facts measured by code (MOD-SPEC §2.6 `measure --compact`, §10
-# measured block). Order: the git header line; this session's GSD lines (lib/gsd.pm: from its
+# measured block). Order: the plugin line when this session runs another plugin version than
+# sessions started since (0.1.3, lib/plugver.pm; first, so the cap never cuts it and no git line
+# sits under it: between the git header and its porcelain list the indented files read as its own,
+# 0.1.3 integration review); the git header line; this session's GSD lines (lib/gsd.pm: from its
 # own transcript, never from the worktree alone; none for a session that worked with neither GSD
-# nor a driver skill; right after the git header line); the plugin line when this session runs
-# another plugin version than sessions started since (0.1.3, lib/plugver.pm); the porcelain list (<= 20 lines); in-flight
+# nor a driver skill; right after the git header line); the porcelain list (<= 20 lines); in-flight
 # inventory (every listed id);
 # evidence map (<= 8 rows from this compaction's checkpoint or sweep); the Queued: line when
 # queue_cmd is set. <= 3,000 B, cut at a line boundary with `(+N lines)`: cap() keeps lines from the
@@ -167,7 +169,7 @@ sub compact {
     # The GSD lines go right after the git header line: the cap (it keeps lines from the top) cuts
     # every later line (Queued:, evidence, in flight, approvals, porcelain) before them, so the
     # re-enter command survives.
-    my @l = (shift @gl, gsd_lines($o{gsd} // gsd_session($sid, $cwd, $wt, $o{transcript}, $left->($gsd::SCAN_MS))), plugin_lines(), @gl);
+    my @l = (plugin_lines(), shift @gl, gsd_lines($o{gsd} // gsd_session($sid, $cwd, $wt, $o{transcript}, $left->($gsd::SCAN_MS))), @gl);
     push @l, @{ $o{approvals} } if ref $o{approvals} eq 'ARRAY';
     push @l, inflight_lines(defined $sid_dir ? sidecar::newest($sid_dir) : undef);
     push @l, evidence_lines($o{evidence_rows} || (defined $sid_dir ? _evidence_rows($sid_dir, $nonce) : []));

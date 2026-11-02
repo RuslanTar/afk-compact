@@ -1,6 +1,6 @@
 {
  "id": "V013-VS-09-measure-cap",
- "note": "0.1.3 version skew (lib/plugver.pm, lib/measure.pm): the plugin line sits right after the git header (and the GSD lines), so the 3,000 B cap of the measured facts, which keeps lines from the top, never cuts it: 22 untracked files with 197-byte names fill the porcelain list past the cap.",
+ "note": "0.1.3 version skew (lib/plugver.pm, lib/measure.pm): the plugin line comes first, before the git header (integration review: between the header and its indented porcelain list the files read as the plugin line's), so the 3,000 B cap of the measured facts, which keeps lines from the top, never cuts it: 22 untracked files with 197-byte names fill the porcelain list past the cap.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "manifest": {
@@ -95,7 +95,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: this session runs 0\\.1\\.0; sessions started since 2026-10-21 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins \\(tell the user\\)$",
+     "\\Aplugin: this session runs 0\\.1\\.0; sessions started since 2026-10-21 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins \\(tell the user\\)\\ngit: branch main · [^\\n]*\\n  \\?\\? u01-x+\\.txt$",
      "\\(\\+\\d+ lines\\)",
      "u01-x+\\.txt"
     ]
