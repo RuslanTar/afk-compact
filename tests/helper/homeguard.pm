@@ -618,13 +618,14 @@ sub self_row_errs {
 
 # temp_root_rows(tmp) -> {tried => [what...], errs => [failure...]}: check_temp_root's start-up
 # decision on a TMPDIR at or above a home, one table for both runners (AT-RN-06, AT-RN-07), with
-# stand-ins under tmp/tr (no THROWAWAY folder, the start TMPDIR set per row): a TMPDIR that holds a
-# HOME given made in it (as `mktemp -d` makes one under TMPDIR) is taken; one that is that HOME,
-# the account's home (also under the start TMPDIR: the account's home is never a throwaway one) or
-# holds it, or is / is refused (also a link to /, also with no account home known, and a start
-# TMPDIR of / makes no HOME given a throwaway one, 0.1.3); so is another case of the HOME given's,
-# the account home's or its parent's name where the file system folds case (only the device and
-# inode compare sees those).
+# stand-ins under tmp/tr (no THROWAWAY folder unless a row names one, the start TMPDIR set per
+# row): a TMPDIR that holds a HOME given made in it (as `mktemp -d` makes one under TMPDIR) is
+# taken; one that is that HOME, the account's home (also under the start TMPDIR: the account's
+# home is never a throwaway one) or holds it, or is / is refused (also a link to /, also with no
+# account home known, also an added temp root of / while the start TMPDIR holds the HOME given;
+# a start TMPDIR or a THROWAWAY folder of / makes no HOME given a throwaway one, 0.1.3); so is
+# another case of the HOME given's, the account home's or its parent's name where the file system
+# folds case (only the device and inode compare sees those).
 sub temp_root_rows {
     my ($tmp) = @_;
     my $b = "$tmp/tr";
@@ -638,7 +639,8 @@ sub temp_root_rows {
     my %no_acct = real_set(home => $g);
     my $lroot = "$b/lroot";
     symlink('/', $lroot) or die "homeguard: symlink $lroot: $!\n" unless -l $lroot;
-    # [what, start TMPDIR, the folder checked, want (undef: taken), the %REAL (default: %real)]
+    # [what, start TMPDIR, the folder checked, want (undef: taken), the %REAL (default: %real),
+    #  the THROWAWAY folders (default: none)]
     my @rows = (["a TMPDIR that holds a HOME given made in it", "$b/t", "$b/t", undef],
                 ['a TMPDIR at the HOME given', $g, $g, $held],
                 ["a TMPDIR at the account's home under the start TMPDIR", $b, $a, $held],
@@ -647,7 +649,14 @@ sub temp_root_rows {
                 ['a TMPDIR of / with no account home known', '/', '/', $held, \%no_acct],
                 ['a link to / with no account home known', '/', $lroot, $held, \%no_acct],
                 ['a temp root at the HOME given while the start TMPDIR is /', '/', $g, $held],
-                ['a temp root that holds the HOME given while the start TMPDIR is /', '/', "$b/t", $held, \%no_acct]);
+                ['a temp root that holds the HOME given while the start TMPDIR is /', '/', "$b/t", $held, \%no_acct],
+                # 0.1.3: an added temp root of / (or a link to it) while the start TMPDIR is fine and
+                # holds the HOME given (a throwaway home, as tests/launcher/in-docker.sh makes one),
+                # no account home known: only check_temp_root's own / refusal stops it
+                ['an added temp root of / while the start TMPDIR holds the HOME given', "$b/t", '/', $held, \%no_acct],
+                ['an added link to / while the start TMPDIR holds the HOME given', "$b/t", $lroot, $held, \%no_acct],
+                # a THROWAWAY folder of / makes no home a throwaway one (throwaway's empty-root line)
+                ['a temp root that holds the HOME given while a THROWAWAY folder is /', $a, "$b/t", $held, \%no_acct, ['/']]);
     my ($vg, $va, $vb) = map { $vary->($_) } ($g, $a, $b);
     if (_id($va) ne '' && _id($va) eq _id($a)) {
         push @rows, ['a TMPDIR at the HOME given by another case of its name', $vg, $vg, $held],
@@ -656,10 +665,10 @@ sub temp_root_rows {
     }
     my (@tried, @e);
     for my $r (@rows) {
-        my ($what, $st, $p, $want, $rs) = @$r;
+        my ($what, $st, $p, $want, $rs, $tw) = @$r;
         push @tried, $what;
         local %REAL = $rs ? %$rs : %real;
-        local @THROWAWAY = ();
+        local @THROWAWAY = $tw ? @$tw : ();
         local $START_TMPDIR = $st;
         my $err = eval { check_temp_root($p, 'TMPDIR'); 1 } ? '' : $@;
         if (!$want) { push @e, "$what ($p): refused: $err" if $err ne ''; next }
