@@ -65,7 +65,7 @@ describe('resume line (A): Step 1 as code reads it', () => {
   })
 
   test('a cut Step 1 ends at a word when that keeps 60 chars, else mid-word; an open backtick is closed (review of the first build)', () => {
-    const path = '`tail -c 600 /Users/u/.claude/projects/-Users-u-RubymineProjects-meta/00000000-0000-4000-8000-000000000000.jsonl`'
+    const path = '`tail -c 600 /srv/u/claude/projects/-srv-u-projects-meta/00000000-0000-4000-8000-000000000000/subagents/agent-a1b2c3d4.jsonl`'
     const cut = clipStep1(path)
     expect(cut).toBe(path.slice(0, STEP1_MAX - 2) + '`…')
     expect(cut.length).toBe(STEP1_MAX)
