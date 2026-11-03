@@ -1,6 +1,7 @@
 package roots;
 # lib/roots.pm: unsafe roots (MOD-SPEC §1.2 Block A, D-12). Owner: WP-core.
 # Private store (handoff_root, log_dir, disposable_root), in both handoff-root modes:
+#   no absolute path (util::root_form)  -> REFUSED: root-invalid (no git call)
 #   inside a .planning/ directory      -> REFUSED: root-in-planning
 #   inside a git work tree, not ignored -> REFUSED: root-in-git
 #   inside a work tree but git-ignored  -> ok, one root_in_git {key, ignored:true} row
@@ -156,14 +157,18 @@ sub repo_check {
 }
 
 # check(settings) -> {handoff_root => r, log_dir => r, disposable_root => r} for the
-# effective paths (log_dir = the effective watch dir).
+# effective paths (log_dir = the effective watch dir). A root paths::for marks invalid (no
+# absolute form in this platform, util::root_form) is root-invalid with no check_path and no
+# git call: fail closed (RF-2).
 sub check {
     my ($settings) = @_;
     my $p = paths::for($settings);
+    my $inv = ref $p->{invalid} eq 'HASH' ? $p->{invalid} : {};
+    my $c = sub { my ($k, $path) = @_; return $inv->{$k} ? { ok => 0, reason => 'root-invalid' } : check_path($path) };
     return {
-        handoff_root    => check_path($p->{root}),
-        log_dir         => check_path($p->{watch}),
-        disposable_root => check_path($p->{disposable}),
+        handoff_root    => $c->('handoff_root', $p->{root}),
+        log_dir         => $c->('log_dir', $p->{watch}),
+        disposable_root => $c->('disposable_root', $p->{disposable}),
     };
 }
 

@@ -1,6 +1,6 @@
 {
  "id": "AT-E-03",
- "note": "MOD-SPEC §10 AT-E-03 (S-09): the sweep writes under <disposable_root>/<today>/<stem>-evidence/ (0700 folders, 0600 files), never under <bucket>/evidence/, and the destination is not a git work tree; a disposable_root inside a git work tree or a .planning/ folder is refused and nothing is written there",
+ "note": "MOD-SPEC §10 AT-E-03 (S-09): the sweep writes under <disposable_root>/<today>/<stem>-evidence/ (0700 folders, 0600 files), never under <bucket>/evidence/, and the destination is not a git work tree; a disposable_root inside a git work tree or a .planning/ folder is refused and nothing is written there; a disposable_root with no absolute form in this platform (a drive path C:/x or C:\\x on macOS and Linux, a rooted \\x, a drive-relative C:x, a relative path) is refused as root-invalid before any git call and before the sweep claims the compaction (RF-2: it was joined to the cwd, found outside any work tree and swept); under MSYS or Cygwin perl a drive path is read in its /c/ form first (seams STORE_TEST_OS, STORE_TEST_CYGDRIVE). These roots are written in the settings file: the runner's home guard refuses a root env value that is not absolute, so one inside a git work tree is root-in-git and one outside is swept into",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -118,6 +118,310 @@
     "stdout": "REFUSED: root-in-planning\n",
     "absent": [
      "$TMP/plan/.planning/trash"
+    ],
+    "files": [
+     {
+      "path": "$TMP/trace-4.log",
+      "snapshot": "no-root-git"
+     }
+    ]
+   }
+  },
+  {
+   "name": "disposable_root as a drive path (C:/): root-invalid, no git call, no sweep",
+   "options": {
+    "disposable_root": "C:$TMP/tracked/trash"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "4d5e6f70",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-invalid\n",
+    "trace_absent": [
+     "sweep"
+    ],
+    "absent": [
+     "$WATCH/$SID/swept/4d5e6f",
+     "$TMP/rel"
+    ],
+    "files": [
+     {
+      "path": "$TMP/trace-5.log",
+      "same_bytes_as": "no-root-git"
+     }
+    ]
+   }
+  },
+  {
+   "name": "disposable_root as a drive path (C:\\): root-invalid",
+   "options": {
+    "disposable_root": "C:\\tracked\\trash"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e6f7081",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-invalid\n",
+    "trace_absent": [
+     "sweep"
+    ],
+    "absent": [
+     "$WATCH/$SID/swept/5e6f70",
+     "$TMP/rel"
+    ],
+    "files": [
+     {
+      "path": "$TMP/trace-6.log",
+      "same_bytes_as": "no-root-git"
+     }
+    ]
+   }
+  },
+  {
+   "name": "disposable_root rooted with a backslash (\\x): root-invalid",
+   "options": {
+    "disposable_root": "\\tracked\\trash"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "6f708192",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-invalid\n",
+    "trace_absent": [
+     "sweep"
+    ],
+    "absent": [
+     "$WATCH/$SID/swept/6f7081",
+     "$TMP/rel"
+    ],
+    "files": [
+     {
+      "path": "$TMP/trace-7.log",
+      "same_bytes_as": "no-root-git"
+     }
+    ]
+   }
+  },
+  {
+   "name": "disposable_root drive-relative (C:x): root-invalid",
+   "options": {
+    "disposable_root": "C:tracked/trash"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "708192a3",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-invalid\n",
+    "trace_absent": [
+     "sweep"
+    ],
+    "absent": [
+     "$WATCH/$SID/swept/708192",
+     "$TMP/rel"
+    ],
+    "files": [
+     {
+      "path": "$TMP/trace-8.log",
+      "same_bytes_as": "no-root-git"
+     }
+    ]
+   }
+  },
+  {
+   "name": "disposable_root relative (rel/x): root-invalid, never joined to the cwd",
+   "options": {
+    "disposable_root": "rel/trash"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "8192a3b4",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-invalid\n",
+    "trace_absent": [
+     "sweep"
+    ],
+    "absent": [
+     "$WATCH/$SID/swept/8192a3",
+     "$TMP/rel"
+    ],
+    "files": [
+     {
+      "path": "$TMP/trace-9.log",
+      "same_bytes_as": "no-root-git"
+     }
+    ]
+   }
+  },
+  {
+   "name": "disposable_root relative to a cwd inside a git work tree: root-invalid, git not asked",
+   "options": {
+    "disposable_root": "tracked/trash"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "c5d6e7f8",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-invalid\n",
+    "trace_absent": [
+     "sweep"
+    ],
+    "absent": [
+     "$WATCH/$SID/swept/c5d6e7",
+     "$TMP/tracked/trash"
+    ],
+    "files": [
+     {
+      "path": "$TMP/trace-10.log",
+      "same_bytes_as": "no-root-git"
+     }
+    ]
+   }
+  },
+  {
+   "name": "MSYS perl without Cygwin::win_to_posix_path: a drive path is root-invalid",
+   "options": {
+    "disposable_root": "C:\\tracked\\trash"
+   },
+   "env": {
+    "STORE_TEST_OS": "msys"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "92a3b4c5",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-invalid\n",
+    "trace_absent": [
+     "sweep"
+    ],
+    "absent": [
+     "$WATCH/$SID/swept/92a3b4"
+    ],
+    "files": [
+     {
+      "path": "$TMP/trace-11.log",
+      "same_bytes_as": "no-root-git"
+     }
+    ]
+   }
+  },
+  {
+   "name": "MSYS perl: a drive path inside a git work tree is read as /c/... and refused root-in-git (AT-E-03#14/3/1 on the PC)",
+   "setup": [
+    {
+     "repo_fixture": "main-branch.json",
+     "at": "$TMP/cyg/c/tracked"
+    }
+   ],
+   "options": {
+    "disposable_root": "C:\\tracked\\trash"
+   },
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_CYGDRIVE": "$TMP/cyg"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "a3b4c5d6",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: root-in-git\n",
+    "trace_absent": [
+     "sweep"
+    ],
+    "absent": [
+     "$WATCH/$SID/swept/a3b4c5",
+     "$TMP/cyg/c/tracked/trash"
+    ]
+   }
+  },
+  {
+   "name": "MSYS perl: a drive path outside any work tree is swept into, in its /c/ form",
+   "options": {
+    "disposable_root": "C:/ok/trash"
+   },
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_CYGDRIVE": "$TMP/cyg"
+   },
+   "argv": [
+    "sweep",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "b4c5d6e7",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^TOTAL copied="
+    ],
+    "trace_has": [
+     "sweep"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/swept/b4c5d6",
+      "has": [
+       "\\t$TMP/cyg/c/ok/trash/2026-10-21/"
+      ]
+     }
     ]
    }
   }

@@ -565,7 +565,7 @@ The helper waits 5 seconds at most (`NOT QUEUED (timeout)`); every non-zero exit
 
 It registers one mod module and eight classic command hooks: `PreCompact`, `PostCompact`, `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop`, `StopFailure` and `PermissionDenied`.
 
-Files are private (folders 0700, files 0600, copies 0400). The private store (`handoff_root`, `log_dir` and `disposable_root`) is never written inside a git work tree (unless that path is git-ignored, which the plugin then logs) or inside a `.planning/` folder, in either mode. The only thing the plugin writes inside a repository is the repo-mode export described in [Handoffs in git](#handoffs-in-git-repo-mode), and the three files of `project init`.
+Files are private (folders 0700, files 0600, copies 0400). The private store (`handoff_root`, `log_dir` and `disposable_root`) is never written inside a git work tree (unless that path is git-ignored, which the plugin then logs) or inside a `.planning/` folder, in either mode. A root that is not an absolute path (a relative path, or a Windows drive path such as `C:\x` outside Git Bash's perl, which reads it as `/c/x`) is refused as `root-invalid` and nothing is written under it; `/{{plugin}}:status` shows `root: <key> refused (root-invalid)`. An unset `log_dir` follows `handoff_root` and is refused with it; the logs then go to the default folder. The only thing the plugin writes inside a repository is the repo-mode export described in [Handoffs in git](#handoffs-in-git-repo-mode), and the three files of `project init`.
 
 ### The handoff and evidence folders moved in 0.1.2
 

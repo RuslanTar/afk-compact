@@ -1,7 +1,8 @@
 package paths;
 # lib/paths.pm: where things live (MOD-SPEC conventions). Owner: WP-core.
-# paths::for(settings, sid) -> {root, watch, disposable, watch_default, from_default, legacy,
-#   disposable_from_default, disposable_legacy, moved}
+# paths::for(settings, sid) -> {root, watch, disposable, watch_default, invalid, from_default, legacy,
+#   disposable_from_default, disposable_legacy, moved}  (invalid: {key => 1} for a root with no
+#   absolute form, util::root_form)
 # STATE-ROOT (0.1.2): the default handoff root is ~/.local/state/<plugin>/handoffs and the default
 # disposable root ~/.local/state/<plugin>/disposable. Claude Code asks before every write under
 # ~/.claude in the default permission mode (its protected-path, "sensitive file" prompt, which no
@@ -28,15 +29,33 @@ our %MOVED = (handoff_root => [$DEFAULT_ROOT, $LEGACY_ROOT], disposable_root => 
 sub for {
     my ($settings, $sid) = @_;
     my $v = ref $settings eq 'HASH' && $settings->{values} ? $settings->{values} : $settings;
-    my $given = util::clean_path($v->{handoff_root});
+    # RF-2: each root is read in this platform's form first (util::root_form: a drive path under
+    # MSYS or Cygwin perl becomes /c/...). One it cannot read as absolute is marked invalid
+    # (roots::check refuses it as root-invalid and asks no git) and keeps the cwd-joined form it
+    # always had, so the callers that print it still have a path; nothing is written under it.
+    my %invalid;
+    my $form = sub {
+        my ($k) = @_;
+        my $raw = $v->{$k};
+        return undef unless defined $raw && $raw ne '';
+        my $f = util::root_form($raw);
+        $invalid{$k} = 1 unless defined $f;
+        return util::clean_path($f // $raw);
+    };
+    my $given = $form->('handoff_root');
     my $is_def = from_default($settings, $given);
+    delete $invalid{handoff_root} if $is_def;
     my $root = $is_def ? state_default() : $given;
-    my $watch = (defined $v->{log_dir} && $v->{log_dir} ne '') ? util::clean_path($v->{log_dir}) : "$root/.watch";
-    my $dgiven = util::clean_path($v->{disposable_root});
+    my $log_set = defined $v->{log_dir} && $v->{log_dir} ne '';
+    my $watch = $log_set ? $form->('log_dir') : "$root/.watch";
+    # unset, log_dir follows handoff_root, an invalid one too
+    $invalid{log_dir} = 1 if !$log_set && $invalid{handoff_root};
+    my $dgiven = $form->('disposable_root');
     my $d_def = from_default($settings, $dgiven, 'disposable_root');
+    delete $invalid{disposable_root} if $d_def;
     my $disp = $d_def ? state_default('disposable_root') : $dgiven;
     my $wdef = state_default() . '/.watch';
-    return { root => $root, watch => $watch, disposable => $disp, watch_default => $wdef,
+    return { root => $root, watch => $watch, disposable => $disp, watch_default => $wdef, invalid => \%invalid,
              from_default => $is_def, legacy => $is_def ? legacy($settings, $root) : undef,
              disposable_from_default => $d_def,
              disposable_legacy => $d_def ? legacy($settings, $disp, 'disposable_root') : undef,

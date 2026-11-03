@@ -18,6 +18,14 @@ sub _hires {
 
 sub test_mode { return (($ENV{STORE_TEST_MODE} // '') eq '1') ? 1 : 0 }
 
+# os() -> $^O; in test mode STORE_TEST_OS (msys, cygwin, linux, ...) stands in for it, so the
+# MSYS and Cygwin branches (Git Bash's perl: root_form, identity's /proc start time) run on
+# any host in the helper cases.
+sub os {
+    return $ENV{STORE_TEST_OS} if test_mode() && defined $ENV{STORE_TEST_OS} && $ENV{STORE_TEST_OS} =~ /\A[a-z0-9]+\z/;
+    return $^O;
+}
+
 # stamp_ms() -> 1 when a record stamp may carry milliseconds (Time::HiRes loads). In test mode
 # STORE_TEST_NO_HIRES=1 answers 0, so a case can write the stamp a perl without Time::HiRes
 # writes on any machine (review of bcdaca6: the start-record tests must not depend on it).
@@ -163,6 +171,36 @@ sub basename {
     (my $b = $p) =~ s{/+$}{};
     $b =~ s{^.*/}{};
     return $b;
+}
+
+# root_form(raw) -> a store root as configured (handoff_root, log_dir, disposable_root) as an
+# absolute path in this platform's form, or undef when it has none (RF-2): ~ is expanded first;
+# a path that starts with / is taken as it is; under MSYS or Cygwin perl a drive form (C:/x or
+# C:\x) is read through Cygwin::win_to_posix_path when perl has it. Anything else (a relative
+# path, a rooted \x, a drive-relative C:x, a drive form on macOS or Linux) is undef and is never
+# joined to the cwd: clean_path made <cwd>/C:/x of a drive path, found no work tree there and let
+# a sweep write into a root inside a git work tree. The caller refuses it as root-invalid.
+sub root_form {
+    my ($p) = @_;
+    return undef unless defined $p && !ref $p && $p ne '';
+    $p = expand_tilde($p);
+    return $p if $p =~ m{\A/};
+    my $os = os();
+    return undef unless ($os eq 'msys' || $os eq 'cygwin') && $p =~ m{\A[A-Za-z]:[/\\]};
+    my $f = _win_to_posix() // return undef;
+    my $q = eval { $f->($p, 1) };
+    return defined $q && $q =~ m{\A/} ? $q : undef;
+}
+
+# Cygwin::win_to_posix_path (MSYS and Cygwin perl), or undef. In test mode STORE_TEST_CYGDRIVE=<dir>
+# stands in for it: C:\a\b reads as <dir>/c/a/b (MSYS's /c/a/b under a test folder).
+sub _win_to_posix {
+    if (test_mode() && defined $ENV{STORE_TEST_CYGDRIVE} && $ENV{STORE_TEST_CYGDRIVE} =~ m{\A/}) {
+        my $top = $ENV{STORE_TEST_CYGDRIVE};
+        return sub { (my $x = $_[0]) =~ tr{\\}{/}; $x =~ s{\A([A-Za-z]):}{$top . '/' . lc $1}e; return $x };
+    }
+    no strict 'refs';
+    return defined &{'Cygwin::win_to_posix_path'} ? \&{'Cygwin::win_to_posix_path'} : undef;
 }
 
 # Absolute, with . and .. folded (no symlink resolution: the path may not exist).

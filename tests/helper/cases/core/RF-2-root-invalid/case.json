@@ -1,0 +1,115 @@
+{
+ "id": "RF-2-root-invalid",
+ "note": "RF-2 (Windows sitting 2, AT-E-03#14/3/1): a handoff_root or log_dir with no absolute form in this platform (relative, or a drive path C:\\x outside MSYS and Cygwin perl) is refused as root-invalid: nothing is written under it, never under the helper's cwd joined to it as before. An unset log_dir follows an invalid handoff_root, so core logs to the default watch dir; the watcher refuses too (status: Watcher: writes nothing) and status names root-invalid. The roots are written in the settings file: the runner's home guard refuses a root env value that is not absolute.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "a relative handoff_root: the copy is refused, nothing under the cwd",
+   "setup": [
+    {
+     "write": "$TMP/sum.txt",
+     "text": "summary body\n"
+    }
+   ],
+   "options": {
+    "handoff_root": "rel/h"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/w1"
+   },
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "-",
+    "--from",
+    "$TMP/sum.txt",
+    "--writer",
+    "postcompact-fallback",
+    "--scope",
+    "unknown",
+    "--cwd",
+    "$TMP"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_contains": [
+     "REFUSED: root-invalid"
+    ],
+    "absent": [
+     "$TMP/rel"
+    ],
+    "rows": [
+     {
+      "file": "$TMP/w1/$SID.classic.jsonl",
+      "ev": "copy",
+      "fields": {
+       "result": "failed:root-invalid"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a drive-path handoff_root on macOS or Linux, log_dir unset: the hook's watcher row is not written anywhere",
+   "options": {
+    "handoff_root": "C:\\h"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stderr_empty": true,
+    "absent": [
+     "$TMP/C:*"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact_fallback",
+      "count": 1
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "precompact",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "status names root-invalid for the root and the log_dir that follows it, and the watcher's refusal",
+   "options": {
+    "handoff_root": "C:\\h"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "absent": [
+     "$TMP/C:*"
+    ],
+    "stdout_has": [
+     "^root: handoff_root refused \\(root-invalid\\); copies and evidence under it are not written$",
+     "^root: log_dir refused \\(root-invalid\\); ",
+     "^Watcher: writes nothing \\(log_dir: root-invalid\\)$"
+    ]
+   }
+  }
+ ]
+}
