@@ -23,7 +23,10 @@ sub _pin_bucket {
     my $b = $j->{bucket};
     $b = $b->{path} if ref $b eq 'HASH';
     return undef unless defined $b && !ref $b && $b ne '';
-    $b = util::expand_tilde($b);
+    # bytes, as the root it is compared with and joined to: the pin is JSON read as characters,
+    # so a non-ASCII bucket made the copy path a character string and its root folder encoded
+    # twice (RF-4: every compaction copy after /handoff went to a second, double-encoded root)
+    $b = util::expand_tilde(util::fsb($b));
     if ($b =~ m{^/}) {
         my $c = util::clean_path($b);
         return undef unless index("$c/", "$root/") == 0;

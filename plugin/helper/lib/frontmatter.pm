@@ -1,6 +1,6 @@
 package frontmatter;
 # lib/frontmatter.pm: YAML-subset frontmatter for copies and handoffs. Owner: WP-core.
-#   write(\@pairs) -> "---\n<key>: <value>\n...---\n" (undef and '' values omitted;
+#   write(\@pairs) -> "---\n<key>: <value>\n...---\n", UTF-8 bytes (undef and '' values omitted;
 #     plain scalars when safe, else JSON-quoted strings, which YAML reads too;
 #     hashes and arrays as JSON flow values)
 #   read(text) -> ({key => value}, body) or () when there is no valid frontmatter.
@@ -11,12 +11,16 @@ use utf8;
 
 my $PLAIN = qr/^[A-Za-z0-9_~\/][A-Za-z0-9_.:\/@+~ ,()=-]*$/;
 
+# Every value is made UTF-8 bytes before it is joined (jsonc::encode_bytes, CR-F2): a copy's
+# values mix character strings from the hook payload with bytes from git and the file system,
+# and one character string turned the whole block into characters, so a non-ASCII repository
+# or worktree came out encoded twice (repository: "rÃ«po").
 sub _scalar {
     my ($v) = @_;
-    return jsonc::encode($v) if ref $v;
+    return jsonc::encode_bytes($v) if ref $v;
     my $s = "$v";
-    return $s if $s =~ $PLAIN && $s !~ /\s$/ && $s !~ /: / && $s !~ / #/;
-    return jsonc::encode($s);
+    return util::to_bytes($s) if $s =~ $PLAIN && $s !~ /\s$/ && $s !~ /: / && $s !~ / #/;
+    return jsonc::encode_bytes($s);
 }
 
 sub write {
