@@ -138,7 +138,11 @@ END {
 }
 # T-14: SessionStart writes this session's classic-alive.json, so it reads Claude Code's start time
 # itself (identity::claude_pid); every other call may take it from that record
-$identity::OWN_START = 1 if $IS_HOOK && defined $ARGV[0] && $ARGV[0] eq 'SessionStart';
+{
+    # (identity.pm declares it, but loads after main.pl compiles: no "used only once" warning on stderr)
+    no warnings 'once';
+    $identity::OWN_START = 1 if $IS_HOOK && defined $ARGV[0] && $ARGV[0] eq 'SessionStart';
+}
 ctx::init($HELPER_DIR);
 # U-06: the time bound of the user's patterns for a subcommand the mod calls with a short timeout
 userre::limits(@{ $userre::SUB_S{$sub} }) if $userre::SUB_S{$sub};
