@@ -78,7 +78,8 @@ sub caller_ok {
     my ($sid) = @_;
     my $o = owner($sid) // return (undef, 'no-record');
     my $pp = getppid();
-    return (undef, 'parent') unless $pp == $o->{pid} && identity::alive($pp, $o->{lstart});
+    # the parent proven by its start time read now (alive_verified): an unreadable one is not proof (RF-3)
+    return (undef, 'parent') unless $pp == $o->{pid} && identity::alive_verified($pp, $o->{lstart});
     return ($o, undef);
 }
 

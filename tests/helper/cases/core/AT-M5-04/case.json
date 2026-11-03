@@ -1,6 +1,6 @@
 {
  "id": "AT-M5-04",
- "note": "two processes, same sid, concurrent saves: seqs unique; then a lock owner record with a dead pid, then a live pid with a wrong start time: both stale owners are taken over and logged lock_stale",
+ "note": "two processes, same sid, concurrent saves: seqs unique; then a lock owner record with a dead pid, then a live pid with a wrong start time: both stale owners are taken over and logged lock_stale; then a live pid whose start time this call cannot read (MSYS perl without a readable /proc/<pid>/stat: seams STORE_TEST_OS, STORE_TEST_PROC_ROOT): alive-unknown, so the record is kept and the save gives up at lock-timeout, never breaking a live holder's lock (RF-3)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -211,6 +211,83 @@
        "reason": "start-time"
       }
      }
+    ]
+   }
+  },
+  {
+   "name": "live pid, start time unreadable: the lock is kept until lock-timeout, no lock_stale",
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "b5000005",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "write": "$TMP/s5.md",
+     "text": "<summary>\n⟪$BRAND v1 n=b5000005 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=b5000005⟫\n</summary>"
+    },
+    {
+     "mkdir": "$TMP/noproc"
+    },
+    {
+     "write": "$WATCH/$SID/seq.lock",
+     "json": {
+      "sid": "$SID",
+      "actor": "main",
+      "pid": 1,
+      "pid_lstart": "Mon Jan  1 00:00:00 2001",
+      "host": "$HOST",
+      "ts": "2026-10-21T14:00:00+03:00"
+     }
+    }
+   ],
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_PROC_ROOT": "$TMP/noproc"
+   },
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "b5000005",
+    "--from",
+    "$TMP/s5.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_contains": [
+     "REFUSED: lock-timeout"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "lock_stale",
+      "count": 2
+     }
+    ],
+    "files": [
+     {
+      "path": "$WATCH/$SID/seq.lock",
+      "has": [
+       "\"pid\":1,",
+       "\"pid_lstart\":\"Mon Jan  1 00:00:00 2001\""
+      ]
+     }
+    ],
+    "absent": [
+     "$ROOT/work/general/compact/*_c5-*.md"
     ]
    }
   }

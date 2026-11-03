@@ -1,0 +1,64 @@
+{
+ "id": "RF-3-respawn-cancel-unknown",
+ "note": "RF-3: respawn-cancel TERMs the detached respawn only when its pid runs with the start time recorded, read now (identity::alive_verified). Under MSYS perl with no readable /proc/<pid>/stat (seams STORE_TEST_OS, STORE_TEST_PROC_ROOT) the start time is unknown, which alive() reads as alive-unknown (a lock holder is kept), but it never authorises the kill: the process is left running. With /proc's start equal to the record it is TERMed. The shell reaps the sleep with KILL afterwards: rc 143 is the helper's TERM, 137 the shell's own KILL.",
+ "steps": [
+  {
+   "setup": [
+    {
+     "mkdir": "$WATCH/$SID"
+    },
+    {
+     "mkdir": "$TMP/noproc"
+    },
+    {
+     "mkdir": "$TMP/proc"
+    }
+   ]
+  },
+  {
+   "name": "MSYS, start time unreadable: nothing is killed",
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_PROC_ROOT": "$TMP/noproc",
+    "PR": "$TMP/noproc",
+    "W": "$WATCH/$SID",
+    "SID": "$SID",
+    "L": "Sun Sep 9 01:46:40 2001"
+   },
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "sleep 30 & p=$!; printf '{\"nonce\":\"5555666677778888\",\"pid\":%s,\"lstart\":\"%s\"}\\n' \"$p\" \"$L\" > \"$W/restart-respawn.pid\"; \"$0\" restart respawn-cancel --sid \"$SID\" --nonce 5555666677778888; kill -KILL \"$p\" 2>/dev/null; wait \"$p\"; echo \"sleep rc=$?\"",
+    "$STORE"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "{\"ok\":true,\"killed\":false,\"note\":false}\nsleep rc=137\n"
+   }
+  },
+  {
+   "name": "MSYS, /proc's start time equals the record: TERM",
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_PROC_ROOT": "$TMP/proc",
+    "PR": "$TMP/proc",
+    "W": "$WATCH/$SID",
+    "SID": "$SID",
+    "L": "Sun Sep 9 01:46:40 2001"
+   },
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "sleep 30 & p=$!; mkdir -p \"$PR/$p\"; printf \"%s (sleep) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4096 0\\n\" \"$p\" > \"$PR/$p/stat\"; printf \"btime 1000000000\\n\" > \"$PR/stat\"; printf '{\"nonce\":\"5555666677778888\",\"pid\":%s,\"lstart\":\"%s\"}\\n' \"$p\" \"$L\" > \"$W/restart-respawn.pid\"; \"$0\" restart respawn-cancel --sid \"$SID\" --nonce 5555666677778888; kill -KILL \"$p\" 2>/dev/null; wait \"$p\"; echo \"sleep rc=$?\"",
+    "$STORE"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "{\"ok\":true,\"killed\":true,\"note\":false}\nsleep rc=143\n",
+    "absent": [
+     "$WATCH/$SID/restart-respawn.pid"
+    ]
+   }
+  }
+ ]
+}

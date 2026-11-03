@@ -2,7 +2,7 @@
  "id": "HT-WA-03",
  "layer": "H",
  "owner": "skills",
- "note": "Dev-7 D2: a pid whose start time differs from @<start> is met as reused; an anchored pid that ends is met without a note (a zombie child of the helper reads as gone); --while pid ends the wait with exit 12 when the pid is gone or reused; --while file when the file goes; a live unanchored pid stays pending",
+ "note": "Dev-7 D2: a pid whose start time differs from @<start> is met as reused; an anchored pid that ends is met without a note (a zombie child of the helper reads as gone); --while pid ends the wait with exit 12 when the pid is gone or reused; --while file when the file goes; a live unanchored pid stays pending; under MSYS and Cygwin perl (seams STORE_TEST_OS, STORE_TEST_PROC_ROOT) the start time comes from /proc/<pid>/stat (field 22 + btime), as on Linux, since their ps has no -o: a /proc start equal to @<start> stays pending, another is reused, and with no readable /proc entry the start is unknown, so a running pid reads alive, never reused (RF-3, Windows sitting 2 R7w)",
  "steps": [
   {
    "name": "reused",
@@ -126,6 +126,75 @@
    "expect": {
     "exit": 0,
     "stdout": "wait: done file:$TMP/g.moved after 0s\n"
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/proc/$RUNNER_PID/stat",
+     "content": "$RUNNER_PID (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4096 0\n"
+    },
+    {
+     "write": "$TMP/proc/stat",
+     "content": "cpu 0 0 0 0\nbtime 1000000000\n"
+    },
+    {
+     "mkdir": "$TMP/noproc"
+    }
+   ]
+  },
+  {
+   "name": "MSYS: the start time read from /proc matches @<start>: pending",
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_PROC_ROOT": "$TMP/proc"
+   },
+   "argv": [
+    "wait",
+    "--for",
+    "pid-exit:$RUNNER_PID@1000000000",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10,
+    "stdout": "wait: pending after 0s (max 0s); run the same command again\n"
+   }
+  },
+  {
+   "name": "MSYS: the start time read from /proc differs from @<start>: reused",
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_PROC_ROOT": "$TMP/proc"
+   },
+   "argv": [
+    "wait",
+    "--for",
+    "pid-exit:$RUNNER_PID@1",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done pid-exit:$RUNNER_PID@1 after 0s note=reused\n"
+   }
+  },
+  {
+   "name": "MSYS without a readable /proc/<pid>/stat: the start is unknown, a running pid is never read as reused",
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_PROC_ROOT": "$TMP/noproc"
+   },
+   "argv": [
+    "wait",
+    "--for",
+    "pid-exit:$RUNNER_PID@1",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10,
+    "stdout": "wait: pending after 0s (max 0s); run the same command again\n"
    }
   }
  ]
