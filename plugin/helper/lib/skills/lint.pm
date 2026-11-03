@@ -23,6 +23,8 @@ package skills::lint;
 #        claimed session counts only rows after the claim).
 #      0.1.2 (D-8): approval_context_only (a stage bound to a plugin handoff turn): every own
 #        approval must be the context-only form (approval-plugin-turn).
+#      0.1.3: carried_as {line => draft line} (publish's re-lint after moving approvals: a line
+#        whose draft text was carried stays carried).
 # The result also carries `acuity`: the rating found in Resume here, or undef; and
 # `approvals`: {checked => [U-n…], lines, unchecked, classes, origins} for the frontmatter, the row
 # and the line-hash record.
@@ -54,6 +56,10 @@ sub lint {
     skills::spec::need(qw(time_re claim_tags.verified_re carry.tag_re carry.foreign_approval_note lint_ids private_path_classes));
     # Lines carried byte-identical from the base or from the own chain's file.
     my %prev_lines = map { $_ => 1 } split /\n/, join("\n", grep { defined } $in->{previous}, $in->{own_previous});
+    # carried_as {line => draft line}: publish rewrote a moved approval's id in these lines
+    # (skills::approvals::move_lines); one whose draft text was carried is still carried.
+    my $cas = ref $in->{carried_as} eq 'HASH' ? $in->{carried_as} : {};
+    $prev_lines{$_} = 1 for grep { $prev_lines{ $cas->{$_} } } keys %$cas;
     # CR-F29 (DP-27): tagged ledger lines carried from a foreign base keep the base's
     # checked/verified stamps verbatim; their times are not checked.
     my $carried = _foreign_carried($in, \@lines);

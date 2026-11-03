@@ -1,0 +1,182 @@
+{
+  "id": "AT-AP-26 (a carried line that cites a moved id keeps its carried-stamp exemption, 0.1.3 APPROVALS review round 3)",
+  "needs": [
+    "nonroot"
+  ],
+  "tmp_base": "repo",
+  "layer": "H",
+  "owner": "skills",
+  "note": "0.1.3 APPROVALS, review round 3 (RV-S2). A line carried byte-identical from the own file keeps an old `checked <stamp>` (lint exempts carried lines from unprinted-time and time-format). When an approval it cites moves to Open questions, publish rewrites its U-<k> to the new Q-<m>; that rewrite alone does not make it a new line, so the re-lint of the moved text still exempts it and publish writes the file, as round 1 did. A line that is not carried, with the same old stamp and the same moved id, still blocks: the first publish refuses with LINT unprinted-time for it; without it the handoff is written with the carried line rewritten.",
+  "now": "2026-10-21T14:05:12+03:00",
+  "tz": "Etc/GMT-3",
+  "options": {
+    "queue_cmd": "$TMP/bin/notexec"
+  },
+  "steps": [
+    {
+      "setup": [
+        {
+          "repo": {
+            "branch": "feat/x",
+            "commits": [
+              {
+                "files": {
+                  "app/retry.rb": "x = 1\n"
+                },
+                "msg": "seed"
+              }
+            ]
+          },
+          "at": "$TMP/repo"
+        },
+        {
+          "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+          "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+        },
+        {
+          "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+          "content": "{\"type\": \"user\", \"uuid\": \"u0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"let's finish the release prep\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Two questions:\\n1. Run the tests?\\n2. Push feat/x to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. yes\\n2. no\"}}\n{\"type\": \"assistant\", \"uuid\": \"a3\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Shall I merge MR !12 now?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes, but wait for CI first\"}}\n{\"type\": \"assistant\", \"uuid\": \"a5\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"The release notes are ready.\"}]}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"ok\"}}\n{\"type\": \"assistant\", \"uuid\": \"a7\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"May I push feat/z to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/z to origin now please\"}}\n{\"type\":\"user\",\"uuid\":\"x9\",\"sessionId\":\"99999999-aaaa-4bbb-8ccc-dddddddddddd\",\"timestamp\":\"2026-10-21T13:20:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"archive the old-tools repo today\"}}\n"
+        },
+        {
+          "git": [
+            "rev-parse",
+            "HEAD"
+          ],
+          "cwd": "$TMP/repo",
+          "var": "HEAD0"
+        },
+        {
+          "write": "$TMP/bin/notexec",
+          "content": "#!/bin/sh\nexit 0\n",
+          "mode": "0600"
+        },
+        {
+          "write": "$ROOT/repo/approvals/2026-10-21_09-00-00_11111111_approvals.md",
+          "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-9 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Open questions\n- Q-5: rename the retry flag? · owner user · raised by agent · unasked\n## Work done and findings\n- old/x clean-up waits on U-7 (HEAD checked 2026-10-21 09:00 +0300)\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=0a0a0a0a⟫\n"
+        },
+        {
+          "write": "$ROOT/repo/approvals/2026-10-21_12-00-00_99999999_other.md",
+          "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T12:00:00+03:00\nsession_id: 99999999-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\ngit_commit: 1234567890abcdef1234567890abcdef12345678\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-9 — other session\n## User constraints\n- U-3: \"never deploy on Fridays\" — scope deploys; user, 99999999\n## Open questions\n- Q-2: bump the gateway timeout? · owner user · raised by agent · unasked\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+        }
+      ]
+    },
+    {
+      "name": "begin: the newest handoff is another session's (foreign base), the own file is older; the queue is degraded, so a Queued: line is allowed",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "begin",
+        "--sid",
+        "$SID",
+        "--topic",
+        "approvals"
+      ],
+      "expect": {
+        "exit": 0,
+        "json": {
+          "previous_kind": "foreign",
+          "own_previous_handoff": "repo/approvals/2026-10-21_09-00-00_11111111_approvals.md",
+          "queue.mode": "degraded"
+        }
+      },
+      "capture": {
+        "STAGE": "json:stage"
+      }
+    },
+    {
+      "name": "stamp prints the check time",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "stamp",
+        "--stage",
+        "$STAGE"
+      ],
+      "expect": {
+        "exit": 0
+      }
+    },
+    {
+      "write": "$STAGE/body.md",
+      "content": "# LAB-9 — approvals moved, references follow\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-7: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n- Q-1: keep the 45 s retry window? Upstream retries at 40 s · owner user · raised by agent · unasked\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- old/x clean-up waits on U-7 (HEAD checked 2026-10-21 09:00 +0300)\n- old/y clean-up waits on U-7 (HEAD checked 2026-10-21 08:00 +0300)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    },
+    {
+      "name": "a line that is not carried, with an old stamp, citing the moved U-7: still refused for its unprinted time",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "publish",
+        "--stage",
+        "$STAGE",
+        "--slug",
+        "approvals",
+        "--status",
+        "in-progress"
+      ],
+      "expect": {
+        "exit": 3,
+        "stdout_has": [
+          "^LINT unprinted-time line 25$",
+          "^REFUSED: lint \\(1 blocking\\)"
+        ],
+        "stdout_lacks": [
+          "^Wrote handoff to: ",
+          "^LINT unprinted-time line 24$"
+        ]
+      }
+    },
+    {
+      "write": "$STAGE/body.md",
+      "content": "# LAB-9 — approvals moved, references follow\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-7: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n- Q-1: keep the 45 s retry window? Upstream retries at 40 s · owner user · raised by agent · unasked\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- old/x clean-up waits on U-7 (HEAD checked 2026-10-21 09:00 +0300)\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+    },
+    {
+      "name": "only the carried line cites U-7: U-7 moves, the carried line now cites Q-6 and keeps its exemption; the file is written",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "publish",
+        "--stage",
+        "$STAGE",
+        "--slug",
+        "approvals",
+        "--status",
+        "in-progress"
+      ],
+      "capture": {
+        "PUB": "re:^Wrote handoff to: (.+)$"
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_has": [
+          "^ADVISORY approval-quote line 10: U-7 goes to Open questions as Q-6, a re-ask; .*; line 24 cites Q-6 instead$",
+          "^Wrote handoff to: "
+        ],
+        "stdout_lacks": [
+          "^LINT ",
+          "^REFUSED"
+        ]
+      }
+    },
+    {
+      "name": "the written file holds the carried line with Q-6 and its old stamp",
+      "cwd": "$TMP/repo",
+      "argv": [
+        "handoff-state",
+        "--sid",
+        "$SID"
+      ],
+      "expect": {
+        "files": [
+          {
+            "path": "$PUB",
+            "has": [
+              "^- old/x clean-up waits on Q-6 \\(HEAD checked 2026-10-21 09:00 \\+0300\\)$",
+              "^- Q-6: re-ask before acting: delete branch old/x "
+            ],
+            "lacks": [
+              "^## Approvals",
+              "U-7: approval",
+              "waits on U-7"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

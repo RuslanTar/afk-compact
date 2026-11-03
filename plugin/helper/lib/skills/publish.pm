@@ -125,7 +125,7 @@ sub run {
     my $times = skills::stage::printed_times($dir, $s);
     my $floor = [ skills::approvals::quote_floor($ctx, $s->{session_id}) ];
     my $lint = sub {
-        my ($text) = @_;
+        my ($text, $carried_as) = @_;
         my $r = eval { skills::lint::lint({
             body => $text, recipes => \%recipes, extra => \%extra, previous => $prev_text,
             previous_kind => $s->{previous_kind}, own_previous => $own_text,
@@ -133,7 +133,7 @@ sub run {
             jobs => $jobs, times => $times, evidence => $ev, bucket => $s->{bucket},
             brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
             queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
-            quote_floor => $floor,
+            quote_floor => $floor, carried_as => $carried_as,
             approval_context_only => (defined $ht ? 1 : 0),
         }) };
         if (!$r) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
@@ -149,15 +149,17 @@ sub run {
     # move once the rest passes.
     # Q numbers go on above the chain's (spec §4): the base, the own file and the stage's ledger.
     # The reason a quote failed (copy, claim, pasted: review round 2) comes from the lint.
-    my ($mbody, $moved, $keep) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
-                                                               $prev_text, $own_text, $extra{'ledger.md'});
+    # A carried line whose only change is that rewrite stays carried for the re-lint (its old stamps
+    # stay exempt, review round 3).
+    my ($mbody, $moved, $keep, $was) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
+                                                                     $prev_text, $own_text, $extra{'ledger.md'});
     my %rules;
     my $draft_adv = $res->{advisory};
     if (@$moved) {
         $rules{ $_->{rule} } = 1 for @$moved;
         if (!@$keep) {
             $body = $mbody;
-            $res = $lint->($body);
+            $res = $lint->($body, $was);
             $keep = $res->{blocking};
         }
     }

@@ -989,7 +989,7 @@ sub move_why {
 }
 
 # move_lines(body, [[rule, where]…], {where => reason}, other texts…) -> (new body, [{line, id, q,
-# rule, why, refs => [line…], see => [line…]}…], [[rule, where]…] kept)
+# rule, why, refs => [line…], see => [line…]}…], [[rule, where]…] kept, {new line => draft line})
 # Each blocking item of %MOVE_RULES on an own approval line of `## Approvals` moves that line to
 # `## Open questions` as `- Q-<n>: re-ask before acting: <action> · targets <…> · words recorded as
 # the user's: "<…>"[ (answer to "<…>")][ · denied <how> <stamp>] (was U-<k>; not carried: <why>)
@@ -1006,7 +1006,9 @@ sub move_why {
 # or a re-ask item) an exact `U-<k>` token of a moved id, outside double quotes and backticks and
 # not an end of an id range, now reads its `Q-<m>` (refs: the draft's line numbers), unless the
 # id is moved twice or a kept line still holds it (`- U-<k>:`); when `## Approvals` is dropped, a
-# "see Approvals" pointer reads "see Open questions" (see, on the last moved line's entry).
+# "see Approvals" pointer reads "see Open questions" (see, on the last moved line's entry). The
+# last value maps each line this rewrite changed to its draft text, so the re-lint keeps a carried
+# line carried (lint `carried_as`).
 sub move_lines {
     my ($body, $items, $reasons, @other) = @_;
     my @lines = split /\n/, $body // '', -1;
@@ -1023,7 +1025,7 @@ sub move_lines {
         push @keep, $it;
     }
     my ($oq) = grep { $lines[$_] =~ /\A##\s/ && index($lines[$_], $OPEN_HEADING) == 0 } 0 .. $#lines;
-    return ($body, [], $items || []) unless %mv && defined $oq;
+    return ($body, [], $items || [], {}) unless %mv && defined $oq;
     my $qn = 0;
     for (@lines, grep { defined } @other) { while (/\bQ-([0-9]+)\b/g) { $qn = $1 if $1 > $qn } }
     my (@moved, @add);
@@ -1058,7 +1060,7 @@ sub move_lines {
         delete $to{$1} if $lines[$i] =~ /\A\s*(?:[-*+]\s+)?(U-[0-9]+):/;
     }
     my $drop = !grep { $lines[$_] =~ /\S/ && !$mv{$_} } keys %$in;
-    my @see;
+    my (@see, %was);
     for my $i (0 .. $#lines) {
         next if $in->{$i} || $mv{$i} || ($tag_re && $lines[$i] =~ $tag_re) || $lines[$i] =~ /\(was U-[0-9]+; not carried:/;
         my @seg = split /("[^"]*"|“[^”]*”|`[^`]*`)/, $lines[$i], -1;
@@ -1071,7 +1073,9 @@ sub move_lines {
             $pt += $seg[$k] =~ s/\b([Ss]ee (?:the )?)(## )?Approvals\b/$1$2Open questions/g if $drop;
         }
         push @see, $i + 1 if $pt;
-        $lines[$i] = join '', @seg;
+        my $new = join '', @seg;
+        $was{$new} = $lines[$i] if $new ne $lines[$i];
+        $lines[$i] = $new;
     }
     $moved[-1]{see} = \@see if @see;
     # Open questions: its body runs to the next main heading.
@@ -1107,7 +1111,7 @@ sub move_lines {
         my %d = map { $_ => 1 } @drop;
         @out = map { $out[$_] } grep { !$d{$_} } 0 .. $#out;
     }
-    return (join("\n", @out), \@moved, \@keep);
+    return (join("\n", @out), \@moved, \@keep, \%was);
 }
 
 # One quote check's ask: the quote, the targets and the action (the matching-item rule reads the
