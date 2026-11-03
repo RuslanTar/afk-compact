@@ -97,11 +97,19 @@ sub _start_ms {
     return $s;
 }
 
+# The Stop budget in ms. Test seam (STORE_TEST_MODE only): STORE_TEST_STOP_BUDGET_MS widens it,
+# never narrows it, for a case whose subject is a phase's own work, not the budget (HS-03: the
+# GSD catch-up, which a loaded host would otherwise leave no time).
+sub _stop_budget {
+    my $w = util::test_mode() ? ($ENV{STORE_TEST_STOP_BUDGET_MS} // '') : '';
+    return ($w =~ /\A[0-9]{1,6}\z/ && $w > $STOP_BUDGET_MS) ? 0 + $w : $STOP_BUDGET_MS;
+}
+
 # _stop_left(cap, keep) -> ms of the Stop budget still free after the reserve and `keep` ms
 # held for what follows, at most `cap`, never below 0.
 sub _stop_left {
     my ($cap, $keep) = @_;
-    my $l = $STOP_BUDGET_MS - $STOP_RESERVE_MS - ($keep // 0) - (util::clock_ms() - ($T_START // util::clock_ms()));
+    my $l = _stop_budget() - $STOP_RESERVE_MS - ($keep // 0) - (util::clock_ms() - ($T_START // util::clock_ms()));
     $l = $cap if defined $cap && $l > $cap;
     return $l < 0 ? 0 : int $l;
 }
