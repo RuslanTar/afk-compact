@@ -44,7 +44,8 @@ my @rows = (
     { ev => 'config_effective', window => 150000, native_offset => 33000, native_trigger => 117000, reserve => 100000,
       soft_max => undef, target => undef, soft_max_raw => -7000, target_raw => -4667, disabled => 'trigger-disabled-small-window',
       small_window => 1, min_window => 'never', clamped => [] },
-    { ev => 'config_effective', window => 1000000, native_offset => 33000, native_trigger => 967000, reserve => 100000,
+    { ev => 'config_effective', window => 1000000, window_from => 'breakdown', autocompact_source => 'model-default',
+      native_offset => 33000, native_trigger => 967000, reserve => 100000,
       soft_max => 800000, target => 533333, soft_max_raw => 800000, target_raw => 533333, disabled => undef,
       small_window => 0, min_window => 253000, clamped => [ 'soft_max' ] },
     { ev => 'dispatch', nonce => 'ab0c0004', trigger => 'auto', channel => 'mod-hook', idle => 1, idle_gap_s => 1800 },
@@ -125,6 +126,8 @@ my @rows = (
         $E->is($r{24}{disabled}, 'trigger-disabled-small-window', 'disabled word');
         $E->is($b->($r{24}{small_window}), 'true', 'small_window');
         $E->is($r{25}{min_window}, 253000, 'min_window number');
+        $E->is(($r{25}{window_from} // 'missing') . ' ' . ($r{25}{autocompact_source} // 'missing'), 'breakdown model-default',
+               'config_effective window_from and autocompact_source kept (0.1.4 T-11)');
         $E->is($r{26}{idle_gap_s}, 1800, 'dispatch idle_gap_s');
         $E->is($r{27}{skip}, 'native-ran', 'compacted skip native-ran');
         $E->is($r{28}{left}, 2, 'orphan_finished counts');

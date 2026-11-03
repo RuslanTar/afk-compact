@@ -63,8 +63,8 @@
     },
     "native_window_tokens": {
       "type": "number",
-      "title": "Claude Code compaction window (tokens) [default 0 = autoCompactWindow, else the model's window]",
-      "description": "The context size within which Claude Code runs its own automatic compaction; the plugin keeps its own thresholds below Claude Code's compaction point (about 33,000 tokens under this window). Default 0 means the window your Claude Code autoCompactWindow setting names, else the model's context window as Claude Code reports it; enter a number only if Claude Code compacts within another window (values under 100,000 count as 100,000).",
+      "title": "Claude Code compaction window (tokens) [default 0 = the window Claude Code reports]",
+      "description": "The context size within which Claude Code runs its own automatic compaction; the plugin keeps its own thresholds below Claude Code's compaction point (about 33,000 tokens under this window). Default 0 means the compaction window Claude Code reports (set by CLAUDE_CODE_AUTO_COMPACT_WINDOW, your autoCompactWindow setting or the model's default), with its own compaction point when it reports one; a Claude Code that reports none: the window your autoCompactWindow setting names, else the model's context window. Enter a number only if Claude Code compacts within another window (values under 100,000 count as 100,000).",
       "default": 0
     },
     "boundary_delay_ms": {

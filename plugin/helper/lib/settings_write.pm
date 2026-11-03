@@ -294,7 +294,7 @@ sub check_value {
         return (undef, "below its minimum $lo") if defined $lo && $n < $lo;
         return (undef, "above its maximum $hi") if defined $hi && $n > $hi;
         my $floor = window_floor();
-        return (undef, "0 (Claude Code's autoCompactWindow, else the model's window) or at least $floor") if $key eq 'native_window_tokens' && $n > 0 && $n < $floor;
+        return (undef, "0 (the window Claude Code reports) or at least $floor") if $key eq 'native_window_tokens' && $n > 0 && $n < $floor;
         # the JSON text must read back as the same number (Perl prints 1e+15 past 15 digits)
         return (undef, 'too many digits') unless "$n" =~ /\A[0-9]+(?:\.[0-9]+)?\z/;
         return ({ data => $n, json => "$n" });

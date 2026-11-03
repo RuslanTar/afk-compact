@@ -28,6 +28,14 @@ export type RunResult = {
  * `''` when the engine gave none): only a plan window is evidence of the one-hour cache (D15).
  */
 export type Usage = { tokens: number | undefined; window: number; rateLimits: { kind: string; percentUsed: number }[] }
+/**
+ * 0.1.4 T-11: the compaction window as Claude Code settled it, from the `summary` context breakdown
+ * (`$.session.usage({ breakdown: 'summary' })`, estimated locally: no token-count request):
+ * `window` its `rawMaxTokens`, `threshold` its `autoCompactThreshold` (absent while auto-compaction
+ * is off), `source` its `autocompactSource` (env, settings, clientdata, experiment, model-default,
+ * unknown-model or auto: the model's own limit).
+ */
+export type CompactWindow = { window: number; threshold?: number; source?: string }
 
 /** Claude Code's own native idle compaction as the merged settings and its environment say (§1.1). */
 export type NativeIdle = 'on' | 'vetoed' | 'compaction-off' | 'unknown'
@@ -265,6 +273,13 @@ export interface Deps {
    * undefined when unset, not a positive number, or the read throws.
    */
   compactWindowSetting?(): Promise<number | undefined>
+  /**
+   * 0.1.4 T-11: the compaction window from the `summary` context breakdown (CompactWindow), read
+   * with the thresholds once per load (config.ts effective) while `native_window_tokens` is unset;
+   * undefined when the reply has no breakdown (an older Claude Code, no session bound), its window
+   * is not a positive number, or the call throws. Then compactWindowSetting is read, as in 0.1.3.
+   */
+  compactWindow?(): Promise<CompactWindow | undefined>
   /**
    * Owner xxxxxxxx-17 (2b): the idle mode Claude Code last cached from its server
    * (`cachedGrowthBookFeatures.tengu_sunny_locket.mode` in `<config dir>/.claude.json`), as a
@@ -954,6 +969,20 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       try {
         const v = await $.settings.read({ key: 'autoCompactWindow' })
         return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined
+      } catch {
+        return undefined
+      }
+    },
+    async compactWindow() {
+      try {
+        const b = (await $.session.usage({ breakdown: 'summary' })).context.breakdown
+        const pos = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0
+        if (!b || !pos(b.rawMaxTokens)) return undefined
+        return {
+          window: Math.floor(b.rawMaxTokens),
+          ...(pos(b.autoCompactThreshold) ? { threshold: Math.floor(b.autoCompactThreshold) } : {}),
+          ...(typeof b.autocompactSource === 'string' && /^[a-z-]{1,32}$/.test(b.autocompactSource) ? { source: b.autocompactSource } : {}),
+        }
       } catch {
         return undefined
       }

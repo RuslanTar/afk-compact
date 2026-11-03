@@ -310,7 +310,10 @@ our %SCHEMA = (
     copy_failed => { nonce => 'nonce', reason => 'word' },
     copy_mismatch => { nonce => 'nonce' },
     checkpoint => { nonce => 'nonce', ms => 'num', bytes => 'int', measured => 'bool', consent => 'word' },
-    config_effective => { window => 'num', native_offset => 'num', native_trigger => 'num', reserve => 'num',
+    # 0.1.4 T-11: window_from (where the window came from) and the breakdown's autocompactSource
+    config_effective => { window => 'num', window_from => [enum => qw(option breakdown setting context)],
+                          autocompact_source => [enum => qw(env settings clientdata experiment model-default unknown-model auto)],
+                          native_offset => 'num', native_trigger => 'num', reserve => 'num',
                           soft_max => 'num', target => 'num', disabled => 'word', clamped => [list => 'word'],
                           min_window => [or => 'num', 'never'], small_window => 'bool', soft_max_raw => 'num', target_raw => 'num' },
     config_clamped => { key => 'word', configured => 'num', effective => 'num' },
