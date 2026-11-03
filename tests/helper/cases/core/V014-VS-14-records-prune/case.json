@@ -439,6 +439,77 @@
    ]
   },
   {
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "d7d7d7d7-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/d7d7d7d7-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "545454:Fri Oct 23 14:08:00 2026"
+   },
+   "now": "2026-10-23T14:08:12+03:00",
+   "name": "a third day, nothing left over the batch: A's pair whose ended- twin is under a week old (written by a later start's close_gone) still stays, and so does every record kept before",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/61000001-1791716000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000001-1791716000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000002-1791716000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000002-1791716000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000004-1791900000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000005-1791950000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000006-1792400000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000007-1791810000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000007-1791810000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000008-1791820000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000009-1791830000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/62000001-1791700000.live-b2b2b2b2.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/62000002-1791710000.live-b2b2b2b2.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/63000001-1791600000.live-c3c3c3c3.json"
+     }
+    ]
+   },
+   "setup": [
+    {
+     "write": "$WATCH/b2b2b2b2-1111-4222-8333-444444444444/pending/abcdef.post.md",
+     "content": "stash\n"
+    }
+   ]
+  },
+  {
    "lib": "own_start",
    "args": {
     "root": "$ROOT",
