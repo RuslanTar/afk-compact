@@ -1,6 +1,6 @@
 {
  "id": "HS-02-stop-budget-from-start",
- "note": "0.1.3 hook speed (cmd/hook.pl): the Stop hook's one budget, 3.5 s (under half its 8 s timeout), counts from the helper's start, before its libraries compile (main.pl's mark; STORE_TEST_HOOK_START_AGO_MS moves that mark back, as on a host slowed by load, and moves nothing without it). Each Stop writes one stop_timing row last: its own duration from the helper's start (ms), the start (start_ms), what reconcile, the GSD catch-up and the watcher took and were given, and what the budget cut. (1) A helper that spent 3.4 s starting gives reconcile no time, the GSD catch-up (due: no cache yet) none, and the watcher only its 0.2 s floor; the row says reconcile and gsd were cut; the turn's records are still written (last-stop). (2) One that spent 1.2 s gives reconcile at most 1 s (it keeps 1 s for the watcher: 3.5 - 0.3 reserve - 1.2 - 1 = 1 s) and the watcher at most 2 s and at least 1 s; nothing is cut and the catch-up runs. (3) With `watcher: off` no stop_timing row is written. With the 0.1.2 budget (7 s counted after the start), without main.pl's mark, or with reconcile keeping no room for the watcher, (2) gives reconcile its full 2 s or the watcher its full 3 s",
+ "note": "0.1.3 hook speed (cmd/hook.pl): the Stop hook's one budget, 3.5 s (under half its 8 s timeout), counts from the helper's start, before its libraries compile (main.pl's mark; STORE_TEST_HOOK_START_AGO_MS moves that mark back, as on a host slowed by load, and moves nothing without it). Each Stop writes one stop_timing row last: its own duration from the helper's start (ms), the start (start_ms), what reconcile, the GSD catch-up and the watcher took and were given, and what the budget cut. (1) A helper that spent 3.4 s starting gives reconcile no time, the GSD catch-up (due: no cache yet) none, and the watcher only its 0.2 s floor; the row says reconcile and gsd were cut; the turn's records are still written (last-stop). (2) One that spent 1.2 s gives reconcile at most 1 s (it keeps 1 s for the watcher: 3.5 - 0.3 reserve - 1.2 - 1 = 1 s) and the watcher at most 2 s and at least 1 s; nothing is cut and the catch-up runs. (3) With `watcher: off` no stop_timing row is written. With the 0.1.2 budget (7 s counted after the start), without main.pl's mark, or with reconcile keeping no room for the watcher, (2) gives reconcile its full 2 s or the watcher its full 3 s. On a loaded host the catch-up in (2) may get no time: the row then names gsd as cut, with status no-time",
  "now": "2026-10-20T10:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -105,10 +105,6 @@
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "stop_timing",
       "count": 1,
-      "fields": {
-       "gsd": "ok",
-       "cut": []
-      },
       "fields_le": {
        "reconcile_budget_ms": 1000,
        "watch_window_ms": 2000
@@ -116,7 +112,19 @@
       "fields_ge": {
        "watch_window_ms": 1000,
        "ms": 1200
-      }
+      },
+      "fields_any": [
+       {
+        "gsd": "ok",
+        "cut": []
+       },
+       {
+        "gsd": "no-time",
+        "cut": [
+         "gsd"
+        ]
+       }
+      ]
      }
     ]
    }

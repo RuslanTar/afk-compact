@@ -1,0 +1,226 @@
+{
+ "id": "HS-06-late-step0-save-waits",
+ "note": "0.1.3 hook speed (lib/reconcile.pm SWEEP_MIN_MS), review round 2 probe ZZ-P0: the wait covers reconcile's step 0 too, the save of a PostCompact deferred for want of a scope proof (classic fallback, RR-S21-02). Its boundary row proves it main at a Stop that starts 1.7 s late: the save and its sweep wait (no copy, no swept claim, no sweep_evidence; the stash stays in pending/; stop_timing names reconcile as cut, and gsd too, with status no-time, when a loaded host left the catch-up no time). The next Stop, on time, saves the copy and sweeps it: the planted evidence file is copied (referenced_budget 0)",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "setup",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "ts": "2026-10-21T14:04:40+03:00"
+       }
+      }
+     ]
+    },
+    {
+     "text": "evidence line\n",
+     "write": "$TMP/work/tasks/ev1.output"
+    },
+    {
+     "paths": [
+      "$TMP/work/tasks/ev1.output"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "PreCompact manual: the classic fallback (its nonce)",
+   "now": "2026-10-21T14:04:48.478+03:00",
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "manual",
+    "custom_instructions": null
+   },
+   "capture": {
+    "N": "re:n=([0-9a-f]{8}) s=main"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "SessionStart(compact)",
+   "now": "2026-10-21T14:05:00.724+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "session_id": "$SID",
+    "source": "compact",
+    "transcript_path": "$TMP/proj/$SID.jsonl"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "PostCompact: the copy waits for a scope proof",
+   "now": "2026-10-21T14:05:00.813+03:00",
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "manual",
+    "compact_summary": "<summary>\n⟪{{plugin}} v1 n=$N s=main⟫\n# LAB-42 RRCLEARBODY\n## Resume here\nStatus: active\n⟪/{{plugin}} n=$N⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$WATCH/$SID/pending/*.post.md",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "the boundary lands; the next Stop starts 1.7 s late: the save and its sweep wait",
+   "now": "2026-10-21T14:05:20+03:00",
+   "setup": [
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "boundary": {
+        "ts": "2026-10-21T14:05:00.865+03:00",
+        "trigger": "manual",
+        "pre": 37896,
+        "post": 4537,
+        "duration_ms": 12100,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "env": {
+    "STORE_TEST_HOOK_START_AGO_MS": "1700"
+   },
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/swept/*",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/*.post.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 0
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stop_timing",
+      "count": 1,
+      "fields_any": [
+       {
+        "cut": [
+         "reconcile"
+        ]
+       },
+       {
+        "cut": [
+         "reconcile",
+         "gsd"
+        ],
+        "gsd": "no-time"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "the Stop after it, on time: saved main and swept, the evidence copied",
+   "now": "2026-10-21T14:05:50+03:00",
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 1,
+      "has": [
+       "RRCLEARBODY"
+      ]
+     },
+     {
+      "path": "$WATCH/$SID/pending/*.post.md",
+      "count": 0
+     },
+     {
+      "path": "$DISP/2026-10-21/*-evidence/ev1.output",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "sweep_evidence",
+      "count": 1,
+      "fields": {
+       "referenced_budget": 0
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -4280,6 +4280,9 @@ sub check {
     for my $rw (@{ $x->{rows} || [] }) {
         my @rows = grep { ($_->{ev} // '') eq $rw->{ev} } read_rows($rw->{file});
         @rows = grep { !subset($rw->{fields}, $_) } @rows if $rw->{fields};
+        # fields_any [{…}…]: a row matches when one of them is a subset of it (what a loaded host may
+        # change, e.g. a Stop whose budget left the GSD catch-up no time)
+        @rows = grep { my $r = $_; grep { !subset($_, $r) } @{ $rw->{fields_any} } } @rows if ref $rw->{fields_any} eq 'ARRAY';
         # fields_ge {field: min}: every matched row has a number >= min there
         for my $k (sort keys %{ $rw->{fields_ge} || {} }) {
             for my $r (@rows) { push @e, "rows $rw->{ev}: $k = " . ($r->{$k} // 'null') . " < $rw->{fields_ge}{$k}" unless defined $r->{$k} && !ref $r->{$k} && $r->{$k} =~ /^-?\d+(?:\.\d+)?$/ && $r->{$k} >= $rw->{fields_ge}{$k} }

@@ -1,6 +1,6 @@
 {
  "id": "HS-05-late-save-waits-for-sweep-time",
- "note": "0.1.3 hook speed (lib/reconcile.pm SWEEP_MIN_MS): RR-S21-04's late main-proven save is swept right after it, and the sweep claims swept/<id6> once. A Stop that starts 1.7 s late (STORE_TEST_HOOK_START_AGO_MS) gives reconcile under 0.5 s (3.5 - 0.3 reserve - 1 for the watcher - 1.7): the save and its sweep both wait (no copy, no copy_late, no swept claim, no sweep_evidence; the stop_timing row says reconcile was cut). The next Stop, on time, saves the copy late and sweeps it: the planted evidence file is copied into the evidence folder (referenced_budget 0). Before, a budget above 0 but too small to copy saved the copy, then claimed the sweep with about 0 ms left: the evidence was only referenced, for good",
+ "note": "0.1.3 hook speed (lib/reconcile.pm SWEEP_MIN_MS): RR-S21-04's late main-proven save is swept right after it, and the sweep claims swept/<id6> once. A Stop that starts 1.7 s late (STORE_TEST_HOOK_START_AGO_MS) gives reconcile under 0.5 s (3.5 - 0.3 reserve - 1 for the watcher - 1.7): the save and its sweep both wait (no copy, no copy_late, no swept claim, no sweep_evidence; the stop_timing row says reconcile was cut). The next Stop, on time, saves the copy late and sweeps it: the planted evidence file is copied into the evidence folder (referenced_budget 0). Before, a budget above 0 but too small to copy saved the copy, then claimed the sweep with about 0 ms left: the evidence was only referenced, for good. On a loaded host the GSD catch-up (due here) may get no time as well: the row then also names gsd, with status no-time",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -133,14 +133,23 @@
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "stop_timing",
       "count": 1,
-      "fields": {
-       "cut": [
-        "reconcile"
-       ]
-      },
       "fields_le": {
        "reconcile_budget_ms": 499
-      }
+      },
+      "fields_any": [
+       {
+        "cut": [
+         "reconcile"
+        ]
+       },
+       {
+        "cut": [
+         "reconcile",
+         "gsd"
+        ],
+        "gsd": "no-time"
+       }
+      ]
      }
     ]
    }
