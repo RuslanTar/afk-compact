@@ -10,7 +10,7 @@ Usage:
                                      (sha column refreshed in memory; the repo is not written)
   tools/fixtures-gen --check         fixture checks (below) plus drift: the four files on disk
                                      must equal a fresh render; exit 1 on any problem
-  tools/fixtures-gen --clean         remove the three generated files (nothing else)
+  tools/fixtures-gen --clean         remove the four generated files (nothing else)
   tools/fixtures-gen --print-expected [p5|acuity|idle|cc311|unclosed]
                                      print summaries/expected.tsv (or summaries/<table>/expected.tsv)
                                      as the reference detector computes it (authoring aid; never
