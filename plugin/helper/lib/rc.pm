@@ -39,7 +39,9 @@ sub sid      { $R{sid} }
 # The session id is held as bytes, as the watch dir is: a skill passes the sid it read from a
 # stage's JSON as a character string, which joined to a non-ASCII watch dir (bytes) made the
 # path a character string and its folder name encoded twice (RF-4: publish wrote its
-# handoff_mode row under a second, double-encoded root).
+# handoff_mode row under a second, double-encoded root). init and as_session hold it the same
+# way; their callers pass bytes today (argv, jsonc's ASCII strings, file names), so there it only
+# keeps the rule.
 sub set_sid  { $R{sid} = util::fsb($_[0]) }
 sub settings { $R{settings} }
 sub val      { $R{settings}{values}{ $_[0] } }
