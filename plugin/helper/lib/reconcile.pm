@@ -47,6 +47,7 @@ our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long afte
 our $SUB_WINDOW_S = 120;            # a subagent boundary row at most this long after its PostCompact
 our $TOL_S = 2;                     # subagent rows: slack around a PostCompact's time
 our $BESIDE_S = 5;                  # a subagent row this far past TOL_S beside a main match: not main (BD-3)
+our $CB_JOIN_S = 60;                # a main boundary row and its compaction's rollup row: at most this far apart
 # 0.1.3 hook speed: a main-proven save is swept right after it (sweep::run claims swept/<id6>,
 # once); with less than this left of the run's budget the save and its sweep both wait for the
 # next run, so a run cut short by a slow start never claims a sweep it has no time to copy.
@@ -301,7 +302,8 @@ sub _match {
 
 # ---------------------------------------------------------------- run
 # run(transcript => P, cwd => C, budget_ms => 2000, cutoff => epoch, final => 0|1)
-#   -> {late, unresolved, precompute_not_reused, order_anomaly, undelivered, saved, kept, dropped}
+#   -> {late, unresolved, precompute_not_reused, order_anomaly, undelivered, saved, kept, dropped,
+#       waits, busy (the lock was held: nothing ran)}
 # final (MOD-SPEC §5.4 "Final mode": SessionEnd, and the cross-session finish): P3 first, then
 # every stash still unproven once the transcripts are read to their end is saved as
 # unattributed at once (the SETTLE_S wait is waived); a stash whose transcripts were not
@@ -314,6 +316,10 @@ sub run {
     my $out = eval {
         lock::with("$sid_dir/reconcile.lock", { sid => rc::sid(), actor => 'reconcile' }, sub { _run(\%a, $n, $sid_dir) }, wait_ms => 300);
     };
+    # 0.1.4: `busy` when another reconciler held the lock (a `reconcile` call, another session's
+    # cross-session finish): this run read nothing, so its `waits` say nothing about the stashes
+    # still in pending/ (the watcher holds their A-01 while the holder works on them)
+    $n->{busy} = 1 if !$out && ($@ // '') =~ /lock-timeout/;
     return $out // $n;
 }
 
@@ -564,17 +570,35 @@ sub _run {
     # compaction sizes on the mod path (PKG-RUNTIME E.2, MOD-SPEC §5.4): a main boundary row
     # matched to a nonce that already has a rollup row gets one compaction_boundary row, once
     # per nonce, append-only (readers join it by nonce; nothing is rewritten)
+    # 0.1.4 (W-18): the real store never got one of these rows: a boundary row's timestamp comes
+    # 0.6 to 3.6 s before its PostCompact (57 of 57 compactions of the 0.1.2/0.1.3 log), so P3
+    # (_match) never gave a main boundary its `by`, and a pool item matched later was already done
+    # (no longer in the pool). A main boundary now finds its compaction's rollup row itself: by the
+    # matched pool item's nonce when P3 matched it (and the item is still pending), else the nearest rollup row of a main (or
+    # unattributed) compaction within CB_JOIN_S of the boundary row, either side, not taken by
+    # another boundary. Precomputed boundaries pair with precomputed rollup rows only.
     my %pool_by = map { ($_->{id6} => $_) } @$pool;
-    for my $bd (grep { defined $_->{by} && $_->{by} ne '-' && !$_->{cb} } @{ $st->{bounds} }) {
-        my $it = $pool_by{ $bd->{by} } or do { $bd->{cb} = 1; next };
-        my $nn = $it->{nonce} // $it->{dispatch} // $it->{deferred};
+    my %taken = map { ($_ => 1) } keys %{ $st->{cbn} };
+    for my $bd (grep { !$_->{cb} } @{ $st->{bounds} }) {
+        my $it = (defined $bd->{by} && $bd->{by} ne '-') ? $pool_by{ $bd->{by} } : undef;
+        my $nn = $it ? ($it->{nonce} // $it->{dispatch} // $it->{deferred}) : undef;
         my ($roll) = defined $nn ? grep { ($_->{nonce} // '') eq $nn && ($_->{join} // '') ne 'reconcile' } @{ $st->{rolls_l} } : ();
-        next unless $roll || $now - $it->{e} > $MAIN_WINDOW_S;    # the row may come at the next Stop
+        unless ($roll || $it) {
+            my $bd_e = $bd->{e} // 0;
+            ($roll) = sort { abs($a->{e} - $bd_e) <=> abs($b->{e} - $bd_e) }
+                      grep { defined $_->{nonce} && !$taken{ $_->{nonce} } && ($_->{join} // '') ne 'reconcile'
+                             && ($_->{actor} // 'main') =~ /\A(?:main|unattributed)\z/ && ($_->{pc} ? 1 : 0) == ($bd->{pc} ? 1 : 0)
+                             && abs(($_->{e} // 0) - $bd_e) <= $CB_JOIN_S } @{ $st->{rolls_l} };
+            $nn = $roll->{nonce} if $roll;
+        }
+        # the row may come at the next Stop
+        next unless $roll || $now - ($it ? $it->{e} : $bd->{e} // 0) > $MAIN_WINDOW_S;
         # the native idle row is written just after the boundary row: decided once it was read,
         # or the transcript was read to its end SETTLE_S after the boundary, or a later one exists
         next if $roll && !_idle_settled($st, $bd, $main_end, $now, $a{final});
         $bd->{cb} = 1;
         next unless $roll && !$st->{cbn}{$nn};
+        $taken{$nn} = 1;
         my @idle = _idle($logged, $disp{$nn}, $bd, $nn);
         rc::emit('compaction_boundary', [nonce => $nn, id6 => $roll->{id6} // $it->{id6}, boundary_uuid => $bd->{u},
                                          pre_tokens => $bd->{pre}, post_tokens => $bd->{post}, duration_ms => $bd->{ms},
@@ -808,28 +832,11 @@ sub _save_deferred {
     rc::emit('scope_leak', [nonce => $s->{nonce}, scope => $scope, marker_scope => $s->{scope}]) if $verdict eq 'scope-leak';
 }
 
-# The order canary looks only at boundaries after this session's first record.
+# The order canary looks only at boundaries after this session's first record: the same time the
+# watcher's history skip takes (0.1.4, sessions::first_row; a Stop's own rows do not start it).
 sub cutoff {
     my $d = rc::sid_dir() // return undef;
-    my @t;
-    for my $f (rc::stream_path('classic'), "$d/classic-alive.json", "$d/mod-alive.json") {
-        next unless defined $f && -e $f;
-        if ($f =~ /\.jsonl$/) {
-            open(my $fh, '<:raw', $f) or next;
-            my $first = <$fh>;
-            close $fh;
-            my $j = defined $first ? eval { jsonc::decode($first) } : undef;
-            my $e = ref $j eq 'HASH' ? util::parse_iso($j->{ts} // '') : undef;
-            push @t, $e if defined $e;
-        } else {
-            my $raw = util::read_file($f);
-            my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
-            my $e = ref $j eq 'HASH' ? util::parse_iso($j->{ts} // '') : undef;
-            push @t, $e if defined $e;
-        }
-    }
-    my ($min) = sort { $a <=> $b } @t;
-    return $min;
+    return sessions::first_row($d, rc::stream_path('classic'), rc::stream_path('mod'));
 }
 
 

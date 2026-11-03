@@ -8,7 +8,7 @@ my @BASE = qw(sid event settings paths watch sid_dir plugin_root brand version n
 my %TYPE = (sid => 'str', event => 'str', settings => 'HASH', paths => 'HASH', watch => 'str', sid_dir => 'str',
             plugin_root => 'str', brand => 'str', version => 'str', now => 'num', cc_version => 'str', cc_version_src => 'str');
 my %EXTRA = (PreCompact => [qw(instructions fallback_nonce)], PostCompact => ['detect'], SessionStart => [qw(dispatch resume_bytes)],
-             SessionEnd => ['reconcile'], SubagentStop => ['reconcile'], Stop => [qw(payload copy_waits)]);
+             SessionEnd => ['reconcile'], SubagentStop => ['reconcile'], Stop => [qw(payload copy_waits reconcile_busy)]);
 
 sub _type { my ($v) = @_; return 'null' unless defined $v; return ref $v if ref $v; return $v =~ /^-?\d+(\.\d+)?$/ ? 'num' : 'str' }
 

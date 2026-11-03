@@ -22,7 +22,6 @@ use watch::json;
 use watch::spec;
 use watch::hturn;
 
-my %OKV = map { $_ => 1 } qw(ok ok-trailer ok-unclosed);
 my %BADV = map { $_ => 1 } qw(unshaped truncated stale);
 my $JOIN_S = 120;
 # A-28 (MG-5): a handoff turn's first request that read under this share of its input from the
@@ -32,6 +31,10 @@ our $COLD_SHARE = 0.5;
 our $COLD_MIN_TOKENS = 100_000;
 # A-23: the idle compactions held for a later Stop at most (see _a23_held).
 our $A23_HELD_MAX = 50;
+# A-27: the main boundaries whose history and idle facts the session state keeps (bmeta).
+our $BMETA_MAX = 50;
+# A-24 (set below with the walk)
+our ($WATCH_MB_CAP, $BELOW_QUOTA, $TASK_OUT_MAX);
 
 # The row kinds the rules read from the classic and mod streams and from the
 # mod's events/ files. Only these are decoded and kept (lib/watch/cache.pm);
@@ -222,7 +225,42 @@ sub thresholds {
         $t{native} //= $t{window} - clamp_constants($ctx->{spec})->{native_offset} if defined $t{window};
         return \%t if defined $t{target} && defined $t{soft_max} && defined $t{native};
     }
-    return fallback_thresholds($ctx->{settings}, $ctx->{spec});
+    return fallback_thresholds($ctx->{settings}, $ctx->{spec}, cc_compact_window($ctx));
+}
+
+# cc_compact_window(ctx) -> the window Claude Code's `autoCompactWindow` setting names (0.1.4, the
+# watcher's copy of the mod's compactWindowSetting/settingWindow, plugin/hooks/lib/deps.ts and
+# config.ts): the merged settings, read from the files Claude Code merges them from, the later one
+# winning: <config dir>/settings.json (CLAUDE_CONFIG_DIR, else ~/.claude), the project's
+# .claude/settings.json and .claude/settings.local.json (the payload's cwd, else
+# CLAUDE_PROJECT_DIR), then the managed settings file. A JSON number above 0 counts, floored at the
+# clamp's window_floor (100,000); the model's own window, which the mod also caps it at, is not
+# known here. undef when unset or unreadable.
+sub cc_compact_window {
+    my ($ctx) = @_;
+    return $ctx->{_cc_window} if exists $ctx->{_cc_window};
+    my $cd = (defined $ENV{CLAUDE_CONFIG_DIR} && length $ENV{CLAUDE_CONFIG_DIR}) ? $ENV{CLAUDE_CONFIG_DIR}
+           : (defined $ENV{HOME} && length $ENV{HOME}) ? "$ENV{HOME}/.claude" : undef;
+    my $proj = ref $ctx->{payload} eq 'HASH' && defined $ctx->{payload}{cwd} && !ref $ctx->{payload}{cwd} ? $ctx->{payload}{cwd}
+             : $ENV{CLAUDE_PROJECT_DIR};
+    my $managed = $^O eq 'darwin' ? '/Library/Application Support/ClaudeCode/managed-settings.json'
+                : $^O =~ /\A(?:MSWin32|msys|cygwin)\z/ ? (($ENV{ProgramFiles} // $ENV{PROGRAMFILES} // 'C:/Program Files') . '/ClaudeCode/managed-settings.json')
+                : '/etc/claude-code/managed-settings.json';
+    my @files = ((defined $cd ? "$cd/settings.json" : ()),
+                 (defined $proj && length $proj ? ("$proj/.claude/settings.json", "$proj/.claude/settings.local.json") : ()), $managed);
+    my $v;
+    for my $p (@files) {
+        my $raw = watch::io::slurp($p, 1 << 20);
+        next unless defined $raw && index($raw, 'autoCompactWindow') >= 0;
+        my $j = eval { watch::json::decode($raw) };
+        next unless ref $j eq 'HASH' && exists $j->{autoCompactWindow};
+        my $x = $j->{autoCompactWindow};
+        # a JSON number (a quoted "800000" is not one, as for the mod), above 0
+        my $num = defined $x && !ref $x && $raw =~ /"autoCompactWindow"\s*:\s*-?[0-9]/ && $x =~ /\A[0-9]+(?:\.[0-9]+)?(?:[eE][+]?[0-9]+)?\z/ && $x > 0;
+        $v = $num ? $x : undef;
+    }
+    my $floor = clamp_constants($ctx->{spec})->{window_floor};
+    return $ctx->{_cc_window} = defined $v ? ($v < $floor ? $floor : int $v) : undef;
 }
 
 # The clamp constants (P5-FOLD A3): one shared source, the spec's `clamp` object
@@ -248,10 +286,13 @@ sub clamp_constants {
 # as the floor; `reserve` from `handoff_turn`/`handoff_turn_max_tokens`; disabled below
 # `min_target`. `min_window` is the smallest window that stays enabled ('never' when the
 # configured pair alone is below the minimum). Unknown window (0): undef.
+# 0.1.4: with native_window_tokens unset, `cc_window` (Claude Code's autoCompactWindow,
+# cc_compact_window) is the window, as the mod takes it.
 sub fallback_thresholds {
-    my ($s, $spec) = @_;
+    my ($s, $spec, $cc_window) = @_;
     return { off => 1, why => 'triggers-off' } if lc($s->{triggers} // 'true') eq 'false';
     my $w = $s->{native_window_tokens};
+    $w = $cc_window unless $w && $w > 0;
     return undef unless $w && $w > 0;
     my $K = clamp_constants($spec);
     $w = $K->{window_floor} if $w < $K->{window_floor};
@@ -329,19 +370,58 @@ sub build_compactions {
         }
         return $best ? ($best, 'time') : (undef, undef);
     };
+    # 0.1.4: the PostCompact-only records of earlier Stops (session state `ponly`: the row's key, the
+    # dispatch it took, its time, actor and record id). When the sweep lags behind the hooks, the
+    # boundary of such a compaction is swept at a later Stop: it joins that record (the same nonce,
+    # by core's compaction_boundary or rollup row naming the boundary's uuid, or the PostCompact row
+    # within JOIN_S after the boundary), keeps its dispatch and its id, so the compaction stays one
+    # record and its alerts are not raised twice.
+    my @ponly = grep { ref $_ eq 'HASH' && defined $_->{k} && defined $_->{id} } @{ ref $sess->{ponly} eq 'ARRAY' ? $sess->{ponly} : [] };
+    my (%uuid_nonce, @ponly_new);
+    for my $r (values %{ $S->{boundary} || {} }, values %{ $S->{rollup} || {} }) {
+        next unless defined $r->{boundary_uuid} && !ref $r->{boundary_uuid} && defined $r->{nonce} && !ref $r->{nonce};
+        $uuid_nonce{ $r->{boundary_uuid} } //= $r->{nonce};
+    }
+    my %post_by = map { (_pkey($_) => $_) } @post;
+    my $find_ponly = sub {
+        my ($B) = @_;
+        my $ba = $B->{actor} // 'main';
+        my @c = grep { !$_->{used} && $post_by{ $_->{k} } } @ponly;
+        @c = grep { my $pa = $_->{a} // 'unattributed'; $pa eq 'unattributed' || $pa eq 'unknown' || ($ba eq 'main' ? $pa eq 'main' : $pa ne 'main') } @c;
+        my $bn = defined $B->{uuid} && !ref $B->{uuid} ? $uuid_nonce{ $B->{uuid} } : undef;
+        if (defined $bn) { my ($po) = grep { ($_->{n} // '') eq $bn } @c; return $po if $po }
+        return undef unless defined $B->{ts_epoch};
+        my ($best, $bd);
+        for my $po (@c) {
+            next unless defined $po->{t};
+            my $d = $po->{t} - $B->{ts_epoch};
+            next if $d < -1 || $d > $JOIN_S;
+            if (!defined $bd || abs($d) < $bd) { $best = $po; $bd = abs($d) }
+        }
+        return $best;
+    };
     my $mk = sub {
-        my ($B, $P) = @_;
+        my ($B, $P, $po) = @_;
         my $ref_t = $B ? $B->{ts_epoch} : _t($P);
-        my ($D, $join) = $find_disp->($P, $ref_t, $B && ${ $B->{precomputed} });
-        $jd{ $D->{nonce} } = 1 if $D;
+        my ($D, $join);
+        if ($po) {
+            $D = defined $po->{n} ? $S->{disp}{ $po->{n} } : undef;
+            $join = $D ? $po->{j} : undef;
+        } else {
+            ($D, $join) = $find_disp->($P, $ref_t, $B && ${ $B->{precomputed} });
+            $jd{ $D->{nonce} } = 1 if $D;
+        }
         $jp{ _pkey($P) } = 1 if $P;
         my $C = { B => $B, P => $P, D => $D, join => $join };
         _derive($ctx, $S, $C);
+        if ($po) { $C->{id} = $po->{id}; $C->{joined} = 1 }
+        push @ponly_new, { k => _pkey($P), n => ($D ? $D->{nonce} : undef), j => $join, t => _t($P), a => $C->{actor}, id => $C->{id} }
+            if $P && !$B;
         push @out, $C;
     };
     for my $B (sort { ($a->{ts_epoch} // 0) <=> ($b->{ts_epoch} // 0) } @$boundaries) {
         tick($ctx);
-        my ($P, $pd);
+        my ($P, $pd, $po);
         if (defined $B->{ts_epoch}) {
             for my $p (@post) {
                 next if $jp{ _pkey($p) };
@@ -351,7 +431,11 @@ sub build_compactions {
                 if (!defined $pd || $d < $pd) { $P = $p; $pd = $d }
             }
         }
-        $mk->($B, $P);
+        if (!$P && ($po = $find_ponly->($B))) {
+            $po->{used} = 1;
+            $P = $post_by{ $po->{k} };
+        }
+        $mk->($B, $P, $po);
     }
     for my $p (@post) {
         next if $jp{ _pkey($p) };
@@ -360,6 +444,10 @@ sub build_compactions {
         tick($ctx);
         $mk->(undef, $p);
     }
+    my @keep = ((grep { !$_->{used} } @ponly), @ponly_new);
+    delete $_->{used} for @keep;
+    @keep = @keep[-50 .. -1] if @keep > 50;
+    if (@keep) { $sess->{ponly} = \@keep } else { delete $sess->{ponly} }
     my @jp = sort keys %jp;
     @jp = @jp[-300 .. -1] if @jp > 300;
     $sess->{jp} = \@jp;
@@ -472,17 +560,23 @@ sub _derive {
 
 # copy_of(S, nonce, time) -> the compaction's copy (M-14): the rollup row's, else the copy rows
 # by nonce (by time within JOIN_S without one), else a failed, exists or mismatch row; `missing`.
+# 0.1.4: a rollup copy that says failed or missing (PostCompact's save failed and kept the stash)
+# gives way to a saved, exists or late copy row of the same compaction (the later save; reconcile
+# writes no second rollup row), else it stands.
 sub copy_of {
     my ($S, $rk, $ref_t) = @_;
-    return $S->{rollup}{$rk}{copy} if defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy};
+    my $rc = (defined $rk && $S->{rollup}{$rk}) ? $S->{rollup}{$rk}{copy} : undef;
+    $rc = undef if ref $rc;
+    return $rc if defined $rc && !copy_bad($rc);
     my $copy;
     for my $r (rows_of($S, 'copy')) {
         my $hit = defined $rk && defined $r->{nonce} ? $r->{nonce} eq $rk
-                : (defined $ref_t && defined _t($r) && abs(_t($r) - $ref_t) <= $JOIN_S);
+                : (!defined $rc && defined $ref_t && defined _t($r) && abs(_t($r) - $ref_t) <= $JOIN_S);
         next unless $hit;
         $copy = $r->{result};
         return $copy if defined $copy && $copy =~ /\A(?:saved|exists|late)\z/;
     }
+    return $rc if defined $rc;
     return $copy if defined $copy;
     for my $ev (qw(copy_failed copy_exists copy_mismatch)) {
         for my $r (rows_of($S, $ev)) {
@@ -516,13 +610,15 @@ sub evaluate {
     my $vh = $sess->{vh} ||= [];
     my $prev_chars = $sess->{prev_chars} ||= {};
     my $R = sub { watch::alerts::raise($ctx, $ex, @_) };
-    my $once = sub { my $rule = shift; return ($ex->{by_rule}{$rule} // 0) ? 'info' : 'warn' };
+    # 0.1.4: a rule is graded info when an open row of it exists (a closed one demotes nothing)
+    my $once = sub { my $rule = shift; return ($ex->{open_by_rule}{$rule} // 0) ? q(info) : q(warn) };
     # A-23 of the idle compactions held at earlier Stops (below), before this Stop's own.
     my $held = _a23_held($ctx, $S, $sess, $R);
     my $a01_held = _a01_held($ctx, $S, $sess, $R);
     # A session with no row yet: this Stop is the plugin's first hook in it (installed or reloaded
     # mid-session), so its own start is where observing began.
     my $obs = observed_from($ctx) // $ctx->{now};
+    local $ctx->{_obs} = $obs;
 
     for my $c (@$C) {
         tick($ctx);
@@ -536,6 +632,11 @@ sub evaluate {
         # observed, so it raises no A-01, A-05 or hookless A-15.
         my $hist = $B ? history_boundary($B->{ts_epoch}, $P, $D, $obs) : 0;
         my $idle = idle_compaction($S, $c);
+        # 0.1.4 (A-27): what a later continue needs to know of a main boundary, kept for the Stops after
+        # this one (session state `bmeta`, by uuid: history boundary, idle)
+        if ($B && $c->{main} && defined $B->{uuid} && !ref $B->{uuid}) {
+            $sess->{bmeta}{ $B->{uuid} } = { t => $B->{ts_epoch}, hist => ($hist ? 1 : 0), idle => ($idle ? 1 : 0) };
+        }
         if ($main_nf && $c->{copy_bad} && !$hist) {
             my $a01 = { id => $c->{id}, key => $c->{key}, actor => $c->{actor}, nonce => ($D ? $D->{nonce} : $P ? $P->{nonce_found} : undef),
                         t => $c->{ref_t}, line => ($B ? $B->{line} : undef) };
@@ -551,7 +652,12 @@ sub evaluate {
                 $R->(rule => 'A-02', severity => ($prev_bad ? 'critical' : 'warn'), id_parts => \@idp, %k,
                      evidence => { verdict => $c->{verdict}, channel => $c->{channel}, join => $c->{join} });
             }
-            push @$vh, [ ($B ? $B->{uuid} : $c->{id}), $c->{verdict} ] unless $c->{precompute};
+            if ($c->{joined}) {
+                # a P-only record of an earlier Stop that its boundary joined: the same history entry
+                $_->[0] = $B->{uuid} for grep { ($_->[0] // q()) eq $c->{id} && defined $B->{uuid} } @$vh;
+            } elsif (!$c->{precompute}) {
+                push @$vh, [ ($B ? $B->{uuid} : $c->{id}), $c->{verdict} ];
+            }
             shift @$vh while @$vh > 20;
         }
         if (($c->{verdict} // '') eq 'scope-leak') {
@@ -602,7 +708,7 @@ sub evaluate {
             if ($u > 0 || $dx > 0) {
                 $R->(rule => 'A-09', severity => ($u > 0 ? 'critical' : 'warn'), id_parts => \@idp, %k,
                      evidence => { lost_U => $l->{lost_U}, lost_D => $l->{lost_D}, lost_X => $l->{lost_X},
-                                   ledger_src => $l->{ledger_src} });
+                                   renumbered => $l->{renumbered}, carried => $l->{carried}, ledger_src => $l->{ledger_src} });
             }
         }
         if ($P && defined $P->{summary_chars}) {
@@ -647,13 +753,18 @@ sub evaluate {
             if (!@inj && _idle_dispatch($D) && _block_waits($ctx, $c->{nonce})) {
                 push @$held, $a23 unless grep { $_->{nonce} eq $c->{nonce} } @$held;
             } else {
-                _a23($R, $a23, \@inj);
+                _a23($R, $a23, \@inj, watch::spec::ok_verdicts($ctx->{spec}));
             }
         }
         if ($c->{main} && ($c->{mod_off} || ($P && ($c->{channel} // '') eq 'none'))) {
             $R->(rule => 'A-26', severity => $once->('A-26'), id_parts => \@idp, %k,
                  evidence => { mod_off => watch::ctx::B($c->{mod_off}), channel => $c->{channel} });
         }
+    }
+    if (ref $sess->{bmeta} eq q(HASH) && keys %{ $sess->{bmeta} } > $BMETA_MAX) {
+        my $bm = $sess->{bmeta};
+        my @k = sort { ((ref $bm->{$a} eq q(HASH) ? $bm->{$a}{t} : 0) // 0) <=> ((ref $bm->{$b} eq q(HASH) ? $bm->{$b}{t} : 0) // 0) } keys %$bm;
+        delete @{$bm}{ @k[0 .. $#k - $BMETA_MAX] };
     }
     @$held = @$held[-$A23_HELD_MAX .. -1] if @$held > $A23_HELD_MAX;
     if (@$held) { $sess->{a23_held} = $held } else { delete $sess->{a23_held} }
@@ -686,9 +797,9 @@ sub _injects {
 
 # One A-23 per reason for a compaction (`id`, `key`, `actor`, `verdict`) and its resume_inject rows.
 sub _a23 {
-    my ($R, $a, $inj) = @_;
+    my ($R, $a, $inj, $okv) = @_;
     my @inj = @$inj;
-    my $nonok = defined $a->{verdict} && !$OKV{ $a->{verdict} };
+    my $nonok = defined $a->{verdict} && !$okv->{ $a->{verdict} };
     my %why;
     $why{count} = scalar @inj if @inj == 0 || @inj >= 2;
     $why{nonok_note_missing} = \1 if $nonok && grep { defined $_->{nonok_note} && !$_->{nonok_note} } @inj;
@@ -734,7 +845,7 @@ sub _a23_held {
         tick($ctx);
         my @inj = _injects($S, $h->{nonce});
         if (!@inj && _block_waits($ctx, $h->{nonce})) { push @keep, $h; next }
-        _a23($R, $h, \@inj);
+        _a23($R, $h, \@inj, watch::spec::ok_verdicts($ctx->{spec}));
     }
     return \@keep;
 }
@@ -762,10 +873,20 @@ sub _a01 {
 # _stash_waits(ctx, nonce, id6) -> the stash file reconcile left in pending/ at this Stop for
 # that compaction (ctx copy_waits, cmd/hook.pl), when it is still there; else undef. A stash
 # reconcile did not reach is named by its file only: a marked summary's is the nonce's first 6.
+# 0.1.4: when this run's reconcile could not take the session's reconcile lock (ctx
+# reconcile_busy: a `reconcile` call or another session's finish held it, so it left no waits),
+# any stash of that compaction still in pending/ (<nonce>.mod.md, <id6 or the nonce's first 6>.post.md)
+# is waited on: the lock holder works on it.
 sub _stash_waits {
     my ($ctx, $nonce, $id6) = @_;
-    my $w = ref $ctx->{copy_waits} eq 'HASH' ? $ctx->{copy_waits} : return undef;
     my $n6 = (defined $nonce && !ref $nonce && $nonce =~ /\A([0-9a-f]{6})[0-9a-f]{2}\z/) ? $1 : undef;
+    if ($ctx->{reconcile_busy}) {
+        my $d = watch::ctx::sid_dir($ctx) . '/pending';
+        for my $f ((defined $n6 ? "$nonce.mod.md" : ()), map { defined $_ && !ref $_ && /\A[0-9a-z-]{6,12}\z/ ? "$_.post.md" : () } $id6, $n6) {
+            return $f if -f "$d/$f";
+        }
+    }
+    my $w = ref $ctx->{copy_waits} eq 'HASH' ? $ctx->{copy_waits} : return undef;
     for my $k ((defined $nonce && !ref $nonce ? "n:$nonce" : ()), map { defined $_ && !ref $_ ? "i:$_" : () } $id6, $n6) {
         my $f = $w->{$k};
         return $f if _waits_on($ctx, $f);
@@ -773,10 +894,13 @@ sub _stash_waits {
     return undef;
 }
 
-# _waits_on(ctx, file) -> 1 when this run's reconcile left that stash waiting and it is still in pending/.
+# _waits_on(ctx, file) -> 1 when this run's reconcile left that stash waiting (or could not take
+# the lock, reconcile_busy) and it is still in pending/.
 sub _waits_on {
     my ($ctx, $f) = @_;
-    return 0 unless defined $f && !ref $f && $f =~ /\A[0-9A-Za-z._-]+\z/ && ref $ctx->{copy_waits} eq 'HASH';
+    return 0 unless defined $f && !ref $f && $f =~ /\A[0-9A-Za-z._-]+\z/;
+    return -f watch::ctx::sid_dir($ctx) . "/pending/$f" ? 1 : 0 if $ctx->{reconcile_busy};
+    return 0 unless ref $ctx->{copy_waits} eq 'HASH';
     return 0 unless grep { defined $_ && !ref $_ && $_ eq $f } values %{ $ctx->{copy_waits} };
     return -f watch::ctx::sid_dir($ctx) . "/pending/$f" ? 1 : 0;
 }
@@ -819,6 +943,7 @@ sub a01_end {
     local $ctx->{_deadline} = $deadline;
     my $rc = $ctx->{reconcile};
     local $ctx->{copy_waits} = (ref $rc eq 'HASH' && ref $rc->{waits} eq 'HASH') ? $rc->{waits} : {};
+    local $ctx->{reconcile_busy} = (ref $rc eq 'HASH' && $rc->{busy}) ? 1 : 0;
     my $ex = watch::alerts::load_existing($ctx);
     my $open = grep { ($_->{rule} // '') eq 'A-01' } @{ $ex->{open} };
     my $ran = 0;
@@ -863,28 +988,12 @@ sub _pre_near {
 # plugin loaded mid-session on the classic path) is observed from the earliest of those rows:
 # the first plugin Stop ran then, so what its sweep found before that is history too. With no
 # row at all, that first Stop is the one running: evaluate takes its time (ctx now).
-our $OBS_HEAD_LINES = 64;
-my %OWN_ROW = map { $_ => 1 } qw(sweep sweep_partial watch_error precompute_or_failed stop_timing);
+# 0.1.4: the rule lives in core (sessions::first_row), the one definition core's order canary
+# (reconcile::cutoff) takes too; with no stream row it falls back to the alive files' time.
 sub observed_from {
     my ($ctx) = @_;
-    my ($best, $own);
-    for my $p (watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx)) {
-        next if -l $p;
-        open(my $fh, '<:raw', $p) or next;
-        my $n = 0;
-        while (defined(my $line = <$fh>)) {
-            last if ++$n > $OBS_HEAD_LINES;
-            (my $raw = $line) =~ s/[\r\n]+\z//;
-            my $r = eval { watch::json::decode($raw) };
-            next unless ref $r eq 'HASH';
-            my $t = watch::io::parse_iso($r->{ts}) // next;
-            if ($OWN_ROW{ $r->{ev} // '' }) { $own = $t if !defined $own || $t < $own; next }
-            $best = $t if !defined $best || $t < $best;
-            last;
-        }
-        close $fh;
-    }
-    return $best // $own;
+    require sessions;
+    return sessions::first_row(watch::ctx::sid_dir($ctx), watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx));
 }
 
 # history_boundary(boundary epoch, P, D, observed_from) -> 1 for a boundary from before the
@@ -901,9 +1010,14 @@ sub history_boundary {
 # whose dispatch an earlier P-only record already took (the sweep lagged behind the hooks in a
 # long transcript) has no D of its own: a main mod dispatch marked idle from $JOIN_S before
 # it to 1 s after it is that compaction's.
+#
+# 0.1.4: a boundary the sweep marked with Claude Code's native idle notice (`idle_notice`: the
+# first "Compacted while idle" or "... written while you were away" row after it; the rule
+# reconcile settles the rollup idle by) is idle too, with no dispatch and before reconcile ran.
 sub idle_compaction {
     my ($S, $c) = @_;
     return 1 if ($c->{idle} // '') eq 'true';
+    return 1 if ref $c->{B} eq 'HASH' && defined $c->{B}{idle_notice} && !ref $c->{B}{idle_notice} && $c->{B}{idle_notice} =~ /\A(?:notice|return)\z/;
     my $yes = sub { my $i = shift; $i = $$i if ref $i eq 'SCALAR'; return (defined $i && !ref $i && ($i eq '1' || $i eq 'true')) ? 1 : 0 };
     return $yes->($c->{D}{idle}) if $c->{D};
     my $t = $c->{B} ? $c->{B}{ts_epoch} : undef;
@@ -919,6 +1033,7 @@ sub idle_compaction {
 
 sub _event_rules {
     my ($ctx, $S, $ex, $sess, $events, $C) = @_;
+    my $okv = watch::spec::ok_verdicts($ctx->{spec});
     my $R = sub { watch::alerts::raise($ctx, $ex, @_) };
     my $vh = $sess->{vh} || [];
     # A-12 (AP-9, 2026-10-23): an outward call after a boundary or a manual resume is consented
@@ -991,7 +1106,7 @@ sub _event_rules {
             if (defined $e->{b_uuid}) {
                 for my $i (0 .. $#$vh) { $pos = $i if ($vh->[$i][0] // '') eq $e->{b_uuid} }
             }
-            if (defined $pos && $pos >= 1 && !$OKV{ $vh->[$pos][1] // '' } && !$OKV{ $vh->[$pos - 1][1] // '' }) {
+            if (defined $pos && $pos >= 1 && !$okv->{ $vh->[$pos][1] // q() } && !$okv->{ $vh->[$pos - 1][1] // q() }) {
                 $R->(rule => 'A-19', severity => 'critical', id_parts => ['halt', $e->{uuid} // $e->{line}],
                      evidence => { continue_after_halt_cond => \1, line => $e->{line} });
             }
@@ -999,7 +1114,10 @@ sub _event_rules {
                 $R->(rule => 'A-19', severity => 'critical', id_parts => ['cap0', $e->{uuid} // $e->{line}],
                      evidence => { cap => 0, line => $e->{line} });
             }
-            if (defined $e->{b_uuid} && !$e->{b_nudged}) {
+            # 0.1.4: no A-27 after a boundary the plugin never observed (a history boundary, as A-01,
+            # A-05 and the hookless A-15 skip it; all 12 rows of the 0.1.2 log were such) or after an
+            # idle compaction (it runs on the idle timer: no nudge comes before it)
+            if (defined $e->{b_uuid} && !$e->{b_nudged} && !a27_quiet($ctx, $S, $sess, $e)) {
                 $R->(rule => 'A-27', severity => 'warn', id_parts => [$e->{uuid} // $e->{line}],
                      evidence => { continue_without_nudge => \1, line => $e->{line} });
             }
@@ -1048,6 +1166,21 @@ sub _event_rules {
     for my $r (rows_of($S, 'idle_unshaped')) {
         $R->(rule => 'A-29', severity => 'warn', id_parts => [ 'b', $r->{boundary_uuid} // $r->{ts} ], evidence => {});
     }
+}
+
+# a27_quiet(ctx, S, sess, continue event) -> 1 when the continue's last main boundary is a history
+# boundary or an idle compaction: by what evaluate kept of it (session state bmeta), else by the
+# boundary time and idle notice the sweep put on the event (a boundary evaluated before 0.1.4:
+# history when it is before the session's first row and no PostCompact row lies near it).
+sub a27_quiet {
+    my ($ctx, $S, $sess, $e) = @_;
+    my $m = ref $sess->{bmeta} eq 'HASH' ? $sess->{bmeta}{ $e->{b_uuid} } : undef;
+    return ($m->{hist} || $m->{idle}) ? 1 : 0 if ref $m eq 'HASH';
+    return 1 if defined $e->{b_idle_notice} && !ref $e->{b_idle_notice} && $e->{b_idle_notice} =~ /\A(?:notice|return)\z/;
+    my $bt = _num($e->{b_ts});
+    return 0 unless defined $bt;
+    my $obs = exists $ctx->{_obs} ? $ctx->{_obs} : ($ctx->{_obs} = observed_from($ctx));
+    return history_boundary($bt, _pre_near($S, $bt) ? 1 : 0, 0, $obs);
 }
 
 sub _num { my ($v) = @_; return (defined $v && !ref $v && $v =~ /\A-?[0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?\z/) ? 0 + $v : undef }
@@ -1184,7 +1317,7 @@ sub _session_rules {
     # A-15 from canary rows.
     for my $ev (qw(keyset_change version_change trigger_unknown order_anomaly)) {
         for my $r (rows_of($S, $ev)) {
-            my $first = !grep { ($_->{rule} // '') eq 'A-15' && ($_->{cc_version} // '') eq ($r->{cc_version} // '') } @{ $ex->{rows} };
+            my $first = !grep { ($_->{rule} // q()) eq q(A-15) && ($_->{cc_version} // q()) eq ($r->{cc_version} // q()) } @{ $ex->{open} };
             $R->(rule => 'A-15', severity => ($first ? 'warn' : 'info'), id_parts => [$ev, $r->{ts}],
                  evidence => { canary => $ev });
         }
@@ -1194,12 +1327,27 @@ sub _session_rules {
     for my $r (rows_of($S, 'warn_quota')) {
         $R->(rule => 'A-24', severity => 'warn', id_parts => ['quota', $r->{ts}], evidence => { mb => $r->{mb} });
     }
-    unless (grep { ($_->{rule} // '') eq 'A-24' && ref $_->{evidence} eq 'HASH' && $_->{evidence}{watch_dir} } @{ $ex->{rows} }) {
-        my $mb = _watch_mb($ctx, $sess);
+    # 0.1.4: the walk also runs while a watch-size A-24 is open (hourly, _watch_mb). A folder over
+    # quota, or with more entries than the walk counts (WATCH_MB_CAP; its size is then a lower
+    # bound), raises one A-24 per episode: its id carries the UTC date of the walk that first found
+    # the folder over (session state `watch_ep`), so a rise after a close raises a new id (a closed
+    # id is never raised again). A walk that finds the folder back under quota and under the cap
+    # closes the open one (`resolved: below quota`) and ends the episode.
+    {
+        my @open = grep { ($_->{rule} // '') eq 'A-24' && ref $_->{evidence} eq 'HASH' && $_->{evidence}{watch_dir} } @{ $ex->{open} };
+        my $w = _watch_mb($ctx, $sess);
         my $quota = $ctx->{settings}{watch_quota_mb} // 50;
         $quota = 10000 if $quota > 10000;
-        if (defined $mb && $quota > 0 && $mb > $quota) {
-            $R->(rule => 'A-24', severity => 'warn', id_parts => ['watch-size'], evidence => { watch_dir => \1, mb => int $mb });
+        if ($w && $quota > 0 && ($w->{over} || $w->{mb} > $quota)) {
+            my $ep = $sess->{watch_ep} //= _utc_date($now);
+            unless (@open) {
+                $R->(rule => 'A-24', severity => 'warn', id_parts => ['watch-size', $ep],
+                     evidence => { watch_dir => \1, ($w->{over} ? (mb_at_least => int $w->{mb}, entries_over => $WATCH_MB_CAP)
+                                                                : (mb => int $w->{mb})) });
+            }
+        } elsif ($w) {
+            delete $sess->{watch_ep};
+            watch::alerts::close_alert($ctx, $ex, $_, $BELOW_QUOTA) for @open;
         }
     }
     # A-25: >= 5 watch_error or sweep_partial rows in a day.
@@ -1214,13 +1362,24 @@ sub _session_rules {
     }
     tick($ctx);
     # A-11: an item listed running for >= stall_min whose output has not moved. 0.1.3 alert
-    # noise: only an item with a known output path is checked; without one (every teammate,
-    # workflow, subagent and monitor) the watcher cannot see progress, and "quiet" was every
-    # such item (107 of 107 on 0.1.2). A shell whose path the result text did not give has the
-    # file Claude Code writes for every background shell (task_output); it counts only when that
-    # file exists.
+    # noise: only an item with a known output path is checked; without one the watcher cannot see
+    # progress, and "quiet" was every such item (107 of 107 on 0.1.2). A shell whose path the result
+    # text did not give has the file Claude Code writes for every background shell (task_output);
+    # 0.1.4: a subagent has the link to its transcript there, a workflow its run journal (the run
+    # its launch result named); teammates and monitors stay unchecked. The path is resolved when the
+    # item is first seen and kept in the session state (`task_out`), which the re-check of older
+    # rows (lib/watch/supersede.pm) reads too.
     my @slots = @{ $S->{bg} };
+    my $tout = ref $sess->{task_out} eq 'HASH' ? $sess->{task_out} : ($sess->{task_out} = {});
     if (@slots) {
+        for my $t (@{ $slots[-1]{tasks} }) {
+            next unless defined $t->{id} && !ref $t->{id} && !defined $tout->{ $t->{id} };
+            my $p = task_output($ctx, $t, $sess->{task_runs});
+            $tout->{ $t->{id} } = $p if defined $p;
+        }
+        my %listed = map { defined $_->{id} && !ref $_->{id} ? ($_->{id} => 1) : () } map { @{ $_->{tasks} } } @slots;
+        my @gone = grep { !$listed{$_} } sort keys %$tout;
+        delete @{$tout}{ @gone[0 .. $#gone - $TASK_OUT_MAX] } if @gone > $TASK_OUT_MAX;
         my %first;
         for my $s (@slots) {
             for my $t (@{ $s->{tasks} }) {
@@ -1235,7 +1394,7 @@ sub _session_rules {
             my $out = $t->{output_path} // $t->{outputFilePath};
             my $derived;
             unless (defined $out && !ref $out && length $out) {
-                $out = task_output($ctx, $t) // next;
+                $out = $tout->{ $t->{id} } // next;
                 $derived = 1;
             }
             my $quiet = 1;
@@ -1257,15 +1416,52 @@ sub _session_rules {
 # macOS the recorded paths read /private/tmp, the same folder), and <project> is the session's
 # project folder name, the one its transcript sits in under ~/.claude/projects. Without a
 # transcript path (another session, lib/watch/supersede.pm) the folder is found by session id.
-# A shell's file is a regular file (a subagent's is a link to its transcript). undef otherwise.
+# A shell's file is a regular file. 0.1.4: a subagent's is a link to its transcript, and the
+# transcript it points to is returned; a workflow's progress is its run journal,
+# <project>/<sid>/subagents/workflows/<run>/journal.jsonl beside the session's transcript (the
+# run from the slot, else from `runs`, {task id => run} as the sweep read the launch results).
+# Teammates and monitors: undef, as anything not found.
+$TASK_OUT_MAX = 200;
 sub task_output {
-    my ($ctx, $t) = @_;
-    return undef unless ($t->{type} // '') eq 'shell' && defined $t->{id} && !ref $t->{id} && $t->{id} =~ /\A[0-9A-Za-z_-]{1,64}\z/;
-    for my $d (task_dirs($ctx)) {
-        my $p = "$d/$t->{id}.output";
-        return $p if -f $p && !-l $p;
+    my ($ctx, $t, $runs) = @_;
+    my $id = $t->{id};
+    return undef unless defined $id && !ref $id && $id =~ /\A[0-9A-Za-z_-]{1,64}\z/;
+    my $type = $t->{type} // '';
+    if ($type eq 'shell') {
+        for my $d (task_dirs($ctx)) {
+            my $p = "$d/$id.output";
+            return $p if -f $p && !-l $p;
+        }
+    } elsif ($type eq 'subagent' || $type eq 'agent') {
+        for my $d (task_dirs($ctx)) {
+            my $p = "$d/$id.output";
+            next unless -l $p;
+            my $to = readlink $p;
+            next unless defined $to && length $to;
+            $to = "$d/$to" unless $to =~ m{\A/};
+            return $to if -f $to;
+        }
+    } elsif ($type eq 'workflow') {
+        my $run = $t->{run_id} // $t->{run} // (ref $runs eq 'HASH' ? $runs->{$id} : undef);
+        return undef unless defined $run && !ref $run && $run =~ /\A[0-9A-Za-z_-]{1,64}\z/;
+        for my $pd (project_dirs($ctx)) {
+            my $j = "$pd/$ctx->{sid}/subagents/workflows/$run/journal.jsonl";
+            return $j if -f $j && !-l $j;
+        }
     }
     return undef;
+}
+
+# project_dirs(ctx) -> the folder of the session's transcript; without a transcript path (another
+# session) every <config dir>/projects/* folder that holds a folder of the session id.
+sub project_dirs {
+    my ($ctx) = @_;
+    my $sid = $ctx->{sid} // '';
+    return () unless $sid =~ /\A[0-9A-Za-z][0-9A-Za-z-]{7,63}\z/;
+    my $tp = ref $ctx->{payload} eq 'HASH' ? $ctx->{payload}{transcript_path} : undef;
+    return ($1) if defined $tp && !ref $tp && $tp =~ m{\A(.+)/\Q$sid\E\.jsonl\z};
+    my $cd = (defined $ENV{CLAUDE_CONFIG_DIR} && length $ENV{CLAUDE_CONFIG_DIR}) ? $ENV{CLAUDE_CONFIG_DIR} : ($ENV{HOME} // '') . '/.claude';
+    return grep { -d "$_/$sid" } map { "$cd/projects/$_" } watch::io::list_dir("$cd/projects");
 }
 
 sub task_dirs {
@@ -1298,22 +1494,30 @@ sub task_dirs {
 # every Stop's run at the hard stop (a walk that ran to the hard stop itself left the next tick()
 # to drop the run); the next Stop walks again.
 our $WATCH_MB_EVERY_S = 3600;
-our $WATCH_MB_CAP = 20000;
+$WATCH_MB_CAP = 20000;
 our $WATCH_MB_SHARE = 0.5;
+$BELOW_QUOTA = 'resolved: below quota';
+sub _utc_date { my @g = gmtime(int($_[0] // time)); return sprintf('%04d-%02d-%02d', $g[5] + 1900, $g[4] + 1, $g[3]) }
+
+# _watch_mb(ctx, sess) -> {mb, over} (over: the walk stopped at WATCH_MB_CAP entries and mb is what
+# it counted), the kept result while under an hour old; undef when the walk gave up.
 sub _watch_mb {
     my ($ctx, $sess) = @_;
     my $now = $ctx->{now} // time;
     my $c = ref $sess eq 'HASH' && ref $sess->{watch_mb} eq 'HASH' ? $sess->{watch_mb} : undef;
-    if ($c && defined $c->{ts} && $c->{ts} <= $now && $now - $c->{ts} < $WATCH_MB_EVERY_S) { return $c->{mb} }
+    if ($c && defined $c->{ts} && defined $c->{mb} && $c->{ts} <= $now && $now - $c->{ts} < $WATCH_MB_EVERY_S) {
+        return { mb => $c->{mb}, over => ($c->{over} ? 1 : 0) };
+    }
     my $dl = $ctx->{_deadline};
     if (defined $dl) { my $m = watch::io::mono(); $dl = $m + ($dl - $m) * $WATCH_MB_SHARE }
-    my $mb = _dir_mb($ctx->{watch}, $WATCH_MB_CAP, $dl);
-    return undef if defined $mb && $mb eq 'late';
-    $sess->{watch_mb} = { ts => $now, mb => $mb } if ref $sess eq 'HASH';
-    return $mb;
+    my $w = _dir_mb($ctx->{watch}, $WATCH_MB_CAP, $dl);
+    return undef unless ref $w eq 'HASH';
+    $sess->{watch_mb} = { ts => $now, mb => $w->{mb}, over => $w->{over} } if ref $sess eq 'HASH';
+    return $w;
 }
 
-# _dir_mb(dir, cap, deadline) -> MB under dir, undef over cap entries, 'late' at the deadline.
+# _dir_mb(dir, cap, deadline) -> {mb => MB under dir, over => 0}; past cap entries {mb => the MB
+# counted so far, over => 1}; 'late' at the deadline.
 sub _dir_mb {
     my ($dir, $cap, $deadline) = @_;
     my ($bytes, $n) = (0, 0);
@@ -1324,7 +1528,7 @@ sub _dir_mb {
         opendir(my $dh, $d) or next;
         for my $e (readdir $dh) {
             next if $e eq '.' || $e eq '..';
-            return undef if ++$n > $cap;
+            return { mb => $bytes / (1 << 20), over => 1 } if ++$n > $cap;
             return 'late' if defined $deadline && $n % 256 == 0 && watch::io::mono() >= $deadline;
             my $p = "$d/$e";
             my @st = lstat $p or next;
@@ -1334,7 +1538,7 @@ sub _dir_mb {
         }
         closedir $dh;
     }
-    return $bytes / (1 << 20);
+    return { mb => $bytes / (1 << 20), over => 0 };
 }
 
 1;

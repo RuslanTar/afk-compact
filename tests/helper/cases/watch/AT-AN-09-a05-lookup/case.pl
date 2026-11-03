@@ -2,7 +2,9 @@
 # whose dispatch an earlier P-only record took counts only a main mod dispatch that is not a
 # precompute. An idle-marked dispatch on the classic channel (n1), one of a subagent (n2) and an
 # idle precompute (n3) each lie within 120 s before a boundary: none makes it idle, so all three
-# auto compactions below the target raise A-05.
+# auto compactions below the target raise A-05. 0.1.4 (W-17): a boundary joins the P-only record whose
+# PostCompact row lies within 120 s after it, keeping its dispatch; n1's row lies 131 s after its
+# boundary here, so the lookup is what is tested.
 my ($n1, $n2, $n3) = ('4d4e0001', '4d4e0002', '4d4e0003');
 my $post = sub { my ($n, $t) = @_;
                  return T::row('postcompact', $t, writer => 'classic', nonce_found => $n, scope_found => 'main',
@@ -16,7 +18,7 @@ my $d = sub { my ($n, $t, %o) = @_; return { %{ T::dispatch($n, $t, %o) }, idle 
         { path => "\$WATCH/\$SID/dispatch/$n3.json", json => $d->($n3, 1499, trigger => 'precompute') },
         { path => '$WATCH/$SID.classic.jsonl',
           jsonl => [ T::row('config_note', 1, writer => 'helper', key => 'relaunch_auto', note => 'settings-file-only'),
-                     $post->($n1, 101), $post->($n2, 1001) ] },
+                     $post->($n1, 231), $post->($n2, 1001) ] },
     ],
     transcript => [ T::prompt(0), T::assistant_text(5) ],
     steps => [

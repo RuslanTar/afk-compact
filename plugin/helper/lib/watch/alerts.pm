@@ -8,7 +8,8 @@ package watch::alerts;
 #
 # Rows are never deleted. An alert is closed by a later `alert_closed {alert_id, rule, reason}`
 # row in the same log (0.1.3: the rows an older version wrote under a rule that changed,
-# lib/watch/supersede.pm, and an A-01 whose copy was saved later, lib/watch/rules.pm); a closed
+# lib/watch/supersede.pm, and an A-01 whose copy was saved later, lib/watch/rules.pm; 0.1.4: an A-24
+# watch-size alert whose folder is back under quota); a closed
 # alert is not open: not counted or listed as open, not delivered, and never raised again (its id
 # stays taken).
 #
@@ -31,10 +32,11 @@ our $LOG_RE = qr/"ev"\s*:\s*"alert(?:_closed)?"/;
 
 # The alerts written so far: from a cache load (lib/watch/cache.pm) at Stop,
 # else read from the alerts log. rows: every alert row; closed: {alert_id => reason};
-# open: the rows not closed.
+# open: the rows not closed; by_rule counts every alert row of a rule (closed ones too), open_by_rule
+# only the open ones (0.1.4: what grades a rule or holds a check back reads open rows only).
 sub load_existing {
     my ($ctx, $C) = @_;
-    my %e = (ids => {}, by_rule => {}, rows => [], closed => {}, open => []);
+    my %e = (ids => {}, by_rule => {}, open_by_rule => {}, rows => [], closed => {}, open => []);
     my $rows = $C && ref $C->{rows} eq 'HASH' ? $C->{rows}{alerts}
              : watch::io::read_jsonl(watch::ctx::alerts_log($ctx), undef, $LOG_RE);
     my ($alerts, $closed) = split_rows($rows);
@@ -43,7 +45,9 @@ sub load_existing {
         $e{ids}{ $r->{alert_id} } = 1;
         $e{by_rule}{ $r->{rule} // '' }++;
         push @{ $e{rows} }, $r;
-        push @{ $e{open} }, $r unless exists $closed->{ $r->{alert_id} };
+        next if exists $closed->{ $r->{alert_id} };
+        push @{ $e{open} }, $r;
+        $e{open_by_rule}{ $r->{rule} // q() }++;
     }
     return \%e;
 }
@@ -84,6 +88,7 @@ sub raise {
     return undef unless watch::ctx::write_row($ctx, watch::ctx::alerts_log($ctx), $row);
     $ex->{ids}{$id} = 1;
     $ex->{by_rule}{ $a{rule} }++;
+    $ex->{open_by_rule}{ $a{rule} }++;
     push @{ $ex->{rows} }, $row;
     push @{ $ex->{open} }, $row;
     push @{ $ex->{new} }, $row;
@@ -99,6 +104,7 @@ sub close_alert {
     my $row = watch::ctx::row($ctx, $CLOSED, { alert_id => $id, rule => $r->{rule}, reason => $reason }, actor => 'main');
     return 0 unless watch::ctx::write_row($ctx, watch::ctx::alerts_log($ctx), $row);
     $ex->{closed}{$id} = $reason;
+    $ex->{open_by_rule}{ $r->{rule} // q() }-- if ($ex->{open_by_rule}{ $r->{rule} // q() } // 0) > 0 && grep { ($_->{alert_id} // q()) eq $id } @{ $ex->{open} || [] };
     $ex->{open} = [ grep { ($_->{alert_id} // '') ne $id } @{ $ex->{open} || [] } ];
     return 1;
 }

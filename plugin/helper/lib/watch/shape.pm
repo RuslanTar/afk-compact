@@ -153,10 +153,29 @@ sub fabricated {
 
 my $ID_RE = qr/\b([UDX])-([0-9]+)\b/;
 
+# 0.1.4 (stable ledger, watcher side): an entry's text with its id, the separator after it, the
+# bullet, trailing check stamps (`checked <stamp>`, `[verified <stamp>]`, `(<stamp>)`, a bare
+# stamp; whole, near or legacy form) and the separators before them removed, ASCII case and
+# whitespace folded. Two entries with the same normalised text are the same line.
+my $SEP = qr/(?:\s|,|;|\xc2\xb7|\xe2\x80\x94|\xe2\x80\x93|-)*/;
+sub norm_entry {
+    my ($line, $spec) = @_;
+    my ($full, $legacy) = time_res($spec);
+    my $stamp = qr/(?:$full|$NEAR_RE(?::[0-9]{2}(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:?[0-9]{2})?|$legacy)/;
+    my $t = $line;
+    $t =~ s/\A\s*(?:[-*]\s+)?//;
+    $t =~ s/\A[UDX]-[0-9]+\b(?:\s*(?::|\.|\)|\xe2\x80\x94|-))?\s*//;
+    1 while $t =~ s/$SEP(?:\[\s*verified\s+$stamp[^\]\n]{0,40}\]|\(\s*(?:checked\s+|verified\s+)?$stamp\s*\)|(?:checked|verified)\s+$stamp|$stamp)\s*\z//i;
+    $t = lc $t;
+    $t =~ s/\s+/ /g;
+    $t =~ s/\A | \z//g;
+    return $t;
+}
+
 # Ledger entries are lines that start with an id (after an optional bullet).
 sub _ledger {
-    my ($body, $fold_rx) = @_;
-    my (%entries, %named, $chars, @other);
+    my ($body, $fold_rx, $spec) = @_;
+    my (%entries, %named, %carried, %text, %by_text, $chars, @other);
     $chars = 0;
     my $folded = 0;
     for my $line (split /\n/, $body) {
@@ -173,7 +192,14 @@ sub _ledger {
             next;
         }
         if ($t =~ /\A([UDX])-([0-9]+)\b/) {
-            $entries{"$1-$2"} = 1;
+            my $id = "$1-$2";
+            $entries{$id} = 1;
+            # the other ids an entry line carries (`U-33 "1a" R1354; U-34 "2,3,4" R1355`), ranges
+            # left out as on a fold line
+            (my $s = $t) =~ s/\b[UDX]-[0-9]+\s*(?:\.\.|\xe2\x80\xa6)\s*[UDX]-[0-9]+\b//g;
+            while ($s =~ /$ID_RE/g) { $carried{"$1-$2"} = 1 }
+            my $nt = norm_entry($line, $spec);
+            if (length $nt) { $text{$id} //= $nt; $by_text{$nt} //= $id }
             $chars += chars($line) + 1;
             next;
         }
@@ -182,28 +208,37 @@ sub _ledger {
         $o =~ s/^\s+|\s+$//g;
         push @other, $o if length $o;
     }
-    return { entries => \%entries, named => \%named, chars => $chars, folded => $folded, other => \@other };
+    return { entries => \%entries, named => \%named, chars => $chars, folded => $folded, other => \@other,
+             text => \%text, by_text => \%by_text, carried => \%carried };
 }
 
-# M-11 against the previous summary text (or undef).
+# M-11 against the previous summary text (or undef). 0.1.4: an old id is lost only when the new
+# ledger has neither the id (as an entry, carried on another entry line, or named on a
+# Superseded/fold line) nor an entry with the same normalised text (norm_entry); such a line
+# under another id counts as `renumbered`, an id carried on another entry line as `carried`.
 sub ledger_diff {
     my ($body, $prev, $src, $spec) = @_;
     my $fold_rx = watch::spec::regex($spec, 'fold_line_re');
-    my $cur = _ledger($body, $fold_rx);
+    my $cur = _ledger($body, $fold_rx, $spec);
     unless (defined $prev) {
-        return { lost_U => undef, lost_D => undef, lost_X => undef, folded => $cur->{folded},
-                 ledger_chars => $cur->{chars}, overlap_pct => undef, ledger_src => 'none' };
+        return { lost_U => undef, lost_D => undef, lost_X => undef, renumbered => undef, carried => undef,
+                 folded => $cur->{folded}, ledger_chars => $cur->{chars}, overlap_pct => undef, ledger_src => 'none' };
     }
-    my $old = _ledger($prev, $fold_rx);
+    my $old = _ledger($prev, $fold_rx, $spec);
     my %lost = (U => 0, D => 0, X => 0);
+    my ($renumbered, $carried) = (0, 0);
     for my $id (keys %{ $old->{entries} }) {
         next if $cur->{entries}{$id} || $cur->{named}{$id};
+        if ($cur->{carried}{$id}) { $carried++; next }
+        my $nt = $old->{text}{$id};
+        if (defined $nt && $cur->{by_text}{$nt}) { $renumbered++; next }
         $lost{ substr($id, 0, 1) }++;
     }
     my %prev_lines = map { $_ => 1 } @{ $old->{other} };
     my $n = scalar @{ $cur->{other} };
     my $same = grep { $prev_lines{$_} } @{ $cur->{other} };
-    return { lost_U => $lost{U}, lost_D => $lost{D}, lost_X => $lost{X}, folded => $cur->{folded},
+    return { lost_U => $lost{U}, lost_D => $lost{D}, lost_X => $lost{X}, renumbered => $renumbered, carried => $carried,
+             folded => $cur->{folded},
              ledger_chars => $cur->{chars}, overlap_pct => ($n ? int(100 * $same / $n + 0.5) : 0),
              ledger_src => $src };
 }

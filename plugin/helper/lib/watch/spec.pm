@@ -80,6 +80,16 @@ sub secret_classes {
     return \%c;
 }
 
+# ok_verdicts(spec) -> {verdict => 1}: the verdicts that count as ok, from the spec's
+# `ok_verdicts`; without a usable list, the three of 0.1.3.
+our @OK_VERDICTS = qw(ok ok-trailer ok-unclosed);
+sub ok_verdicts {
+    my ($spec) = @_;
+    my $v = ref $spec eq 'HASH' ? $spec->{ok_verdicts} : undef;
+    my @l = ref $v eq 'ARRAY' ? grep { defined && !ref && /\A[a-z][a-z0-9-]{0,31}\z/ } @$v : ();
+    return { map { $_ => 1 } (@l ? @l : @OK_VERDICTS) };
+}
+
 sub alert_text {
     my ($spec, $rule) = @_;
     my $t = $spec->{alert_texts};

@@ -198,7 +198,7 @@ sub week_counts {
 sub superseded_lines {
     my ($ctx) = @_;
     my $cut = $ctx->{now} - 7 * 86400;
-    my %ids;
+    my (%ids, %ver);
     for my $f (watch::io::list_dir($ctx->{watch})) {
         next unless $f =~ /\.alerts\.jsonl\z/;
         my $p = "$ctx->{watch}/$f";
@@ -206,13 +206,19 @@ sub superseded_lines {
         next unless defined $mt && $mt >= $cut;
         for my $r (@{ watch::io::read_jsonl($p, undef, qr/"ev"\s*:\s*"alert_closed"/) }) {
             next unless ($r->{ev} // '') eq 'alert_closed' && defined $r->{alert_id} && !ref $r->{alert_id};
-            next unless ($r->{reason} // '') =~ /\Asuperseded:/;
+            next unless ($r->{reason} // q()) =~ /\Asuperseded:/;
             my $t = watch::io::parse_iso($r->{ts});
-            $ids{"$f/$r->{alert_id}"} = 1 if defined $t && $t >= $cut;
+            next unless defined $t && $t >= $cut;
+            $ids{"$f/$r->{alert_id}"} = 1;
+            $ver{$1} = 1 if $r->{reason} =~ /rule changed in ([0-9]+\.[0-9]+\.[0-9]+)\z/;
         }
     }
     my $n = keys %ids;
-    return $n ? (sprintf('Alerts closed as superseded (the rule changed in 0.1.3; rows kept): %d', $n)) : ();
+    # 0.1.4: the versions the closing reasons name ("the rule changed in 0.1.3 or 0.1.4")
+    my $vk = sub { sprintf(q(%06d%06d%06d), split /\./, $_[0]) };
+    my @v = sort { $vk->($a) cmp $vk->($b) } keys %ver;
+    my $in = @v ? join(q( or ), @v) : q(an update);
+    return $n ? (sprintf(q(Alerts closed as superseded (the rule changed in %s; rows kept): %d), $in, $n)) : ();
 }
 
 sub last_row_ts {

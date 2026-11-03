@@ -107,6 +107,12 @@ sub on_stop {
     $ctx = _prepare($ctx);
     my $start = watch::io::mono();
     my $hard = !defined $deadline ? $start + 3 : $deadline < 1e9 ? $start + $deadline : $deadline;
+    # test seam (STORE_TEST_MODE only): STORE_TEST_WATCH_MIN_MS gives the run at least that window, so
+    # a case whose Stop starts late still sees its rules run whatever the machine's load (AT-AN-14)
+    if (($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_WATCH_MIN_MS} // '') =~ /\A[0-9]{1,5}\z/) {
+        my $min = $start + $ENV{STORE_TEST_WATCH_MIN_MS} / 1000;
+        $hard = $min if $hard < $min;
+    }
     # Reading stops at 2 s, or at two thirds of a shorter window, so the rules
     # still fit before the hard stop.
     my $soft = $start + 2;
@@ -135,6 +141,7 @@ sub on_stop {
         my $sess = $state->{session} = ref $state->{session} eq 'HASH' ? $state->{session} : {};
         my $carry = ref $state->{carry} eq 'HASH' ? $state->{carry} : {};
         $sess->{task_kinds} = $carry->{task_types} if ref $carry->{task_types} eq 'HASH';
+        $sess->{task_runs} = $carry->{task_runs} if ref $carry->{task_runs} eq q(HASH);
         $stage = 'load';
         my $cache = watch::cache::load($ctx, kinds => \@watch::rules::KINDS, deadline => $hard);
         # Only the Stop holding the sweeper's lock persists the cache.
@@ -173,6 +180,7 @@ sub on_stop {
         $sess->{last_stop_ts} = $ctx->{now};
         $carry->{last_stop_ts} = $ctx->{now} if %$carry;
         delete $sess->{task_kinds};
+        delete $sess->{task_runs};
         watch::sweep::finish($run);
         $stage = 'deliver';
         $out = watch::alerts::deliver($ctx, $ex, $hard);

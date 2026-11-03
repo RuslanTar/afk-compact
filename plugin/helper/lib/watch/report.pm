@@ -19,7 +19,8 @@ use watch::json;
 use watch::export;
 use watch::rules;
 
-my %OKV = map { $_ => 1 } qw(ok ok-trailer ok-unclosed);
+use watch::spec;
+
 my %SHAPED = map { $_ => 1 } qw(mod-hook mod-self classic);
 
 # --- loading ----------------------------------------------------------------
@@ -55,7 +56,7 @@ sub load {
         $S{$name} = [ sort { ($a->{_t} // 0) <=> ($b->{_t} // 0) } @r ];
         delete $S{$k} if $name ne $k;
     }
-    return { source => (defined $o{input} ? 'remote' : 'live'), sessions => \%S };
+    return { source => (defined $o{input} ? 'remote' : 'live'), sessions => \%S, spec => $ctx->{spec} };
 }
 
 sub _ev { return $_[0]{ev} // 'compaction' }
@@ -118,6 +119,7 @@ sub _pct {
 
 sub stats {
     my ($L) = @_;
+    my $okv = watch::spec::ok_verdicts($L->{spec});
     my %s = (sessions => 0, days => {}, alerts => {}, alert_rows => [], verdicts => {}, triggers => {},
              durations => {}, bands => [], chains => 0, nudge_driven => 0, receipts => 0, receipts_unselected => 0,
              lost_U => 0, lost_DX => 0, chain_steps => 0, fabricated => 0, summary => [], over12k => 0,
@@ -192,7 +194,7 @@ sub stats {
             $s{nudge_driven}++ if $c->{nudge_driven};
             $s{idle}++ if ($c->{idle} // '') eq 'true';
             $s{save_gap}++ if !defined $c->{copy} || $c->{copy} =~ /\A(?:missing|not-found|failed)/;
-            if ($SHAPED{ $c->{channel} // '' }) { $s{shaped}++; $s{shaped_ok}++ if $OKV{ $c->{verdict} // '' } }
+            if ($SHAPED{ $c->{channel} // '' }) { $s{shaped}++; $s{shaped_ok}++ if $okv->{ $c->{verdict} // q() } }
             $s{scope_leak}++ if ($c->{verdict} // '') eq 'scope-leak';
             $s{days}{ substr($c->{ts} // '????-??-??', 0, 10) }{compactions}++;
             if (defined $c->{nonce} && $c->{nonce} ne 'none' && $c->{nonce} =~ /\A[0-9a-f]{8}\z/) {

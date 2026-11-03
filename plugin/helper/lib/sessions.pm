@@ -214,6 +214,53 @@ sub own_since {
     return $s->{until};
 }
 
+# first_row(sid_dir, classic stream, mod stream) -> epoch of the session's first record, or undef
+# (0.1.4: the one definition core's order canary, reconcile::cutoff, and the watcher's history
+# skip, watch::rules::observed_from, both take). Per stream, the first row among its first
+# FIRST_ROW_LINES that is not a row a Stop writes itself (OWN_STOP_ROWS: the watcher's sweep,
+# sweep_partial, watch_error, precompute_or_failed and core's stop_timing); the earliest of the two
+# streams. A session whose streams hold only such rows (the plugin loaded mid-session, its first
+# hook a Stop) starts at the earliest of them; one with no row at all at the earliest `ts` of its
+# classic-alive.json and mod-alive.json. The streams are append-only, so their first rows never
+# change. Pure: reads files only (jsonc, util), no session context.
+our @OWN_STOP_ROWS = qw(sweep sweep_partial watch_error precompute_or_failed stop_timing);
+our $FIRST_ROW_LINES = 64;
+sub first_row {
+    my ($sid_dir, @streams) = @_;
+    require jsonc;
+    require util;
+    my %own = map { $_ => 1 } @OWN_STOP_ROWS;
+    my ($best, $own);
+    for my $p (@streams) {
+        next unless defined $p && !ref $p && -f $p && !-l $p;
+        open(my $fh, '<:raw', $p) or next;
+        my $n = 0;
+        while (defined(my $line = <$fh>)) {
+            last if ++$n > $FIRST_ROW_LINES;
+            (my $raw = $line) =~ s/[\r\n]+\z//;
+            my $r = eval { jsonc::decode($raw) };
+            next unless ref $r eq 'HASH' && defined $r->{ts} && !ref $r->{ts};
+            my $t = util::parse_iso($r->{ts}) // next;
+            my $ev = defined $r->{ev} && !ref $r->{ev} ? $r->{ev} : '';
+            if ($own{$ev}) { $own = $t if !defined $own || $t < $own; next }
+            $best = $t if !defined $best || $t < $best;
+            last;
+        }
+        close $fh;
+    }
+    return $best // $own if defined $best || defined $own;
+    return undef unless defined $sid_dir && !ref $sid_dir;
+    my $alive;
+    for my $f ("$sid_dir/classic-alive.json", "$sid_dir/mod-alive.json") {
+        next unless -f $f && !-l $f;
+        my $raw = util::read_file($f);
+        my $j = defined $raw ? eval { jsonc::decode($raw) } : undef;
+        my $e = ref $j eq 'HASH' && defined $j->{ts} && !ref $j->{ts} ? util::parse_iso($j->{ts}) : undef;
+        $alive = $e if defined $e && (!defined $alive || $e < $alive);
+    }
+    return $alive;
+}
+
 # record_live(record) -> 1 when a live- record with no ended- twin still counts as live
 # (MOD-SPEC §5.8, MOD-SPEC §7 liveness). Owner ruling xxxxxxxx-07 (2026-10-22 23:54, CR-1) on
 # question C-STORE-1, "Process gone counts": a record of this host whose pid is gone or runs with

@@ -9,6 +9,9 @@ use utf8;
 
 package cmd_hook;
 
+# how core calls the watcher, shared with the `reconcile` CLI (lib/watchcall.pm)
+require watchcall;
+
 our %EVENTS = map { $_ => 1 } qw(PreCompact PostCompact SessionStart SessionEnd Stop SubagentStop StopFailure PermissionDenied);
 our %KEYSET_EVENTS = map { $_ => 1 } qw(PreCompact PostCompact SessionStart);
 # One writer per row kind (ROOT-RULINGS F2-5): core writes stop_failure and
@@ -18,35 +21,12 @@ our %CORE_ROWS_ONLY = map { $_ => 1 } qw(StopFailure PermissionDenied);
 # the classic stream tail _turn_kind read (copy rows for the pending-record check)
 our $LAST_CLASSIC;
 
-sub _error_class {
-    my ($e) = @_;
-    $e //= '';
-    return 'spec' if $e =~ /^spec:/;
-    return 'json' if $e =~ /^json:/;
-    return 'assets' if $e =~ /^assemble:/;
-    return 'lock-timeout' if $e =~ /lock-timeout/;
-    return 'io' if $e =~ /^(create|open|write|close|rename|mkdir|lock open)\b/;
-    return 'internal';
-}
+sub _error_class { return watchcall::error_class(@_) }
 
-sub _watch_ctx {
-    my ($event, $extra) = @_;
-    return { sid => rc::sid(), event => $event, settings => rc::settings(), paths => rc::paths(), watch => rc::watch(),
-             sid_dir => rc::sid_dir(), plugin_root => ctx::root(), brand => ctx::brand(), version => ctx::version(),
-             now => util::now(), cc_version => rc::cc_version(), cc_version_src => rc::cc_version_src(), %{ $extra || {} } };
-}
+sub _watch_ctx { return watchcall::ctx(@_) }
 
 # Run a watcher seam with stdout closed off (nothing it does may reach stdout).
-sub _watch_call {
-    my ($stage, $fn) = @_;
-    return if (rc::val('watcher') // 'shadow') eq 'off';
-    open(my $saved, '>&', \*STDOUT) or return;
-    open(STDOUT, '>', '/dev/null');
-    my $ok = eval { require "watch.pm"; $fn->(); 1 };
-    my $err = $@;
-    open(STDOUT, '>&', $saved);
-    if (!$ok && $err !~ /not implemented/) { rc::emit('watch_error', [stage => $stage, error_class => _error_class($err)]) }
-}
+sub _watch_call { return watchcall::call(@_) }
 
 # Stop (8 s hook timeout): one budget for the whole process, counted from the helper's start
 # (main.pl, before its libraries compile), on the real clock (STORE_TEST_NOW fixes the clock,
@@ -108,14 +88,9 @@ sub _stop_left {
 
 # The cross-session finish of an ended session (lib/orphans.pm, called in that session's context
 # after its final reconcile, with what is left of the pass): the watcher's end pass for it, as its
-# own SessionEnd would have run it (its held A-01s; lib/watch/rules.pm a01_end).
-sub _finished_watch {
-    my ($n, $meta, $left_ms) = @_;
-    return if !defined $left_ms || $left_ms < 100;
-    $left_ms = $END_WATCH_MS if $left_ms > $END_WATCH_MS;
-    my $p = { session_id => rc::sid(), transcript_path => (ref $meta eq 'HASH' ? $meta->{transcript} : undef) };
-    _watch_call('watch.on_hook', sub { watch::on_hook('SessionEnd', $p, _watch_ctx('SessionEnd', { reconcile => $n }), $left_ms / 1000) });
-}
+# own SessionEnd would have run it (its held A-01s; lib/watch/rules.pm a01_end). The `reconcile`
+# CLI's finish pass runs the same one (lib/watchcall.pm finished).
+sub _finished_watch { local $watchcall::END_WATCH_MS = $END_WATCH_MS; return watchcall::finished(@_) }
 
 sub run {
     my ($event) = @_;
@@ -162,7 +137,9 @@ sub run {
         my $w0 = util::clock_ms();
         # the stashes reconcile left for the next Stop (their A-01 waits with them, lib/watch/rules.pm)
         my $waits = ref $extra eq 'HASH' && ref $extra->{reconcile} eq 'HASH' ? $extra->{reconcile}{waits} : undef;
-        _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p, copy_waits => $waits || {} }), $left) });
+        # 0.1.4: reconcile could not take the session lock (another reconciler held it): no waits
+        my $busy = ref $extra eq 'HASH' && ref $extra->{reconcile} eq 'HASH' && $extra->{reconcile}{busy} ? 1 : 0;
+        _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p, copy_waits => $waits || {}, reconcile_busy => $busy }), $left) });
         eval { _stop_row($t0, $w0, $left) };
     } elsif ($event eq 'SessionEnd') {
         my $l = $END_BY_MS - (util::clock_ms() - $T_START);
@@ -376,7 +353,13 @@ sub on_SessionEnd {
     # F2-1). A session that ends before its next Stop (/clear, exit) gets that reconcile
     # here, with the same 2 s budget: the boundary row has landed by now (S-21). Final mode
     # (RRP-05, MOD-SPEC §5.4): what P3 leaves unproven is saved unattributed at once.
-    my $n = eval { reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000,
+    # 0.1.4: at most what leaves the finish pass and the watcher's end pass their time by
+    # END_BY_MS from the helper's start, so a start slowed by load still ends inside the 5 s
+    # timeout (a save reconcile has no time to sweep waits for a later run, as at Stop).
+    my $rb = $END_BY_MS - $END_WATCH_MS - $orphans::PASS_MS - (util::clock_ms() - ($T_START // util::clock_ms()));
+    $rb = $RECONCILE_MS if $rb > $RECONCILE_MS;
+    $rb = 0 if $rb < 0;
+    my $n = eval { reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => int $rb,
                                   final => 1, cutoff => reconcile::cutoff()) };
     # then the cross-session finish pass (MOD-SPEC §5.8, ≤ 1 s)
     eval { orphans::pass(budget_ms => $orphans::PASS_MS, after => \&_finished_watch) };
