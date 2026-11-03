@@ -24,6 +24,10 @@ package watch::ctx;
 #   secret_hits    PostCompact: [rule ids] from secrets.scan on the summary
 #   keyset_hash    C5 sha8 of this payload's key set, as core computes it
 #   mod_alive_this_turn  PostCompact: core's liveness answer (MOD-SPEC §3.3)
+#   copy_waits     Stop: the stashes this Stop's reconcile left for a later run
+#                  {"n:<nonce>" or "i:<id6>" => file in pending/}; their A-01 is held
+#   reconcile      SessionEnd, SubagentStop: that reconcile's result (SessionEnd: its
+#                  `waits`, as copy_waits)
 #   refused        a root refusal reason: the watcher then writes nothing (unset: refused()
 #                  checks the watch dir and handoff_root itself)
 #   append         sub(path, row): core's appender (default: watch::io)
