@@ -197,8 +197,8 @@ const OWN_REPLY_RE = /(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answ
  *   0.1.1, which reads no job in a wait's words);
  * - a step it reads free is held on a job only when a job trigger leads it (`JOB_RE`) and no
  *   user-wins word stands anywhere in it (`USER_WINS_RE`); else it is free, as there.
- * Planned for 0.1.2: an explicit `waits: job` / `waits: you` mark in the summary's steps, read by
- * code instead of the wording. The job reading takes every space (a no-break space too) as a plain
+ * Not built (0.1.3; a candidate for a later version): an explicit `waits: job` / `waits: you` mark in
+ * the summary's steps, read by code instead of the wording. The job reading takes every space (a no-break space too) as a plain
  * one, as copies.pm `_hold_of` does.
  */
 function holdOf(raw: string): 'user' | 'job' | undefined {
