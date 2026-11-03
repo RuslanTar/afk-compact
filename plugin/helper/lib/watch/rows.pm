@@ -10,6 +10,9 @@ use watch::spec;
 use watch::json;
 
 our $SUMMARY_HEAD = 'This session is being continued from a previous conversation';
+# 0.1.4 (A-27): the words every handoff-turn submit of the plugin carries (assets/handoff-turn.txt,
+# its [submit-halt], [submit-pre] and [submit-idle] lines), never a continue
+our $HT_SUBMIT = ', so the plugin asks for a handoff while the context is still here.';
 
 # D-01 read-only Bash class (WATCH §4 D-01).
 my $READONLY_BASH = qr/\A\s*(?:git\s+(?:status|log|diff|show|rev-parse|branch)\b|ls\b|rg\b|head\b|tail\b|wc\b|date\b)/;
@@ -166,6 +169,9 @@ sub classify {
         my $origin = ref $r->{origin} eq 'HASH' ? $r->{origin} : undef;
         if ($origin && ($origin->{kind} // '') eq 'plugin') {
             $f{kind} = (defined $brand && ($origin->{name} // '') eq $brand) ? 'continue' : 'plugin_prompt';
+            # the plugin's handoff-turn submit, told by its text when its ht record is gone
+            $f{ht_submit} = 1 if $f{kind} eq 'continue' && index($text, "Note from the user's $brand plugin: ") >= 0
+                                && index($text, $HT_SUBMIT) >= 0;
             return \%f;
         }
         if ($r->{isMeta}) { $f{kind} = 'meta'; return \%f }

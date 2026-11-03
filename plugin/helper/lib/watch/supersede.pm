@@ -265,7 +265,8 @@ sub _bounds {
 
 # A-11 without a known output path: the rule now checks such an item only when it has an output
 # the watcher can see (rules.pm task_output: a shell's task output file, a subagent's transcript, a
-# workflow's run journal), by the path the session state kept when the item was first seen
+# workflow's run journal with its agents' transcripts, rules.pm progress_mtime), by the path the
+# session state kept when the item was first seen
 # (0.1.4), else derived now. The item is found by its alert id among the session's background slots
 # and task output files; one that is not found or has no such output is not checked, so its row is
 # closed. When the output exists, the row stays
@@ -301,7 +302,7 @@ sub _a11_unchecked {
     my $kept = ref $st->{session} eq 'HASH' && ref $st->{session}{task_out} eq 'HASH' ? $st->{session}{task_out}{ $t->{id} } : undef;
     my $runs = ref $st->{carry} eq 'HASH' ? $st->{carry}{task_runs} : undef;
     my $out = (defined $kept && !ref $kept && -e $kept) ? $kept : (watch::rules::task_output($sc, $t, $runs) // return 1);
-    my $mt = (stat $out)[9];
+    my $mt = watch::rules::progress_mtime($out);
     my $at = watch::io::parse_iso($r->{ts});
     return (defined $mt && defined $at && $mt <= $at - $QUIET_S) ? 0 : 1;
 }

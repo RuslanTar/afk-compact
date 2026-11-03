@@ -299,12 +299,17 @@ sub _analyze {
     # M-17 (DP-14): the plugin-submitted handoff turn is a plugin-origin `user` row like a
     # continue; an open ht record (handoff-turn/<ht>.json, one submit per ht) makes it a
     # `handoff_turn`. It is a turn, not a continue: no continue event, no A-19/A-27 input.
+    # 0.1.4: a submit told by its text (rows.pm $HT_SUBMIT) whose record is gone (all 12 A-27 rows
+    # of the 0.1.2 log were such: pre-compaction and pre-idle handoff turns) is no continue either;
+    # it counts as a plugin prompt.
     my $ht;
     if ($k eq 'continue') {
         $ht = watch::hturn::submit_for($ctx, $f->{ts}, $c->{ht_used} ||= {});
         if ($ht) {
             $c->{ht_used}{ $ht->{ht} } = 1;
             $k = 'handoff_turn';
+        } elsif ($f->{ht_submit}) {
+            $k = 'plugin_prompt';
         }
     }
     if ($k eq 'prompt' || $k eq 'continue' || $k eq 'handoff_turn' || $k eq 'plugin_prompt') {

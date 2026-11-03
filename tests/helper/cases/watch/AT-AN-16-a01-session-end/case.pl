@@ -135,8 +135,8 @@ my @ending = $finish ? (
                   next unless $f =~ /\A([0-9a-f]{6}|h[0-9a-f]{5})\.post\.json\z/;
                   my $m = watch::io::read_json_file("$v->{WATCH}/$T::SID/pending/$f") || {};
                   next unless ($m->{nonce} // '') eq $got{n3};
-                  chmod 0, "$v->{WATCH}/$T::SID/pending/$1.post.md" or die "chmod: $!";
-                  $got{unreadable} = 1;
+                  # a stash an earlier end already saved is gone: the assertions below say so
+                  $got{unreadable} = 1 if chmod 0, "$v->{WATCH}/$T::SID/pending/$1.post.md";
               }
           } },
         @ending,

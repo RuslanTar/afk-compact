@@ -33,6 +33,9 @@ our $COLD_MIN_TOKENS = 100_000;
 our $A23_HELD_MAX = 50;
 # A-27: the main boundaries whose history and idle facts the session state keeps (bmeta).
 our $BMETA_MAX = 50;
+# W-19: the context window of the standard models (thresholds: a larger autoCompactWindow needs a
+# context seen above it)
+our $STD_WINDOW = 200_000;
 # A-24 (set below with the walk)
 our ($WATCH_MB_CAP, $BELOW_QUOTA, $TASK_OUT_MAX);
 
@@ -209,7 +212,7 @@ sub _bg_slots {
 # Effective thresholds: the mod's latest config_effective row, else the
 # MOD-SPEC §1.2 clamp over the settings when the window is configured.
 sub thresholds {
-    my ($ctx, $S) = @_;
+    my ($ctx, $S, $seen) = @_;
     return { off => 1 } if rows_of($S, 'triggers_off') || rows_of($S, 'trigger_disabled_small_window');
     my ($cfg) = reverse rows_of($S, 'config_effective');
     # A disabled row (needs/mod-to-watch.md 5) has null thresholds and the computed values in
@@ -225,24 +228,31 @@ sub thresholds {
         $t{native} //= $t{window} - clamp_constants($ctx->{spec})->{native_offset} if defined $t{window};
         return \%t if defined $t{target} && defined $t{soft_max} && defined $t{native};
     }
-    return fallback_thresholds($ctx->{settings}, $ctx->{spec}, cc_compact_window($ctx));
+    # 0.1.4: Claude Code never compacts past the model's own window (the mod caps the setting at
+    # it). The watcher does not know that window: a setting above the standard $STD_WINDOW counts
+    # only once the session's context has been above $STD_WINDOW (`seen`, the largest main
+    # boundary's tokens before), so the model's window is a larger one; else no thresholds.
+    my $ccw = cc_compact_window($ctx);
+    $ccw = undef if defined $ccw && $ccw > $STD_WINDOW && !(($seen // 0) > $STD_WINDOW);
+    return fallback_thresholds($ctx->{settings}, $ctx->{spec}, $ccw);
 }
 
 # cc_compact_window(ctx) -> the window Claude Code's `autoCompactWindow` setting names (0.1.4, the
 # watcher's copy of the mod's compactWindowSetting/settingWindow, plugin/hooks/lib/deps.ts and
 # config.ts): the merged settings, read from the files Claude Code merges them from, the later one
 # winning: <config dir>/settings.json (CLAUDE_CONFIG_DIR, else ~/.claude), the project's
-# .claude/settings.json and .claude/settings.local.json (the payload's cwd, else
-# CLAUDE_PROJECT_DIR), then the managed settings file. A JSON number above 0 counts, floored at the
-# clamp's window_floor (100,000); the model's own window, which the mod also caps it at, is not
-# known here. undef when unset or unreadable.
+# .claude/settings.json and .claude/settings.local.json (the project root Claude Code reads them
+# from, CLAUDE_PROJECT_DIR, else the payload's cwd), then the managed settings file. A JSON number
+# above 0 counts, floored at the clamp's window_floor (100,000). The mod also caps it at the model's
+# own window, which the watcher does not know: thresholds() uses it only where that cap cannot
+# change it. undef when unset or unreadable.
 sub cc_compact_window {
     my ($ctx) = @_;
     return $ctx->{_cc_window} if exists $ctx->{_cc_window};
     my $cd = (defined $ENV{CLAUDE_CONFIG_DIR} && length $ENV{CLAUDE_CONFIG_DIR}) ? $ENV{CLAUDE_CONFIG_DIR}
            : (defined $ENV{HOME} && length $ENV{HOME}) ? "$ENV{HOME}/.claude" : undef;
-    my $proj = ref $ctx->{payload} eq 'HASH' && defined $ctx->{payload}{cwd} && !ref $ctx->{payload}{cwd} ? $ctx->{payload}{cwd}
-             : $ENV{CLAUDE_PROJECT_DIR};
+    my $proj = (defined $ENV{CLAUDE_PROJECT_DIR} && length $ENV{CLAUDE_PROJECT_DIR}) ? $ENV{CLAUDE_PROJECT_DIR}
+             : ref $ctx->{payload} eq 'HASH' && defined $ctx->{payload}{cwd} && !ref $ctx->{payload}{cwd} ? $ctx->{payload}{cwd} : undef;
     my $managed = $^O eq 'darwin' ? '/Library/Application Support/ClaudeCode/managed-settings.json'
                 : $^O =~ /\A(?:MSWin32|msys|cygwin)\z/ ? (($ENV{ProgramFiles} // $ENV{PROGRAMFILES} // 'C:/Program Files') . '/ClaudeCode/managed-settings.json')
                 : '/etc/claude-code/managed-settings.json';
@@ -605,7 +615,12 @@ sub evaluate {
     my @bounds = map { @{ $_->{boundaries} } } @$sweep_files;
     my @events = map { @{ $_->{events} } } grep { $_->{actor} eq 'main' } @$sweep_files;
     my $C = build_compactions($ctx, $S, $sess, \@bounds);
-    my $th = thresholds($ctx, $S);
+    # the largest context a main boundary of the session showed (tokens before), kept across Stops
+    for my $b (@bounds) {
+        my $pre = ($b->{actor} // '') eq 'main' ? _num($b->{pre}) : undef;
+        $sess->{ctx_seen} = int $pre if defined $pre && $pre > ($sess->{ctx_seen} // 0);
+    }
+    my $th = thresholds($ctx, $S, $sess->{ctx_seen});
     my $secret_class = watch::spec::secret_classes($ctx->{spec});
     my $vh = $sess->{vh} ||= [];
     my $prev_chars = $sess->{prev_chars} ||= {};
@@ -1366,7 +1381,8 @@ sub _session_rules {
     # progress, and "quiet" was every such item (107 of 107 on 0.1.2). A shell whose path the result
     # text did not give has the file Claude Code writes for every background shell (task_output);
     # 0.1.4: a subagent has the link to its transcript there, a workflow its run journal (the run
-    # its launch result named); teammates and monitors stay unchecked. The path is resolved when the
+    # its launch result named), which moves with its agents' transcripts beside it (progress_mtime);
+    # teammates and monitors stay unchecked. The path is resolved when the
     # item is first seen and kept in the session state (`task_out`), which the re-check of older
     # rows (lib/watch/supersede.pm) reads too.
     my @slots = @{ $S->{bg} };
@@ -1397,11 +1413,11 @@ sub _session_rules {
                 $out = $tout->{ $t->{id} } // next;
                 $derived = 1;
             }
-            my $quiet = 1;
-            if (-e $out) {
-                my $mt = (stat $out)[9];
-                $quiet = $now - $mt >= 900 ? 1 : 0;
-            }
+            # a derived output that is gone (the item's files were moved or removed since it was
+            # first seen) cannot be checked: skipped, as an item with no such output
+            my $mt = progress_mtime($out);
+            next if $derived && !defined $mt;
+            my $quiet = defined $mt ? ($now - $mt >= 900 ? 1 : 0) : 1;
             next unless $quiet;
             $R->(rule => 'A-11', severity => 'warn', id_parts => [$t->{id}],
                  evidence => { output_known => \1, minutes => int(($now - $first{ $t->{id} }) / 60),
@@ -1420,7 +1436,8 @@ sub _session_rules {
 # transcript it points to is returned; a workflow's progress is its run journal,
 # <project>/<sid>/subagents/workflows/<run>/journal.jsonl beside the session's transcript (the
 # run from the slot, else from `runs`, {task id => run} as the sweep read the launch results).
-# Teammates and monitors: undef, as anything not found.
+# The journal stands for the run folder: its progress is progress_mtime's. Teammates and
+# monitors: undef, as anything not found.
 $TASK_OUT_MAX = 200;
 sub task_output {
     my ($ctx, $t, $runs) = @_;
@@ -1450,6 +1467,26 @@ sub task_output {
         }
     }
     return undef;
+}
+
+# progress_mtime(output path) -> when the item's output last moved (epoch), undef when the path is
+# gone. A workflow's run journal gets a row only when one of its agents starts or ends (real runs:
+# unchanged for 77 to 307 minutes while agents worked), so for a run journal the newest of it and
+# the run folder's agent transcripts (agent-<id>.jsonl, beside it) counts.
+sub progress_mtime {
+    my ($p) = @_;
+    my @st = stat $p;
+    return undef unless @st;
+    my $mt = $st[9];
+    if ($p =~ m{\A(.+/subagents/workflows/[0-9A-Za-z_-]{1,64})/journal\.jsonl\z}) {
+        my $d = $1;
+        for my $f (watch::io::list_dir($d)) {
+            next unless $f =~ /\Aagent-[0-9A-Za-z_-]{1,64}\.jsonl\z/;
+            my $m = (stat "$d/$f")[9];
+            $mt = $m if defined $m && $m > $mt;
+        }
+    }
+    return $mt;
 }
 
 # project_dirs(ctx) -> the folder of the session's transcript; without a transcript path (another

@@ -152,6 +152,8 @@ sub fabricated {
 }
 
 my $ID_RE = qr/\b([UDX])-([0-9]+)\b/;
+# between the ids of a list: spaces, `,` `/` `&` `+`, the words and/or/to/through, an en dash
+my $LIST_SEP = qr/(?:\s|,|\/|&|\+|\b(?:and|or|to|through)\b|\xe2\x80\x93)/;
 
 # 0.1.4 (stable ledger, watcher side): an entry's text with its id, the separator after it, the
 # bullet, trailing check stamps (`checked <stamp>`, `[verified <stamp>]`, `(<stamp>)`, a bare
@@ -194,10 +196,14 @@ sub _ledger {
         if ($t =~ /\A([UDX])-([0-9]+)\b/) {
             my $id = "$1-$2";
             $entries{$id} = 1;
-            # the other ids an entry line carries (`U-33 "1a" R1354; U-34 "2,3,4" R1355`), ranges
-            # left out as on a fold line
+            # the other ids an entry line carries: the id list it starts with (`U-2, U-3, U-10:
+            # carried`, `U-51/U-52: done`) and the id list each of its merged clauses starts with
+            # (`U-33 "1a" R1354; U-34 "2,3,4" R1355`, `U-59: done · U-61: done`), ranges left out as
+            # on a fold line; an id the text only cites (`per U-32`) is not carried
             (my $s = $t) =~ s/\b[UDX]-[0-9]+\s*(?:\.\.|\xe2\x80\xa6)\s*[UDX]-[0-9]+\b//g;
-            while ($s =~ /$ID_RE/g) { $carried{"$1-$2"} = 1 }
+            for my $clause (split /;|\xc2\xb7|\|/, $s) {
+                while ($clause =~ /\G$LIST_SEP*([UDX])-([0-9]+)\b/gc) { $carried{"$1-$2"} = 1 }
+            }
             my $nt = norm_entry($line, $spec);
             if (length $nt) { $text{$id} //= $nt; $by_text{$nt} //= $id }
             $chars += chars($line) + 1;
@@ -213,9 +219,10 @@ sub _ledger {
 }
 
 # M-11 against the previous summary text (or undef). 0.1.4: an old id is lost only when the new
-# ledger has neither the id (as an entry, carried on another entry line, or named on a
-# Superseded/fold line) nor an entry with the same normalised text (norm_entry); such a line
-# under another id counts as `renumbered`, an id carried on another entry line as `carried`.
+# ledger has neither the id (as an entry, in the id list another entry line or one of its merged
+# clauses starts with, or named on a Superseded/fold line) nor an entry with the same normalised
+# text (norm_entry); such a line under another id counts as `renumbered`, an id in another entry
+# line's id list as `carried`.
 sub ledger_diff {
     my ($body, $prev, $src, $spec) = @_;
     my $fold_rx = watch::spec::regex($spec, 'fold_line_re');
