@@ -199,6 +199,11 @@ sub _walk {
 }
 
 our $CACHED;
+# $OWN_START = 1 (main.pl sets it for hook SessionStart, the writer of classic-alive.json): the
+# start time is always read, never taken from that record. A new Claude Code process may hold the
+# pid of the session's earlier one (a container with fixed pids, `claude --resume`), and a record
+# trusted there would keep the earlier start time for good.
+our $OWN_START = 0;
 # claude_pid() -> {pid, lstart, found}. The start time comes from this session's
 # classic-alive.json (SessionStart writes it for the process it ran in: {pid, pid_lstart}) when
 # that record names the same pid, else from start_time (one `ps` call off Linux; 0.1.4 T-14).
@@ -213,7 +218,7 @@ sub claude_pid {
     my $first = getppid();
     my ($pid, $found) = _walk($first);
     $pid //= $first;
-    my $d = defined &rc::sid_dir ? eval { rc::sid_dir() } : undef;
+    my $d = !$OWN_START && defined &rc::sid_dir ? eval { rc::sid_dir() } : undef;
     my $raw = defined $d ? util::read_file("$d/classic-alive.json", 4096) : undef;
     my $rec = defined $raw ? eval { jsonc::decode($raw) } : undef;
     my $ls = ref $rec eq 'HASH' && defined $rec->{pid} && !ref $rec->{pid} && $rec->{pid} =~ /\A[1-9][0-9]*\z/ && $rec->{pid} == $pid

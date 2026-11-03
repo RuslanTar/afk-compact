@@ -1,0 +1,76 @@
+{
+ "id": "BG-PID-02-session-start-own-lstart",
+ "note": "0.1.4 T-14 review: claude_pid takes Claude Code's start time from this session's classic-alive.json when that record names the same pid, except in hook SessionStart, the hook that writes the record: a new Claude Code process may get the pid of the session's earlier one (a container with fixed pids, `claude --resume`), and a record trusted there would keep the earlier start time for good (identity::alive would then read the live session as gone). The runner stands in for Claude Code through the real walk (CLAUDE_PID = the runner's pid, no STORE_TEST_CLAUDE_PID): a resume after the record was seeded with another start time for the same pid writes the runner's real one",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "STORE_TEST_CLAUDE_PID": null,
+  "CLAUDE_PID": "$RUNNER_PID"
+ },
+ "steps": [
+  {
+   "name": "startup: the record holds the runner's start time",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$WATCH/$SID/classic-alive.json",
+      "json": {
+       "pid_lstart": "$RUNNER_LSTART",
+       "source": "startup"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the record of the session's earlier process, which had the same pid and another start time",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/classic-alive.json",
+     "text": "{\"pid\":$RUNNER_PID,\"pid_lstart\":\"Mon Jan 5 10:00:00 2026\",\"source\":\"startup\",\"ts\":\"2026-01-05T10:00:00+03:00\"}\n"
+    }
+   ]
+  },
+  {
+   "name": "resume in the new process: SessionStart reads the start time itself and writes it",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$WATCH/$SID/classic-alive.json",
+      "json": {
+       "pid_lstart": "$RUNNER_LSTART",
+       "source": "resume"
+      },
+      "lacks": [
+       "Jan 5"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
