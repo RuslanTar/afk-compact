@@ -1,7 +1,7 @@
 package watch;
 # lib/watch.pm: library seam of BUILD-PLAN §3.6. Owner: WP-watch.
 #
-#   watch::on_hook(event, payload, ctx)   rows written at hook time
+#   watch::on_hook(event, payload, ctx[, left])  rows written at hook time (SessionEnd: the end pass)
 #   watch::on_stop(ctx, deadline)         sweep + rules + delivery at main Stop
 #   watch::status_lines(sid[, ctx])       lines for `status` (MOD-SPEC §11)
 #   watch::verdict_line(sid[, ctx])       the verdict line that opens `status`
@@ -51,19 +51,32 @@ sub _class {
     return $e =~ /\A[a-z][a-z0-9-]{0,39}\z/ ? $e : 'internal';
 }
 
+# SessionEnd (`left`: the seconds it may take, default 1): after the session's final reconcile,
+# its held A-01s and the open A-01s whose copy landed (lib/watch/rules.pm a01_end). Core calls it
+# the same way, in that session's context, after another session's cross-session finish.
 sub on_hook {
-    my ($event, $payload, $ctx) = @_;
+    my ($event, $payload, $ctx, $left) = @_;
     local $SIG{__WARN__} = sub { };
+    my $start = watch::io::mono();
     $ctx = _prepare($ctx, $payload);
     my $ok = eval {
         local $SIG{__DIE__};
         return 1 unless _sid_ok($ctx->{sid});
+        my $end = (defined $event && $event eq 'SessionEnd') ? 1 : 0;
         my $fn = defined $event ? $HOOKS{$event} : undef;
-        return 1 unless $fn;
+        return 1 unless $fn || $end;
         watch::ctx::init($ctx);
         return 1 unless watch::ctx::watcher_on($ctx);
         return 1 if watch::ctx::refused($ctx);
         watch::ctx::note_watcher_value($ctx);
+        if ($end) {
+            require watch::rules;
+            my $s = (defined $left && !ref $left && $left =~ /\A[0-9.]+\z/) ? $left : 1;
+            return 1 if eval { watch::rules::a01_end($ctx, $start + $s); 1 };
+            my $err = $@;
+            return 1 if defined $err && !ref $err && $err eq "hard-stop\n";
+            die $err;
+        }
         require watch::hooks;
         no strict 'refs';
         &{"watch::hooks::$fn"}($ctx);

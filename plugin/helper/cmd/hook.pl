@@ -70,6 +70,11 @@ our %STOP;
 # SessionStart (5 s hook timeout): the compact block is measured within this budget from
 # hook start, so it is printed and claimed before the hook is killed.
 our $SESSION_COMPACT_MS = 3500;
+# SessionEnd (5 s hook timeout): after its final reconcile and the finish pass, the watcher's end
+# pass (lib/watch/rules.pm a01_end) takes at most END_WATCH_MS and ends by END_BY_MS from the
+# helper's start (at least 100 ms).
+our $END_WATCH_MS = 1000;
+our $END_BY_MS = 4200;
 our $T0;
 
 # U-06 (lib/userre.pm): [seconds one of the user's own patterns may run, seconds this hook may
@@ -99,6 +104,17 @@ sub _stop_left {
     my $l = $STOP_BUDGET_MS - $STOP_RESERVE_MS - ($keep // 0) - (util::clock_ms() - ($T_START // util::clock_ms()));
     $l = $cap if defined $cap && $l > $cap;
     return $l < 0 ? 0 : int $l;
+}
+
+# The cross-session finish of an ended session (lib/orphans.pm, called in that session's context
+# after its final reconcile, with what is left of the pass): the watcher's end pass for it, as its
+# own SessionEnd would have run it (its held A-01s; lib/watch/rules.pm a01_end).
+sub _finished_watch {
+    my ($n, $meta, $left_ms) = @_;
+    return if !defined $left_ms || $left_ms < 100;
+    $left_ms = $END_WATCH_MS if $left_ms > $END_WATCH_MS;
+    my $p = { session_id => rc::sid(), transcript_path => (ref $meta eq 'HASH' ? $meta->{transcript} : undef) };
+    _watch_call('watch.on_hook', sub { watch::on_hook('SessionEnd', $p, _watch_ctx('SessionEnd', { reconcile => $n }), $left_ms / 1000) });
 }
 
 sub run {
@@ -148,6 +164,11 @@ sub run {
         my $waits = ref $extra eq 'HASH' && ref $extra->{reconcile} eq 'HASH' ? $extra->{reconcile}{waits} : undef;
         _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p, copy_waits => $waits || {} }), $left) });
         eval { _stop_row($t0, $w0, $left) };
+    } elsif ($event eq 'SessionEnd') {
+        my $l = $END_BY_MS - (util::clock_ms() - $T_START);
+        $l = $END_WATCH_MS if $l > $END_WATCH_MS;
+        $l = 100 if $l < 100;
+        _watch_call('watch.on_hook', sub { watch::on_hook($event, $p, _watch_ctx($event, $extra), $l / 1000) });
     } elsif (!$CORE_ROWS_ONLY{$event}) {
         _watch_call('watch.on_hook', sub { watch::on_hook($event, $p, _watch_ctx($event, $extra)) });
     }
@@ -261,7 +282,7 @@ sub on_SessionStart {
                          scratchpad => (defined $sp ? 'present' : 'absent'),
                          under_temp_root => (defined $sp ? jsonc::bool(sweep::_temp_root(util::clean_path($sp))) : undef)]);
     # the cross-session finish pass, after this session's own records (MOD-SPEC §5.8, ≤ 1 s)
-    eval { orphans::pass(budget_ms => $orphans::PASS_MS) } if $src =~ /^(startup|resume|clear)$/;
+    eval { orphans::pass(budget_ms => $orphans::PASS_MS, after => \&_finished_watch) } if $src =~ /^(startup|resume|clear)$/;
     return ('', {});
 }
 
@@ -358,7 +379,7 @@ sub on_SessionEnd {
     my $n = eval { reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => 2000,
                                   final => 1, cutoff => reconcile::cutoff()) };
     # then the cross-session finish pass (MOD-SPEC §5.8, ≤ 1 s)
-    eval { orphans::pass(budget_ms => $orphans::PASS_MS) };
+    eval { orphans::pass(budget_ms => $orphans::PASS_MS, after => \&_finished_watch) };
     return ('', { reconcile => $n });
 }
 
@@ -385,7 +406,8 @@ sub on_Stop {
     push @{ $STOP{cut} }, 'reconcile' if ($rb < $RECONCILE_MS && $rms >= $rb) || (ref $n eq 'HASH' && $n->{waited});
     # the cross-session finish pass, only when reconcile left ≥ 500 ms of its budget (MOD-SPEC §5.8)
     my $rleft = $rb - (util::clock_ms() - $r0);
-    eval { orphans::pass(budget_ms => ($rleft < $orphans::PASS_MS ? $rleft : $orphans::PASS_MS)) } if $rleft >= $orphans::STOP_MIN_LEFT_MS;
+    eval { orphans::pass(budget_ms => ($rleft < $orphans::PASS_MS ? $rleft : $orphans::PASS_MS), after => \&_finished_watch) }
+        if $rleft >= $orphans::STOP_MIN_LEFT_MS;
     # Dev-1 D5: a relaunch bumped in this turn that no recorded job matched
     eval { jobrec::on_stop($d) };
     my ($gb, $g0) = (_stop_left($GSD_WARM_MS, $WATCH_MIN_MS), util::clock_ms());

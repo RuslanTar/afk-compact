@@ -71,9 +71,11 @@ sub _marked {
     return map { $_->[0] } sort { $a->[1] <=> $b->[1] || $a->[0] cmp $b->[0] } @m;
 }
 
-# finish(S, budget_ms) -> {state: finished|live|locked|none, saved, kept, left}
+# finish(S, budget_ms[, after]) -> {state: finished|live|locked|none, saved, kept, left}. `after`
+# (cmd/hook.pl) runs in S's context once its reconcile is done: after(result, meta, ms left).
 sub finish {
-    my ($S, $budget_ms) = @_;
+    my ($S, $budget_ms, $after) = @_;
+    my $t0 = util::clock_ms();
     my $w = rc::watch() // return { state => 'none' };
     my $sd = "$w/$S";
     return { state => 'none' } unless -d "$sd/pending";
@@ -89,6 +91,7 @@ sub finish {
                 my $meta = _newest_meta($sd);
                 my $n = reconcile::run_locked(transcript => $meta->{transcript}, cwd => $meta->{cwd}, budget_ms => $budget_ms,
                                               final => 1, cutoff => reconcile::cutoff());
+                eval { $after->($n, $meta, $budget_ms - (util::clock_ms() - $t0)) } if ref $after eq 'CODE';
                 return { state => 'finished', saved => $n->{saved} // 0, kept => $n->{kept} // 0, left => scalar(stash_files($sd)) };
             });
         }, wait_ms => 0, log => 0);
@@ -112,7 +115,7 @@ sub _newest_meta {
     return $best || {};
 }
 
-# pass(budget_ms => N, max_sids => N, full => 0|1) -> {finished, kept, left}: the caller's
+# pass(budget_ms => N, max_sids => N, full => 0|1, after => sub) -> {finished, kept, left}: the caller's
 # finish pass. Marked sids first (oldest marker first); then, when the backstop is due (the
 # first pass after an install or a plugin version change) or `full` is asked, every
 # <watch>/*/pending/ from the resumable cursor. The caller writes one orphan_finished row
@@ -130,7 +133,7 @@ sub pass {
         return 0 if $tried{$S}++;
         my $left = $deadline - util::clock_ms();
         return 0 if $left <= 0;
-        my $r = finish($S, $left);
+        my $r = finish($S, $left, $o{after});
         return 0 unless ($r->{state} // '') eq 'finished';
         rc::emit('orphan_finished', [sid => $S, saved => $r->{saved}, kept => $r->{kept}, left => $r->{left}]);
         $tot{finished}++;

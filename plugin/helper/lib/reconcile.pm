@@ -356,6 +356,14 @@ sub _run {
         $n->{waits}{$_} = $f for map { /\A[ni]:[0-9a-z-]+\z/ ? $_ : () } @keys;
         return 1;
     };
+    # the stashes a run out of budget did not reach wait for the next run too, named by their
+    # file (`<id6>.post.md`, `<nonce>.mod.md`); a post stash's nonce is in its .post.json, not read
+    my $budget_waits = sub {
+        for my $f (@_) {
+            if ($f =~ /\A([0-9a-f]{6}|h[0-9a-f]{5}(?:-\d+)?)\.post\.md\z/) { $n->{waits}{"i:$1"} //= $f }
+            elsif ($f =~ /\A(([0-9a-f]{6})[0-9a-f]{2})\.mod\.md\z/) { $n->{waits}{"n:$1"} //= $f; $n->{waits}{"i:$2"} //= $f }
+        }
+    };
     my $now = util::now();
     my $st = _load($sid_dir);
     local $LOGGED = $st->{logged};    # the rows this session already has (_save_deferred reads it)
@@ -443,8 +451,9 @@ sub _run {
     # save would be refused again and log another failed copy row at each Stop; the
     # stashes wait for a later Stop with a safe root (the refusal row is once per session).
     my @pending = $root_ok ? util::list_dir("$sid_dir/pending") : ();
-    for my $f (@pending) {
-        last if !$left->();
+    for my $i (0 .. $#pending) {
+        my $f = $pending[$i];
+        if (!$left->()) { $budget_waits->(@pending[$i .. $#pending]); last }
         my ($id6, $kind, $nonce);
         if ($f =~ /^([0-9a-f]{6}|h[0-9a-f]{5}(?:-\d+)?)\.post\.md$/) { ($id6, $kind) = ($1, 'post') }
         elsif ($f =~ /^([0-9a-f]{8})\.mod\.md$/) { ($nonce, $kind) = ($1, 'mod'); $id6 = substr($1, 0, 6) }

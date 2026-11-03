@@ -456,6 +456,23 @@ sub abandon {
     delete $run->{fh};
 }
 
+# with_state(ctx, fn) -> fn's result: fn(main state) under the sweeper's lock, outside a Stop
+# (lib/watch/rules.pm a01_end); the state is written back only when fn returns true (a die
+# writes nothing). With no transcript path or no state yet (no Stop swept it) fn gets undef;
+# when a Stop holds the lock, fn does not run (that Stop does the same work).
+sub with_state {
+    my ($ctx, $fn) = @_;
+    my $main = $ctx->{payload}{transcript_path};
+    return $fn->(undef) unless defined $main && !ref $main && length $main && -f _off_path($ctx, $main);
+    my ($fh) = watch::io::open_locked(_off_path($ctx, $main));
+    return 0 unless $fh;
+    my $state = _load_state($fh);
+    my $r = $fn->($state);
+    _save_state($fh, $state) if $r;
+    close $fh;
+    return $r;
+}
+
 # `sweep` rows: one per file with new bytes; boundaries split so each row
 # stays under the 4 KB row cap.
 sub rows_for {

@@ -744,9 +744,13 @@ sub _a23_held {
 # A Stop that starts late leaves a main-proven save to the next Stop (lib/reconcile.pm
 # SWEEP_MIN_MS): its stash stays in pending/, and the copy is not missing, only late. Such a
 # compaction's A-01 is held (session state `a01_held`, at most $A23_HELD_MAX) while its stash
-# is still in pending/; a later Stop that finds the copy drops it, one that finds no copy and no
-# stash raises it. An open A-01 whose copy has since been saved is closed (`alert_closed`,
-# reason `resolved: copy saved`; the row is kept).
+# is still in pending/ and reconcile still waits on it (a run out of budget leaves the stashes it
+# did not reach the same way); a later Stop that finds the copy drops it, one whose reconcile no
+# longer waits on the stash (a failed save, no stash left, a refused handoff_root) raises it. The
+# session's end does the same after its final reconcile (SessionEnd, or another session's
+# cross-session finish: a01_end below), so a held A-01 is neither lost nor left open. An open A-01
+# whose copy has since been saved is closed (`alert_closed`, reason `resolved: copy saved`; the
+# row is kept).
 our $RESOLVED = 'resolved: copy saved';
 
 sub _a01 {
@@ -756,15 +760,25 @@ sub _a01 {
 }
 
 # _stash_waits(ctx, nonce, id6) -> the stash file reconcile left in pending/ at this Stop for
-# that compaction (ctx copy_waits, cmd/hook.pl), when it is still there; else undef.
+# that compaction (ctx copy_waits, cmd/hook.pl), when it is still there; else undef. A stash
+# reconcile did not reach is named by its file only: a marked summary's is the nonce's first 6.
 sub _stash_waits {
     my ($ctx, $nonce, $id6) = @_;
     my $w = ref $ctx->{copy_waits} eq 'HASH' ? $ctx->{copy_waits} : return undef;
-    for my $k ((defined $nonce && !ref $nonce ? "n:$nonce" : ()), (defined $id6 && !ref $id6 ? "i:$id6" : ())) {
+    my $n6 = (defined $nonce && !ref $nonce && $nonce =~ /\A([0-9a-f]{6})[0-9a-f]{2}\z/) ? $1 : undef;
+    for my $k ((defined $nonce && !ref $nonce ? "n:$nonce" : ()), map { defined $_ && !ref $_ ? "i:$_" : () } $id6, $n6) {
         my $f = $w->{$k};
-        return $f if defined $f && !ref $f && $f =~ /\A[0-9A-Za-z._-]+\z/ && -f watch::ctx::sid_dir($ctx) . "/pending/$f";
+        return $f if _waits_on($ctx, $f);
     }
     return undef;
+}
+
+# _waits_on(ctx, file) -> 1 when this run's reconcile left that stash waiting and it is still in pending/.
+sub _waits_on {
+    my ($ctx, $f) = @_;
+    return 0 unless defined $f && !ref $f && $f =~ /\A[0-9A-Za-z._-]+\z/ && ref $ctx->{copy_waits} eq 'HASH';
+    return 0 unless grep { defined $_ && !ref $_ && $_ eq $f } values %{ $ctx->{copy_waits} };
+    return -f watch::ctx::sid_dir($ctx) . "/pending/$f" ? 1 : 0;
 }
 
 sub _a01_held {
@@ -775,11 +789,7 @@ sub _a01_held {
         tick($ctx);
         my $copy = copy_of($S, $h->{nonce}, $h->{t});
         next unless copy_bad($copy);
-        my $f = $h->{stash};
-        if ($copy eq 'missing' && defined $f && !ref $f && $f =~ /\A[0-9A-Za-z._-]+\z/ && -f watch::ctx::sid_dir($ctx) . "/pending/$f") {
-            push @keep, $h;
-            next;
-        }
+        if ($copy eq 'missing' && _waits_on($ctx, $h->{stash})) { push @keep, $h; next }
         _a01($R, $h, $copy);
     }
     return \@keep;
@@ -795,6 +805,39 @@ sub _a01_resolved {
         tick($ctx);
         watch::alerts::close_alert($ctx, $ex, $r, $RESOLVED);
     }
+}
+
+# a01_end(ctx, deadline) -> 1 when it ran: the session's end, after its final reconcile (ctx
+# `reconcile`, that run's result with its `waits`; payload transcript_path names the session
+# state). The held A-01s are checked as a Stop checks them and an open A-01 whose copy landed is
+# closed; no other rule runs. Past the deadline (watch::io::mono) it stops with nothing kept.
+sub a01_end {
+    my ($ctx, $deadline) = @_;
+    require watch::alerts;
+    require watch::cache;
+    require watch::sweep;
+    local $ctx->{_deadline} = $deadline;
+    my $rc = $ctx->{reconcile};
+    local $ctx->{copy_waits} = (ref $rc eq 'HASH' && ref $rc->{waits} eq 'HASH') ? $rc->{waits} : {};
+    my $ex = watch::alerts::load_existing($ctx);
+    my $open = grep { ($_->{rule} // '') eq 'A-01' } @{ $ex->{open} };
+    my $ran = 0;
+    watch::sweep::with_state($ctx, sub {
+        my ($state) = @_;
+        my $sess = (ref $state eq 'HASH' && ref $state->{session} eq 'HASH') ? $state->{session} : undef;
+        my $held = ($sess && ref $sess->{a01_held} eq 'ARRAY' && @{ $sess->{a01_held} }) ? 1 : 0;
+        return 0 unless $held || $open;
+        my $cache = watch::cache::load($ctx, kinds => \@KINDS, deadline => $deadline);
+        return 0 unless $cache->{complete};
+        my $S = load_session($ctx, $cache);
+        $ran = 1;
+        _a01_resolved($ctx, $S, $ex);
+        return 0 unless $held;
+        my $keep = _a01_held($ctx, $S, $sess, sub { watch::alerts::raise($ctx, $ex, @_) });
+        if (@$keep) { $sess->{a01_held} = $keep } else { delete $sess->{a01_held} }
+        return 1;
+    });
+    return $ran;
 }
 
 sub _pre_near {
