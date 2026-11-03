@@ -503,7 +503,10 @@ sub abs_path {
     return undef unless defined $p && $p ne '';
     $p = expand_tilde($p);
     $p = cwd() . '/' . $p unless $p =~ m{\A/};
-    my $r = Cwd::abs_path($p);
+    # Cwd gets bytes, as util::real_path gives it: the pure-Perl fast_abs_path (Cwd's
+    # abs_path under MSYS and Cygwin) joins its byte result to a character file name,
+    # which encoded a non-ASCII folder twice (RF-1)
+    my $r = Cwd::abs_path(bytes($p));
     return defined $r ? text($r) : $p;
 }
 
