@@ -24,7 +24,10 @@
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
 #   case "tmp_base": "repo"  the case's temp dir sits under the repo's git-ignored tmp/,
 #                            not the system temp folder (the publish lint treats paths
-#                            under /tmp, /private/tmp and /var/folders as ephemeral)
+#                            under /tmp, /private/tmp and /var/folders as ephemeral); its
+#                            helper calls get STORE_TEST_EPHEMERAL_EXEMPT=$TMP, so a
+#                            checkout under /tmp keeps that folder alone out of the lint's
+#                            ephemeral paths (T-8)
 #   case "tmp_base": "short" the case's temp dir sits under /tmp whatever TMPDIR is (R6: a
 #                            case whose helper output depends on its path lengths)
 #   case "teardown"        [setup action...]: run after the steps, also after a failed one (a mode
@@ -1415,6 +1418,10 @@ sub child_env {
     $e{STORE_TEST_CLAUDE_PID} = $DEFAULT_PID;
     my $now = $st->{now} // $case->{now};
     $e{STORE_TEST_NOW} = $now if defined $now;
+    # T-8 (0.1.4): a repo-based case's work folder (tmp_base "repo", under the repo's tmp/) is not an
+    # ephemeral path to the publish lint, so a checkout under /tmp runs these cases as any other;
+    # every other temp path in such a case stays ephemeral (lib/skills/lint.pm _test_exempt)
+    $e{STORE_TEST_EPHEMERAL_EXEMPT} = $V->{TMP} if ($case->{tmp_base} // '') eq 'repo';
     my %ce = (%{ $case->{env} || {} }, %{ $st->{env} || {} });
     for my $k (keys %ce) {
         # a name may be a placeholder too ($LAUNCH_ENV)
