@@ -1,0 +1,354 @@
+{
+ "id": "HOOK-LAZY-01-per-event-libs",
+ "note": "0.1.4 T-12 (main.pl): `hook <Event>` loads a base set of libraries and its event's table, not every core library; cmd/hook.pl is unchanged. (1) The tables hold every library whose package variables, or a `defined &pkg::fn` guard on whose functions, a loaded library, the watcher or the event's path through cmd/hook.pl refers to: a variable of a library left out reads as undef and a guard skips its feature with no error (detect::summary, secrets::scan, identity::claude_pid). (2) Each event run with its set and with every core library (STORE_TEST_LAZY=full) prints the same and leaves the same rows and files; the plain SessionStart does not load reconcile (nor copies, postcompact, scope, bucket, frontmatter, rollup), SubagentStop and StopFailure far fewer; only the SessionStart that finishes an ended session (the cross-session finish calls reconcile) loads the libraries left out, through the AUTOLOAD fallback, and its rows are the full run's",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "the tables hold every library a variable or a guard needs",
+   "lib": "hook_lazy_audit",
+   "args": {}
+  },
+  {
+   "name": "each event with its set and with every library: the same output and rows",
+   "lib": "hook_load_parity",
+   "args": {
+    "tz": "Etc/GMT-3",
+    "steps": [
+     {
+      "name": "SessionStart startup",
+      "setup": [
+       {
+        "mkdir": "@TMP@/work"
+       },
+       {
+        "transcript": "@TMP@/proj/$SID.jsonl",
+        "rows": [
+         {
+          "prompt": {
+           "ts": "2026-10-21T13:59:00+03:00"
+          }
+         },
+         {
+          "text": "working"
+         }
+        ]
+       }
+      ],
+      "now": "2026-10-21T14:00:00+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "SessionStart"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "SessionStart",
+       "source": "startup"
+      }
+     },
+     {
+      "name": "Stop",
+      "now": "2026-10-21T14:01:00+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "Stop"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "Stop",
+       "stop_hook_active": false,
+       "background_tasks": [],
+       "session_crons": []
+      }
+     },
+     {
+      "name": "PreCompact",
+      "now": "2026-10-21T14:02:00+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "PreCompact"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "PreCompact",
+       "trigger": "auto",
+       "custom_instructions": null
+      }
+     },
+     {
+      "name": "PostCompact",
+      "now": "2026-10-21T14:02:30+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "PostCompact"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "PostCompact",
+       "trigger": "auto",
+       "compact_summary": "<summary>\n# LAB-42 LAZYBODY\n## Resume here\nStatus: active\n</summary>"
+      }
+     },
+     {
+      "name": "SessionStart compact",
+      "now": "2026-10-21T14:02:31+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "SessionStart"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "SessionStart",
+       "source": "compact"
+      }
+     },
+     {
+      "name": "Stop after the compaction",
+      "now": "2026-10-21T14:03:00+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "Stop"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "Stop",
+       "stop_hook_active": false,
+       "background_tasks": [],
+       "session_crons": []
+      }
+     },
+     {
+      "name": "SubagentStop",
+      "now": "2026-10-21T14:03:10+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "SubagentStop"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "SubagentStop",
+       "agent_id": "a1b2c3d4e5f6a7b8c",
+       "agent_type": "general-purpose",
+       "stop_hook_active": false
+      }
+     },
+     {
+      "name": "StopFailure",
+      "now": "2026-10-21T14:03:20+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "StopFailure"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "StopFailure",
+       "error": "rate_limit"
+      }
+     },
+     {
+      "name": "PermissionDenied",
+      "now": "2026-10-21T14:03:30+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "PermissionDenied"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "PermissionDenied",
+       "tool_name": "Bash",
+       "tool_input": {
+        "command": "sleep 60"
+       },
+       "reason": "denied by a rule in settings"
+      }
+     },
+     {
+      "name": "A: PostCompact, unproven, deferred",
+      "setup": [
+       {
+        "transcript": "@TMP@/proj/a0a0a0a0-1111-4222-8333-444444444444.jsonl",
+        "rows": [
+         {
+          "prompt": {
+           "ts": "2026-10-21T14:04:40+03:00"
+          }
+         }
+        ]
+       }
+      ],
+      "now": "2026-10-21T14:05:00.800+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "PostCompact"
+      ],
+      "stdin_json": {
+       "session_id": "a0a0a0a0-1111-4222-8333-444444444444",
+       "transcript_path": "@TMP@/proj/a0a0a0a0-1111-4222-8333-444444444444.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "PostCompact",
+       "trigger": "manual",
+       "compact_summary": "<summary>\n# LAB-42 ORPHANBODY\n## Resume here\nStatus: active\n</summary>"
+      }
+     },
+     {
+      "name": "SessionEnd",
+      "now": "2026-10-21T14:06:00+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "SessionEnd"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "SessionEnd",
+       "reason": "prompt_input_exit"
+      }
+     },
+     {
+      "name": "C: SessionStart(startup) finishes A",
+      "setup": [
+       {
+        "write": "@ROOT@/.sessions/by-pid/777777-1761022800.live-a0a0a0a0.json",
+        "json": {
+         "pid": 777777,
+         "pid_lstart": "Tue Oct 21 08:00:00 2026",
+         "host": "$HOST",
+         "session_id": "a0a0a0a0-1111-4222-8333-444444444444",
+         "cwd": "@TMP@/work",
+         "worktree": null,
+         "source": "startup",
+         "ts": "2026-10-21T14:00:00+03:00"
+        }
+       },
+       {
+        "write": "@ROOT@/.sessions/by-pid/777777-1761022800.ended-a0a0a0a0.json",
+        "json": {
+         "session_id": "a0a0a0a0-1111-4222-8333-444444444444",
+         "reason": "prompt_input_exit",
+         "ts": "2026-10-21T14:06:00+03:00"
+        }
+       }
+      ],
+      "now": "2026-10-21T14:20:00+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "SessionStart"
+      ],
+      "stdin_json": {
+       "session_id": "c0c0c0c0-1111-4222-8333-444444444444",
+       "transcript_path": "@TMP@/proj/c0c0c0c0-1111-4222-8333-444444444444.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "SessionStart",
+       "source": "startup"
+      }
+     }
+    ],
+    "inc_lacks": {
+     "SessionStart startup": [
+      "reconcile",
+      "copies",
+      "postcompact",
+      "scope",
+      "bucket",
+      "frontmatter",
+      "rollup",
+      "checkpoint"
+     ],
+     "SubagentStop": [
+      "reconcile",
+      "copies",
+      "gsd",
+      "restart",
+      "plugver",
+      "measure",
+      "sweep",
+      "evidence",
+      "orphans"
+     ],
+     "StopFailure": [
+      "reconcile",
+      "copies",
+      "gsd",
+      "restart",
+      "sidecar",
+      "sessions",
+      "lock",
+      "orphans"
+     ],
+     "PreCompact": [
+      "reconcile",
+      "gsd",
+      "restart",
+      "measure",
+      "sweep",
+      "orphans"
+     ],
+     "PermissionDenied": [
+      "gsd",
+      "restart",
+      "sweep",
+      "orphans",
+      "sidecar"
+     ]
+    },
+    "lazy_loads": [
+     "C: SessionStart(startup) finishes A"
+    ]
+   }
+  }
+ ]
+}

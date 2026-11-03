@@ -80,17 +80,71 @@ if ($IS_HOOK) {
     $SIG{PIPE} = 'IGNORE';
 }
 
-# Core libraries every subcommand may use (BUILD-PLAN §3.6 seams).
-for my $lib (qw(util jsonc sha ctx spec settings paths roots log rc identity lock nonce
-                git gsd queue bucket frontmatter detect assemble secrets evidence
-                dispatch transcript scope sessions sidecar copies measure checkpoint
-                sweep reconcile orphans keyset resumeblock args rollup postcompact repomode jobrec handoff_turn notice userre
-                restart plugver)) {
+# Core libraries every subcommand may use (BUILD-PLAN §3.6 seams), in load order.
+our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock nonce
+               git gsd queue bucket frontmatter detect assemble secrets evidence
+               dispatch transcript scope sessions sidecar copies measure checkpoint
+               sweep reconcile orphans keyset resumeblock args rollup postcompact repomode jobrec handoff_turn notice userre
+               restart plugver);
+# 0.1.4 (T-12): `hook <Event>` loads the base set and its event's table, not all of @CORE
+# (compiling every library was the largest part of a hook's start under load). A table holds
+# the libraries the event's handler in cmd/hook.pl calls and what they call in turn (a file-level
+# reading; reconcile, which the cross-session finish calls only for an ended session, is left out
+# where nothing else needs it), every library whose package variables a loaded one reads, and every
+# library behind a `defined &pkg::fn` guard a loaded one, or the watcher, holds (detect::summary,
+# secrets::scan, identity::claude_pid): such a guard would skip its feature, not fail, if its
+# library were left out. A call into a library still left out loads all the rest of @CORE first
+# (the AUTOLOAD below), so a call no table foresaw costs the full start, never the feature. Any
+# other subcommand, and an unknown event, loads @CORE. Test seams (STORE_TEST_MODE only):
+# STORE_TEST_LAZY=full loads @CORE for a hook too; STORE_TEST_INC_OUT=<file> gets one line, the
+# libraries loaded by the end (HOOK-LAZY-01).
+our @HOOK_BASE = qw(util jsonc sha ctx spec settings paths roots log rc identity git detect secrets transcript args repomode userre);
+our %HOOK_EVENT = (
+    PreCompact       => [qw(lock nonce bucket frontmatter assemble dispatch sessions copies keyset)],
+    PostCompact      => [qw(lock nonce queue bucket frontmatter evidence dispatch scope sessions sidecar copies sweep orphans keyset
+                            rollup postcompact jobrec restart)],
+    SessionStart     => [qw(lock nonce gsd queue assemble evidence dispatch sessions sidecar measure sweep orphans keyset resumeblock
+                            jobrec restart plugver)],
+    SessionEnd       => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar copies measure
+                            sweep reconcile orphans resumeblock rollup postcompact jobrec restart plugver)],
+    Stop             => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar copies measure
+                            sweep reconcile orphans resumeblock rollup postcompact jobrec restart plugver)],
+    SubagentStop     => [qw(sessions sidecar jobrec)],
+    StopFailure      => [],
+    PermissionDenied => [qw(dispatch rollup reconcile copies)],
+);
+my $TEST = ($ENV{STORE_TEST_MODE} || '') eq '1';
+my %load = map { ($_ => 1) } @CORE;
+if ($IS_HOOK && defined $ARGV[0] && $HOOK_EVENT{ $ARGV[0] } && !($TEST && ($ENV{STORE_TEST_LAZY} || '') eq 'full')) {
+    %load = map { ($_ => 1) } @HOOK_BASE, @{ $HOOK_EVENT{ $ARGV[0] } };
+}
+for my $lib (grep { $load{$_} } @CORE) {
     my $ok = eval { require "$lib.pm"; 1 };
     if (!$ok) {
         if ($IS_HOOK) { local $/; my $d = <STDIN>; exit 0 }
         print STDERR "$sub: cannot load $lib: $@";
         exit 70;
+    }
+}
+my @LATER = grep { !$load{$_} } @CORE;
+# (perl sets the $AUTOLOAD of the package a sub was compiled in: main's, for these)
+our $AUTOLOAD;
+for my $pkg (@LATER) {
+    no strict 'refs';
+    *{"${pkg}::AUTOLOAD"} = sub {
+        my $name = $AUTOLOAD;
+        return if $name =~ /::DESTROY\z/;
+        util::trace("hook-lazy-load $name");
+        require "$_.pm" for grep { !$INC{"$_.pm"} } @LATER;
+        die "Undefined subroutine &$name called\n" unless defined &$name;
+        goto &$name;
+    };
+}
+END {
+    my $f = $TEST ? $ENV{STORE_TEST_INC_OUT} : undef;
+    if (defined $f && $f =~ m{\A/} && open(my $fh, '>>', $f)) {
+        print $fh join(' ', sort map { /\A([a-z_]+)\.pm\z/ ? $1 : () } keys %INC), "\n";
+        close $fh;
     }
 }
 ctx::init($HELPER_DIR);
