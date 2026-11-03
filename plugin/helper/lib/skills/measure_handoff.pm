@@ -173,7 +173,9 @@ sub _gsd_path_bad {
             && $p =~ m{/\.planning/(?:workstreams/[A-Za-z0-9][A-Za-z0-9._-]*/)?STATE\.md\z};
     return undef unless defined $wt;
     return 'outside this worktree' if $wt eq '';
-    my ($rp, $rw) = ((-e $p ? Cwd::realpath($p) : undef) // $p, (-d $wt ? Cwd::realpath($wt) : undef) // $wt);
+    # skills::util::abs_path hands Cwd bytes: a character path given to the pure-Perl Cwd (MSYS,
+    # Cygwin) came back encoded twice, so `-e "$d/.git"` missed a nested checkout's .git (RF-1)
+    my ($rp, $rw) = map { skills::util::text($_) } (-e $p ? skills::util::abs_path($p) : $p), (-d $wt ? skills::util::abs_path($wt) : $wt);
     $rw =~ s{/+\z}{};
     return 'outside this worktree' unless index($rp, "$rw/") == 0;
     my ($d) = $rp =~ m{\A(.*)/\.planning/(?:workstreams/[^/]+/)?STATE\.md\z};
