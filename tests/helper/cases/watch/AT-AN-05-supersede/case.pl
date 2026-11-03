@@ -7,9 +7,10 @@
 # dispatch records, background slots and one task output file. Kept open: the observed
 # compaction's A-01 and hookless A-15, the non-idle A-05, the version_change A-15, a row 0.1.3
 # wrote itself, the listed shell whose output file had not changed for the 15 minutes before the
-# alert, the item with a known output path, A-09. Closed too: the shell found by its id prefix
-# whose output file changed after the alert (whether it was quiet then cannot be told, and 0.1.3
-# never flags what it cannot check).
+# alert, the item with a known output path, A-09. Closed too: the listed shell whose output file
+# changed 5 minutes before its alert, and the shell found by its id prefix whose output file
+# changed after the alert (whether either was quiet then cannot be told, and 0.1.3 never flags
+# what it cannot check).
 # A second Stop closes nothing more; a row an older process appends later is checked again. A
 # later version (a Stop as 0.1.4) closes no row 0.1.3 wrote itself, even one 0.1.3's rule would
 # not raise now.
@@ -45,18 +46,19 @@ my @old = (
     $alert->('A-05', 'warn', $aid->('A-05', 'p:x'), nonce => '1d1e0005', evidence => { band_position => 'below-target', source => 'rollup' }),
     $alert->('A-15', 'warn', $aid->('A-15', 'canary'), evidence => { canary => 'version_change' }),
     $alert->('A-01', 'critical', $aid->('A-01', 'b:u-h5'), seq => 5, version => '0.1.3', evidence => { copy => 'missing', line => 50 }),
-    map({ $alert->('A-11', 'warn', $aid->('A-11', $_), evidence => { output_known => \0, minutes => 90 }) } qw(tm-1 sh-d sh-x gone-1 wabcdefgh babcdefgh)),
+    map({ $alert->('A-11', 'warn', $aid->('A-11', $_), evidence => { output_known => \0, minutes => 90 }) } qw(tm-1 sh-d sh-x sh-w gone-1 wabcdefgh babcdefgh)),
     $alert->('A-11', 'warn', $aid->('A-11', 'sh-k'), evidence => { output_known => \1, minutes => 90 }),
     $alert->('A-09', 'warn', $aid->('A-09', 'x'), evidence => {}),
 );
 my %closed_want = map { $_ => 1 } ($aid->('A-01', 'b:u-h1'), $aid->('A-15', 'b:u-h1', 'hookless'), $aid->('A-05', 'b:u-h1'),
                                    $aid->('A-05', 'b:u-i3'), $aid->('A-05', 'p:x'), $aid->('A-11', 'tm-1'), $aid->('A-11', 'sh-x'),
-                                   $aid->('A-11', 'gone-1'), $aid->('A-11', 'wabcdefgh'), $aid->('A-11', 'babcdefgh'));
+                                   $aid->('A-11', 'sh-w'), $aid->('A-11', 'gone-1'), $aid->('A-11', 'wabcdefgh'), $aid->('A-11', 'babcdefgh'));
 my $late = $alert->('A-15', 'warn', $aid->('A-15', 'b:u-h5', 'hookless'), seq => 5, evidence => { hookless_boundary => \1, line => 50 });
 my $disp = sub { my ($n, $t, $idle) = @_; my $d = T::dispatch($n, $t); $d->{session_id} = $OTHER; $d->{idle} = $idle ? \1 : \0; return $d };
 my @tasks = ({ id => 'tm-1', type => 'teammate', status => 'running', output_path => undef },
              { id => 'sh-d', type => 'shell', status => 'running', output_path => undef },
              { id => 'sh-x', type => 'shell', status => 'running', output_path => undef },
+             { id => 'sh-w', type => 'shell', status => 'running', output_path => undef },
              { id => 'sh-k', type => 'shell', status => 'running', output_path => '/nonexistent/sh-k.output' });
 # the Stops run as 0.1.3 (the cases' own manifest says 0.1.0): rows of the running version are never re-checked
 my $v013 = { plugin_version => '0.1.3' };
@@ -86,6 +88,8 @@ my $status = sub {
         # last changed 16 minutes before its alert (at 2000): certainly quiet then
         { path => "\$TMP/cctmp/claude-$</-other-proj/$OTHER/tasks/sh-d.output", text => "x\n", mtime => $T::BASE + 2000 - 960 },
         { path => "\$TMP/cctmp/claude-$</-other-proj/$OTHER/tasks/a1b2.output", text => "x\n" },
+        # last changed 5 minutes before its alert: not quiet for the 15 minutes before it
+        { path => "\$TMP/cctmp/claude-$</-other-proj/$OTHER/tasks/sh-w.output", text => "x\n", mtime => $T::BASE + 2000 - 300 },
         # no longer listed: by Claude Code's id prefix a workflow (w) and a shell (b); the shell's
         # file changed after its alert (written now)
         { path => "\$TMP/cctmp/claude-$</-other-proj/$OTHER/tasks/wabcdefgh.output", text => "x\n" },
@@ -146,27 +150,27 @@ my $status = sub {
         my ($E) = @_;
         my @c = @{ $got{after1} || [] };
         my %c = map { ($_->{alert_id} => $_) } @c;
-        $E->count(\@c, 10, 'the first Stop closes the 10 rows the rule as it is now would not raise');
+        $E->count(\@c, 11, 'the first Stop closes the 11 rows the rule as it is now would not raise');
         $E->is(join(',', sort grep { !$closed_want{$_} } keys %c), '', 'no other row closed');
         $E->is(join(',', sort grep { !$c{$_} } keys %closed_want), '', 'every superseded row closed');
-        $E->is(scalar(grep { ($_->{reason} // '') eq 'superseded: rule changed in 0.1.3' && ($_->{sid} // '') eq $OTHER } @c), 10,
+        $E->is(scalar(grep { ($_->{reason} // '') eq 'superseded: rule changed in 0.1.3' && ($_->{sid} // '') eq $OTHER } @c), 11,
                'each with the reason, in that session');
         $E->count($got{after0} || [], 0, '0.1.2 closes none of its own rows');
         $E->is($got{mark}, 1, 'the log is marked checked');
-        $E->count($got{after2} || [], 10, 'a second Stop closes nothing more');
+        $E->count($got{after2} || [], 11, 'a second Stop closes nothing more');
         my @c3 = @{ $got{after3} || [] };
-        $E->count(\@c3, 12, 'once an older process appended a row, the log is checked again');
-        $E->is(join(',', sort map { $_->{alert_id} } @c3[10 .. $#c3]), join(',', sort($aid->('A-11', 'sh-d'), $late->{alert_id})),
-               'the late hookless A-15 of a history boundary, and the shell whose file went away') if @c3 >= 12;
+        $E->count(\@c3, 13, 'once an older process appended a row, the log is checked again');
+        $E->is(join(',', sort map { $_->{alert_id} } @c3[11 .. $#c3]), join(',', sort($aid->('A-11', 'sh-d'), $late->{alert_id})),
+               'the late hookless A-15 of a history boundary, and the shell whose file went away') if @c3 >= 13;
         $E->ok(scalar(($got{mark4} // '') =~ / 0\.1\.4\n?\z/), 'the 0.1.4 Stop checked the log');
-        $E->count($got{after4} || [], 12, '0.1.4 closes none of the rows 0.1.3 wrote (A-01 of a history boundary, A-11 of a gone item)');
+        $E->count($got{after4} || [], 13, '0.1.4 closes none of the rows 0.1.3 wrote (A-01 of a history boundary, A-11 of a gone item)');
         my ($o2) = $E->outputs;
         $E->is($o2, undef, 'the closed alert is not delivered');
         $E->is($got{rows_kept}, scalar(@old) + 1, 'no alert row deleted');
         my @own = grep { ($_->{ev} // '') eq 'alert_closed' } $E->rows('alerts');
         $E->count(\@own, 1, "this session's own old row is closed too");
         my $b = $got{before} || {};
-        $E->is($b->{verdict}, 'attention: 17 open alerts (A-01, A-05, A-09, A-11, A-15); no compactions this session',
+        $E->is($b->{verdict}, 'attention: 18 open alerts (A-01, A-05, A-09, A-11, A-15); no compactions this session',
                'before: the verdict counts the old rows');
         my $a = $got{after} || {};
         $E->is($a->{verdict}, 'attention: 7 open alerts (A-01, A-05, A-09, A-11, A-15); no compactions this session',
@@ -177,7 +181,7 @@ my $status = sub {
         $E->is(scalar(grep { /\A  \S+ \S+ (\S+):/ && $closed_want{$1} } @l), 0, 'no closed row listed');
         $E->is(scalar(grep { /\AAlerts, last 7 days: A-01 2, A-05 1, A-09 1, A-11 2, A-15 2 \(1 sessions\)\z/ } @l), 1,
                'the 7-day counts leave the closed rows out');
-        $E->is(scalar(grep { $_ eq 'Alerts closed as superseded (the rule changed in 0.1.3; rows kept): 11' } @l), 1,
+        $E->is(scalar(grep { $_ eq 'Alerts closed as superseded (the rule changed in 0.1.3; rows kept): 12' } @l), 1,
                'one line counts the superseded rows, store-wide');
         $E->is(scalar(grep { /superseded/ } @{ ($got{week} || {})->{lines} || [] }), 0, 'not shown 8 days later');
         # the Stop reads its own alerts log through the watch cache: the close row is kept there
