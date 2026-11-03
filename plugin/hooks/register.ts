@@ -5,12 +5,12 @@ import type { Register } from 'claude-code'
 import { onSessionEnd, onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onOwnCompact, onTurnComplete } from './lib/boundary'
 import { onCompact, trackNative } from './lib/compact'
-import { claimOwnCompact, isOwnOrigin, newState, promptEntering, promptNotEntered, promptQueued, realDeps, refuseOwnSubmit } from './lib/deps'
+import { claimOwnCompact, isHuman, isOwnOrigin, newState, promptEntering, promptNotEntered, promptQueued, realDeps, refuseOwnSubmit } from './lib/deps'
 import { laneTurnEnd } from './lib/digest'
 import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn'
 import { jobStart, recordJob } from './lib/jobs'
 import { randomHex } from './lib/nonce'
-import { noteDialog, personAnswered } from './lib/question'
+import { noteDialog, personAnswered, personTyped, timeoutNote } from './lib/question'
 import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer, resumeIdle } from './lib/idle'
 import { cancelKeepWarmTimer, noteBackground, noteEndedTasks, resumeKeepWarm } from './lib/keepwarm'
@@ -207,6 +207,8 @@ export const register: Register = (on, options) => {
     // A prompt queued while a turn runs may start its own turn after it: its origin kind decides
     // there whether halt clears, as for one entering an idle session.
     if (!own && e.turnId !== undefined && r.drop === undefined) promptQueued(state, kind, r.text, e.turnId)
+    // 0.1.4 R-7: a person's prompt typed into the running turn: they wrote since a dialog timed out.
+    if (!own && e.turnId !== undefined && e.wait !== true && r.drop === undefined && isHuman(kind)) personTyped(state)
     if (entering && r.drop === undefined) {
       const d = realDeps($, options, state)
       await cancelIdle(d, await d.sessionId())
@@ -252,12 +254,15 @@ export const register: Register = (on, options) => {
     if (r.deny !== undefined) return r
     // Question carry: a dialog that closed on the AFK timeout leaves its questions open.
     if (isAsk) noteDialog(state, input, r)
+    // 0.1.4 R-5: the no-dialog rule beside the timed-out result itself, compaction or not.
+    const asked = isAsk ? timeoutNote(d.name, r) : undefined
     // Away digest phase 1: work the model starts after an idle block went out supersedes its lane.
     if (r.isError !== true && startsWork(tool, r.result)) laneWorkStarted(state)
     if (job) await recordJob(d, sid, tool, input, r, job)
     const text = (await limitText(d, sid, r.text)) ?? (await nudgeText(d, sid))
-    if (text === undefined) return r
-    return { ...r, context: [...(r.context ?? []), text] }
+    const notes = [asked, text].filter((t): t is string => t !== undefined)
+    if (notes.length === 0) return r
+    return { ...r, context: [...(r.context ?? []), ...notes] }
   }).catch(($, e, next) => next(e))
 
   // A headless session's own `/compact` (boundary.ts) is claimed before any await and shaped

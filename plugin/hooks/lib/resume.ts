@@ -75,6 +75,12 @@ export type BlockArgs = {
    * `claude --resume`, before the first turn) reads this; else the load's own (`autoModeOf`).
    */
   autoMode?: boolean
+  /**
+   * 0.1.4 R-3/R-4: the reply's reader is a script (`scriptReader` when the block was built), so the
+   * block has no `[resumed]` line. Recorded at build: a delivery whose reader differs builds the block
+   * again (`freshBlock`). Absent (an older record): `scriptReader` decides at the build.
+   */
+  script?: boolean
 }
 
 /** 0.1.3 resume-text A: the longest Step 1 text the `[resumed]` line carries (UTF-16 units, as the block caps count). */
@@ -154,6 +160,30 @@ export function personWrote(a: BlockArgs): BlockArgs {
   return b
 }
 
+/**
+ * 0.1.4 R-3: Claude Code's hosts where a person reads the reply though no person is at a prompt
+ * (session.start `isInteractive` false): its desktop app and its VS Code extension
+ * (CLAUDE_CODE_ENTRYPOINT, `Deps.entrypoint`).
+ */
+const PERSON_HOSTS: readonly string[] = ['claude-desktop', 'claude-vscode']
+
+/**
+ * 0.1.4 R-3 (the line's audience decides; the 0.1.3 follow-up's escalation: Claude Code reports
+ * `isInteractive` false for the desktop app and the IDE extensions too, so their users lost the
+ * line): the reply goes to a script, so the block has no `[resumed]` line, only in a headless load
+ * (`state.headless`) with no surface (`$.session.surfaces()` empty: probe 2026-11-03 on 2.1.317, 7
+ * `-p` loads gave `[]`, a terminal load `["terminal"]`) whose entrypoint, when readable, is not one
+ * of PERSON_HOSTS. A surface (desktop, mobile, an IDE) or such an entrypoint keeps the line.
+ * Nudges and plugin turns still follow `state.headless` alone.
+ */
+export async function scriptReader(d: Pick<Deps, 'state' | 'surfaces' | 'entrypoint'>): Promise<boolean> {
+  if (!d.state.headless) return false
+  const ep = await d.entrypoint()
+  if (ep !== undefined && PERSON_HOSTS.includes(ep)) return false
+  const surf = await d.surfaces()
+  return surf === undefined || surf.length === 0
+}
+
 /** The helper's `Active driver:` line (lib/gsd.pm) in a re-measure: `[driver]` is kept. */
 export const DRIVER_LINE = /^Active driver: /m
 /** The helper's GSD and driver lines (lib/gsd.pm) in a re-measure. */
@@ -186,9 +216,10 @@ export const REMEASURE_HELPER_MS = REMEASURE_MS - 300
  */
 /**
  * D-22 (root 2026-10-31, 0.1.2 classifier probe): in auto permission mode the classifier blocks a
- * gated outward action (push, destructive git, external write, deploy) that a carried approval
- * covers, as with none, and passes the user's fresh yes; so the block keeps `[auto-mode]`, which
- * asks first. The mode is the newest a main hook input carried in this load (Stop,
+ * gated outward action that a carried approval covers, as with none, and passes the user's fresh
+ * yes; so the block keeps `[auto-mode]`, which asks first. 0.1.4 R-1 (probe 2026-11-03 on 2.1.317):
+ * only destructive git and external writes are still blocked, a plain push passes, so the line
+ * names those two. The mode is the newest a main hook input carried in this load (Stop,
  * UserPromptSubmit, PermissionRequest: restart.ts `noteMode`, D10); with none seen yet, the one
  * the building compaction recorded. No new probe.
  */
@@ -257,7 +288,8 @@ export async function buildBlockWith(
   if (idle && a.again !== undefined) tags.push('idle-again')
   // Exactly one of the two step-4 lines (BLD-04 exclusive group).
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
-  // D-22: in auto mode a carried approval does not pass the classifier; ask first.
+  // D-22: in auto mode a carried approval does not pass the classifier for destructive git or an
+  // external write (0.1.4 R-1); ask first.
   if (autoModeOf(d, a)) tags.push('auto-mode')
   // Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver,
   // never in a halted idle block ([idle-halt] stops and waits for the user; EXCLUSIVE in tools/assemble).
@@ -296,11 +328,12 @@ export async function buildBlockWith(
   }
   // 0.1.3 resume-text A: one code-rendered first line, unless the block already fixes the first
   // line (the handoff ack; a raced handoff's receipt when its draft can be finished) or an earlier
-  // turn printed it ([idle-again]: a background result's turn took this block first). Not in a
-  // headless load either (review round 2): session.start's `isInteractive` false (`claude -p`, the
-  // Agent SDK) or a compaction call rejected as headless; a script there reads the reply.
+  // turn printed it ([idle-again]: a background result's turn took this block first). Not when a
+  // script reads the reply (0.1.4 R-3, `scriptReader`: a headless load with no surface, `claude -p`
+  // or the Agent SDK; the desktop app and IDE extensions keep it).
   const partialFirst = h !== undefined && !('published' in h) && runtime.draft_state === 'present'
-  if (!tags.includes('handoff-ack') && !partialFirst && a.again === undefined && !d.state.headless) {
+  const script = a.script ?? (await scriptReader(d))
+  if (!tags.includes('handoff-ack') && !partialFirst && a.again === undefined && !script) {
     tags.push('resumed')
     runtime.resume_line = resumeLine(a.step1)
   }
@@ -585,14 +618,17 @@ export function againLost(s: LoadState, a: AgainSent): void {
  * stored measure and its own stamp when no fresh one is taken or the fresh one fails.
  */
 async function freshBlock(
-  d: Deps, pend: PendingResume, args: BlockArgs, force = false,
+  d: Deps, pend: PendingResume, given: BlockArgs, force = false,
 ): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; remeasured: boolean; lane?: LaneResult; running?: number }> {
   const t0 = await d.now()
   const ageS = Math.round((t0 - pend.builtAt) / 1000)
+  // 0.1.4 R-4: the reader as it is now (a load found headless after the build, a surface that
+  // attached or left); a block built for the other reader is built again.
+  const args: BlockArgs = { ...given, script: await scriptReader(d) }
   // Away digest phase 1: an idle block is built again at delivery (from its stored measure, no
   // helper call), so its lane is read with the agents running now, whatever its age.
   const changed = (args.halt === true) !== (pend.args.halt === true) || args.again !== pend.args.again || args.idle === true
-    || args.questionTimedOut !== pend.args.questionTimedOut
+    || args.questionTimedOut !== pend.args.questionTimedOut || args.script !== pend.args.script
   const at = pend.measuredAt ?? pend.builtAt
   const stored = async () => changed
     ? { ...(await buildBlockWith(d, pend.sid, args, pend.remeasure ?? null, at)), remeasured: false }
@@ -764,6 +800,7 @@ function isArgs(a: unknown): a is BlockArgs {
     && (o.question === undefined || typeof o.question === 'string')
     && (o.questionTimedOut === undefined || typeof o.questionTimedOut === 'boolean')
     && (o.step1 === undefined || typeof o.step1 === 'string')
+    && (o.script === undefined || typeof o.script === 'boolean')
 }
 
 function isOutcome(o: unknown): o is Outcome {
@@ -801,6 +838,8 @@ export async function restorePending(d: Deps, sid: string): Promise<PendingResum
   const s1 = typeof a.step1 === 'string' ? clipStep1(a.step1) : ''
   if (s1 !== '') a.step1 = s1
   else delete a.step1
+  // 0.1.4 R-3: this load's reader, not the one of the process that wrote the record.
+  a.script = await scriptReader(d)
   const at = typeof measuredAt === 'number' ? measuredAt : builtAt
   const built = await buildBlockWith(d, sid, a, typeof remeasure === 'string' ? remeasure : null, at)
   return {

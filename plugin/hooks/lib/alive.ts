@@ -109,6 +109,7 @@ export async function onTurnStart(d: Deps, turnId: string, text = ''): Promise<v
   s.nudgedThisTurn = false
   s.askedThisTurn = false
   s.askTimedOut = undefined
+  s.askPersonSince = false
   s.resumeAfter = false
   s.lastCycle = null
   // A published handoff names only a compaction before the next main turn (§3.1).
@@ -156,6 +157,7 @@ export async function onSessionEnd(d: Deps, endedSid: string, reason?: string): 
   // Question carry: the next conversation never gets this one's open question.
   s.openQuestion = undefined
   s.askTimedOut = undefined
+  s.askPersonSince = false
   const h = s.handoffTurn
   s.handoffTurn = undefined
   if (h && h.phase !== 'running') shadowPluginSide(d, h, 'cancelled')

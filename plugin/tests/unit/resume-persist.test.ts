@@ -314,7 +314,7 @@ async function classic($: unknown, ev: 'Stop' | 'UserPromptSubmit', e: Record<st
   await ($ as { classic: Record<string, (e: unknown) => Promise<unknown>> }).classic[ev]?.(e)
 }
 
-const AUTO_LINE = "Auto mode: its classifier blocks a push, destructive git, external write or deploy that step 4's approval covers"
+const AUTO_LINE = "Auto mode: its classifier blocks a force-push, history rewrite, branch or tag delete or external write that step 4's approval covers"
 
 // D-22 (root 2026-10-31, the 0.1.2 classifier probe): in auto permission mode a carried approval
 // does not pass the classifier, so the block keeps [auto-mode] (ask first); the mode is the newest
