@@ -144,7 +144,9 @@ sub run {
         $left = 0.2 if $left < 0.2;
         util::trace(sprintf('stop-watch-window %d', $left * 1000));
         my $w0 = util::clock_ms();
-        _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p }), $left) });
+        # the stashes reconcile left for the next Stop (their A-01 waits with them, lib/watch/rules.pm)
+        my $waits = ref $extra eq 'HASH' && ref $extra->{reconcile} eq 'HASH' ? $extra->{reconcile}{waits} : undef;
+        _watch_call('watch.on_stop', sub { watch::on_stop(_watch_ctx($event, { payload => $p, copy_waits => $waits || {} }), $left) });
         eval { _stop_row($t0, $w0, $left) };
     } elsif (!$CORE_ROWS_ONLY{$event}) {
         _watch_call('watch.on_hook', sub { watch::on_hook($event, $p, _watch_ctx($event, $extra)) });

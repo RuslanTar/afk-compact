@@ -346,10 +346,14 @@ sub _run {
     my $t0 = util::clock_ms();
     my $deadline = $t0 + ($a{budget_ms} // 2000);
     my $left = sub { my $l = $deadline - util::clock_ms(); return $l > 0 ? $l : 0 };
-    # a main-proven save waits for the next run when its sweep would not have SWEEP_MIN_MS
+    # a main-proven save waits for the next run when its sweep would not have SWEEP_MIN_MS. The
+    # result's `waits` names each stash left so ({"n:<nonce>" or "i:<id6>" => its file in
+    # pending/}): the watcher of the same Stop holds that compaction's A-01 (lib/watch/rules.pm).
     my $sweep_waits = sub {
-        return 0 unless $_[0] eq 'main' && $left->() < $SWEEP_MIN_MS && rc::val('auto_evidence');
+        my ($scope, $f, @keys) = @_;
+        return 0 unless $scope eq 'main' && $left->() < $SWEEP_MIN_MS && rc::val('auto_evidence');
         $n->{waited}++;
+        $n->{waits}{$_} = $f for map { /\A[ni]:[0-9a-z-]+\z/ ? $_ : () } @keys;
         return 1;
     };
     my $now = util::now();
@@ -431,7 +435,7 @@ sub _run {
         elsif (($it->{p3} // '') eq 'sub') { ($scope, $agent, $proof) = ('sub', $it->{agent}, 'p3-sub') }
         elsif ($main_end && $subs_end && ($a{final} || $now - $it->{e} >= $SETTLE_S)) { ($scope, $proof) = ('unknown', 'none') }
         else { next }    # its boundary row may still come: the next Stop decides
-        next if $sweep_waits->($scope);
+        next if $sweep_waits->($scope, $f, "i:$it->{id6}", map { defined $_ && !ref $_ ? "n:$_" : () } @$it{qw(nonce dispatch deferred)});
         _save_deferred($it, $text, $scope, $agent, $proof, \%a, $left, $copied, $f, $n);
     }
 
@@ -483,7 +487,7 @@ sub _run {
             next unless $main_end && $subs_end && ($a{final} || $now - $e >= $SETTLE_S);
         }
         if (defined $mn && exists $copied->{"n:$mn"}) { $drop_if_held->($f, $copied->{"n:$mn"}, $text); next }
-        next if $sweep_waits->($scope);
+        next if $sweep_waits->($scope, $f, "i:$id6", map { defined $_ && !ref $_ ? "n:$_" : () } $mn, @m{qw(dispatch deferred)});
         my $save = copies::save(sid => $sid, text => $text, scan => $s, nonce => $mn, content_name => ($m{stale} ? 1 : 0),
                                 writer => ($kind eq 'mod' ? 'mod' : $copies::POSTCOMPACT),
                                 scope => $scope, agent => $agent, tokens => $m{tokens}, cwd => $m{cwd} // $a{cwd},

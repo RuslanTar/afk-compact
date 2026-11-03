@@ -8,8 +8,9 @@ package watch::alerts;
 #
 # Rows are never deleted. An alert is closed by a later `alert_closed {alert_id, rule, reason}`
 # row in the same log (0.1.3: the rows an older version wrote under a rule that changed,
-# lib/watch/supersede.pm); a closed alert is not open: not counted or listed as open, not
-# delivered, and never raised again (its id stays taken).
+# lib/watch/supersede.pm, and an A-01 whose copy was saved later, lib/watch/rules.pm); a closed
+# alert is not open: not counted or listed as open, not delivered, and never raised again (its id
+# stays taken).
 #
 # Delivery by Stop `systemMessage` is built but switched to status-only until
 # probe P-W2 passes (BUILD-PLAN E-17, W-Q3): in that mode nothing is printed
@@ -87,6 +88,19 @@ sub raise {
     push @{ $ex->{open} }, $row;
     push @{ $ex->{new} }, $row;
     return $id;
+}
+
+# close_alert(ctx, ex, alert row, reason): one `alert_closed` row for an open alert of this session
+# (the alert row stays). Returns 1 when written.
+sub close_alert {
+    my ($ctx, $ex, $r, $reason) = @_;
+    my $id = $r->{alert_id};
+    return 0 if !defined $id || exists $ex->{closed}{$id};
+    my $row = watch::ctx::row($ctx, $CLOSED, { alert_id => $id, rule => $r->{rule}, reason => $reason }, actor => 'main');
+    return 0 unless watch::ctx::write_row($ctx, watch::ctx::alerts_log($ctx), $row);
+    $ex->{closed}{$id} = $reason;
+    $ex->{open} = [ grep { ($_->{alert_id} // '') ne $id } @{ $ex->{open} || [] } ];
+    return 1;
 }
 
 sub text_for {

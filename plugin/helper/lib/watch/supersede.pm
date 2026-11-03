@@ -168,8 +168,11 @@ sub _bounds {
 # A-11 without a known output path: the rule now checks such an item only when it is a shell
 # whose task output file exists (rules.pm task_output). The item is found by its alert id among
 # the session's background slots and task output files; one that is not found, is not a shell
-# or has no such file is not checked, so its row is closed. When the file exists the rule
-# checks it, and whether it had moved by the alert's time is not known: the row stays open.
+# or has no such file is not checked, so its row is closed. When the file exists, the row stays
+# open only when the file had certainly not moved for the QUIET_S before the alert (its last
+# change at or before then). A file changed since then cannot tell whether the item was quiet
+# at the alert's time, and the rule never flags what it cannot check: that row is closed too.
+our $QUIET_S = 900;
 sub _a11_unchecked {
     my ($K, $r) = @_;
     my $sc = $K->{sc};
@@ -193,7 +196,10 @@ sub _a11_unchecked {
         \%m;
     };
     my $t = $items->{ $r->{alert_id} } // return 1;
-    return defined watch::rules::task_output($sc, $t) ? 0 : 1;
+    my $out = watch::rules::task_output($sc, $t) // return 1;
+    my $mt = (stat $out)[9];
+    my $at = watch::io::parse_iso($r->{ts});
+    return (defined $mt && defined $at && $mt <= $at - $QUIET_S) ? 0 : 1;
 }
 
 1;

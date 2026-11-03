@@ -134,7 +134,7 @@
     "stall_min": {
       "type": "number",
       "title": "Stalled job alert (minutes) [default 60]",
-      "description": "How long, in minutes, a background job must have been running before the local logs may flag it as stalled in /afk-compact:status; it is flagged once it has run this long and its output has not changed for the last 15 minutes (or cannot be checked). Default 60; lower it to hear about stuck jobs sooner, raise it if your jobs normally run for a long time with quiet stretches.",
+      "description": "How long, in minutes, a background job must have been running before the local logs may flag it as stalled in /afk-compact:status; it is flagged once it has run this long and its output file has not changed for the last 15 minutes; a job whose output cannot be checked is never flagged. Default 60; lower it to hear about stuck jobs sooner, raise it if your jobs normally run for a long time with quiet stretches.",
       "default": 60
     },
     "cache_ttl_s": {

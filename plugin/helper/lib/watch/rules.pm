@@ -436,28 +436,10 @@ sub _derive {
         $C->{idle} = rollup_idle($roll);
         $C->{idle_source} = $roll->{idle_source} if defined $roll->{idle_source} && !ref $roll->{idle_source};
     }
-    if (defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy}) { $copy = $S->{rollup}{$rk}{copy} }
-    unless (defined $copy) {
-        my $ref_t = $P ? _t($P) : $B ? $B->{ts_epoch} : undef;
-        for my $r (rows_of($S, 'copy')) {
-            my $hit = defined $rk && defined $r->{nonce} ? $r->{nonce} eq $rk
-                    : (defined $ref_t && defined _t($r) && abs(_t($r) - $ref_t) <= $JOIN_S);
-            next unless $hit;
-            $copy = $r->{result};
-            last if defined $copy && $copy =~ /\A(?:saved|exists|late)\z/;
-        }
-    }
-    unless (defined $copy) {
-        for my $ev (qw(copy_failed copy_exists copy_mismatch)) {
-            for my $r (rows_of($S, $ev)) {
-                next unless defined $rk && ($r->{nonce} // '') eq $rk;
-                $copy = $ev eq 'copy_failed' ? 'failed:' . ($r->{reason} // 'unknown') : $ev eq 'copy_exists' ? 'exists' : 'mismatch';
-            }
-        }
-    }
-    $copy //= 'missing';
+    $C->{ref_t} = $P ? _t($P) : $B ? $B->{ts_epoch} : undef;
+    $copy = copy_of($S, $rk, $C->{ref_t});
     $C->{copy} = $copy;
-    $C->{copy_bad} = ($copy eq 'missing' || $copy =~ /\Afailed/ || $copy eq 'not-found') ? 1 : 0;
+    $C->{copy_bad} = copy_bad($copy);
     # Liveness, M-06.
     if ($P) {
         my $modd = $D && ($D->{channel} // '') =~ /\Amod-/;
@@ -488,6 +470,30 @@ sub _derive {
     }
 }
 
+# copy_of(S, nonce, time) -> the compaction's copy (M-14): the rollup row's, else the copy rows
+# by nonce (by time within JOIN_S without one), else a failed, exists or mismatch row; `missing`.
+sub copy_of {
+    my ($S, $rk, $ref_t) = @_;
+    return $S->{rollup}{$rk}{copy} if defined $rk && $S->{rollup}{$rk} && defined $S->{rollup}{$rk}{copy};
+    my $copy;
+    for my $r (rows_of($S, 'copy')) {
+        my $hit = defined $rk && defined $r->{nonce} ? $r->{nonce} eq $rk
+                : (defined $ref_t && defined _t($r) && abs(_t($r) - $ref_t) <= $JOIN_S);
+        next unless $hit;
+        $copy = $r->{result};
+        return $copy if defined $copy && $copy =~ /\A(?:saved|exists|late)\z/;
+    }
+    return $copy if defined $copy;
+    for my $ev (qw(copy_failed copy_exists copy_mismatch)) {
+        for my $r (rows_of($S, $ev)) {
+            next unless defined $rk && ($r->{nonce} // '') eq $rk;
+            $copy = $ev eq 'copy_failed' ? 'failed:' . ($r->{reason} // 'unknown') : $ev eq 'copy_exists' ? 'exists' : 'mismatch';
+        }
+    }
+    return $copy // 'missing';
+}
+sub copy_bad { my ($copy) = @_; return ($copy eq 'missing' || $copy =~ /\Afailed/ || $copy eq 'not-found') ? 1 : 0 }
+
 # rollup_idle(rollup row) -> its idle as `true`, `false` or `unknown`, else undef.
 sub rollup_idle {
     my ($roll) = @_;
@@ -513,7 +519,10 @@ sub evaluate {
     my $once = sub { my $rule = shift; return ($ex->{by_rule}{$rule} // 0) ? 'info' : 'warn' };
     # A-23 of the idle compactions held at earlier Stops (below), before this Stop's own.
     my $held = _a23_held($ctx, $S, $sess, $R);
-    my $obs = observed_from($ctx);
+    my $a01_held = _a01_held($ctx, $S, $sess, $R);
+    # A session with no row yet: this Stop is the plugin's first hook in it (installed or reloaded
+    # mid-session), so its own start is where observing began.
+    my $obs = observed_from($ctx) // $ctx->{now};
 
     for my $c (@$C) {
         tick($ctx);
@@ -528,8 +537,11 @@ sub evaluate {
         my $hist = $B ? history_boundary($B->{ts_epoch}, $P, $D, $obs) : 0;
         my $idle = idle_compaction($S, $c);
         if ($main_nf && $c->{copy_bad} && !$hist) {
-            $R->(rule => 'A-01', severity => 'critical', id_parts => \@idp, %k,
-                 evidence => { copy => ($c->{copy} =~ /\Afailed/ ? 'failed' : $c->{copy}), line => ($B ? $B->{line} : undef) });
+            my $a01 = { id => $c->{id}, key => $c->{key}, actor => $c->{actor}, nonce => ($D ? $D->{nonce} : $P ? $P->{nonce_found} : undef),
+                        t => $c->{ref_t}, line => ($B ? $B->{line} : undef) };
+            my $stash = $c->{copy} eq 'missing' ? _stash_waits($ctx, $a01->{nonce}, $c->{id6}) : undef;
+            if (defined $stash) { $a01->{stash} = $stash; push @$a01_held, $a01 }
+            else { _a01($R, $a01, $c->{copy}) }
         }
         if ($c->{main} && defined $c->{verdict}) {
             my $bad = $BADV{ $c->{verdict} } ? 1 : 0;
@@ -645,6 +657,9 @@ sub evaluate {
     }
     @$held = @$held[-$A23_HELD_MAX .. -1] if @$held > $A23_HELD_MAX;
     if (@$held) { $sess->{a23_held} = $held } else { delete $sess->{a23_held} }
+    @$a01_held = @$a01_held[-$A23_HELD_MAX .. -1] if @$a01_held > $A23_HELD_MAX;
+    if (@$a01_held) { $sess->{a01_held} = $a01_held } else { delete $sess->{a01_held} }
+    _a01_resolved($ctx, $S, $ex);
     tick($ctx);
     _event_rules($ctx, $S, $ex, $sess, \@events, $C);
     tick($ctx);
@@ -724,6 +739,64 @@ sub _a23_held {
     return \@keep;
 }
 
+# --- A-01 and a copy reconcile left for the next Stop (0.1.3) ------------------
+#
+# A Stop that starts late leaves a main-proven save to the next Stop (lib/reconcile.pm
+# SWEEP_MIN_MS): its stash stays in pending/, and the copy is not missing, only late. Such a
+# compaction's A-01 is held (session state `a01_held`, at most $A23_HELD_MAX) while its stash
+# is still in pending/; a later Stop that finds the copy drops it, one that finds no copy and no
+# stash raises it. An open A-01 whose copy has since been saved is closed (`alert_closed`,
+# reason `resolved: copy saved`; the row is kept).
+our $RESOLVED = 'resolved: copy saved';
+
+sub _a01 {
+    my ($R, $a, $copy) = @_;
+    $R->(rule => 'A-01', severity => 'critical', id_parts => [$a->{id}], key => $a->{key}, actor => $a->{actor},
+         evidence => { copy => ($copy =~ /\Afailed/ ? 'failed' : $copy), line => $a->{line} });
+}
+
+# _stash_waits(ctx, nonce, id6) -> the stash file reconcile left in pending/ at this Stop for
+# that compaction (ctx copy_waits, cmd/hook.pl), when it is still there; else undef.
+sub _stash_waits {
+    my ($ctx, $nonce, $id6) = @_;
+    my $w = ref $ctx->{copy_waits} eq 'HASH' ? $ctx->{copy_waits} : return undef;
+    for my $k ((defined $nonce && !ref $nonce ? "n:$nonce" : ()), (defined $id6 && !ref $id6 ? "i:$id6" : ())) {
+        my $f = $w->{$k};
+        return $f if defined $f && !ref $f && $f =~ /\A[0-9A-Za-z._-]+\z/ && -f watch::ctx::sid_dir($ctx) . "/pending/$f";
+    }
+    return undef;
+}
+
+sub _a01_held {
+    my ($ctx, $S, $sess, $R) = @_;
+    my @keep;
+    for my $h (@{ ref $sess->{a01_held} eq 'ARRAY' ? $sess->{a01_held} : [] }) {
+        next unless ref $h eq 'HASH' && defined $h->{id} && !ref $h->{id};
+        tick($ctx);
+        my $copy = copy_of($S, $h->{nonce}, $h->{t});
+        next unless copy_bad($copy);
+        my $f = $h->{stash};
+        if ($copy eq 'missing' && defined $f && !ref $f && $f =~ /\A[0-9A-Za-z._-]+\z/ && -f watch::ctx::sid_dir($ctx) . "/pending/$f") {
+            push @keep, $h;
+            next;
+        }
+        _a01($R, $h, $copy);
+    }
+    return \@keep;
+}
+
+sub _a01_resolved {
+    my ($ctx, $S, $ex) = @_;
+    for my $r (grep { ($_->{rule} // '') eq 'A-01' } @{ $ex->{open} || [] }) {
+        next if exists $ex->{closed}{ $r->{alert_id} };
+        my $nonce = ref $r->{key} eq 'HASH' ? $r->{key}{nonce} : undef;
+        next unless defined $nonce && !ref $nonce && $nonce =~ /\A[0-9a-f]{8}\z/;
+        next unless copy_of($S, $nonce, undef) =~ /\A(?:saved|exists|late)\z/;
+        tick($ctx);
+        watch::alerts::close_alert($ctx, $ex, $r, $RESOLVED);
+    }
+}
+
 sub _pre_near {
     my ($S, $t) = @_;
     return 1 unless defined $t;
@@ -745,7 +818,8 @@ sub _pre_near {
 # append-only, so their first rows never change. 0.1.3: a session whose streams hold only the
 # Stop's own rows (no SessionStart, mod or preamble row before its first plugin Stop, e.g. the
 # plugin loaded mid-session on the classic path) is observed from the earliest of those rows:
-# the first plugin Stop ran then, so what its sweep found before that is history too.
+# the first plugin Stop ran then, so what its sweep found before that is history too. With no
+# row at all, that first Stop is the one running: evaluate takes its time (ctx now).
 our $OBS_HEAD_LINES = 64;
 my %OWN_ROW = map { $_ => 1 } qw(sweep sweep_partial watch_error precompute_or_failed stop_timing);
 sub observed_from {

@@ -4,6 +4,10 @@
 # band raises nothing.
 {
     settings => { native_window_tokens => 800000 },
+    # the session's first row (0.1.3: a session with no row yet is observed from its first Stop, and
+    # these boundaries would be history)
+    files => [ { path => '$WATCH/$SID.classic.jsonl',
+                 jsonl => [ T::row('config_note', 0, writer => 'helper', key => 'relaunch_auto', note => 'settings-file-only') ] } ],
     transcript => [
         T::prompt(0), T::bash(2, 'make', id => 'toolu_1'), T::result(3, 'toolu_1'),
         T::boundary(10, trigger => 'auto', preTokens => 770000), T::summary(10.1),

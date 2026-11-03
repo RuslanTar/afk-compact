@@ -8,6 +8,10 @@ my $mono = \&watch::io::mono;
 my $finish;
 my $after1;
 {
+    # the session's first row (0.1.3: a session with no row yet is observed from its first Stop, and
+    # these boundaries would be history)
+    files => [ { path => '$WATCH/$SID.classic.jsonl',
+                 jsonl => [ T::row('config_note', 0, writer => 'helper', key => 'relaunch_auto', note => 'settings-file-only') ] } ],
     transcript => [ T::prompt(0), T::assistant_text(1), T::boundary(100, trigger => 'manual'), T::summary(100.1), T::prompt(110) ],
     steps => [
         { call => 'code', code => sub {

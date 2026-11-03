@@ -10,6 +10,10 @@ for my $i (0 .. 3) {
              T::boundary($at, trigger => 'manual'), T::summary($at + 0.1);
 }
 {
+    # the session's first row (0.1.3: a session with no row yet is observed from its first Stop, and
+    # these boundaries would be history)
+    files => [ { path => '$WATCH/$SID.classic.jsonl',
+                 jsonl => [ T::row('config_note', 0, writer => 'helper', key => 'relaunch_auto', note => 'settings-file-only') ] } ],
     transcript => \@t,
     steps => [
         { call => 'code', code => sub { $watch::alerts::DELIVERY = 'system-message' } },
