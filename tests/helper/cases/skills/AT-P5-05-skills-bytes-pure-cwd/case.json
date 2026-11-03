@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "AT-P5-05-skills-bytes with Cwd::abs_path bound to the pure-Perl fast_abs_path, as Perl under MSYS and Cygwin (Git Bash) binds it (RF-1, Windows sitting 2 case 170): a perl stub first on PATH loads FastCwd.pm, which aliases it. fast_abs_path joins its byte result to a character file name, so a character path given to it came out encoded twice (rÃ¤ume) and inventory refused not-found. skills::util::abs_path now hands Cwd bytes, as util::real_path does.",
+ "note": "AT-P5-05-skills-bytes with Cwd::abs_path bound to the pure-Perl fast_abs_path, as Perl under MSYS and Cygwin (Git Bash) binds it (RF-1, Windows sitting 2 case 170): a perl stub first on PATH loads FastCwd.pm, which aliases it. fast_abs_path joins its byte result to a character file name, so a character path given to it came out encoded twice (rÃ¤ume) and inventory refused not-found. skills::util::abs_path now hands Cwd bytes, as util::real_path does. No folder name the steps make holds the double-encoded bytes (RF-4).",
  "path_prepend": ["$TMP/fastcwd-bin"],
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
@@ -63,6 +63,9 @@
    "argv": ["locate", "--sid", "22222222-2222-2222-2222-222222222222", "--cwd", "$TMP/rëpo"],
    "expect": {"exit": 0,
      "stdout_has": ["^candidate: $TMP/räume/h/rëpo/LAB-7/\\S+\\.md · 2026-10-21T14:05:12\\+03:00 · LAB-7 — повтор: retry fix drafted, suite pending · 11111111$"],
-     "stdout_lacks": ["Ã", "Â", "â€", "Ð"]}}
+     "stdout_lacks": ["Ã", "Â", "â€", "Ð"]}},
+  {"name": "no step made a folder whose name holds the root encoded twice (RF-4: publish wrote its handoff_mode row under rÃ¤ume)",
+   "exec": ["/bin/sh", "-c", "find \"$1\" -name '*Ã*' | head -n 1", "sh", "$TMP"],
+   "expect": {"exit": 0, "stdout": ""}}
  ]
 }
