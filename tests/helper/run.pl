@@ -2684,10 +2684,18 @@ sub claude_pid_walk_chains {
         }
         my $ren = sub { my ($x) = @_; return (defined $x && exists $map{"$x"}) ? $map{"$x"} : $x };
         my %t = map { $ren->($_) => { %{ $c->{procs}{$_} }, ppid => $ren->($c->{procs}{$_}{ppid}) } } keys %{ $c->{procs} || {} };
-        my $calls = 0;
-        local *identity::_parent_and_comm = sub { my $p = $t{ $_[0] } or return; return ($p->{ppid}, $p->{comm}) };
+        my ($calls, $walk_ps, $starts) = (0, 0, 0);
+        local *identity::_parent_and_comm = sub { $walk_ps++; my $p = $t{ $_[0] } or return; return ($p->{ppid}, $p->{comm}) };
         local *identity::_exe = sub { $calls++; my $p = $t{ $_[0] } or return undef; return $p->{exe} };
-        local *identity::start_time = sub { return 'stub' };
+        local *identity::start_time = sub { $starts++; return 'stub' };
+        # "alive" {pid, pid_lstart}: this session's classic-alive.json (written under args.dir), else none
+        my $sd;
+        if (ref $c->{alive} eq 'HASH') {
+            $sd = ($args->{dir} // die "claude_pid_walk: alive needs args.dir\n") . '/' . sha::hex256($c->{id});
+            util::mkdir_p($sd);
+            util::write_atomic("$sd/classic-alive.json", jsonc::encode_bytes(jsonc::obj(pid => $ren->($c->{alive}{pid}), pid_lstart => $c->{alive}{pid_lstart})) . "\n", 0600);
+        }
+        local *rc::sid_dir = sub { $sd };
         local $identity::CACHED;
         local $ENV{CLAUDE_PID} = defined $c->{env} ? $ren->($c->{env}) : '';
         local $ENV{STORE_TEST_CLAUDE_PID};
@@ -2699,6 +2707,10 @@ sub claude_pid_walk_chains {
         push @e, "$c->{id}: pid " . ($pid // 'null') . ", want " . ($want // 'null') if ($pid // 'null') ne ($want // 'null');
         push @e, "$c->{id}: found $found, want $c->{found}" if $found != ($c->{found} ? 1 : 0);
         push @e, "$c->{id}: $calls executable reads, want $c->{exe_calls}" if defined $c->{exe_calls} && $calls != $c->{exe_calls};
+        # T-14: parent-and-command reads (a `ps` call each off Linux) and start-time reads the walk made
+        push @e, "$c->{id}: $walk_ps parent reads, want $c->{walk_ps}" if defined $c->{walk_ps} && $walk_ps != $c->{walk_ps};
+        push @e, "$c->{id}: $starts start-time reads, want $c->{start_reads}" if defined $c->{start_reads} && $starts != $c->{start_reads};
+        push @e, "$c->{id}: lstart " . ($r->{lstart} // 'null') . ", want $c->{lstart}" if defined $c->{lstart} && ($r->{lstart} // '') ne $c->{lstart};
     }
     return @e;
 }
@@ -3744,7 +3756,10 @@ sub builtin {
     if ($name eq 'claude_pid_walk') {
         # BG-PID: the walk from the helper's parent to the Claude Code process, over a process
         # table given in the case ({pid: {ppid, comm, exe}}; exe is what /proc/<pid>/exe or lsof
-        # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read.
+        # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read;
+        # `walk_ps` its parent-and-command reads, `start_reads` its start-time reads (each a `ps`
+        # call off Linux), `lstart` the start time it gives; `alive` {pid, pid_lstart}: this
+        # session's classic-alive.json, under args.dir (T-14).
         # The public entry, identity::claude_pid, starts at getppid(): the chain's `start` pid is
         # renamed to it throughout, and start times are stubbed. A recorded pid that happens to be
         # the real parent's (other than `start`) is moved to a free number, so the two never merge.
