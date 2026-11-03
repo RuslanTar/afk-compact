@@ -392,6 +392,30 @@ describe('no re-ask after a timeout (B)', () => {
     expect(again).toContain('"Which database?"')
     expect(again).not.toContain(TIMED)
   })
+
+  // Review round 3: a person who types into the running result turn wrote too (AT-ID-03 "typed over
+  // it"): the block again beside that prompt drops the mark as well.
+  test('the block again beside a prompt the person typed into the running result turn drops the mark too', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    w.tokens = 150000
+    await w.turnEnd($, 'Went on.')
+    await w.advance(1600 * 1000)
+    await raiseCompact($, { trigger: 'auto' })
+    await w.advance(1000 * 1000)
+    await w.userTurn($, 'Background task finished.', 'task-notification')
+    const first = await nextBlock($, w) ?? ''
+    expect(first).toContain('"Which database?"')
+    if (TIMEOUT) expect(first).toContain(TIMED)
+    await w.advance(30 * 1000)
+    await $.prompt.submit({ text: 'what happened?', origin: { kind: 'composer' }, turnId: 't2' } as never)
+    const again = (w.submitContexts[w.submitContexts.length - 1] ?? []).join('\n')
+    expect(again).toContain('"Which database?"')
+    expect(again).not.toContain(TIMED)
+  })
   // Review of the first build: step 6, [question] and the resume skill's R8 tell the model to list
   // the open question last in a later turn; a turn no person started that does so re-words the
   // question, but nobody has written since the timeout, so the mark stays.
