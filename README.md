@@ -119,7 +119,7 @@ Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evid
 | `/afk-compact:settings [advanced \| all]` | Go through the plugin's settings section by section, with each value, where it comes from and its default, and change or reset the ones you pick. Only when you ask: it shows the change and asks before it writes your settings file, and it never changes a consent key (see [Changing settings from a session](#settings)). `advanced` lists the rare tuning keys, `all` both. |
 | `/afk-compact:report [--since 7d]` | Bundle the plugin's content-free logs, version, settings and recorded probe results into a zip that you can send to the developer yourself. Nothing is uploaded. Use it only when you want to share; see [Sending a report](#sending-a-report). |
 
-The handoff and the compaction instructions share one format, so `/afk-compact:resume` reads both.
+The handoff and the compaction instructions share one format, so `/afk-compact:resume` reads both. A published handoff's frontmatter names the plugin version and folder that wrote it, as a summary copy's does (from 0.1.4).
 
 **The helper.** The skills and the plugin call one helper, `scripts/afk-compact-store` in the plugin folder, always by its full path; nothing is added to your `PATH`. Where this page shows a command for you to run, it is written `! "<plugin folder>/scripts/afk-compact-store" …`, and `/afk-compact:status` prints it with the real folder.
 
@@ -506,7 +506,7 @@ To create the declaration, a README and a `.gitignore` for the folder, run `! "<
 
 **The export.** It is the last step of publishing, in the worktree where you work:
 
-- It uses repo-relative paths, writes your home folder as `~/`, and drops the machine-only fields (transcript path, process id, worktree).
+- It uses repo-relative paths, writes your home folder as `~/`, and drops the machine-only fields (transcript path, process id, worktree, plugin folder); it keeps the plugin version.
 - It is scanned for secrets again after the rewrite. A hit refuses the export; the private handoff stays.
 - It is never overwritten. If the target exists with other content, the export is refused.
 - The plugin never runs `git add`, `commit` or `push`. The export is left untracked: review it and commit it yourself.

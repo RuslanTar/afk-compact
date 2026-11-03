@@ -874,13 +874,14 @@ sub lint {
             }
         }
         # One line per id (REVIEW-NIGHT-3 R3-05): approvals_checked lists ids, so a second line
-        # with a checked line's id would ride on its check. In a plugin handoff turn (0.1.3
-        # APPROVALS, review round 2) such a line, already the plain context-only form, waits for
-        # the quote check: when the earlier line fails its quote (publish moves it), this one is
-        # the id's only line and stays or moves on its own check.
+        # with a checked line's id would ride on its check. In any handoff turn (0.1.3 APPROVALS,
+        # review round 2: a plugin turn; 0.1.4 A-7: a handoff the user asked for too) such a line
+        # in the plain context-only form (no question, no denial note) waits for the quote check:
+        # when the earlier line fails its quote (publish moves it), this one is the id's only line
+        # and stays or moves on its own check; while the earlier line stays it refuses as before.
         $e->{where} = $where;
         if (grep { $_->{id} eq $e->{id} } @own, @dup) {
-            if ($cx_only) { push @dup, $e; next }
+            if ($e->{context} && !$e->{question} && !$e->{denied}) { push @dup, $e; next }
             push @{ $r{blocking} }, [ $shape, $where ];
             next;
         }
@@ -959,6 +960,8 @@ sub lint {
 # a shape fault of a handoff the user asked for and approval-denied still refuse.
 our %MOVE_RULES = map { $_ => 1 } qw(approval-quote approval-plugin-turn);
 our $OPEN_HEADING = '## Open questions';
+# A fence line of a code block (a reference inside one is left alone, 0.1.4 A-3).
+my $FENCE_RE = qr/\A[ \t]*(?:```|~~~)/;
 # The rule each moved line broke, in plain words (the Open questions item and the ADVISORY line).
 our %MOVE_WHY = (
     short => 'a quote under 4 words counts only as the user\'s whole message, or one line of a numbered reply, answering your message that names its target',
@@ -989,7 +992,8 @@ sub move_why {
 }
 
 # move_lines(body, [[rule, where]…], {where => reason}, other texts…) -> (new body, [{line, id, q,
-# rule, why, refs => [line…], see => [line…]}…], [[rule, where]…] kept, {new line => draft line})
+# rule, why, refs => [line…], see => [line…], see_both => [line…]}…], [[rule, where]…] kept,
+# {new line => draft line}, {moved-text line number => draft line number})
 # Each blocking item of %MOVE_RULES on an own approval line of `## Approvals` moves that line to
 # `## Open questions` as `- Q-<n>: re-ask before acting: <action> · targets <…> · words recorded as
 # the user's: "<…>"[ (answer to "<…>")][ · denied <how> <stamp>] (was U-<k>; not carried: <why>)
@@ -1003,12 +1007,17 @@ sub move_why {
 # table with a blank line between. A section left with no line is dropped. Any other item is
 # kept (it still refuses); without an Open questions section nothing moves.
 # References (review round 2): elsewhere in the file (not in `## Approvals`, not on a tagged line
-# or a re-ask item) an exact `U-<k>` token of a moved id, outside double quotes and backticks and
-# not an end of an id range, now reads its `Q-<m>` (refs: the draft's line numbers), unless the
-# id is moved twice or a kept line still holds it (`- U-<k>:`); when `## Approvals` is dropped, a
-# "see Approvals" pointer reads "see Open questions" (see, on the last moved line's entry). The
-# last value maps each line this rewrite changed to its draft text, so the re-lint keeps a carried
-# line carried (lint `carried_as`).
+# or a re-ask item, not in a fenced code block) an exact `U-<k>` token of a moved id, outside
+# double quotes and backticks, not an end of an id range, not a file name (`U-7.txt`) and not the
+# second id of a word range (`U-6 to U-7`), now reads its `Q-<m>` (refs: the draft's line
+# numbers), unless the id is moved twice or a kept line still holds it (`- U-<k>:`). A "see
+# Approvals" pointer reads "see Open questions" on every line once `## Approvals` is dropped;
+# while the section keeps lines, only on a line where a moved id was rewritten, and "see Approvals
+# and Open questions" when that line also cites the id of a kept approval line (see and see_both,
+# on the last moved line's entry; 0.1.4 A-2, A-3). The fourth value maps each line this rewrite
+# changed to its draft text, so the re-lint keeps a carried line carried (lint `carried_as`); the
+# fifth maps each line of the new body to its draft line, so the re-lint's line numbers can be
+# printed as the draft's (publish, 0.1.4 A-1).
 sub move_lines {
     my ($body, $items, $reasons, @other) = @_;
     my @lines = split /\n/, $body // '', -1;
@@ -1025,7 +1034,7 @@ sub move_lines {
         push @keep, $it;
     }
     my ($oq) = grep { $lines[$_] =~ /\A##\s/ && index($lines[$_], $OPEN_HEADING) == 0 } 0 .. $#lines;
-    return ($body, [], $items || [], {}) unless %mv && defined $oq;
+    return ($body, [], $items || [], {}, {}) unless %mv && defined $oq;
     my $qn = 0;
     for (@lines, grep { defined } @other) { while (/\bQ-([0-9]+)\b/g) { $qn = $1 if $1 > $qn } }
     my (@moved, @add);
@@ -1052,66 +1061,107 @@ sub move_lines {
         push @add, "- $q: re-ask before acting: $what (was $id; not carried: $why) · owner user · raised by agent · unasked";
         push @moved, { line => $i + 1, id => $id, q => $q, rule => $mv{$i}, why => $why };
     }
-    # References to a moved id, and "see Approvals" pointers once the section is dropped.
+    # References to a moved id, and "see Approvals" pointers on the lines that cite one.
     my %n_id;
     $n_id{ $_->{id} }++ for grep { defined $_->{id} } @moved;
     my %to = map { ($_->{id} => $_) } grep { defined $_->{id} && $n_id{ $_->{id} } == 1 } @moved;
     for my $i (grep { !$mv{$_} } 0 .. $#lines) {
         delete $to{$1} if $lines[$i] =~ /\A\s*(?:[-*+]\s+)?(U-[0-9]+):/;
     }
+    # The ids of the approval lines that stay in `## Approvals` (0.1.4 A-2: a pointer on a line
+    # citing one of them and a moved id names both sections).
+    my %kept_id;
+    for my $i (grep { $in->{$_} && !$mv{$_} } 0 .. $#lines) { $kept_id{$1} = 1 if $lines[$i] =~ /\b(U-[0-9]+):\s*approval\b/ }
     my $drop = !grep { $lines[$_] =~ /\S/ && !$mv{$_} } keys %$in;
-    my (@see, %was);
+    my (@see, @see2, %was);
+    my $fence = 0;
     for my $i (0 .. $#lines) {
+        # 0.1.4 A-3: a fenced code block is left alone, its fence lines too.
+        if ($lines[$i] =~ $FENCE_RE) { $fence = !$fence; next }
+        next if $fence;
         next if $in->{$i} || $mv{$i} || ($tag_re && $lines[$i] =~ $tag_re) || $lines[$i] =~ /\(was U-[0-9]+; not carried:/;
         my @seg = split /("[^"]*"|“[^”]*”|`[^`]*`)/, $lines[$i], -1;
-        my $pt = 0;
-        for my $k (grep { $_ % 2 == 0 } 0 .. $#seg) {
-            $seg[$k] =~ s{(?<![\w-])(?<!\.\.)(?<!–)(U-[0-9]+)(?![\w-])(?!\.\.|–)}{
-                my $m = $to{$1};
-                if ($m) { push @{ $m->{refs} }, $i + 1 unless @{ $m->{refs} || [] } && $m->{refs}[-1] == $i + 1; $m->{q} } else { $1 }
-            }ge if %to;
-            $pt += $seg[$k] =~ s/\b([Ss]ee (?:the )?)(## )?Approvals\b/$1$2Open questions/g if $drop;
+        my @even = grep { $_ % 2 == 0 } 0 .. $#seg;
+        my ($hit, $kept) = (0, 0);
+        for my $k (@even) {
+            my $orig = $seg[$k];
+            # Not an end of an id range (`..`, en dash), nor a file name (`U-7.txt`), nor the
+            # second id of a word range (`U-6 to U-7`, 0.1.4 A-3).
+            $seg[$k] =~ s{(?<![\w-])(?<!\.\.)(?<!–)(U-[0-9]+)(?![\w-])(?!\.\.|–)(?!\.\w)}{
+                my ($id, $at) = ($1, $-[0]);
+                my $m = $to{$id};
+                if ($m && substr($orig, 0, $at) !~ /\bU-[0-9]+ to \z/) {
+                    push @{ $m->{refs} }, $i + 1 unless @{ $m->{refs} || [] } && $m->{refs}[-1] == $i + 1;
+                    $hit++;
+                    $m->{q};
+                } else { $kept++ if $kept_id{$id}; $id }
+            }ge;
         }
-        push @see, $i + 1 if $pt;
+        # "see Approvals": once the section is dropped, every pointer reads "see Open questions";
+        # while it keeps lines, only a pointer on a line citing a moved id changes (0.1.4 A-2), to
+        # "see Approvals and Open questions" when the line cites a kept approval's id too.
+        my $both = !$drop && $kept;
+        my $pt = 0;
+        if ($drop || $hit) {
+            for my $k (@even) {
+                $pt += $seg[$k] =~ s{\b([Ss]ee (?:the )?)(## )?Approvals\b}{ my $h = $2 // ''; $both ? "$1${h}Approvals and ${h}Open questions" : "$1${h}Open questions" }ge;
+            }
+        }
+        push @{ $both ? \@see2 : \@see }, $i + 1 if $pt;
         my $new = join '', @seg;
         $was{$new} = $lines[$i] if $new ne $lines[$i];
         $lines[$i] = $new;
     }
     $moved[-1]{see} = \@see if @see;
+    $moved[-1]{see_both} = \@see2 if @see2;
+    # Each line's draft line number (0.1.4 A-1: the re-lint's line numbers are printed as the
+    # draft's); an inserted item takes its moved approval's line, a blank line before it the first
+    # item's.
+    my @org = map { $_ + 1 } 0 .. $#lines;
+    my @new = (0) x @lines;
     # Open questions: its body runs to the next main heading.
     my $end = $oq + 1;
     $end++ while $end <= $#lines && !($lines[$end] =~ /\A##\s/ && $lines[$end] !~ /\A###/);
     my @sec = @lines[ $oq + 1 .. $end - 1 ];
+    my @sorg = @org[ $oq + 1 .. $end - 1 ];
+    my @snew = (0) x @sec;
+    my @add_org = map { $_->{line} } @moved;
     my @body_idx = grep { $sec[$_] =~ /\S/ } 0 .. $#sec;
     if (@body_idx == 1 && $sec[ $body_idx[0] ] =~ /\A\s*none\s*\z/) {
         splice @sec, $body_idx[0], 1, @add;
+        splice @sorg, $body_idx[0], 1, @add_org;
+        splice @snew, $body_idx[0], 1, (1) x @add;
     } else {
         my ($qd) = grep { $sec[$_] =~ /\A[\s>|*-]*Queued:/ } 0 .. $#sec;
         my $at = defined $qd ? $qd : (@body_idx ? $body_idx[-1] + 1 : 0);
         my @ins = @add;
-        unshift @ins, '' if $at > 0 && $sec[ $at - 1 ] =~ /\A\s*\|/;
+        my @iorg = @add_org;
+        if ($at > 0 && $sec[ $at - 1 ] =~ /\A\s*\|/) { unshift @ins, ''; unshift @iorg, $add_org[0] }
         splice @sec, $at, 0, @ins;
+        splice @sorg, $at, 0, @iorg;
+        splice @snew, $at, 0, (1) x @ins;
     }
     splice @lines, $oq + 1, $end - $oq - 1, @sec;
-    # The moved lines leave `## Approvals`: a line before Open questions keeps its index, one
-    # after it shifts by the lines Open questions gained (the spec puts Approvals first).
-    my %gone = map { $_ => 1 } keys %mv;
-    my @out;
-    my $shift = scalar(@sec) - ($end - $oq - 1);
+    splice @org, $oq + 1, $end - $oq - 1, @sorg;
+    splice @new, $oq + 1, $end - $oq - 1, @snew;
+    # The moved lines leave `## Approvals`.
+    my (@out, @oorg);
     for my $i (0 .. $#lines) {
-        my $orig = $i <= $oq ? $i : $i > $oq + scalar(@sec) ? $i - $shift : undef;
-        next if defined $orig && $gone{$orig};
+        next if !$new[$i] && $mv{ $org[$i] - 1 };
         push @out, $lines[$i];
+        push @oorg, $org[$i];
     }
     # An `## Approvals` left with no line is dropped (the template omits an empty section).
     my $ai = section_lines(\@out);
     my ($ah) = grep { $out[$_] =~ /\A\Q$HEADING\E\s*\z/ } 0 .. $#out;
     if (defined $ah && !grep { $out[$_] =~ /\S/ } keys %$ai) {
-        my @drop = ($ah, keys %$ai);
-        my %d = map { $_ => 1 } @drop;
-        @out = map { $out[$_] } grep { !$d{$_} } 0 .. $#out;
+        my %d = map { $_ => 1 } ($ah, keys %$ai);
+        my @k = grep { !$d{$_} } 0 .. $#out;
+        @out = @out[@k];
+        @oorg = @oorg[@k];
     }
-    return (join("\n", @out), \@moved, \@keep, \%was);
+    my %map = map { ($_ + 1 => $oorg[$_]) } 0 .. $#oorg;
+    return (join("\n", @out), \@moved, \@keep, \%was, \%map);
 }
 
 # One quote check's ask: the quote, the targets and the action (the matching-item rule reads the
