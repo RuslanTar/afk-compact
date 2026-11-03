@@ -992,8 +992,8 @@ sub _pre_near {
 # (reconcile::cutoff) takes too; with no stream row it falls back to the alive files' time.
 sub observed_from {
     my ($ctx) = @_;
-    require sessions;
-    return sessions::first_row(watch::ctx::sid_dir($ctx), watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx));
+    my $core = eval { require sessions; 1 };
+    return $core ? sessions::first_row(watch::ctx::sid_dir($ctx), watch::ctx::classic_log($ctx), watch::ctx::mod_log($ctx)) : undef;
 }
 
 # history_boundary(boundary epoch, P, D, observed_from) -> 1 for a boundary from before the

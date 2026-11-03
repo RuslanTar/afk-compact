@@ -5,7 +5,8 @@
 # the rollup row. The real shape, through the real Stop hook: the mod's dispatch and stream rows, the
 # rollup row its after-step wrote 1.2 s after the boundary row's time, the classic PostCompact's rows
 # and its stash meta (its copy saved), and the boundary row (followed by Claude Code's idle notice)
-# swept after all of them. The Stop writes the row once, for that nonce, with the boundary's uuid and
+# swept after all of them; 5 s before it an older boundary row with no compaction of its own does
+# not take the rollup row (the nearest pair wins). The Stop writes the row once, for that nonce, with the boundary's uuid and
 # sizes and the idle the notice settles; the watcher's join then reads the compaction as idle. The
 # next Stop writes no second row.
 my $n = '8c8d0001';
@@ -32,6 +33,8 @@ my $rel = "repo/general/compact/2026-10-21_x_c1-$id6.md";
         { path => "\$WATCH/\$SID/pending/$id6.post.json", json => { ts => T::loc($B + 1.2), nonce => $n, scope => 'main', trigger => 'auto' } },
     ],
     transcript => [ T::prompt(0), T::assistant_text(5),
+                    # an earlier boundary row 5 s before, with no compaction of its own: the nearest pair wins
+                    T::boundary($B - 5, uuid => 'b-standin', trigger => 'auto', preTokens => 198000), T::summary($B - 4.9),
                     T::boundary($B, uuid => 'b-real', trigger => 'auto', preTokens => 612000, postTokens => 41000, durationMs => 52000),
                     { type => 'system', subtype => 'informational', content => 'Compacted while idle for 1h', level => 'info',
                       uuid => T::uid(), sessionId => $T::SID, timestamp => T::z($B + 0.3) },
@@ -50,7 +53,8 @@ my $rel = "repo/general/compact/2026-10-21_x_c1-$id6.md";
                "for the rollup row's nonce, with the boundary's uuid and sizes");
         $E->is(main::Checker::truthy($r->{idle}) ? 'true' : 'false', 'true', 'idle, as the notice after the boundary says');
         $E->is($r->{idle_source}, 'notice', 'idle_source notice');
-        my ($b) = grep { ($_->{uuid} // '') eq 'b-real' } $E->boundaries;
+        # (the watcher joins its PostCompact row to the first boundary within 120 s, here the older one)
+        my ($b) = grep { ($_->{nonce} // '') eq $n } $E->boundaries;
         $E->is($b ? (main::Checker::truthy($b->{idle}) ? 'true' : $b->{idle} // 'undef') : 'none', 'true', "the watcher's join reads the compaction as idle");
     },
 };

@@ -47,7 +47,8 @@ our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long afte
 our $SUB_WINDOW_S = 120;            # a subagent boundary row at most this long after its PostCompact
 our $TOL_S = 2;                     # subagent rows: slack around a PostCompact's time
 our $BESIDE_S = 5;                  # a subagent row this far past TOL_S beside a main match: not main (BD-3)
-our $CB_JOIN_S = 60;                # a main boundary row and its compaction's rollup row: at most this far apart
+our $CB_BEFORE_S = 10;              # a main boundary row's compaction rollup row: at most this long before it
+our $CB_AFTER_S = 30;               # ... and at most this long after it
 # 0.1.3 hook speed: a main-proven save is swept right after it (sweep::run claims swept/<id6>,
 # once); with less than this left of the run's budget the save and its sweep both wait for the
 # next run, so a run cut short by a slow start never claims a sweep it has no time to copy.
@@ -574,23 +575,39 @@ sub _run {
     # 0.6 to 3.6 s before its PostCompact (57 of 57 compactions of the 0.1.2/0.1.3 log), so P3
     # (_match) never gave a main boundary its `by`, and a pool item matched later was already done
     # (no longer in the pool). A main boundary now finds its compaction's rollup row itself: by the
-    # matched pool item's nonce when P3 matched it (and the item is still pending), else the nearest rollup row of a main (or
-    # unattributed) compaction within CB_JOIN_S of the boundary row, either side, not taken by
-    # another boundary. Precomputed boundaries pair with precomputed rollup rows only.
+    # matched pool item's nonce when P3 matched it (and the item is still pending; that nonce is
+    # then its own), else a rollup row of a main (or unattributed) compaction at most CB_BEFORE_S
+    # before or CB_AFTER_S after the boundary row, not taken by another boundary, the nearest pairs
+    # first (an older boundary next to a later compaction never takes its row). Precomputed
+    # boundaries pair with precomputed rollup rows only.
     my %pool_by = map { ($_->{id6} => $_) } @$pool;
     my %taken = map { ($_ => 1) } keys %{ $st->{cbn} };
+    my @todo;
     for my $bd (grep { !$_->{cb} } @{ $st->{bounds} }) {
         my $it = (defined $bd->{by} && $bd->{by} ne '-') ? $pool_by{ $bd->{by} } : undef;
         my $nn = $it ? ($it->{nonce} // $it->{dispatch} // $it->{deferred}) : undef;
         my ($roll) = defined $nn ? grep { ($_->{nonce} // '') eq $nn && ($_->{join} // '') ne 'reconcile' } @{ $st->{rolls_l} } : ();
-        unless ($roll || $it) {
-            my $bd_e = $bd->{e} // 0;
-            ($roll) = sort { abs($a->{e} - $bd_e) <=> abs($b->{e} - $bd_e) }
-                      grep { defined $_->{nonce} && !$taken{ $_->{nonce} } && ($_->{join} // '') ne 'reconcile'
-                             && ($_->{actor} // 'main') =~ /\A(?:main|unattributed)\z/ && ($_->{pc} ? 1 : 0) == ($bd->{pc} ? 1 : 0)
-                             && abs(($_->{e} // 0) - $bd_e) <= $CB_JOIN_S } @{ $st->{rolls_l} };
-            $nn = $roll->{nonce} if $roll;
+        $taken{$nn} = 1 if defined $nn;
+        push @todo, { bd => $bd, it => $it, nn => $nn, roll => $roll };
+    }
+    my @cand;
+    for my $t (grep { !$_->{it} } @todo) {
+        my $bd_e = $t->{bd}{e} // next;
+        for my $r (@{ $st->{rolls_l} }) {
+            next unless defined $r->{nonce} && !$taken{ $r->{nonce} } && ($r->{join} // '') ne 'reconcile'
+                        && ($r->{actor} // 'main') =~ /\A(?:main|unattributed)\z/ && ($r->{pc} ? 1 : 0) == ($t->{bd}{pc} ? 1 : 0);
+            my $d = ($r->{e} // 0) - $bd_e;
+            push @cand, [ $t, $r, abs $d ] if $d >= -$CB_BEFORE_S && $d <= $CB_AFTER_S;
         }
+    }
+    for my $c (sort { $a->[2] <=> $b->[2] } @cand) {
+        my ($t, $r) = @$c;
+        next if $t->{roll} || $taken{ $r->{nonce} };
+        @$t{qw(roll nn)} = ($r, $r->{nonce});
+        $taken{ $r->{nonce} } = 1;
+    }
+    for my $t (@todo) {
+        my ($bd, $it, $nn, $roll) = @$t{qw(bd it nn roll)};
         # the row may come at the next Stop
         next unless $roll || $now - ($it ? $it->{e} : $bd->{e} // 0) > $MAIN_WINDOW_S;
         # the native idle row is written just after the boundary row: decided once it was read,

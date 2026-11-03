@@ -9,7 +9,11 @@ my $rec = sub { my ($h, $t) = @_; return { v => 1, ht => $h, session_id => $T::S
                                            max_tokens => 64000, opened_at => T::loc($t) } };
 {
     settings => { max_auto_continues_per_hour => 0 },
-    files => [ { path => "\$WATCH/\$SID/handoff-turn/$ht.json", json => $rec->($ht, 98) } ],
+    # the session's first row comes before the boundary: it was observed (0.1.4: A-27 skips a boundary
+    # from before the session's first row, as A-01, A-05 and the hookless A-15 do)
+    files => [ { path => "\$WATCH/\$SID/handoff-turn/$ht.json", json => $rec->($ht, 98) },
+               { path => '$WATCH/$SID.classic.jsonl',
+                 jsonl => [ T::row('config_note', 1, writer => 'helper', key => 'relaunch_auto', note => 'settings-file-only') ] } ],
     transcript => [
         T::prompt(0), T::bash(2, 'make', id => 'toolu_1'), T::result(3, 'toolu_1'),
         T::boundary(90, trigger => 'auto'), T::summary(90.1),                # no nudge drove it
