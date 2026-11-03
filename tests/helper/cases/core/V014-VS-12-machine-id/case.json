@@ -1,0 +1,14 @@
+{
+ "id": "V014-VS-12-machine-id",
+ "note": "0.1.4 version skew (lib/plugver.pm machine(), V-6): the real machine id read, with no test seam (the other V013 cases set STORE_TEST_MACHINE_ID). The staged copy's machine(), in a child perl outside test mode, equals 16 hex of sha256(\"machine\\n\" + the id in lower case), the id read here on its own: macOS IOPlatformUUID (ioreg -rd1 -c IOPlatformExpertDevice), Linux /etc/machine-id. Where Docker holds debian:bookworm-slim (no pull), the same on Linux with a known id written to /etc/machine-id; else that step prints a note and does not run.",
+ "steps": [
+  {
+   "lib": "machine_id",
+   "args": {
+    "images": [
+     "debian:bookworm-slim"
+    ]
+   }
+  }
+ ]
+}

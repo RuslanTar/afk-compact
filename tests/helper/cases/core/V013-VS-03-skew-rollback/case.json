@@ -51,7 +51,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.3 · \\S+$",
+     "^plugin: 0\\.1\\.3 · ~/\\S+$",
      "^plugin notice: this session runs 0\\.1\\.3; sessions started since 2026-10-21 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins$"
     ]
    }
@@ -72,7 +72,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.3 · \\S+$"
+     "^plugin: 0\\.1\\.3 · ~/\\S+$"
     ],
     "stdout_lacks": [
      "^plugin notice:"

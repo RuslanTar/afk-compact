@@ -39,7 +39,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.0 · \\S+$"
+     "^plugin: 0\\.1\\.0 · ~/\\S+$"
     ],
     "stdout_lacks": [
      "^plugin notice:"
@@ -128,7 +128,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.0 · \\S+$"
+     "^plugin: 0\\.1\\.0 · ~/\\S+$"
     ],
     "stdout_lacks": [
      "^plugin notice:"
@@ -155,7 +155,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.0 · \\S+$"
+     "^plugin: 0\\.1\\.0 · ~/\\S+$"
     ],
     "stdout_lacks": [
      "^plugin notice:"
@@ -181,7 +181,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "\\Astatus: no log folder \\(root-in-git\\)\\nplugin: 0\\.1\\.0 · \\S+$"
+     "\\Astatus: no log folder \\(root-in-git\\)\\nplugin: 0\\.1\\.0 · ~/\\S+$"
     ],
     "stdout_lacks": [
      "^plugin notice:"

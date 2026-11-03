@@ -1,0 +1,168 @@
+{
+ "id": "V014-VS-15-replaced-copy",
+ "note": "0.1.4 version skew (lib/plugver.pm orphaned, V-1): when an update or uninstall replaces a plugin version, Claude Code writes <old version folder>/.orphaned_at (epoch milliseconds) and keeps that folder 14 days, so a session that loaded it runs on. The session reads the marker in its own copy's folder: present, the notice says `this session runs <own>, replaced by an install at <time>: /reload-plugins`, with no later session start needed (status, the resume block's measured facts, begin); beside a newer session start both parts show. Absent, or not a number: nothing changes. After /reload-plugins the hooks run from the new copy, which has no marker.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "manifest": {
+  "version": "0.1.3"
+ },
+ "plugin_at": "$HOME/.claude/plugins/cache/m/$BRAND/0.1.3",
+ "steps": [
+  {
+   "name": "no marker, no other load: the version line only",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "setup": [
+    {
+     "sha_tag": "user\n$PLUGIN_PARENT",
+     "var": "UTAG"
+    },
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "touch": "$PLUGIN/.claude-plugin/plugin.json",
+     "at": "2026-10-01T00:00:00+03:00"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin: 0\\.1\\.3 · ~/\\S+$"
+    ],
+    "stdout_lacks": [
+     "^plugin notice:",
+     "reload-plugins"
+    ]
+   }
+  },
+  {
+   "name": "the copy is marked replaced at 12:00: status says so with no later session start",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "setup": [
+    {
+     "write": "$PLUGIN/.orphaned_at",
+     "content": "1792573200123"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin: 0\\.1\\.3 · ~/\\S+\\nplugin notice: this session runs 0\\.1\\.3, replaced by an install at 2026-10-21 12:00 \\+0300: /reload-plugins$"
+    ]
+   }
+  },
+  {
+   "name": "the resume block's measured facts",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin: this session runs 0\\.1\\.3, replaced by an install at 2026-10-21 12:00 \\+0300: /reload-plugins \\(tell the user\\)$"
+    ]
+   }
+  },
+  {
+   "name": "begin (handoff)",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "plugin_notice": {
+      "re": "^this session runs 0\\.1\\.3, replaced by an install at 2026-10-21 12:00 \\+0300: /reload-plugins$"
+     }
+    }
+   }
+  },
+  {
+   "name": "a session started at 13:00 runs 0.1.4: both parts",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/loads/1792576800_616161-1792576790_0.1.4_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.4",
+      "plugin_root": "$PLUGIN_PARENT/0.1.4",
+      "host": "$HOST",
+      "session_id": "61616161-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "2026-10-21T13:00:00+03:00",
+      "scope": "user"
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.3, replaced by an install at 2026-10-21 12:00 \\+0300; sessions started since 2026-10-21 13:00 \\+0300 run 0\\.1\\.4: /reload-plugins$"
+    ]
+   }
+  },
+  {
+   "name": "a marker that is not a number: the newer start only",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "setup": [
+    {
+     "write": "$PLUGIN/.orphaned_at",
+     "content": "soon\n"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.3; sessions started since 2026-10-21 13:00 \\+0300 run 0\\.1\\.4: /reload-plugins$"
+    ],
+    "stdout_lacks": [
+     "replaced"
+    ]
+   }
+  },
+  {
+   "name": "a marker in seconds reads the same",
+   "argv": [
+    "status"
+   ],
+   "setup": [
+    {
+     "write": "$PLUGIN/.orphaned_at",
+     "content": "1792573200\n"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.3, replaced by an install at 2026-10-21 12:00 \\+0300; sessions started since 2026-10-21 13:00 \\+0300 run 0\\.1\\.4: /reload-plugins$"
+    ]
+   }
+  }
+ ]
+}

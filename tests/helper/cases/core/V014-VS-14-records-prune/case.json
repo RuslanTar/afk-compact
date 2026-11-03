@@ -1,0 +1,450 @@
+{
+ "id": "V014-VS-14-records-prune",
+ "note": "0.1.4 (lib/sessions.pm prune_records, V-5): .sessions/by-pid, one live- record per session start and an ended- twin per end, is pruned once a day with the load prune (lib/plugver.pm), at most a batch of files (STORE_TEST_LOADS_BATCH 3 here, 500 by default). Per session id (read from the record: A and D share their first 8 characters) it keeps the earliest live- record, the earliest with milliseconds and the earliest without, so own_start (the approvals' quote floor; words typed in an earlier process of a resumed session keep counting) is the same before and after, with their ended- twins; every record of a session whose pending/ holds a stash (ended() needs a record, else no other session finishes it); every record of a process that runs or whose start cannot be read (the seam-fed process table STORE_TEST_PROC_STARTS), and of another host. It drops the other records over a week old, each live- record with its ended- twin when that is as old.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {
+  "STORE_TEST_PROC_STARTS": "$TMP/procs",
+  "STORE_TEST_LOADS_BATCH": "3"
+ },
+ "steps": [
+  {
+   "name": "before any prune",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$TMP/procs",
+     "content": "61000004 1791900000\n61000005 ?\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000001-1791716000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000001,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-11T14:00:00+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000001-1791716000.ended-a1a1a1a1.json",
+     "json": {
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "reason": "other",
+      "ts": "2026-10-11T15:00:00+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000002-1791716000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000002,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-11T14:00:00.400+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000002-1791716000.ended-a1a1a1a1.json",
+     "json": {
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "reason": "other",
+      "ts": "2026-10-11T15:00:00+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000003-1791800000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000003,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-12T14:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000003-1791800000.ended-a1a1a1a1.json",
+     "json": {
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "reason": "other",
+      "ts": "2026-10-12T16:00:00+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000004-1791900000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000004,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-13T14:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000005-1791950000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000005,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-13T20:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000006-1792400000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000006,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-19T14:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000007-1791810000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000007,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-12T18:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000007-1791810000.ended-a1a1a1a1.json",
+     "json": {
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "reason": "gone",
+      "ts": "2026-10-20T09:00:00+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000008-1791820000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000008,
+      "pid_lstart": "fixture",
+      "host": "other-host.example",
+      "session_id": "a1a1a1a1-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-12T19:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/61000009-1791830000.live-a1a1a1a1.json",
+     "json": {
+      "pid": 61000009,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "a1a1a1a1-2222-4333-8444-555555555555",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-12T20:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/62000001-1791700000.live-b2b2b2b2.json",
+     "json": {
+      "pid": 62000001,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "b2b2b2b2-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-11T10:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/62000002-1791710000.live-b2b2b2b2.json",
+     "json": {
+      "pid": 62000002,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "b2b2b2b2-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-11T12:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$WATCH/b2b2b2b2-1111-4222-8333-444444444444/pending/abcdef.post.md",
+     "content": "stash\n"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/63000001-1791600000.live-c3c3c3c3.json",
+     "json": {
+      "pid": 63000001,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "c3c3c3c3-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-10T10:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/63000002-1791780000.live-c3c3c3c3.json",
+     "json": {
+      "pid": 63000002,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "c3c3c3c3-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-12T10:00:00.000+03:00"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/63000003-1791784000.live-c3c3c3c3.json",
+     "json": {
+      "pid": 63000003,
+      "pid_lstart": "fixture",
+      "host": "$HOST",
+      "session_id": "c3c3c3c3-1111-4222-8333-444444444444",
+      "cwd": "$TMP/work",
+      "worktree": null,
+      "head": null,
+      "source": "resume",
+      "ts": "2026-10-12T11:00:00.000+03:00"
+     }
+    }
+   ],
+   "lib": "own_start",
+   "args": {
+    "root": "$ROOT",
+    "sid": "a1a1a1a1-1111-4222-8333-444444444444",
+    "want": "1791716400.000 1791716400.400 1"
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "d4d4d4d4-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/d4d4d4d4-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "name": "a process's first start of the day prunes .sessions/by-pid with the load prune: kept are each session's earliest record (with and without milliseconds) and their ended- twins, every record of a session with a stash, of a process that runs or whose start cannot be read, of another host, under a week old, and a pair whose ended- twin is under a week old; of the rest (A's third process, C's later two), oldest first, at most a batch of files (3): C's two go, A's pair waits",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/61000001-1791716000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000001-1791716000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000002-1791716000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000002-1791716000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000004-1791900000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000005-1791950000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000006-1792400000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000007-1791810000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000007-1791810000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000008-1791820000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000009-1791830000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/62000001-1791700000.live-b2b2b2b2.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/62000002-1791710000.live-b2b2b2b2.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/63000001-1791600000.live-c3c3c3c3.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000003-1791800000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000003-1791800000.ended-a1a1a1a1.json"
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/by-pid/63000002-1791780000.live-c3c3c3c3.json",
+     "$ROOT/.sessions/by-pid/63000003-1791784000.live-c3c3c3c3.json"
+    ]
+   }
+  },
+  {
+   "lib": "own_start",
+   "args": {
+    "root": "$ROOT",
+    "sid": "a1a1a1a1-1111-4222-8333-444444444444",
+    "want": "1791716400.000 1791716400.400 1"
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "d5d5d5d5-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/d5d5d5d5-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "525252:Tue Oct 21 14:06:00 2026"
+   },
+   "now": "2026-10-21T14:06:12+03:00",
+   "name": "another process's first start the same day: no second prune (A's pair waits)",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/61000003-1791800000.live-a1a1a1a1.json"
+     }
+    ]
+   }
+  },
+  {
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "d6d6d6d6-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/d6d6d6d6-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "535353:Thu Oct 22 14:07:00 2026"
+   },
+   "now": "2026-10-22T14:07:12+03:00",
+   "name": "the next day's first start drops A's pair; the rest stays (B's stash, which the first start's cross-session pass finished, waits again)",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/by-pid/61000001-1791716000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000001-1791716000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000002-1791716000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000002-1791716000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000004-1791900000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000005-1791950000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000006-1792400000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000007-1791810000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000007-1791810000.ended-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000008-1791820000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/61000009-1791830000.live-a1a1a1a1.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/62000001-1791700000.live-b2b2b2b2.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/62000002-1791710000.live-b2b2b2b2.json"
+     },
+     {
+      "path": "$ROOT/.sessions/by-pid/63000001-1791600000.live-c3c3c3c3.json"
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/by-pid/61000003-1791800000.live-a1a1a1a1.json",
+     "$ROOT/.sessions/by-pid/61000003-1791800000.ended-a1a1a1a1.json"
+    ]
+   },
+   "setup": [
+    {
+     "write": "$WATCH/b2b2b2b2-1111-4222-8333-444444444444/pending/abcdef.post.md",
+     "content": "stash\n"
+    }
+   ]
+  },
+  {
+   "lib": "own_start",
+   "args": {
+    "root": "$ROOT",
+    "sid": "a1a1a1a1-1111-4222-8333-444444444444",
+    "want": "1791716400.000 1791716400.400 1"
+   }
+  }
+ ]
+}

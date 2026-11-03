@@ -10,6 +10,9 @@ package sessions;
 #     earlier one ended with no SessionEnd, close_gone; its ts is that later start, not the end,
 #     which is unknown)
 #   <root>/.sessions/<sid>.lineage.json {previous_session_id, lineage_reason}
+#   prune_records: once a day (with the load prune, lib/plugver.pm) drops a session's later live-
+#     records of ended processes, over a week old, and their ended- twins; never a session's
+#     earliest record, one of a session with a stash, or one of a process that may still run.
 use strict;
 use warnings;
 use utf8;
@@ -74,7 +77,8 @@ sub _gone {
 # reason `gone`, within the budget. Only sid's own records: another session's record may be a
 # process this one cannot see (another pid namespace under the same host name), and its
 # liveness is judged when it is read (record_live). Records of another host, or with no host,
-# are left alone; no record is deleted (own_start reads every live- record).
+# are left alone; no record is deleted here (own_start reads every live- record; prune_records
+# keeps each session's earliest).
 sub close_gone {
     my ($sid, %o) = @_;
     return 0 unless defined $sid && !ref $sid && length($sid) >= 8;
@@ -225,6 +229,82 @@ sub record_live {
     my $h = $rec->{host};
     return 1 unless defined $h && !ref $h && $h ne '' && $h eq identity::host();
     return identity::alive($rec->{pid}, $rec->{pid_lstart}) ? 1 : 0;
+}
+
+# prune_records(now, max) -> the number of per-process records unlinked. lib/plugver.pm runs it
+# with the daily load prune, under that prune's lock, on a process's first start. Kept, per
+# session id (read from the record; sid8 groups with a single live- record are not read):
+#   - the earliest live- record, with milliseconds and without (own_start reads both kinds, so
+#     its since and until stay; a resumed session's words typed in an earlier process keep
+#     counting), and their ended- twins;
+#   - every record of a session whose <watch>/<sid>/pending/ holds a stash (ended() needs a
+#     record, else no other session ever finishes it);
+#   - every record of a process that may still run: identity::key_live over one
+#     identity::start_epochs call (a start that cannot be read counts as running); a record of
+#     another host, or with none, counts as running (record_live);
+#   - a record that cannot be read, or whose ts cannot.
+# Dropped: the other live- records dated over $RECORDS_AGE_S ago, oldest first, at most max files
+# a run, each with its ended- twin when that is as old (else the pair stays). Only the effective
+# root's folder: a legacy root is never written.
+our $RECORDS_AGE_S = 7 * 86400;
+sub prune_records {
+    my ($now, $max) = @_;
+    return 0 unless defined $max && $max > 0;
+    my $d = by_pid();
+    my (%by8, %names);
+    for my $f (util::list_dir($d)) {
+        next unless $f =~ /\A(\d+-\d+)\.(live|ended)-([^.\/]+)\.json\z/;
+        $names{$f} = 1;
+        push @{ $by8{$3} }, [$1, $f] if $2 eq 'live';
+    }
+    my $host = identity::host();
+    my $w = rc::watch();
+    my (@cand, %pid);
+    for my $s8 (sort grep { @{ $by8{$_} } > 1 } keys %by8) {
+        my %sess;
+        for my $x (@{ $by8{$s8} }) {
+            my $j = eval { jsonc::decode(util::read_file("$d/$x->[1]", 64 * 1024) // '') };
+            next unless ref $j eq 'HASH' && defined $j->{session_id} && !ref $j->{session_id};
+            my $ts = $j->{ts};
+            my $t = defined $ts && !ref $ts ? util::parse_iso($ts) : undef;
+            push @{ $sess{ $j->{session_id} } }, { key => $x->[0], name => $x->[1], s8 => $s8, t => $t, host => $j->{host},
+                                                   fine => (defined $t && $ts =~ /T\d\d:\d\d:\d\d\.\d/ ? 1 : 0) };
+        }
+        for my $sid (sort keys %sess) {
+            my @r = @{ $sess{$sid} };
+            next if @r < 2;
+            next if defined $w && args::valid_sid($sid) && orphans::stash_files("$w/$sid");
+            my ($ef, $ec);
+            for my $r (grep { defined $_->{t} } @r) {
+                if ($r->{fine}) { $ef = $r if !$ef || $r->{t} < $ef->{t} }
+                else { $ec = $r if !$ec || int($r->{t}) < int($ec->{t}) }
+            }
+            for my $r (@r) {
+                next if ($ef && $r == $ef) || ($ec && $r == $ec);
+                next unless defined $r->{t} && $now - $r->{t} > $RECORDS_AGE_S;
+                next unless defined $r->{host} && !ref $r->{host} && $r->{host} eq $host;
+                push @cand, $r;
+                $pid{$1} = 1 if $r->{key} =~ /\A(\d+)-/;
+            }
+        }
+    }
+    return 0 unless @cand;
+    my $st = identity::start_epochs([sort { $a <=> $b } keys %pid]);
+    my $n = 0;
+    for my $r (sort { $a->{t} <=> $b->{t} || $a->{name} cmp $b->{name} } @cand) {
+        next if identity::key_live($r->{key}, $st);
+        my @go = ($r->{name});
+        my $tw = "$r->{key}.ended-$r->{s8}.json";
+        if ($names{$tw}) {
+            my $j = eval { jsonc::decode(util::read_file("$d/$tw", 64 * 1024) // '') };
+            my $t = ref $j eq 'HASH' && defined $j->{ts} && !ref $j->{ts} ? util::parse_iso($j->{ts}) : undef;
+            next unless defined $t && $now - $t > $RECORDS_AGE_S;
+            push @go, $tw;
+        }
+        last if $n + @go > $max;
+        $n += unlink map { "$d/$_" } @go;
+    }
+    return $n;
 }
 
 # ended(sid) -> 1 when another session may finish sid's stashes (MOD-SPEC §5.8 "Eligible"):

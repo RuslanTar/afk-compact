@@ -9,7 +9,7 @@ description: 'Show handoff plugin status: "handoff status", "did compaction save
 
 Run `<store> status --sid '${CLAUDE_SESSION_ID}'` and relay its lines as printed, in its order. If that `--sid` value is empty or has `${`, run it as written: never guess or invent a session id (no folder name or other id). The helper then prints `session: unknown (no session id)` and only the lines that are not about this session.
 - `ok: …` or `attention: …` first (one line: saved copies and open alerts; without a session id, the last 7 days; none while the watcher is off), then `watcher:` (its state, log size, how to share or turn it off), then `notice: <text>` while the first-run notice is unshown;
-- `plugin: <version> · <folder>` (the copy this session runs), then `plugin notice: …` when sessions started since run another version;
+- `plugin: <version> · <folder>` (the copy this session runs), then `plugin notice: …` when this copy was replaced or sessions started since run another version;
 - effective thresholds with `min_window`, clamped values marked; `plugin compactions off: …` when the window is below it;
 - `seat_state` of the last 5 compactions, with trigger, verdict and copy path;
 - open escalations and open watcher alerts, with the last 7 days' counts by rule;
