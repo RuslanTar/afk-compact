@@ -20,7 +20,8 @@ run     Reads every *.zip directly in INBOX (received files are untrusted data):
            `<store> watch report --input ... --since all` writes WATCH-REPORT.md beside them.
         5. pooled: DIR/BETA-REPORT.md plus bundles.tsv, installs.tsv, alerts.tsv,
            config-changed.tsv. Alerts count open ones: an alert a later alert_closed row closed
-           (as status reads the alerts log) is counted apart, by its close reason.
+           (as status reads the alerts log) is counted apart, by its close reason; the per-alert
+           list and alerts.tsv keep it, marked closed with that reason (column state).
         Valid bundles are extracted into a fresh DIR/raw/<zip sha8>/. Nothing in them is executed
         or imported. DIR defaults to INBOX/../beta-analysis/<YYYY-MM-DD_HH-MM-SS>/ and must not
         exist yet or be empty. INBOX and DIR must sit outside any git work tree.
@@ -690,18 +691,19 @@ def render(bundles, installs, rows_in, rows_dup, rows_bad):
                     pooled["shaped_ok"] += 1 if c["verdict"] in OK_VERDICTS else 0
             for r in rs:
                 ev = ev_of(r)
-                if ev == "alert" and isinstance(r.get("alert_id"), str) and r["alert_id"] in closed:
-                    continue
                 if ev == "alert":
-                    alerts += 1
                     rule = r.get("rule") if isinstance(r.get("rule"), str) and RULE_RE.match(r["rule"]) else "other"
-                    pooled["alerts"][rule] = pooled["alerts"].get(rule, 0) + 1
+                    why = closed.get(r["alert_id"]) if isinstance(r.get("alert_id"), str) else None
+                    if why is None:
+                        alerts += 1
+                        pooled["alerts"][rule] = pooled["alerts"].get(rule, 0) + 1
                     ev_ = r.get("evidence") if isinstance(r.get("evidence"), dict) else {}
                     key = r.get("key") if isinstance(r.get("key"), dict) else {}
                     sess = key.get("session_id") if isinstance(key.get("session_id"), str) and HEX12_RE.match(key["session_id"]) else h
                     nonce = key.get("nonce") if isinstance(key.get("nonce"), str) and NONCE_RE.match(key["nonce"]) else "-"
                     line = ev_.get("line") if isinstance(ev_.get("line"), int) and not isinstance(ev_.get("line"), bool) else "-"
-                    pooled["alert_lines"].append((iid, word(r.get("alert_id")), rule, word(r.get("severity")), sess, nonce, line))
+                    pooled["alert_lines"].append((iid, word(r.get("alert_id")), rule, word(r.get("severity")), sess, nonce, line,
+                                                  "open" if why is None else "closed: " + why))
                 elif ev == "watch_error":
                     k = "%s/%s" % (word(r.get("stage")), word(r.get("error_class")))
                     pooled["werr"][k] = pooled["werr"].get(k, 0) + 1
@@ -804,10 +806,10 @@ def render(bundles, installs, rows_in, rows_dup, rows_bad):
 
     counts("Alerts by rule", pooled["alerts"], "alerts")
     counts("Alerts closed, by reason", pooled["closed"], "alerts")
-    L += ["Alerts to ask the friend about (install, alert id, rule, severity, session, nonce, transcript line):", ""]
-    arows = [("install_id", "alert_id", "rule", "severity", "session", "nonce", "line")]
+    L += ["Alerts to ask the friend about (install, alert id, rule, severity, session, nonce, transcript line; a closed one with its reason):", ""]
+    arows = [("install_id", "alert_id", "rule", "severity", "session", "nonce", "line", "state")]
     for a in pooled["alert_lines"]:
-        L.append("- %s %s %s %s session %s nonce %s line %s" % a)
+        L.append("- %s %s %s %s session %s nonce %s line %s" % a[:7] + ("" if a[7] == "open" else " (%s)" % a[7]))
         arows.append(a)
     if not pooled["alert_lines"]:
         L.append("- none")

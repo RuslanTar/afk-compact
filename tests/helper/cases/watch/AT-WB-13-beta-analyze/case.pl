@@ -11,7 +11,8 @@
 # outcomes hold too. 0.1.4 (T-5, T-6): the install's store also holds a sweep row with four shaped
 # main compactions (ok, ok-trailer, ok-unclosed, truncated) and a second alert that a later
 # alert_closed row closed, so the verdict mix counts ok-unclosed as ok (3 of 4) and the alerts count
-# the open ones (as status does), the closed one apart by its reason, all read from the exported rows.
+# the open ones (as status does), the closed one apart by its reason (still listed, marked closed),
+# all read from the exported rows.
 # sha256 through core's sha::hex256 (Digest::SHA when it loads, else the embedded one; the driver loads it)
 my $REPO = Cwd::abs_path(File::Basename::dirname(Cwd::abs_path(__FILE__)) . '/../../../../..');
 my $TOOL = "$REPO/tools/beta-analyze";
@@ -152,6 +153,7 @@ push @{ $alog->{jsonl} },
               $got{md} = watch::io::slurp("$ana/BETA-REPORT.md") // '';
               $got{bundles} = { map { $_->{zip} => $_ } @{ $tsv->("$ana/bundles.tsv") } };
               $got{installs} = $tsv->("$ana/installs.tsv");
+              $got{alerts} = $tsv->("$ana/alerts.tsv");
               $got{raw} = [ sort(watch::io::list_dir("$ana/raw")) ];
               $got{inst} = [ sort(watch::io::list_dir("$ana/installs")) ];
               $got{wr} = [ map { -s "$ana/installs/$_/WATCH-REPORT.md" ? 1 : 0 } @{ $got{inst} } ];
@@ -249,7 +251,12 @@ push @{ $alog->{jsonl} },
         $E->is($by_rule // '', "| Value | Alerts |\n|---|---|\n| A-01 | 2 |", 'alerts by rule: the open ones only');
         $has->($md, qr/^## Alerts closed, by reason\n\n\| Value \| Alerts \|\n\|---\|---\|\n\| superseded: rule changed in 0\.1\.3 \| 2 \|$/m, 'closed alerts by reason');
         $has->($md, qr/^\| \Q$got{install}\E \|(?: [^|]* \|){9} 1 \|/m, 'per-install alerts: the open one');
-        $E->ok(($md !~ /a05-5678abcd/ ? 1 : 0), 'a closed alert is not one to ask the friend about');
+        $has->($md, qr/^- \Q$got{install}\E a05-5678abcd A-05 warn session [0-9a-f]{12} nonce f0f00001 line 3 \(closed: superseded: rule changed in 0\.1\.3\)$/m,
+               'the closed alert stays in the list to ask about, marked closed with its reason');
+        my %st = map { ($_->{alert_id} => $_->{state}) } grep { $_->{install_id} eq $got{install} } @{ $got{alerts} || [] };
+        $E->is($st{'a05-5678abcd'} // 'missing', 'closed: superseded: rule changed in 0.1.3', 'alerts.tsv: the closed alert, its state with the reason');
+        my @open = grep { $_ ne 'a05-5678abcd' } sort keys %st;
+        $E->is(join(',', map { $st{$_} } @open), 'open', 'alerts.tsv: the other alert is open');
         $E->ok(($md !~ m{/U[s]ers/|/h[o]me/} ? 1 : 0), 'no path in BETA-REPORT');
         # deletes nothing, writes only under DIR
         $E->is(watch::json::encode($got{in1}), watch::json::encode($got{in0}), 'INBOX unchanged');
