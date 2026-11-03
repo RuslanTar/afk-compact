@@ -222,7 +222,7 @@ sub bars {
            $sample_ok ? 'PASS' : 'FAIL (extend by 7 days)');
     $add->('Save gap', '0', $s->{save_gap}, $s->{save_gap} ? 'FAIL' : 'PASS');
     my $okp = $s->{shaped} ? 100 * $s->{shaped_ok} / $s->{shaped} : undef;
-    $add->('Verdict ok/ok-trailer, shaped main', '>=90%', defined $okp ? sprintf('%.0f%% of %d', $okp, $s->{shaped}) : 'none',
+    $add->('Verdict ok/ok-trailer/ok-unclosed, shaped main', '>=90%', defined $okp ? sprintf('%.0f%% of %d', $okp, $s->{shaped}) : 'none',
            !defined $okp ? 'n/a (no shaped compaction)' : $okp >= 90 ? 'PASS' : 'FAIL');
     $add->('Scope leak', '0', $s->{scope_leak}, $s->{scope_leak} ? 'FAIL' : 'PASS');
     $add->('double_channel', '0', '-', 'n/a (not logged in v1)');

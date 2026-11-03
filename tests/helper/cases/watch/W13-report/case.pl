@@ -36,7 +36,7 @@ my %got;
         $has->(qr/^- Claude Code versions: 2\.1\.306$/m, 'versions');
         $has->(qr/^## Audit\n\n- PASS /m, 'the audit passes and comes first');
         $has->(qr/^\| Save gap \| 0 \| 1 \| FAIL \|$/m, 'save gap bar: one missing copy fails');
-        $has->(qr/^\| Verdict ok\/ok-trailer, shaped main \| >=90% \| 100% of 5 \| PASS \|$/m, 'verdict bar');
+        $has->(qr/^\| Verdict ok\/ok-trailer\/ok-unclosed, shaped main \| >=90% \| 100% of 5 \| PASS \|$/m, 'verdict bar');
         $has->(qr/^\| Post-compaction calls_to_progress \| median <=3, p90 <=6 \| - \| deferred \(derived tier\) \|$/m, 'transcript tier deferred, not FAIL');
         $has->(qr/^\| Sample \| .* \| 5 main, 2 sessions, 1 chains, 3 nudge-driven, 0 resumes \| FAIL \(extend by 7 days\) \|$/m, 'sample bar');
         $has->(qr/^\| Auto-continue per nudge-driven compaction \| 1, except a logged halt \| 3 continues, 3 nudge-driven, 0 halts \| PASS \|$/m, 'auto-continue bar');

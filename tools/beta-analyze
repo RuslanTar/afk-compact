@@ -761,7 +761,7 @@ def render(bundles, installs, rows_in, rows_dup, rows_bad):
     share = "%.0f%%" % (100.0 * pooled["idle"] / pooled["comp"]) if pooled["comp"] else "n/a"
     L += ["", "- Idle share (rollup `idle` field; idle is not a trigger value): %s (%d of %d)" % (share, pooled["idle"], pooled["comp"]), ""]
 
-    okp = "%.0f%% ok/ok-trailer of %d" % (100.0 * pooled["shaped_ok"] / pooled["shaped"], pooled["shaped"]) if pooled["shaped"] else "no shaped main compaction"
+    okp = "%.0f%% ok/ok-trailer/ok-unclosed of %d" % (100.0 * pooled["shaped_ok"] / pooled["shaped"], pooled["shaped"]) if pooled["shaped"] else "no shaped main compaction"
     L += ["## Verdict mix, shaped main compactions", "", "- %s" % okp, ""]
     counts("Verdicts", pooled["verdicts"], "compactions")
 

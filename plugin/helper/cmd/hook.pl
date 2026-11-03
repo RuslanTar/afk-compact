@@ -270,7 +270,8 @@ sub on_SessionStart {
 # (afk-compact@afk-compact -> afk-compact-afk-compact). The marketplace comes from where Claude
 # Code loaded the plugin, CLAUDE_PLUGIN_ROOT (else the helper's own root): an installed plugin's
 # .../plugins/cache/<marketplace>/<name>/<version>, a synced one's .../plugins/synced/<x>/<name>
-# (`synced`), anything else a --plugin-dir run (`inline`, as settings::inline_key reads it).
+# (`synced`; Claude Code may add `~g<n>` to that folder's name, e.g. engineering~g2), anything else a
+# --plugin-dir run (`inline`, as settings::inline_key reads it).
 sub own_data_name {
     my $b = ctx::brand();
     my $r = $ENV{CLAUDE_PLUGIN_ROOT};
@@ -278,7 +279,7 @@ sub own_data_name {
     my @s = grep { $_ ne '' } split m{/+}, $r // '';
     my $m = 'inline';
     if (@s >= 5 && $s[-5] eq 'plugins' && $s[-4] eq 'cache' && $s[-2] eq $b) { $m = $s[-3] }
-    elsif (@s >= 4 && $s[-4] eq 'plugins' && $s[-3] eq 'synced' && $s[-1] eq $b) { $m = 'synced' }
+    elsif (@s >= 4 && $s[-4] eq 'plugins' && $s[-3] eq 'synced' && $s[-1] =~ /\A\Q$b\E(?:~g[0-9]+)?\z/) { $m = 'synced' }
     (my $id = "$b\@$m") =~ s/[^A-Za-z0-9_-]/-/g;
     return $id;
 }

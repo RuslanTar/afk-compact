@@ -263,6 +263,9 @@ my $tsv = sub {
         $E->is($calls, 1, 'one process call (the store launcher)');
         $E->ok(($src =~ /sys\.addaudithook\(_audit\)/ ? 1 : 0), 'the audit guard is installed');
         $E->ok(($src !~ /\b(?:claude|codex|anthropic|openai)\b/i ? 1 : 0), 'no model client named');
+        # the verdict mix line (no shaped compaction in these bundles) names every verdict OK_VERDICTS counts
+        $E->ok(($src =~ /^OK_VERDICTS = \{"ok", "ok-trailer", "ok-unclosed"\}$/m && $src =~ /"%\.0f%% ok\/ok-trailer\/ok-unclosed of %d"/ ? 1 : 0),
+               'the verdict mix label names ok-unclosed, which it counts');
         # WP-fix's fixture zips (tests/fixtures/beta, FIX-06), once that folder is on the branch
         if ($got{fx_cases}) {
             $E->is($got{fx_run}{exit}, 0, "fixture run exit 0 ($got{fx_run}{err})");
