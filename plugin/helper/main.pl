@@ -5,31 +5,20 @@
 # The guard below must stay parsable by perl 5.8: it runs before any other
 # `use`, so an old perl that reaches this file still takes the fallback. The
 # launcher checks no version itself (one perl start per call): a hook runs the
-# launcher's fallback (scripts/<name>-store --fallback-hook hook <Event>), which
-# reads stdin, writes its one content-free row and exits 0; stdin is left
-# unread here for it. Without a launcher to run, a hook drains stdin and exits
-# 0. Anything else refuses, exit 3. Test seam (STORE_TEST_MODE only):
-# STORE_TEST_PERL_V=5.NNN stands in for $] (a perl older than this host's).
+# launcher's fallback (the launcher file again, with --fallback-hook hook
+# <Event>), which reads stdin, writes its one content-free row and exits 0;
+# stdin is left unread here for it. The launcher's hook wrapper hands over its
+# own path in $main::STORE_LAUNCHER. Without a launcher to run, a hook drains
+# stdin and exits 0. Anything else refuses, exit 3. Test seam (STORE_TEST_MODE
+# only): STORE_TEST_PERL_V=5.NNN stands in for $] (a perl older than this host's).
 BEGIN {
     my $v = $];
     $v = $ENV{STORE_TEST_PERL_V}
         if ($ENV{STORE_TEST_MODE} || '') eq '1' && ($ENV{STORE_TEST_PERL_V} || '') =~ /\A5\.[0-9]{1,6}\z/;
     if ($v < 5.028) {
         if (@ARGV && $ARGV[0] eq 'hook') {
-            my $root = __FILE__;
-            $root = './x' unless $root =~ m{/};
-            $root =~ s{/[^/]*\z}{};
-            $root .= '/..';
-            my $name = '';
-            if (open(my $mf, '<', "$root/.claude-plugin/plugin.json")) {
-                local $/;
-                my $m = <$mf>;
-                close $mf;
-                ($name) = (defined $m ? $m : '') =~ /"name"\s*:\s*"([A-Za-z0-9._-]+)"/;
-                $name = '' unless defined $name;
-            }
-            my $launcher = "$root/scripts/$name-store";
-            exec('/bin/sh', $launcher, '--fallback-hook', @ARGV) if $name ne '' && -r $launcher && -x '/bin/sh';
+            my $launcher = defined $main::STORE_LAUNCHER ? $main::STORE_LAUNCHER : '';
+            exec('/bin/sh', $launcher, '--fallback-hook', @ARGV) if $launcher =~ m{\A/} && -f $launcher && -r _ && -x '/bin/sh';
             local $/;
             my $drain = <STDIN>;
             exit 0;

@@ -42,8 +42,10 @@ elif [ -x "$perl" ] && [ -r "$root/helper/main.pl" ]; then
   export PERL_BADLANG
   if [ "${1-}" = hook ]; then
     # Exit 2 from a hook blocks, vetoes or re-prompts; perl exits 2 on its own when it
-    # dies with errno ENOENT. A hook always exits 0, whatever main.pl does.
-    exec "$perl" -e 'END { $? = 0 } my $main = shift @ARGV; do $main;' "$root/helper/main.pl" "$@" 2>/dev/null
+    # dies with errno ENOENT. A hook always exits 0, whatever main.pl does. main.pl's guard
+    # reads this file's path from $main::STORE_LAUNCHER to run its fallback on an old perl.
+    exec "$perl" -e 'END { $? = 0 } my $main = shift @ARGV; $main::STORE_LAUNCHER = shift @ARGV; do $main;' \
+      "$root/helper/main.pl" "$root/scripts/${self##*/}" "$@" 2>/dev/null
   fi
   exec "$perl" "$root/helper/main.pl" "$@"
 fi
@@ -70,22 +72,31 @@ if [ "${1-}" = hook ]; then
   case $watch in '~'|'~/'*) watch=${HOME-}${watch#\~} ;; esac
   # MOD-SPEC 1.2 without the helper: a row only in an absolute folder that no folder from it up to
   # / marks as a git work tree or a .planning folder (no git call, so a git-ignored root gets no
-  # row either), at most 64 levels; else nothing is written and the hook still exits 0.
+  # row either), at most 64 levels; else nothing is written and the hook still exits 0. The walk
+  # runs on the path as given and again from the deepest folder that exists read through its
+  # symlinks (cd -P), so a root reached through a link into a work tree is refused too.
   safe=0
   case $watch in
     /*)
-      case /$watch/ in
+      t=$watch
+      while :; do case $t in */) t=${t%/} ;; *) break ;; esac; done
+      e=$t n=0
+      while [ -n "$e" ] && [ ! -d "$e" ] && [ "$n" -lt 64 ]; do n=$((n + 1)); e=${e%/*}; done
+      r=$t
+      if [ -d "${e:-/}" ] && p=$(cd -P "${e:-/}" 2>/dev/null && pwd -P); then r=${p%/}${t#"$e"}; fi
+      case /$t/$r/ in
         */[.][Pp][Ll][Aa][Nn][Nn][Ii][Nn][Gg]/*) ;;
         *)
-          d=$watch
-          while :; do case $d in */) d=${d%/} ;; *) break ;; esac; done
-          safe=1 n=0
-          while :; do
-            if [ -e "$d/.git" ] || [ -e "$d/.planning" ]; then safe=0; break; fi
-            [ -n "$d" ] || break
-            n=$((n + 1))
-            if [ "$n" -gt 64 ]; then safe=0; break; fi
-            d=${d%/*}
+          safe=1
+          for d in "$t" "$r"; do
+            n=0
+            while :; do
+              if [ -e "$d/.git" ] || [ -e "$d/.planning" ]; then safe=0; break; fi
+              [ -n "$d" ] || break
+              n=$((n + 1))
+              if [ "$n" -gt 64 ]; then safe=0; break; fi
+              case $d in */*) d=${d%/*} ;; *) d= ;; esac
+            done
           done ;;
       esac ;;
   esac

@@ -1,6 +1,6 @@
 {
  "id": "AT-P-13",
- "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH older than 5.28: a stand-in that runs this host's perl with STORE_TEST_PERL_V=5.026003; the launcher checks no version, main.pl's guard runs the launcher's fallback for a hook, stdin unread, and refuses anything else), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3. 0.1.4 T-15: the fallback writes its row only under an absolute folder that no folder from it up to / holds a .git (folder or file: a git work tree) or a .planning folder, and with no .planning part (also one not made yet, any letter case); a root in a git work tree, a relative root and a .planning root get no row and no folder, the hook still exits 0 with nothing on stdout",
+ "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH older than 5.28: a stand-in that runs this host's perl with STORE_TEST_PERL_V=5.026003; the launcher checks no version, main.pl's guard runs the launcher's fallback for a hook (the path the launcher's hook wrapper hands it), stdin unread; the stand-in counts its starts, one per hook, and refuses anything else), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3. 0.1.4 T-15: the fallback writes its row only under an absolute folder that no folder from it up to / holds a .git (folder or file: a git work tree) or a .planning folder, and with no .planning part (also one not made yet, any letter case); the walk runs on the path as given and from its deepest existing folder read through symlinks (cd -P); a root in a git work tree (also through a symlink), a relative root and a .planning root get no row and no folder, the hook still exits 0 with nothing on stdout",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "path_prepend": [
@@ -11,7 +11,7 @@
    "setup": [
     {
      "stub": "perl",
-     "script": "STORE_TEST_PERL_V=5.026003 exec /usr/bin/perl \"$@\""
+     "script": "echo x >> \"$TMP/perl-calls\"; STORE_TEST_PERL_V=5.026003 exec /usr/bin/perl \"$@\""
     }
    ],
    "argv": [
@@ -43,8 +43,15 @@
        "writer": "helper"
       }
      }
+    ],
+    "files": [
+     {
+      "path": "$TMP/perl-calls",
+      "lines": 1
+     }
     ]
-   }
+   },
+   "name": "the stand-in perl is started once for the hook (no version-check spawn)"
   },
   {
    "name": "the default root under an absolute XDG_STATE_HOME",
@@ -265,10 +272,88 @@
    }
   },
   {
-   "name": "a relative handoff_root (read against the cwd): no row; set by a shell in the case's work folder, since the runner's guard refuses a relative folder option it passes itself",
+   "name": "a log_dir reached through a symlink into a git work tree: no row (read through cd -P)",
    "setup": [
     {
-     "mkdir": "$TMP/work"
+     "mkdir": "$TMP/lrepo/.git"
+    },
+    {
+     "mkdir": "$TMP/lrepo/sub"
+    },
+    {
+     "symlink": "$TMP/lnk",
+     "to": "$TMP/lrepo/sub"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/lnk/logs"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "absent": [
+     "$LEGACY",
+     "$TMP/lrepo/sub/logs"
+    ]
+   }
+  },
+  {
+   "name": "a log_dir under a git work tree whose folder links out of it: no row (the path as given is walked too)",
+   "setup": [
+    {
+     "mkdir": "$TMP/orepo/.git"
+    },
+    {
+     "mkdir": "$TMP/outside"
+    },
+    {
+     "symlink": "$TMP/orepo/out",
+     "to": "$TMP/outside"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/orepo/out/logs"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "absent": [
+     "$LEGACY",
+     "$TMP/outside/logs"
+    ]
+   }
+  },
+  {
+   "name": "a relative handoff_root (read against the cwd, whose first folder exists there): no row; set by a shell in the case's work folder, since the runner's guard refuses a relative folder option it passes itself",
+   "setup": [
+    {
+     "mkdir": "$TMP/work/rel"
     }
    ],
    "exec": [
@@ -292,7 +377,7 @@
     "stderr_empty": true,
     "absent": [
      "$LEGACY",
-     "$TMP/work/rel"
+     "$TMP/work/rel/handoffs"
     ]
    }
   },
