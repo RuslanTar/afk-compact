@@ -27,7 +27,8 @@ package plugver;
 #     none) by the host name, so a rename of the host (macOS adds -2, -3 ... after a name
 #     conflict) hides no record that has the id.
 #   note_load(sid, source, cwd) -> 1 when a record was written, else 0. Before it writes, it drains
-#     at most $PRUNE_BATCH names of a folder an earlier prune moved aside, and once a day prunes.
+#     at most $PRUNE_BATCH names of a folder an earlier prune moved aside, and once a day prunes;
+#     both under one lock (loads-drop/.lock), so a drain never meets a prune halfway.
 #   prune: keeps the record of every pid that runs (its process may start another session: the
 #     per-process dedupe), the newest record per version and scope ($GROUP_MAX groups) and the
 #     newest $KEEP_MAX records of the last $WINDOW_S; drops the rest and records dated over
@@ -70,10 +71,9 @@ sub drop_dir { return sessions::dir() . '/loads-drop' }
 
 sub _ver_ok { my ($v) = @_; return defined $v && !ref $v && $v =~ /\A$VER_RE\z/ ? 1 : 0 }
 
-sub _batch {
-    return $1 if util::test_mode() && ($ENV{STORE_TEST_LOADS_BATCH} // '') =~ /\A([1-9][0-9]{0,5})\z/;
-    return $PRUNE_BATCH;
-}
+# Test seams (STORE_TEST_MODE only): small values stand in for the batch and the two caps.
+sub _seam { my ($k, $v) = @_; return util::test_mode() && ($ENV{$k} // '') =~ /\A([1-9][0-9]{0,5})\z/ ? $1 : $v }
+sub _batch { return _seam('STORE_TEST_LOADS_BATCH', $PRUNE_BATCH) }
 
 # _loads() -> [[epoch, key, version, tag, name] ...], newest first (ties: name order, reversed)
 sub _loads {
@@ -187,15 +187,24 @@ sub _prune {
     my $d = dir();
     my @st = stat("$d/.pruned");
     return 0 if @st && $st[9] > $now - $PRUNE_EVERY_S && $st[9] <= $now + $FUTURE_S;
+    my $n = _locked(sub { _prune_locked($all, $now) });
+    return $n // 0;
+}
+
+# _locked(code) -> code's result under loads-drop/.lock, or undef when another process holds it
+# (a lock left over 120 s by a killed hook is removed; the next start takes it). The prune and the
+# drain share it: a drain never reads a folder a prune is still moving records out of.
+sub _locked {
+    my ($code) = @_;
     my $lock = drop_dir() . '/.lock';
     if (!util::write_excl($lock, "$$\n", 0600)) {
         my @l = stat $lock;
         unlink $lock if @l && $l[9] < time - 120;
-        return 0;
+        return undef;
     }
-    my $n = eval { _prune_locked($all, $now) };
+    my $n = eval { $code->() };
     unlink $lock;
-    return $n // 0;
+    return $n;
 }
 
 sub _prune_locked {
@@ -203,12 +212,13 @@ sub _prune_locked {
     my $d = dir();
     my (%keep, %seen);
     my ($groups, $recent) = (0, 0);
+    my ($gmax, $kmax) = (_seam('STORE_TEST_LOADS_GROUPS', $GROUP_MAX), _seam('STORE_TEST_LOADS_KEEP', $KEEP_MAX));
     for my $r (@$all) {
         my ($e, $k, $v, $t, $n) = @$r;
         if (_alive($k =~ /\A(\d+)-/ ? $1 : 0)) { $keep{$n} = 1; next }
         next if $e > $now + $FUTURE_S;
-        if (!$seen{"$v $t"}++ && $groups++ < $GROUP_MAX) { $keep{$n} = 1; next }
-        $keep{$n} = 1 if $now - $e <= $WINDOW_S && $recent++ < $KEEP_MAX;
+        if (!$seen{"$v $t"}++ && $groups++ < $gmax) { $keep{$n} = 1; next }
+        $keep{$n} = 1 if $now - $e <= $WINDOW_S && $recent++ < $kmax;
     }
     my @drop = grep { !$keep{$_} } map { $_->[4] } @$all;
     my $ok = 1;
@@ -232,7 +242,15 @@ sub _prune_locked {
 
 # _drain(now) -> names handled: at most a batch of the oldest folder a prune moved aside; a record
 # dated from a minute before the move on (written while the folder moved) goes back to loads/.
+# Not while a prune holds the lock (it may not have moved its kept records back yet).
 sub _drain {
+    my ($now) = @_;
+    my $dd = drop_dir();
+    return 0 unless grep { /\A\d+-\d+\z/ } util::list_dir($dd);
+    return _locked(sub { _drain_locked($now) }) // 0;
+}
+
+sub _drain_locked {
     my ($now) = @_;
     my $dd = drop_dir();
     my ($a) = sort grep { /\A\d+-\d+\z/ } util::list_dir($dd);

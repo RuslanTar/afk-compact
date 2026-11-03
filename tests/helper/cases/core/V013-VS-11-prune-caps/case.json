@@ -1,0 +1,130 @@
+{
+ "id": "V013-VS-11-prune-caps",
+ "note": "0.1.3 version skew (lib/plugver.pm), review round 2 test gap: the prune's two fixed caps. With the caps set small (STORE_TEST_LOADS_GROUPS 2 for $GROUP_MAX 64, STORE_TEST_LOADS_KEEP 1 for $KEEP_MAX 200), newest first: the newest 0.1.3 record is kept as its group's newest, the next 0.1.3 one as the one recent record allowed, the third 0.1.3 one (recent too) is dropped; the 0.1.2 record is kept as the second group's newest, and the old 0.1.1 record, a third group, is dropped.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "manifest": {
+  "version": "0.1.3"
+ },
+ "plugin_at": "$HOME/.claude/plugins/cache/m/$BRAND/0.1.3",
+ "env": {
+  "STORE_TEST_LOADS_GROUPS": "2",
+  "STORE_TEST_LOADS_KEEP": "1"
+ },
+ "steps": [
+  {
+   "name": "a first start prunes: two groups and one recent record kept beyond each group's newest",
+   "now": "2026-10-21T14:05:12+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "setup": [
+    {
+     "sha_tag": "user\n$PLUGIN_PARENT",
+     "var": "UTAG"
+    },
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792580000_50000041-1792579990_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "$HOST",
+      "session_id": "50000000-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792570000_50000042-1792569990_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "$HOST",
+      "session_id": "50000000-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792560000_50000043-1792559990_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "$HOST",
+      "session_id": "50000000-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1792550000_50000044-1792549990_0.1.2_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.2",
+      "plugin_root": "$PLUGIN_PARENT/0.1.2",
+      "host": "$HOST",
+      "session_id": "50000000-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads/1790000000_50000045-1789999990_0.1.1_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.1",
+      "plugin_root": "$PLUGIN_PARENT/0.1.1",
+      "host": "$HOST",
+      "session_id": "50000000-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads/1792580000_50000041-1792579990_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1792570000_50000042-1792569990_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/1792550000_50000044-1792549990_0.1.2_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads/*.json",
+      "count": 4
+     },
+     {
+      "path": "$ROOT/.sessions/loads/.pruned"
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/loads/1792560000_50000043-1792559990_0.1.3_$UTAG.json",
+     "$ROOT/.sessions/loads/1790000000_50000045-1789999990_0.1.1_$UTAG.json"
+    ]
+   }
+  }
+ ]
+}
