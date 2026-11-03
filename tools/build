@@ -56,6 +56,7 @@ OTHER_GEN = {
     "plugin/tests/unit/_gen/brand.gen.ts": "tools/fixtures-gen",
     "plugin/tests/unit/_gen/corpus.gen.ts": "tools/fixtures-gen",
     "plugin/tests/unit/_gen/payloads.gen.ts": "tools/fixtures-gen",
+    "plugin/tests/unit/_gen/paths.gen.ts": "tools/fixtures-gen",
     "plugin/tests/unit/_gen/helper-replies.gen.ts": "tools/helper-replies-gen",
 }
 # The goldens index and its data modules (goldens.<asset>[.<n>].gen.ts, tools/assemble).

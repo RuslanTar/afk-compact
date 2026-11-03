@@ -10,7 +10,8 @@ import { CLOSE, OPEN, detectSummary, grammar, lastInstrMarker, markerText, senti
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
 import { endsWithQuestion } from '../../hooks/lib/boundary'
-import { formatTokens, tempPaths } from '../../hooks/lib/nudge'
+import { cutPrefix, formatTokens, junkPath, tempPaths } from '../../hooks/lib/nudge'
+import { JUNK_PATHS } from './_gen/paths.gen'
 import { QUESTION_MAX } from '../../hooks/lib/question'
 import type { Deps } from '../../hooks/lib/deps'
 import { cacheSOf, compactMinOf, envTruthy } from '../../hooks/lib/deps'
@@ -439,6 +440,19 @@ test('RRP-08 temp paths: a temp root counts only at a path start; a URL path, qu
   expect(tempPaths({ command: 'X=/tmp/a.log; cat "/tmp/b.log" `cat /tmp/c.log` $(ls /private/var/folders/x1/T/d.log) >/tmp/e.log' })).toEqual([
     '/tmp/a.log', '/tmp/b.log', '/tmp/c.log', '/private/var/folders/x1/T/d.log', '/tmp/e.log',
   ])
+})
+
+test('T-10 junk paths: the mod drops what the helper\'s begin drops by text, one table for both (tests/fixtures/paths/junk-paths.json, TMP-JUNK-01)', () => {
+  expect(JUNK_PATHS.length).toBeGreaterThan(20)
+  for (const r of JUNK_PATHS) {
+    expect([r.path, cutPrefix(r.path)]).toEqual([r.path, r.as])
+    expect([r.path, junkPath(r.as)]).toEqual([r.path, r.junk])
+  }
+})
+
+test('T-10 temp paths: a piece of a command never reaches paths.jsonl; a cut assignment or wait spec is taken off', () => {
+  expect(tempPaths({ command: 'ls /tmp/run/* /tmp/run/{a,b}.log /private/tmp/flow-guard-"$x" /private/tmp/claude-%d /tmp/ppost.$$ /tmp/real.txt' })).toEqual(['/tmp/real.txt'])
+  expect(tempPaths({ command: 'tail -f exit:/private/tmp/a/tasks/b1.output F=$S/tasks/x.output' })).toEqual(['/private/tmp/a/tasks/b1.output'])
 })
 
 test('detector: an s=sub marker with the main Resume here heading in a subagent-proven compaction is scope-leak (MOD-SPEC 5.1, corpus 41)', () => {

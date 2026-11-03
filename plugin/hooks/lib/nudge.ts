@@ -76,15 +76,36 @@ function strings(v: unknown, out: string[], depth = 0): void {
   else if (v !== null && typeof v === 'object') for (const x of Object.values(v)) strings(x, out, depth + 1)
 }
 
-/** Temp paths in a tool call's input (the sweep scope of MOD-SPEC §10), new ones only. */
+/** The path without the shell assignment or wait spec it was cut with (`F=/tmp/x`, `exit:/tmp/x`). */
+export function cutPrefix(p: string): string {
+  const m = /^[A-Za-z_][A-Za-z0-9_-]*[=:](\/[\s\S]*)$/.exec(p)
+  return m?.[1] ?? p
+}
+
+/**
+ * A piece of a command, not a file, by its text alone (the helper's skills/begin.pm junk_path, one
+ * table pins both: tests/fixtures/paths/junk-paths.json): not absolute, an unexpanded variable, a
+ * glob or brace, a backslash, a `...` part, a last `-` (a prefix cut at a variable) or a printf
+ * directive. Such a path never reaches paths.jsonl or the evidence sweep.
+ */
+export function junkPath(p: string): boolean {
+  if (!p.startsWith('/')) return true
+  if (/\$(?:[A-Za-z_{($]|$)/.test(p)) return true
+  if (/[*[\]{}\\]/.test(p)) return true
+  if (/(?:^|\/)\.\.\.(?:\/|$)/.test(p)) return true
+  if (p.endsWith('-')) return true
+  return /%[-+ #0]*[0-9]*(?:\.[0-9]+)?[sdifxXcu]/.test(p)
+}
+
+/** Temp paths in a tool call's input (the sweep scope of MOD-SPEC §10), new ones only, junk left out. */
 export function tempPaths(input: Record<string, unknown>, seen: (p: string) => boolean = () => false): string[] {
   const texts: string[] = []
   for (const [k, v] of Object.entries(input)) if (k !== 'tool' && k !== 'agentId' && k !== 'tool_use_id') strings(v, texts)
   const found: string[] = []
   for (const t of texts) {
     for (const m of t.matchAll(TEMP)) {
-      const p = m[0].replace(/[.,:]+$/, '')
-      if (p.length > 1024 || seen(p) || found.includes(p)) continue
+      const p = cutPrefix(m[0].replace(/[.,:]+$/, ''))
+      if (p.length > 1024 || junkPath(p) || seen(p) || found.includes(p)) continue
       found.push(p)
       if (found.length >= 20) return found
     }

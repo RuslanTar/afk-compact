@@ -74,6 +74,8 @@
 #     in a zone (case or step "tz", an env TZ, a builtin's args "tz") whose tz database file
 #     the host lacks, "needs tzdata", with no "needs" entry, unless the zone has an exact
 #     POSIX form (Etc/GMT-3 is "<+03>-3"), which its helper calls then get (host_zone).
+#   builtin junk_paths {table}: begin's cut_prefix and junk_path (the staged copy) over each row of the
+#     junk-path table (tests/fixtures/paths/junk-paths.json: path, as, junk), as the mod's units.test.ts reads it
 #   builtin begin_fit {reply, found, all, unread, pad {key, to}, json, min_bytes, max_bytes}: begin's _fit
 #     (the staged copy) over a fixed reply, independent of the temp folder's path
 #   builtin hold_parity {file, lists {<const name>: job | user | none}, min}: copies::_hold_of (the
@@ -3495,6 +3497,24 @@ sub builtin {
             $total += @words;
         }
         print "#   hold_parity: $total wordings\n" if $VERBOSE;
+        return @e;
+    }
+    if ($name eq 'junk_paths') {
+        # T-10: skills::begin's cut_prefix and junk_path (the staged copy) over every row of the one
+        # table the mod's recorder is held to as well (tests/fixtures/paths/junk-paths.json, read by
+        # units.test.ts through _gen/paths.gen.ts): {table}
+        local @INC = ("$STAGE/helper/lib", @INC);
+        require "skills/begin.pm";
+        my $t = jsonc::decode(util::read_file(src_file($a->{table}, $cdir)));
+        my $n = 0;
+        for my $r (@{ ref $t eq 'HASH' && ref $t->{rows} eq 'ARRAY' ? $t->{rows} : [] }) {
+            $n++;
+            my ($as, $want) = (skills::begin::cut_prefix($r->{path}), $r->{as} // $r->{path});
+            push @e, "$r->{path}: cut to $as, want $want" if $as ne $want;
+            my ($j, $wj) = (skills::begin::junk_path($as) ? 1 : 0, $r->{junk} ? 1 : 0);
+            push @e, "$r->{path}: junk $j, want $wj" if $j != $wj;
+        }
+        push @e, "no rows in $a->{table}" unless $n;
         return @e;
     }
     if ($name eq 'begin_fit') {

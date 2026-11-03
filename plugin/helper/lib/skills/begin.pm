@@ -528,8 +528,7 @@ sub _tmp_candidates {
         my $d = eval { skills::util::json_decode($l) } or next;
         my $p = ref $d eq 'HASH' ? ($d->{path} // $d->{p}) : undef;
         next unless defined $p && !ref $p;
-        # a shell assignment or a wait spec the path was cut with (`F=/tmp/x`, `exit:/tmp/x`)
-        $p = $1 if $p =~ m{\A[A-Za-z_][A-Za-z0-9_-]*[=:](/.*)\z}s;
+        $p = cut_prefix($p);
         next if $seen{$p}++;
         my @st = stat $p;
         next if !@st && junk_path($p);
@@ -538,18 +537,31 @@ sub _tmp_candidates {
     return (\@out, $unread);
 }
 
+# cut_prefix(path) -> the path without the shell assignment or wait spec it was cut with
+# (`F=/tmp/x`, `exit:/tmp/x` -> /tmp/x), else the path as it is.
+sub cut_prefix {
+    my ($p) = @_;
+    return $p =~ m{\A[A-Za-z_][A-Za-z0-9_-]*[=:](/.*)\z}s ? $1 : $p;
+}
+
 # junk_path(path) -> 1 when a recorded path that names no file is a piece of a command, not a
 # file a handoff could keep or dispose of (0.1.3 small fixes; begin calls it only for a path that
 # does not exist, so a real file of any name stays): not absolute (`$S/tasks/x.output`,
 # `F=$S/...`: read against no known folder), an unexpanded shell or template variable (`$S`,
 # `${l.k}`, `$$`), a glob or brace pattern (`*`, `[`, `{`), a backslash (an escaped newline
-# `\n` from a script's text), or a `...` part (an elided path, `/var/folders/.../T`).
+# `\n` from a script's text), a `...` part (an elided path, `/var/folders/.../T`), a last `-` (a
+# prefix cut at a variable, `/tmp/flow-guard-$x`) or a printf directive (`/tmp/claude-%d`: `%`,
+# optional flags, width and precision, then s d i f x X c u). The mod's recorder applies the same
+# text rules before a path reaches paths.jsonl (hooks/lib/nudge.ts junkPath); one table pins
+# both (tests/fixtures/paths/junk-paths.json).
 sub junk_path {
     my ($p) = @_;
     return 1 unless defined $p && $p =~ m{\A/};
     return 1 if $p =~ /\$(?:[A-Za-z_{(\$]|\z)/;
     return 1 if $p =~ /[*\[\]{}\\]/;
     return 1 if $p =~ m{(?:\A|/)\.\.\.(?:/|\z)};
+    return 1 if $p =~ /-\z/;
+    return 1 if $p =~ /%[-+ #0]*[0-9]*(?:\.[0-9]+)?[sdifxXcu]/;
     return 0;
 }
 
