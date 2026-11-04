@@ -1,6 +1,6 @@
 {
  "id": "HOOK-LAZY-01-per-event-libs",
- "note": "0.1.4 T-12 (main.pl): `hook <Event>` loads a base set of libraries and its event's table, not every core library; cmd/hook.pl is unchanged. (1) The tables hold every library whose package variables, or a `defined &pkg::fn` guard on whose functions, a loaded library, the watcher or the event's path through cmd/hook.pl refers to: a variable of a library left out reads as undef and a guard skips its feature with no error (detect::summary, secrets::scan, identity::claude_pid). (2) Each event run with its set and with every core library (STORE_TEST_LAZY=full) prints the same and leaves the same rows and files; the plain SessionStart does not load reconcile (nor copies, postcompact, scope, bucket, frontmatter, rollup), SubagentStop and StopFailure far fewer; only the SessionStart that finishes an ended session (the cross-session finish calls reconcile) loads the libraries left out, through the AUTOLOAD fallback, and its rows are the full run's",
+ "note": "0.1.4 T-12 (main.pl): `hook <Event>` loads a base set of libraries and its event's table, not every core library; cmd/hook.pl is unchanged. (1) The tables hold every library whose package variables, or a `defined &pkg::fn` guard on whose functions, a loaded library, the watcher or the event's path through cmd/hook.pl refers to: a variable of a library left out reads as undef and a guard skips its feature with no error (detect::summary, secrets::scan, identity::claude_pid). (2) Each event run with its set and with every core library (STORE_TEST_LAZY=full) prints the same and leaves the same rows and files; the plain SessionStart does not load reconcile (nor copies, postcompact, scope, bucket, frontmatter; rollup it loads since resumeblock's script_reader reads the mod's headless row, 0.1.4 R-2), SubagentStop and StopFailure far fewer; only the SessionStart that finishes an ended session (the cross-session finish calls reconcile) loads the libraries left out, through the AUTOLOAD fallback, and its rows are the full run's",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -305,7 +305,6 @@
       "scope",
       "bucket",
       "frontmatter",
-      "rollup",
       "checkpoint"
      ],
      "SubagentStop": [

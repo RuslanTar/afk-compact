@@ -93,7 +93,7 @@ our %HOOK_EVENT = (
     PostCompact      => [qw(lock nonce queue bucket frontmatter evidence dispatch scope sessions sidecar copies sweep orphans keyset
                             rollup postcompact jobrec restart)],
     SessionStart     => [qw(lock nonce gsd queue assemble evidence dispatch sessions sidecar measure sweep orphans keyset resumeblock
-                            jobrec restart plugver)],
+                            rollup jobrec restart plugver)],
     SessionEnd       => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar copies measure
                             sweep reconcile orphans resumeblock rollup postcompact jobrec restart plugver)],
     Stop             => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar copies measure
