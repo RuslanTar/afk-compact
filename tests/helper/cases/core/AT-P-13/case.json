@@ -1,6 +1,6 @@
 {
  "id": "AT-P-13",
- "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH older than 5.28: a stand-in that runs this host's perl with STORE_TEST_PERL_V=5.026003; the launcher checks no version, main.pl's guard runs the launcher's fallback for a hook (the path the launcher's hook wrapper hands it), stdin unread; the stand-in counts its starts, one per hook, and refuses anything else), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3. 0.1.4 T-15: the fallback writes its row only under an absolute folder that no folder from it up to / holds a .git (folder or file: a git work tree) or a .planning folder, and with no .planning part (also one not made yet, any letter case); the walk runs on the path as given and from its deepest existing folder read through symlinks (cd -P); a root in a git work tree (also through a symlink), a relative root and a .planning root get no row and no folder, the hook still exits 0 with nothing on stdout; a log_dir that is not an absolute path (root-invalid in the helper) gets no row, which would land under the hook's working folder; such a handoff_root with log_dir unset sends the row to the default folder, as the helper's logs go (0.1.4 review F-4(g)) (an exec step sets those roots: the runner's home guard refuses a root env value that is not absolute) 0.1.4 review F-1: a hook's perl runs as the launcher's child, so a perl that is found but cannot start (an interpreter line that points nowhere, a version manager's shim with no perl picked: it ends with 1 to 128) takes the same fallback: exit 0, nothing printed, one row, under /bin/sh, dash and bash",
+ "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH older than 5.28: a stand-in that runs this host's perl with STORE_TEST_PERL_V=5.026003; the launcher checks no version, main.pl's guard runs the launcher's fallback for a hook (the path the launcher's hook wrapper hands it), stdin unread; the stand-in counts its starts, one per hook, and refuses anything else), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3. 0.1.4 T-15: the fallback writes its row only under an absolute folder that no folder from it up to / holds a .git (folder or file: a git work tree) or a .planning folder, and with no .planning part (also one not made yet, any letter case); the walk runs on the path as given and from its deepest existing folder read through symlinks (cd -P); a root in a git work tree (also through a symlink), a relative root and a .planning root get no row and no folder, the hook still exits 0 with nothing on stdout; a log_dir that is not an absolute path (root-invalid in the helper) gets no row, which would land under the hook's working folder; such a handoff_root with log_dir unset sends the row to the default folder, as the helper's logs go (0.1.4 review F-4(g)) (an exec step sets those roots: the runner's home guard refuses a root env value that is not absolute) 0.1.4 review F-1: a hook's perl runs as the launcher's child, so a perl that is found but cannot start (an interpreter line that points nowhere, a version manager's shim with no perl picked: it ends with 1 to 128) takes the same fallback: exit 0, nothing printed, one row, under /bin/sh, dash and bash. 0.1.4 F-1 follow-up: a hook's perl that ends on a signal (an exit above 128: ABRT, as a perl that aborts on a missing library, or SEGV) takes the same fallback, exit 0 and its row; the payload's session id when perl ended before reading stdin, unknown when it had read it",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "path_prepend": [
@@ -718,6 +718,77 @@
        "writer": "helper"
       }
      }
+    ]
+   }
+  },
+  {
+   "name": "a perl that ends on a signal before it reads stdin (ABRT, as a perl that aborts on a missing library, and SEGV) under /bin/sh and dash (when found): exit 0, nothing on stdout, the row with the payload's session id (0.1.4 F-1 follow-up)",
+   "setup": [
+    {
+     "stub": "perl",
+     "script": "ulimit -c 0 2>/dev/null; kill -\"$STORE_TEST_SIG\" $$; exit 0"
+    }
+   ],
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "for s in /bin/sh dash; do p=$(command -v \"$s\") || continue; for g in ABRT SEGV; do d=\"$1/sig-${s##*/}-$g\"; printf '{\"session_id\":\"%s\",\"hook_event_name\":\"PreCompact\",\"trigger\":\"auto\"}' \"$2\" | STORE_TEST_SIG=$g CLAUDE_PLUGIN_OPTION_LOG_DIR=$d \"$p\" \"$0\" hook PreCompact >\"$1/out\" 2>/dev/null; rc=$?; n=$(grep -c '\"ev\":\"helper_runtime_missing\"' \"$d/$2.classic.jsonl\" 2>/dev/null); echo \"${s##*/} $g rc=$rc rows=${n:-0} out=$(wc -c <\"$1/out\" | tr -d ' ')\"; done; done",
+    "$STORE",
+    "$TMP",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^sh ABRT rc=0 rows=1 out=0$",
+     "^sh SEGV rc=0 rows=1 out=0$"
+    ],
+    "stdout_lacks": [
+     "rc=[1-9]",
+     "rows=[02-9]",
+     "out=[1-9]"
+    ]
+   }
+  },
+  {
+   "name": "a perl that ends on a signal after it read stdin: exit 0, nothing on stdout, the row under the unknown session id",
+   "setup": [
+    {
+     "stub": "perl",
+     "script": "cat >/dev/null; ulimit -c 0 2>/dev/null; kill -SEGV $$; exit 0"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/sig-read"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "rows": [
+     {
+      "file": "$TMP/sig-read/unknown.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 1,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ],
+    "absent": [
+     "$TMP/sig-read/$SID.classic.jsonl"
     ]
    }
   }

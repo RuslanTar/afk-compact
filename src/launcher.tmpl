@@ -4,9 +4,9 @@
 # version check of its own: main.pl's first lines refuse a perl older than
 # 5.28, and for a hook they run this file again as `--fallback-hook hook
 # <Event>`, stdin unread. Without perl or a readable main.pl, from that call,
-# or for a hook whose perl cannot start, it takes the fallback path: a hook
-# prints nothing and exits 0 after one content-free row (none under a root the
-# helper would refuse); any other command refuses.
+# or for a hook whose perl cannot start or ends on a signal, it takes the
+# fallback path: a hook prints nothing and exits 0 after one content-free row
+# (none under a root the helper would refuse); any other command refuses.
 
 # Keep the user's perl library paths for queue_cmd children, then clear
 # every variable that can inject modules or change byte handling.
@@ -48,17 +48,18 @@ elif [ -x "$perl" ] && [ -r "$root/helper/main.pl" ]; then
   # reads this file's path from $main::STORE_LAUNCHER to run its fallback on an old perl.
   # perl runs as a child, not in this shell's place: a perl found but unable to start (an
   # interpreter line that points nowhere, a version manager's shim with no perl picked) ends
-  # with 1 to 128, stdin unread, and the fallback below runs. One that started ends 0 (its END)
-  # or above 128 (a signal). Its walk to Claude Code starts at this shell's parent
+  # with 1 to 128, stdin unread, and the fallback below runs. One that ends on a signal (above
+  # 128: a perl that aborts on a missing library, a crash, a kill) takes the fallback too, so
+  # its row is written; its sid reads unknown when perl had read stdin. Only a perl that ran
+  # main.pl to its END ends 0. Its walk to Claude Code starts at this shell's parent
   # ($main::STORE_LAUNCHER_PARENT, "<this pid>:<parent>"), as when perl took this shell's place.
   "$perl" -e 'END { $? = 0 } my $main = shift @ARGV; $main::STORE_LAUNCHER = shift @ARGV; $main::STORE_LAUNCHER_PARENT = shift @ARGV; do $main;' \
     "$root/helper/main.pl" "$root/scripts/${self##*/}" "$$:${PPID-}" "$@" 2>/dev/null
-  rc=$?
-  if [ "$rc" -lt 1 ] || [ "$rc" -gt 128 ]; then exit 0; fi
+  [ "$?" -eq 0 ] && exit 0
 fi
 
-# Fallback: no perl, no readable helper/main.pl, a hook's perl that could not start, or (from
-# main.pl) a perl older than 5.28.
+# Fallback: no perl, no readable helper/main.pl, a hook's perl that could not start or ended on
+# a signal, or (from main.pl) a perl older than 5.28.
 if [ "${1-}" = hook ]; then
   payload=$(cat 2>/dev/null | head -c 65536 2>/dev/null)
   sid=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[ ]*:[ ]*"\([0-9A-Za-z-]\{8,64\}\)".*/\1/p' | head -n 1)
