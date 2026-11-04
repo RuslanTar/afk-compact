@@ -213,7 +213,9 @@ describe('resume line (A): the block', () => {
   })
 
   // 0.1.4 review F-4: the other entrypoints Claude Code 2.1.317 counts as a person's surface (its
-  // person-surface set beside isInteractive) keep the line in a headless load with no surface too.
+  // person-surface set beside isInteractive) keep the line in a headless load with no surface too,
+  // the underscore forms it maps to the same Cowork and Slack surfaces (local_agent,
+  // claude_in_slack) as well.
   test('a headless load with no surface whose entrypoint is another app a person reads (desktop 3P, Cowork, remote desktop and mobile, SSH remote, Slack) keeps the [resumed] line', async ($, on) => {
     const w = new World().install(on)
     w.interactive = false
@@ -221,7 +223,7 @@ describe('resume line (A): the block', () => {
     w.resumeHere = 'Status: working\nStep 1: `npm test`\nGate: none\n'
     await w.start($)
     await w.userTurn($)
-    for (const ep of ['claude-desktop-3p', 'local-agent', 'remote_desktop', 'remote_mobile', 'ssh-remote', 'claude-in-slack']) {
+    for (const ep of ['claude-desktop-3p', 'local-agent', 'local_agent', 'remote_desktop', 'remote_mobile', 'ssh-remote', 'claude-in-slack', 'claude_in_slack']) {
       w.env['CLAUDE_CODE_ENTRYPOINT'] = ep
       await raiseCompact($, { trigger: 'auto' })
       expect([ep, resumedLine(await nextBlock($, w))]).toEqual([ep, RESUMED ? lineFor('Resumed · step 1: `npm test`') : undefined])

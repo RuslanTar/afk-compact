@@ -165,10 +165,12 @@ export function personWrote(a: BlockArgs): BlockArgs {
  * (session.start `isInteractive` false): its desktop app and its VS Code extension
  * (CLAUDE_CODE_ENTRYPOINT, `Deps.entrypoint`). Review F-4: also the other entrypoints 2.1.317 counts
  * as a person's surface (its own set beside `isInteractive`): the desktop app's third-party form,
- * Cowork's local agent, the remote desktop and mobile apps, an SSH remote and the Slack app.
+ * Cowork's local agent, the remote desktop and mobile apps, an SSH remote and the Slack app; with
+ * `local_agent` and `claude_in_slack`, the underscore forms it maps to the same Cowork and Slack
+ * surfaces (one switch arm each in 2.1.317 and 2.1.318).
  */
 const PERSON_HOSTS: readonly string[] = ['claude-desktop', 'claude-vscode', 'claude-desktop-3p', 'local-agent',
-  'remote_desktop', 'remote_mobile', 'ssh-remote', 'claude-in-slack']
+  'local_agent', 'remote_desktop', 'remote_mobile', 'ssh-remote', 'claude-in-slack', 'claude_in_slack']
 
 /**
  * 0.1.4 R-3 (the line's audience decides; the 0.1.3 follow-up's escalation: Claude Code reports
