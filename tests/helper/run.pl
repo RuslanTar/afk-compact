@@ -2988,7 +2988,8 @@ sub builtin {
         # protocol of protocol_chars, the fixed lines (frame_chars, default 300) and a measured block of
         # remeasure_bytes keeps the block
         # untrimmed within max; the tags it asks the asset for are exactly `tags`, and the
-        # [resumed] line's runtime text is `resume_line` when given (0.1.3 resume-text A).
+        # [resumed] line's runtime text is `resume_line` when given (0.1.3 resume-text A);
+        # `entrypoint` and `mod_headless` (0.1.4 R-2) set who the classic path thinks reads the reply.
         for my $l (qw(measure resumeblock)) { require "$l.pm" }
         no warnings qw(redefine once);
         my (@seen, $line);
@@ -3002,6 +3003,17 @@ sub builtin {
             my $w = $a->{tmp} // die "resume_block: stop_mode needs tmp\n";
             util::mkdir_p("$w/x");
             restart::note_stop("$w/x", { permission_mode => $a->{stop_mode}, ($a->{stop_agent} ? (agent_id => 'a1') : ()) });
+            @rc::R{qw(watch sid)} = ($w, 'x');
+        }
+        # 0.1.4 R-2: CLAUDE_CODE_ENTRYPOINT as the hook sees it (unset unless `entrypoint` is given),
+        # and with `mod_headless` a `headless` row in the mod's stream of this session.
+        local $ENV{CLAUDE_CODE_ENTRYPOINT};
+        if (defined $a->{entrypoint}) { $ENV{CLAUDE_CODE_ENTRYPOINT} = $a->{entrypoint} } else { delete $ENV{CLAUDE_CODE_ENTRYPOINT} }
+        if ($a->{mod_headless}) {
+            require "rollup.pm";
+            my $w = $a->{tmp} // die "resume_block: mod_headless needs tmp\n";
+            util::mkdir_p("$w/x");
+            util::write_atomic("$w/x.jsonl", '{"v":1,"ev":"policy","sid":"x"}' . "\n" . '{"v":1,"ev":"headless","sid":"x","via":"session-start","compact":"command"}' . "\n");
             @rc::R{qw(watch sid)} = ($w, 'x');
         }
         my $n = int(($a->{remeasure_bytes} // 3000) / 100);

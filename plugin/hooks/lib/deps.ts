@@ -306,6 +306,12 @@ export interface Deps {
    * the background backend and job folder, and the restart launcher's launch folder (launch.gen.ts).
    */
   restartEnv(): Promise<RestartEnv>
+  /**
+   * 0.1.4 R-3: CLAUDE_CODE_ENTRYPOINT (`$.env.get`), which Claude Code sets per host: `cli`, `sdk-cli`
+   * for `-p` (probe 2026-11-03 on 2.1.317: `cli` in a terminal load, `sdk-cli` in 7 `-p` loads),
+   * `claude-desktop`, `claude-vscode`, `sdk-ts`, `sdk-py`; undefined when unset, empty or unreadable.
+   */
+  entrypoint(): Promise<string | undefined>
 }
 
 /** What one module load keeps in memory (a reload starts a fresh one). */
@@ -335,6 +341,11 @@ export type LoadState = {
   openQuestion: string | undefined
   /** This main turn's AskUserQuestion dialog that closed on the AFK timeout: its questions (question.ts). */
   askTimedOut: string | undefined
+  /**
+   * 0.1.4 R-7: a person's prompt entered this running turn after `askTimedOut` was set (question.ts
+   * `personTyped`): the question stays carried, its timeout mark does not.
+   */
+  askPersonSince: boolean
   /**
    * 0.1.3 resume-text B: the turn that left `openQuestion` open had a dialog that closed on the AFK
    * timeout (question.ts `turnQuestion`); read only while `openQuestion` is set (`carriedTimedOut`).
@@ -683,6 +694,7 @@ export function newState(loadId: string): LoadState {
     lastTurnAsksUser: false,
     openQuestion: undefined,
     askTimedOut: undefined,
+    askPersonSince: false,
     openTimedOut: false,
     ourSubmitPending: false,
     ourSubmitText: undefined,
@@ -1045,6 +1057,14 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
         backend: await get(() => $.env.get('CLAUDE_BG_BACKEND')),
         jobDir: await get(() => $.env.get('CLAUDE_JOB_DIR')),
         launch: await get(() => launchDir($)),
+      }
+    },
+    async entrypoint() {
+      try {
+        const v = await $.env.get('CLAUDE_CODE_ENTRYPOINT')
+        return typeof v === 'string' && v !== '' ? v : undefined
+      } catch {
+        return undefined
       }
     },
   }

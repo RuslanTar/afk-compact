@@ -3,7 +3,8 @@ package resumeblock;
 # resume-context.txt with [midturn]/[nonok], exactly one of [prod-forbid]/[prod-allow], and
 # [driver] when the re-measure names this session's Active driver (lib/gsd.pm; owner 2026-10-26),
 # [auto-mode] when the newest main Stop ran in auto permission mode (D-22), [resumed] with the
-# fixed first line (0.1.3 resume-text A: this path reads no Step 1, see $RESUMED_FALLBACK),
+# fixed first line (0.1.3 resume-text A: this path reads no Step 1, see $RESUMED_FALLBACK) unless a
+# script reads the reply (0.1.4 R-2, script_reader),
 # @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@ (C-5). Total soft
 # 6,500 chars (compaction-rem-6; soft since the owner overturned ratify xxxxxxxx#R3 on 2026-10-23,
 # SPEC-DELTAS RP-2): a block over it logs resume_block_over_soft {nonce, chars}. Hard runtime cap
@@ -19,7 +20,17 @@ our $SOFT_CHARS = 6500;
 # 0.1.3 resume-text A: the [resumed] line's fixed text, as resume.ts RESUMED_FALLBACK. The classic
 # SessionStart(compact) payload has no summary, and its copy is saved by PostCompact around the
 # same time (the saved-copy line says pending), so this path has no Step 1 to show.
+# 0.1.4 R-6 probe (2026-11-03, Claude Code 2.1.317, a scratch plugin logging both hooks with a 1 s
+# PostCompact): in all 6 compactions (3 `claude -p --resume <id> /compact`, 3 `/compact` in a
+# terminal session) SessionStart(compact) started and ended before PostCompact started, and the
+# mod's session.compact returned after PostCompact. So no copy or summary of this compaction exists
+# when this path builds its block: the fixed form stays.
 our $RESUMED_FALLBACK = 'Resumed after compaction';
+
+# 0.1.4 R-2: CLAUDE_CODE_ENTRYPOINT values whose reply a script reads (`claude -p`: sdk-cli; the
+# Agent SDK: sdk-ts, sdk-py). Probe 2026-11-03 on 2.1.317: every hook of a `-p` run saw sdk-cli, every
+# hook of a terminal session cli.
+our %SCRIPT_ENTRYPOINTS = map { $_ => 1 } qw(sdk-cli sdk-ts sdk-py);
 
 sub build {
     my (%a) = @_;
@@ -40,11 +51,13 @@ sub build {
     # (never with [idle-halt], which this classic path never sets).
     push @tags, 'driver' if $re =~ /^Active driver: /m;
     # D-22 (root 2026-10-31): in auto permission mode the classifier blocks a gated outward action
-    # a carried approval covers, so [auto-mode] asks first. The mode is the newest main Stop's,
+    # a carried approval covers (0.1.4 R-1: destructive git and external writes; a plain push
+    # passes), so [auto-mode] asks first. The mode is the newest main Stop's,
     # which on_Stop already keeps (restart::note_stop, D10); no new probe.
     push @tags, 'auto-mode' if auto_mode(rc::sid_dir());
-    # 0.1.3 resume-text A: one fixed first line before any tool call (no handoff ack or idle-again here).
-    push @tags, 'resumed';
+    # 0.1.3 resume-text A: one fixed first line before any tool call (no handoff ack or idle-again
+    # here); 0.1.4 R-2: not when a script reads the reply.
+    push @tags, 'resumed' unless script_reader();
     my $max = 3000;
     my $text;
     for (1 .. 12) {
@@ -60,6 +73,20 @@ sub build {
     }
     rc::emit('resume_block_over_soft', [nonce => $a{nonce}, chars => length($text)]) if length($text) > $SOFT_CHARS;
     return $text;
+}
+
+# script_reader() -> 1 when a script reads this session's reply, so the block has no [resumed]
+# line (0.1.4 R-2, as the mod's resume.ts scriptReader): CLAUDE_CODE_ENTRYPOINT, which Claude Code
+# sets for the hooks it runs, names `claude -p` or the Agent SDK (%SCRIPT_ENTRYPOINTS); any other
+# value (cli, claude-desktop, claude-vscode: a person reads the reply) keeps the line. Unset (an older
+# Claude Code, a host that does not set it): 1 when the mod logged this session headless (its
+# `headless` row: session.start said no person is at the prompt, or a compaction call was refused
+# as headless), else the line stays.
+sub script_reader {
+    my $ep = $ENV{CLAUDE_CODE_ENTRYPOINT};
+    return $SCRIPT_ENTRYPOINTS{$ep} ? 1 : 0 if defined $ep && $ep ne '';
+    my $rows = eval { rollup::stream_rows(rc::stream_path('mod'), evs => ['headless']) } || [];
+    return (grep { ($_->{ev} // '') eq 'headless' } @$rows) ? 1 : 0;
 }
 
 # auto_mode(sid_dir) -> 1 when the newest main Stop of this session ran in auto permission mode.

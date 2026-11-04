@@ -60,6 +60,10 @@ describe('resume line (A): Step 1 as code reads it', () => {
     expect(step1Of('## Resume here\nStep 1: `make gate` — for the 0.1.1 gate (U-3) | proposed\n')).toBe('`make gate`')
     expect(step1Of('## Resume here\nStep 1: report — for the owner\'s "ship it?"\n')).toBe('report')
     expect(step1Of('## Resume here\nStep 1: rerun — for each red case, read its log\n')).toBe('rerun — for each red case, read its log')
+    // 0.1.4 R-8 (review of the 0.1.3 follow-up, mutant r2: `the` without its space): `— for them`
+    // and `— for these` are not the free `— for the …` tail.
+    expect(step1Of('## Resume here\nStep 1: x — for them\n')).toBe('x — for them')
+    expect(step1Of('## Resume here\nStep 1: ping the owners — for these two lanes\n')).toBe('ping the owners — for these two lanes')
   })
 
   test('a summary with CRLF line ends gives its Step 1 (review round 2)', () => {
@@ -167,14 +171,69 @@ describe('resume line (A): the block', () => {
   })
 
   // Review round 2: a headless load (`claude -p`, the Agent SDK: session.start `isInteractive`
-  // false) gets no [resumed] line; a script reads its reply.
-  test('a headless load: the block has no [resumed] line', async ($, on) => {
+  // false) gets no [resumed] line; a script reads its reply. 0.1.4 R-3: only with no surface (a
+  // `-p` load has none: probe 2026-11-03).
+  test('a headless load with no surface (`claude -p`): the block has no [resumed] line', async ($, on) => {
     const w = new World().install(on)
     w.interactive = false
+    w.surfaceList = []
     w.resumeHere = 'Status: working\nStep 1: `npm test`\nGate: none\n'
     await w.start($)
     await w.userTurn($)
     await raiseCompact($, { trigger: 'auto' })
+    const b = await nextBlock($, w)
+    expect(b).toBeDefined()
+    expect(resumedLine(b)).toBeUndefined()
+  })
+
+  // 0.1.4 R-3 (the line's audience decides): Claude Code reports `isInteractive` false for the
+  // desktop app and the IDE extensions too; a person reads the reply there.
+  test('a headless load with a surface (the desktop app, an IDE) keeps the [resumed] line; so does one whose entrypoint is claude-desktop or claude-vscode', async ($, on) => {
+    const w = new World().install(on)
+    w.interactive = false
+    w.surfaceList = ['desktop']
+    w.resumeHere = 'Status: working\nStep 1: `npm test`\nGate: none\n'
+    await w.start($)
+    await w.userTurn($)
+    await raiseCompact($, { trigger: 'auto' })
+    expect(resumedLine(await nextBlock($, w))).toBe(RESUMED ? lineFor('Resumed · step 1: `npm test`') : undefined)
+    // No surface, but CLAUDE_CODE_ENTRYPOINT names the IDE extension: still a person's.
+    w.surfaceList = []
+    w.env['CLAUDE_CODE_ENTRYPOINT'] = 'claude-vscode'
+    await raiseCompact($, { trigger: 'auto' })
+    expect(resumedLine(await nextBlock($, w))).toBe(RESUMED ? lineFor('Resumed · step 1: `npm test`') : undefined)
+    // No surface and the `-p` entrypoint: a script reads it.
+    w.env['CLAUDE_CODE_ENTRYPOINT'] = 'sdk-cli'
+    await raiseCompact($, { trigger: 'auto' })
+    const b = await nextBlock($, w)
+    expect(b).toBeDefined()
+    expect(resumedLine(b)).toBeUndefined()
+  })
+
+  test('an interactive load keeps the line whatever its surfaces (only a headless load is a script\'s)', async ($, on) => {
+    const w = new World().install(on)
+    w.surfaceList = []
+    await w.start($)
+    await w.userTurn($)
+    await raiseCompact($, { trigger: 'auto' })
+    expect(resumedLine(await nextBlock($, w))).toBe(RESUMED ? lineFor('Resumed after compaction') : undefined)
+  })
+
+  // 0.1.4 R-4 (the 0.1.3 follow-up's long-term note: a block built before the load was found
+  // headless kept [resumed]): the block records its reader at build, and a delivery to another
+  // reader builds it again.
+  test('a block built before the load is found headless (no surface) is delivered without [resumed]; the record keeps the reader of its build', async ($, on) => {
+    const w = new World().install(on)
+    w.resumeHere = 'Status: working\nStep 1: `npm test`\nGate: none\n'
+    await w.start($)
+    await w.userTurn($)
+    await raiseCompact($, { trigger: 'auto' })
+    const rec = JSON.parse(w.files.get(`${WATCH}/${SID_A}/${PENDING_FILE}`) ?? '{}') as { args?: { script?: boolean } }
+    expect(rec.args?.script).toBe(false)
+    // The load turns out headless before the block goes out (session.start isInteractive false).
+    w.interactive = false
+    w.surfaceList = []
+    await $.session.start({ cwd: '/w', surface: null, isInteractive: false } as never)
     const b = await nextBlock($, w)
     expect(b).toBeDefined()
     expect(resumedLine(b)).toBeUndefined()
@@ -496,5 +555,80 @@ describe('no re-ask after a timeout (B)', () => {
     b = await nextBlock($, w) ?? ''
     expect(b).toContain('"Publish the notes?"')
     expect(b).not.toContain(TIMED)
+  })
+
+  // 0.1.4 R-7 (review of the 0.1.3 follow-up: an interjection kept the mark): the person typed into
+  // the running turn after its dialog timed out (AT-ID-03 "typed over it"), so a mid-turn block of
+  // that turn, and the turn's end, carry the question without [question-timeout].
+  test('a prompt the person typed into the running turn after a timed-out dialog: a mid-turn block has [question] without [question-timeout]', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    await $.prompt.submit({ text: 'use whatever, I am back in 5', origin: { kind: 'composer' }, turnId: 't1' } as never)
+    await raiseCompact($, { trigger: 'auto' })
+    let b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Which database?"')
+    expect(b).not.toContain(TIMED)
+    // The same turn's end leaves the question open, unmarked; a dialog that times out after the
+    // person's message is a new timeout and marks it again.
+    await w.turnEnd($, 'Went on.')
+    await raiseCompact($, { trigger: 'auto' })
+    b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Which database?"')
+    expect(b).not.toContain(TIMED)
+    await w.userTurn($, 'background result', 'task-notification')
+    await $.prompt.submit({ text: 'ok', origin: { kind: 'composer' }, turnId: 't2' } as never)
+    await $.tool.call(ask('Which cache?'))
+    await raiseCompact($, { trigger: 'auto' })
+    b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Which cache?"')
+    if (TIMEOUT) expect(b).toContain(TIMED)
+  })
+
+  test('a prompt not of a person\'s (a task notification) entering the running turn keeps the mark', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    await $.prompt.submit({ text: 'task done', origin: { kind: 'task-notification' }, turnId: 't1' } as never)
+    await raiseCompact($, { trigger: 'auto' })
+    const b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Which database?"')
+    if (TIMEOUT) expect(b).toContain(TIMED)
+  })
+})
+
+// 0.1.4 R-5 (the 0.1.3 lane's long-term note, repeated by its reviews): the no-dialog rule reaches
+// the model at the timed-out dialog's own result, so a session that never compacts gets it too.
+describe('no re-ask after a timeout: the note on the result (R-5)', () => {
+  const NOTE = (w: World): string =>
+    `Note from the user's ${w.name} plugin: the dialog timed out: ask it again only in text, at the end of your reply, until the person writes.`
+  test('a main dialog that closed on the AFK timeout gets the note; an answered one, an empty one and another tool none', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    const timed = (await $.tool.call(ask('Which database?'))) as { context?: readonly string[] }
+    expect(timed.context).toEqual([NOTE(w)])
+    dialogs(w, 'answered')
+    const answered = (await $.tool.call(ask('Which cache?'))) as { context?: readonly string[] }
+    expect(answered.context).toBeUndefined()
+    w.toolAnswer = () => ({ result: { questions: [], answers: {} } })
+    const empty = (await $.tool.call(ask('Which queue?'))) as { context?: readonly string[] }
+    expect(empty.context).toBeUndefined()
+    dialogs(w, 'timeout')
+    expect((await w.tool($)).context).toBeUndefined()
+  })
+
+  test('a subagent\'s timed-out dialog gets no note (the mod reads main calls only)', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    const r = (await $.tool.call({ ...(ask('Which database?') as object), agentId: 'a9a00b3f363327444' } as never)) as { context?: readonly string[] }
+    expect(r.context).toBeUndefined()
   })
 })

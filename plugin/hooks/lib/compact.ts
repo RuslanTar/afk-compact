@@ -20,7 +20,7 @@ import { drawNonce } from './nonce'
 import { carriedQuestion, carriedTimedOut } from './question'
 import { byteLength, sha8 } from './normalize'
 import type { BlockArgs } from './resume'
-import { buildBlockWith, claimedElsewhere, claimedWhere, logLane, logOutcome, openEpisode, persistPending, prodAllowed, settleRecords, step1Of } from './resume'
+import { buildBlockWith, claimedElsewhere, claimedWhere, logLane, logOutcome, openEpisode, persistPending, prodAllowed, scriptReader, settleRecords, step1Of } from './resume'
 import type { LaneFacts } from './lane'
 import { laneFacts, measuredRunning } from './lane'
 import { armDigest } from './digest'
@@ -540,6 +540,8 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     // the running turn's timed-out dialog.
     ...(question !== undefined ? { question, ...(carriedTimedOut(s) ? { questionTimedOut: true } : {}) } : {}),
     ...(step1 !== undefined ? { step1 } : {}),
+    // 0.1.4 R-4: who reads the reply as this build sees it (a later delivery compares it).
+    script: await scriptReader(d),
   }
   const built = await buildBlockWith(d, a.sid, blockArgs)
   // The idle episode of this compaction (a compaction that is not idle closes the one before).

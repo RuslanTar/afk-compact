@@ -133,14 +133,40 @@ export function personAnswered(r: { deny?: string; isError?: true; result?: unkn
  * one of the turn, and the question an earlier turn left open (a person is back, as at their
  * prompt); any other (an error, nothing chosen) changes nothing.
  */
-export function noteDialog(s: Pick<LoadState, 'askTimedOut' | 'openQuestion'>, input: unknown, r: { isError?: true; result?: unknown }): void {
+export function noteDialog(s: Pick<LoadState, 'askTimedOut' | 'askPersonSince' | 'openQuestion'>, input: unknown, r: { isError?: true; result?: unknown }): void {
   if (r.isError !== true && timedOut(r.result)) {
     s.askTimedOut = dialogQuestions(input) ?? s.askTimedOut
+    // A dialog that timed out after the person typed into this turn is a new timeout.
+    s.askPersonSince = false
     return
   }
   if (!personAnswered(r)) return
   s.askTimedOut = undefined
+  s.askPersonSince = false
   s.openQuestion = undefined
+}
+
+/**
+ * 0.1.4 R-5: the context line a main AskUserQuestion result that closed on the AFK timeout gets
+ * (register.ts `tool.call`), so the no-dialog rule of the resume block's step 6 reaches a session
+ * that never compacts too, at the moment Claude Code's own result says the question can be asked
+ * again later (0.1.3 usage review: 9 of 38 timed-out questions were asked again in a dialog, in
+ * later turns no person started). Undefined for any other result.
+ */
+export function timeoutNote(name: string, r: { isError?: true; result?: unknown }): string | undefined {
+  if (r.isError === true || !timedOut(r.result)) return undefined
+  return `Note from the user's ${name} plugin: the dialog timed out: ask it again only in text, at the end of your reply, until the person writes.`
+}
+
+/**
+ * 0.1.4 R-7 (review of the 0.1.3 follow-up: an interjection kept the mark): a person's prompt typed
+ * into the running turn. They wrote since the dialog timed out, so a block built in this turn
+ * carries the question without `[question-timeout]`, and so does the turn's end; the question
+ * stays listed.
+ */
+export function personTyped(s: Pick<LoadState, 'askTimedOut' | 'askPersonSince' | 'openTimedOut'>): void {
+  if (s.askTimedOut !== undefined) s.askPersonSince = true
+  s.openTimedOut = false
 }
 
 /**
@@ -149,15 +175,17 @@ export function noteDialog(s: Pick<LoadState, 'askTimedOut' | 'openQuestion'>, i
  * wins (the model's latest ask). A turn with neither keeps an earlier one open (a background
  * result's turn), which only a person's turn or the session's end closes (alive.ts).
  */
-export function turnQuestion(s: Pick<LoadState, 'askTimedOut' | 'openQuestion' | 'openTimedOut'>, t: { reason: string; answer: string }): void {
+export function turnQuestion(s: Pick<LoadState, 'askTimedOut' | 'askPersonSince' | 'openQuestion' | 'openTimedOut'>, t: { reason: string; answer: string }): void {
   const q = t.reason === 'answer' ? (answerQuestion(t.answer) ?? s.askTimedOut) : undefined
   // 0.1.3 resume-text B: a dialog of this turn closed on the AFK timeout, whichever text is carried
   // (the model often asks the timed-out dialog's question again in plain text). The mark stays while
   // a question is open: a later turn no person started (a task notification, a peer message) that
   // lists it last, as step 6 and `[question]` ask, re-words the question but nobody has answered
   // (review of the first build: 3 of the 6 real compactions after a timeout had such turns).
-  const timed = s.askTimedOut !== undefined
+  // 0.1.4 R-7: not when the person typed into this turn after the timeout (`personTyped`).
+  const timed = s.askTimedOut !== undefined && !s.askPersonSince
   s.askTimedOut = undefined
+  s.askPersonSince = false
   if (q !== undefined) {
     s.openTimedOut = timed || (s.openQuestion !== undefined && s.openTimedOut)
     s.openQuestion = q
@@ -180,9 +208,10 @@ export function carriedQuestion(s: Pick<LoadState, 'askTimedOut' | 'openQuestion
  * open (or an earlier wording of it), so `[question-timeout]` says not to ask it in a dialog again.
  * `openTimedOut` is read only beside an open question: `turnQuestion` sets both together, and
  * whatever clears the question (a person's turn, the session's end, an answered dialog) leaves the
- * flag unread and ends it.
+ * flag unread and ends it. 0.1.4 R-7: a person's prompt typed into the running turn after the
+ * timeout ends the mark too (`personTyped`); the question stays carried.
  */
-export function carriedTimedOut(s: Pick<LoadState, 'askTimedOut' | 'openQuestion' | 'openTimedOut' | 'mainTurnRunning'>): boolean {
-  if (s.mainTurnRunning && s.askTimedOut !== undefined) return true
+export function carriedTimedOut(s: Pick<LoadState, 'askTimedOut' | 'askPersonSince' | 'openQuestion' | 'openTimedOut' | 'mainTurnRunning'>): boolean {
+  if (s.mainTurnRunning && s.askTimedOut !== undefined) return !s.askPersonSince
   return s.openQuestion !== undefined && s.openTimedOut
 }
