@@ -1537,6 +1537,14 @@ sub invoke {
 #   linux_start_time  {image | images, probe, mb, steps}: identity::start_time on Linux in Docker
 #                     (R-4; a subprocess: the case "needs" ["docker-image:<image>"]; images: the
 #                     first one held here, none: a note and not run)
+#   machine_id        {images?}: plugver::machine() of the staged copy with no seam, against the id
+#                     read here (ioreg's IOPlatformUUID on macOS, /etc/machine-id on Linux); images:
+#                     the /etc/machine-id form on Linux in Docker as well (the first one held here,
+#                     none: a note and not run)
+#   start_epochs      {}: identity::start_epochs and key_live of the staged copy with no seam (a
+#                     running pid, an ended one, a reused start)
+#   own_start         {root, sid, want}: sessions::own_start over a store's per-process records,
+#                     "<since> <until> <coarse>" (3 decimals) or "undef"
 my $LIBS_READY;
 sub _libs {
     return if $LIBS_READY;
@@ -3788,6 +3796,82 @@ sub builtin {
         push @e, map { "$a->{image}: $_" } $out =~ /^FAIL: (.*)$/mg;
         push @e, "$a->{image}: exit $r->{exit}" . ($out =~ /\S/ ? ': ' . chars(substr($out, -600)) : '') if $r->{exit} != 0 && !@e;
         push @e, "$a->{image}: no DONE line" if $r->{exit} == 0 && $out !~ /^DONE /m;
+        return @e;
+    }
+    if ($name eq 'machine_id') {
+        # 0.1.4 V-6: plugver::machine() of the staged copy with no test seam (a child perl over the
+        # staged lib/, not test mode): 16 hex of sha256("machine\n" + the id in lower case), the id
+        # read here on its own: macOS IOPlatformUUID (ioreg), elsewhere /etc/machine-id, else
+        # /var/lib/dbus/machine-id; "undef" where none is readable. "images": the same on Linux in
+        # Docker, a known id written to /etc/machine-id first.
+        my $code = 'require "util.pm"; require "jsonc.pm"; require "sha.pm"; require "identity.pm"; require "plugver.pm"; '
+                 . 'my $m = plugver::machine(); print defined $m ? $m : "undef"';
+        my $r = run_cmd([$^X, "-I$STAGE/helper/lib", '-e', $code], timeout_ms => 20000,
+                        env => { STORE_TEST_MODE => undef, STORE_TEST_MACHINE_ID => undef });
+        my $got = $r->{exit} == 0 ? ($r->{out} // '') : "exit $r->{exit}";
+        my $raw;
+        if ($^O eq 'darwin') {
+            my $io = run_cmd(['/usr/sbin/ioreg', '-rd1', '-c', 'IOPlatformExpertDevice'], timeout_ms => 20000, env => { LC_ALL => 'C' });
+            ($raw) = ($io->{out} // '') =~ /"IOPlatformUUID"\s*=\s*"([0-9A-Fa-f-]+)"/;
+        } else {
+            for my $p ('/etc/machine-id', '/var/lib/dbus/machine-id') {
+                my $t = util::read_file($p) // next;
+                if ($t =~ /\A\s*([0-9A-Fa-f]+)\s*\z/) { $raw = $1; last }
+            }
+        }
+        my $want = defined $raw ? substr(sha::hex256("machine\n" . lc $raw), 0, 16) : 'undef';
+        push @e, "machine() $got, want $want" . (defined $raw ? '' : ' (no machine id readable here)') unless $got eq $want;
+        push @e, "machine() $got: not 16 hex" if defined $raw && $got !~ /\A[0-9a-f]{16}\z/;
+        if (ref $a->{images} eq 'ARRAY') {
+            my $docker = util::which('docker');
+            my ($img) = $docker ? grep { docker_image($_) } @{ $a->{images} } : ();
+            if (!defined $img) { print '# not run: none of ' . join(', ', @{ $a->{images} }) . " is here (no pull)\n"; return @e }
+            my $id = '0123456789ABCDEF0123456789abcdef';
+            my $cname = "store-h-mid-$$-" . util::rand_hex(4);
+            my $helper = ($PLUGIN_SRC // "$REPO/plugin") . '/helper';
+            my @run = ($docker, 'run', '--rm', '--init', '--pull', 'never', '--name', $cname, '--network', 'none', '-e', 'LC_ALL=C',
+                       '-v', "$helper:/w/helper:ro", $img, 'sh', '-c', 'printf "%s\n" "$0" > /etc/machine-id && exec perl -I/w/helper/lib -e "$1"',
+                       $id, $code);
+            my $d = run_cmd(['/bin/sh', '-c', 'exec "$0" "$@" 2>&1', @run], timeout_ms => 120000);
+            if ($d->{timed_out}) { run_cmd([$docker, 'rm', '-f', $cname], timeout_ms => 30000) }
+            my $dw = substr(sha::hex256("machine\n" . lc $id), 0, 16);
+            (my $dg = $d->{out} // '') =~ s/\s+\z//;
+            push @e, "$img: machine() $dg, want $dw (/etc/machine-id)" unless $d->{exit} == 0 && $dg eq $dw;
+        }
+        return @e;
+    }
+    if ($name eq 'start_epochs') {
+        # 0.1.4 V-2: identity::start_epochs of the staged copy with no test seam (a child perl, not
+        # test mode). The child's own pid reads the start identity::start_epoch reads for it alone
+        # (`ps -o lstart= -p`, or /proc), the pid of a child it reaped reads 0; key_live of its own
+        # key is 1, of the same pid with another start (a reused pid) 0, of the ended pid 0.
+        my $code = 'require "util.pm"; require "jsonc.pm"; require "identity.pm"; '
+                 . 'my $k = fork; POSIX::_exit(0) if defined $k && !$k; waitpid($k, 0); '
+                 . 'my $one = identity::start_epoch($$); my $s = identity::start_epochs([$$, $k]); '
+                 . 'print join(" ", $one // "undef", $s->{$$} // "undef", $s->{$k} // "undef", '
+                 . 'identity::key_live("$$-" . ($one // 0), $s), identity::key_live("$$-" . (($one // 0) - 1000), $s), '
+                 . 'identity::key_live("$k-" . ($one // 0), $s))';
+        my $r = run_cmd([$^X, "-I$STAGE/helper/lib", '-MPOSIX', '-e', $code], timeout_ms => 20000,
+                        env => { STORE_TEST_MODE => undef, STORE_TEST_PROC_STARTS => undef });
+        my ($one, $mine, $gone, $live, $reused, $ended) = split ' ', ($r->{out} // '');
+        return ("child exit $r->{exit}: " . ($r->{out} // '')) unless $r->{exit} == 0 && defined $ended;
+        push @e, "start_epoch of the child's pid: $one" unless $one =~ /\A[1-9][0-9]+\z/;
+        push @e, "start_epochs of the child's pid: $mine, want $one (start_epoch)" unless $mine eq $one;
+        push @e, "start_epochs of an ended pid: $gone, want 0" unless $gone eq '0';
+        push @e, "key_live of the child's own key: $live, want 1" unless $live eq '1';
+        push @e, "key_live of its pid with another start: $reused, want 0" unless $reused eq '0';
+        push @e, "key_live of the ended pid: $ended, want 0" unless $ended eq '0';
+        return @e;
+    }
+    if ($name eq 'own_start') {
+        # V-5: what a session's own rows start from (sessions::own_start, the approvals' quote
+        # floor), read before and after the daily record prune: the prune keeps it as it was.
+        for my $l (qw(sessions)) { require "$l.pm" }
+        no warnings 'once';
+        local %rc::R = (paths => { root => $a->{root} });
+        my $s = sessions::own_start($a->{sid});
+        my $got = $s ? sprintf('%.3f %.3f %d', $s->{since}, $s->{until}, $s->{coarse}) : 'undef';
+        push @e, "own_start $got, want $a->{want}" unless $got eq ($a->{want} // '');
         return @e;
     }
     if ($name eq 'live_peers') {

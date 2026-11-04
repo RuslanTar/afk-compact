@@ -4,7 +4,8 @@ package identity;
 # Code binary (or whose pid CLAUDE_PID names); a nearer process whose command hides the
 # binary but whose executable is it wins (a background session's worker). Start time:
 # Linux, MSYS and Cygwin /proc/<pid>/stat field 22 + btime (R-4, RF-3); else `ps -o lstart=`.
-# Every start-time read in the helper goes through _read_start.
+# Every start-time read of one pid in the helper goes through _read_start; start_epochs reads
+# many at once (the same /proc fields on the same platforms, else one `ps -axo` listing).
 # Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk; STORE_TEST_PROC_ROOT=<dir>
 # stands in for /proc in the start-time read (with util::os's STORE_TEST_OS).
 use strict;
@@ -97,6 +98,94 @@ sub start_epoch {
     my ($pid, %o) = @_;
     my ($e) = _read_start($pid, $o{ps});
     return $e;
+}
+
+# start_epochs([pid ...]) -> {pid => epoch | 0 | undef}: when each pid's process started, in the
+# seconds that a record's key holds (lstart_epoch of its lstart string); 0 when the pid does not
+# run; undef when it runs (or may) but its start cannot be read. Linux, MSYS and Cygwin:
+# /proc/<pid>/stat where readable (field 22 + btime, as _read_start; no /proc/<pid>: 0). Elsewhere,
+# and for a Linux pid whose stat is not readable: kill 0, then one `ps -axo pid=,lstart=` listing
+# for all the pids that run (read once per process: a daily prune's hundreds of pids cost one ps,
+# not hundreds); a pid it lacks, or no listing (no ps, one without -o): undef. MSYS and Cygwin
+# make no listing (their ps has no -o, as _read_start): a running pid there whose stat is not
+# readable is undef. Test mode: STORE_TEST_PROC_STARTS
+# names a file of `<pid> <epoch>` lines (`<pid> ?`: start unknown) that replaces all of it: an
+# unlisted pid does not run. The load and record prunes use it (lib/plugver.pm, lib/sessions.pm).
+my $PS_STARTS;
+sub start_epochs {
+    my ($pids) = @_;
+    my %out;
+    my @want = grep { defined && !ref && /\A[1-9][0-9]{0,9}\z/ } @{ $pids || [] };
+    if (util::test_mode() && defined $ENV{STORE_TEST_PROC_STARTS} && $ENV{STORE_TEST_PROC_STARTS} ne '') {
+        my %t;
+        for my $l (split /\n/, util::read_file($ENV{STORE_TEST_PROC_STARTS}) // '') {
+            $t{$1} = ($2 eq '?' ? undef : 0 + $2) if $l =~ /\A\s*(\d+)\s+(\d+|\?)\s*\z/;
+        }
+        $out{$_} = exists $t{$_} ? $t{$_} : 0 for @want;
+        return \%out;
+    }
+    my $os = util::os();
+    my $cyg = $os eq 'msys' || $os eq 'cygwin';
+    my $proc = ($os eq 'linux' || $cyg) && -r (_proc() . '/self/stat');
+    my @ps;
+    for my $p (@want) {
+        next if exists $out{$p};
+        if ($proc && -r (_proc() . "/$p/stat")) {
+            my (undef, undef, $ticks) = _proc_stat($p);
+            if (defined $ticks) {
+                my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
+                my $s = POSIX::strftime('%a %b %e %H:%M:%S %Y', localtime(_btime() + int($ticks / $hz)));
+                $s =~ s/  / /g;
+                $out{$p} = lstart_epoch($s);
+                next;
+            }
+        } elsif ($proc && !-e (_proc() . "/$p")) {
+            $out{$p} = 0;
+            next;
+        }
+        if (!(kill(0, $p) || $!{EPERM})) { $out{$p} = 0; next }
+        $out{$p} = undef;
+        push @ps, $p;
+    }
+    if (@ps && !$cyg) {
+        my $t = _ps_starts();
+        $out{$_} = $t->{$_} for grep { defined $t->{$_} } @ps;
+    }
+    return \%out;
+}
+
+sub _ps_starts {
+    return $PS_STARTS if $PS_STARTS;
+    my %t;
+    my $ps = util::which('ps');
+    my $r = defined $ps ? util::run([$ps, '-axo', 'pid=,lstart='], timeout_ms => 5000, env => { LC_ALL => 'C', LANG => 'C' }) : undef;
+    if ($r && $r->{exit} == 0) {
+        for my $l (split /\n/, $r->{out} // '') {
+            next unless $l =~ /\A\s*(\d+)\s+(\S.*?)\s*\z/;
+            my ($pid, $s) = ($1, $2);
+            $s =~ s/\s+/ /g;
+            my $e = lstart_epoch($s);
+            $t{$pid} = $e if defined $e;
+        }
+    }
+    return $PS_STARTS = \%t;
+}
+
+# key_live(key, starts) -> 1 when a record key `<pid>-<start epoch>` may name a process that still
+# runs, by start_epochs' answer: its pid runs with that start (2 s apart at most: a Linux boot time
+# read twice may differ by a second), or with a start that cannot be read, or the key holds no
+# start (0: unreadable when the record was written). 0 when the pid does not run or runs with
+# another start (the pid was reused).
+sub key_live {
+    my ($key, $starts) = @_;
+    return 0 unless defined $key && $key =~ /\A(\d+)-(\d+)\z/ && $1 > 1;
+    my ($pid, $e) = ($1, $2);
+    return 1 unless ref $starts eq 'HASH' && exists $starts->{$pid};
+    my $now = $starts->{$pid};
+    return 1 unless defined $now;
+    return 0 if $now == 0;
+    return 1 if $e == 0;
+    return abs($now - $e) <= 2 ? 1 : 0;
 }
 
 # Seconds since epoch for an lstart string (digits pass through).

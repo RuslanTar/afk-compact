@@ -1,0 +1,10 @@
+{
+ "id": "V014-VS-13-start-epochs",
+ "note": "0.1.4 version skew (lib/identity.pm start_epochs and key_live, V-2): the start times the daily prunes read, with no test seam (the prune cases feed STORE_TEST_PROC_STARTS). In a child perl outside test mode: its own pid reads the start that identity::start_epoch reads for it alone (macOS: one `ps -axo pid=,lstart=` listing against `ps -o lstart= -p`; Linux: /proc), the pid of a child it reaped reads 0 (does not run); key_live of its own key is 1, of its pid with another start (a reused pid) 0, of the ended pid 0.",
+ "steps": [
+  {
+   "lib": "start_epochs",
+   "args": {}
+  }
+ ]
+}

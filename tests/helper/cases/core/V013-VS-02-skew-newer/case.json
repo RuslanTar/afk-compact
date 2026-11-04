@@ -42,7 +42,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.0 · \\S+$"
+     "^plugin: 0\\.1\\.0 · ~/\\S+$"
     ],
     "stdout_lacks": [
      "^plugin notice:",
@@ -74,7 +74,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.0 · \\S+\\nplugin notice: this session runs 0\\.1\\.0; sessions started since 2026-10-21 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins$"
+     "^plugin: 0\\.1\\.0 · ~/\\S+\\nplugin notice: this session runs 0\\.1\\.0; sessions started since 2026-10-21 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins$"
     ]
    }
   },
@@ -86,7 +86,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.0 · \\S+$",
+     "^plugin: 0\\.1\\.0 · ~/\\S+$",
      "^plugin notice: this session runs 0\\.1\\.0; sessions started since 2026-10-21 12:00 \\+0300 run 0\\.1\\.2: /reload-plugins$",
      "^session: unknown \\(no session id\\)"
     ]
@@ -206,7 +206,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.0 · \\S+$"
+     "^plugin: 0\\.1\\.0 · ~/\\S+$"
     ],
     "stdout_lacks": [
      "^plugin notice:",

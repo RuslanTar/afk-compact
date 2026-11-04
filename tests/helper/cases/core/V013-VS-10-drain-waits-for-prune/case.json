@@ -1,6 +1,6 @@
 {
  "id": "V013-VS-10-drain-waits-for-prune",
- "note": "0.1.3 version skew (lib/plugver.pm), review round 2 (scen.sh race): a prune moves loads/ aside, then moves its kept records back, holding loads-drop/.lock. A process that starts between the two steps must not drain that folder: its drain takes the same lock, and while another process holds it, it drains nothing (the kept record of a live process, dated before the move, is not unlinked) and does not prune. Once the prune has moved its kept records back and let go of the lock, the next start drains the rest and removes the folder.",
+ "note": "0.1.3 version skew (lib/plugver.pm), review round 2 (scen.sh race): a prune moves loads/ aside, then moves its kept records back, holding loads-drop/.lock. A process that starts between the two steps must not drain that folder: its drain takes the same lock, and while another process holds it, it drains nothing (the kept record of a live process, dated before the move, is not unlinked) and does not prune. Once the prune has moved its kept records back and let go of the lock, the next start drains the rest and removes the folder. 0.1.4 (V-4): the drain moves back every record the prune's keep rule keeps, not only those written while the folder moved: here the newest 0.1.4 record (no 0.1.4 record left in loads/), and, after a prune killed between its two moves left its lock (removed once over 120 s old, the next start drains), the record of a process that still runs (by the seam-fed process table); a dead record that is not its group's newest is unlinked.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "manifest": {
@@ -57,6 +57,19 @@
      }
     },
     {
+     "write": "$ROOT/.sessions/loads-drop/1792580700-99999/1792300000_50000032-1792299990_0.1.4_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.4",
+      "plugin_root": "$PLUGIN_PARENT/0.1.4",
+      "host": "$HOST",
+      "session_id": "50000000-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
      "write": "$ROOT/.sessions/loads-drop/.lock",
      "content": "99999\n"
     }
@@ -69,6 +82,9 @@
      },
      {
       "path": "$ROOT/.sessions/loads-drop/1792580700-99999/1792400000_50000031-1792399990_0.1.4_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads-drop/1792580700-99999/1792300000_50000032-1792299990_0.1.4_$UTAG.json"
      },
      {
       "path": "$ROOT/.sessions/loads-drop/.lock"
@@ -87,7 +103,7 @@
    }
   },
   {
-   "name": "the prune moved its kept record back and let go of the lock: the next start drains the rest and removes the folder",
+   "name": "the prune moved its kept record back and let go of the lock: the next start drains the rest (the newest 0.1.4 record back to loads/, the older one unlinked) and removes the folder",
    "now": "2026-10-21T14:06:12+03:00",
    "argv": [
     "hook",
@@ -120,14 +136,120 @@
       "path": "$ROOT/.sessions/loads/1792500000_$RUNNER_PID-1792499990_0.1.3_$UTAG.json"
      },
      {
+      "path": "$ROOT/.sessions/loads/1792400000_50000031-1792399990_0.1.4_$UTAG.json"
+     },
+     {
       "path": "$ROOT/.sessions/loads-drop/*",
       "count": 0
      }
     ],
     "absent": [
      "$ROOT/.sessions/loads-drop/1792580700-99999",
-     "$ROOT/.sessions/loads/1792400000_50000031-1792399990_0.1.4_$UTAG.json",
+     "$ROOT/.sessions/loads/1792300000_50000032-1792299990_0.1.4_$UTAG.json",
      "$ROOT/.sessions/loads-drop/.lock"
+    ]
+   }
+  },
+  {
+   "name": "V-4: a prune killed between its two moves left its lock and its moved folder, the kept record of a running process (dated a week back) still in it: the lock, over 120 s old, is removed; this start drains nothing",
+   "now": "2026-10-21T14:07:12+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "53535353-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/53535353-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "535353:Tue Oct 21 14:07:00 2026",
+    "STORE_TEST_PROC_STARTS": "$TMP/procs"
+   },
+   "setup": [
+    {
+     "write": "$TMP/procs",
+     "content": "60000011 1792000000\n"
+    },
+    {
+     "write": "$ROOT/.sessions/loads-drop/1792580000-88888/1792000010_60000011-1792000000_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "$HOST",
+      "session_id": "60000011-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads-drop/1792580000-88888/1791900000_60000012-1791899990_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "$HOST",
+      "session_id": "60000012-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads-drop/.lock",
+     "content": "88888\n",
+     "mtime_ago_s": 200
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads-drop/1792580000-88888/*",
+      "count": 2
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/loads-drop/.lock"
+    ]
+   }
+  },
+  {
+   "name": "V-4: the next start drains that folder: the running process's record goes back to loads/ (so its next /clear writes none), the dead one is unlinked",
+   "now": "2026-10-21T14:08:12+03:00",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "54545454-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/54545454-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "545454:Tue Oct 21 14:08:00 2026",
+    "STORE_TEST_PROC_STARTS": "$TMP/procs"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads/1792000010_60000011-1792000000_0.1.3_$UTAG.json"
+     },
+     {
+      "path": "$ROOT/.sessions/loads-drop/*",
+      "count": 0
+     }
+    ],
+    "absent": [
+     "$ROOT/.sessions/loads/1791900000_60000012-1791899990_0.1.3_$UTAG.json",
+     "$ROOT/.sessions/loads-drop/1792580000-88888"
     ]
    }
   }

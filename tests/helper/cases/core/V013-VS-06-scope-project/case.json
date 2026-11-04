@@ -1,6 +1,6 @@
 {
  "id": "V013-VS-06-scope-project",
- "note": "0.1.3 version skew (lib/plugver.pm), install scope: Claude Code's installed_plugins.json pins the project $TMP/work to 0.1.2 (a project entry) while the user install is 0.1.3. A session in that project (pid 424242, started 09:00) runs 0.1.2: its load record carries the project scope tag (sha256 over `project`, the cache folder of the plugin's versions and the project path). A user-scope session started at 12:00 on 0.1.3 gives it no notice; a project session started at 13:00 on 0.1.1 does. Its status, run from another folder, still takes the scope from that record. A process with no load record takes the scope from installed_plugins.json: outside the project (its cwd, or CLAUDE_PROJECT_DIR when set) the user scope, whose newest load is the 0.1.3 one.",
+ "note": "0.1.3 version skew (lib/plugver.pm), install scope: Claude Code's installed_plugins.json pins the project $TMP/work to 0.1.2 (a project entry) while the user install is 0.1.3. A session in that project (pid 424242, started 09:00) runs 0.1.2: its load record carries the project scope tag (sha256 over `project`, the cache folder of the plugin's versions and the project path). A user-scope session started at 12:00 on 0.1.3 gives it no notice; a project session started at 13:00 on 0.1.1 does. Its status, run from another folder, still takes the scope from that record. A process with no load record takes the scope from installed_plugins.json: outside the project (its cwd, or CLAUDE_PROJECT_DIR when set) the user scope, whose newest load is the 0.1.3 one. 0.1.4 (V-6): a local-scope entry (installed for this project by one user, .claude/settings.local.json) pins the project as a project entry does; a project folder reached through a symbolic link matches the entry by its real path.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "manifest": {
@@ -117,7 +117,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^plugin: 0\\.1\\.2 · \\S+$"
+     "^plugin: 0\\.1\\.2 · ~/\\S+$"
     ],
     "stdout_lacks": [
      "^plugin notice:",
@@ -184,6 +184,108 @@
     "status",
     "--sid",
     "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.2; sessions started since 2026-10-21 13:00 \\+0300 run 0\\.1\\.1: /reload-plugins$"
+    ]
+   }
+  },
+  {
+   "name": "V-6: a local-scope entry for the project: the project scope",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "979797:Tue Oct 21 13:30:00 2026",
+    "CLAUDE_PROJECT_DIR": "$TMP/work"
+   },
+   "setup": [
+    {
+     "write": "$HOME/.claude/plugins/installed_plugins.json",
+     "json": {
+      "version": 2,
+      "plugins": {
+       "$BRAND@m": [
+        {
+         "scope": "user",
+         "installPath": "$PLUGIN_PARENT/0.1.3",
+         "version": "0.1.3"
+        },
+        {
+         "scope": "local",
+         "projectPath": "$TMP/work",
+         "installPath": "$PLUGIN",
+         "version": "0.1.2"
+        }
+       ],
+       "other@m": [
+        {
+         "scope": "project",
+         "projectPath": "$TMP/else",
+         "installPath": "/x/other/1.0.0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^plugin notice: this session runs 0\\.1\\.2; sessions started since 2026-10-21 13:00 \\+0300 run 0\\.1\\.1: /reload-plugins$"
+    ]
+   }
+  },
+  {
+   "name": "V-6: the project folder named through a symbolic link: the entry matches by its real path",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "env": {
+    "STORE_TEST_CLAUDE_PID": "989898:Tue Oct 21 13:30:00 2026",
+    "CLAUDE_PROJECT_DIR": "$TMP/worklink"
+   },
+   "setup": [
+    {
+     "write": "$HOME/.claude/plugins/installed_plugins.json",
+     "json": {
+      "version": 2,
+      "plugins": {
+       "$BRAND@m": [
+        {
+         "scope": "user",
+         "installPath": "$PLUGIN_PARENT/0.1.3",
+         "version": "0.1.3"
+        },
+        {
+         "scope": "project",
+         "projectPath": "$TMP/work",
+         "installPath": "$PLUGIN",
+         "version": "0.1.2"
+        }
+       ],
+       "other@m": [
+        {
+         "scope": "project",
+         "projectPath": "$TMP/else",
+         "installPath": "/x/other/1.0.0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "symlink": "$TMP/worklink",
+     "to": "$TMP/work"
+    }
    ],
    "expect": {
     "exit": 0,

@@ -29,21 +29,32 @@ package plugver;
 #   note_load(sid, source, cwd) -> 1 when a record was written, else 0. Before it writes, it drains
 #     at most $PRUNE_BATCH names of a folder an earlier prune moved aside, and once a day prunes;
 #     both under one lock (loads-drop/.lock), so a drain never meets a prune halfway.
-#   prune: keeps the record of every pid that runs (its process may start another session: the
-#     per-process dedupe), the newest record per version and scope ($GROUP_MAX groups) and the
-#     newest $KEEP_MAX records of the last $WINDOW_S; drops the rest and records dated over
-#     $FUTURE_S ahead. Up to $PRUNE_BATCH drops are unlinked in place; more move the folder aside
+#   prune: keeps, newest first, the records of processes that may still run ($KEEP_MAX at most:
+#     such a process may start another session, the per-process dedupe): this machine's record
+#     whose pid runs with the start time its name holds (identity::start_epochs, one ps listing;
+#     a start that cannot be read counts as running; a reused pid does not), and another
+#     machine's record of the last $WINDOW_S (its process cannot be checked from here; another
+#     $KEEP_MAX at most); the newest record per version and scope ($GROUP_MAX groups); the newest
+#     $KEEP_MAX records of the last $WINDOW_S. It drops the rest and records dated over $FUTURE_S
+#     ahead. Which machine wrote a record is read from it only where the answer decides
+#     ($PRUNE_READS reads at most; past them, or when unreadable, a record is kept as the
+#     keeping answer would keep it). Up to $PRUNE_BATCH drops are unlinked in place; more move
+#     the folder aside
 #     (<root>/.sessions/loads-drop/<epoch>-<pid>, the kept records moved back), which later starts
-#     drain in bounded batches. So a hook never unlinks more than a batch, and a reader lists a
-#     folder of at most a few hundred names.
+#     drain in bounded batches by the same keep rule (a prune killed before it moved its kept
+#     records back loses none). So a hook never unlinks more than a batch, and a reader lists a
+#     folder of at most a few hundred names. The same daily run prunes .sessions/by-pid
+#     (sessions::prune_records).
+#   orphaned() -> epoch | undef: when Claude Code marked this copy replaced (<copy>/.orphaned_at).
 #   skew() -> undef | {own, ref, since, newest}: the reference is the version of the newest load
 #     of this machine and scope; undef (no notice) unless all of: both versions readable and
 #     different, the newest load at most $WINDOW_S old (loads dated over $FUTURE_S ahead are not
 #     read), and this copy installed before that load (its .claude-plugin/plugin.json mtime; a copy
 #     installed later is the newer one, e.g. after /reload-plugins). since = the oldest load of the
 #     reference version after the newest load of another version (within the names walked).
-#   line() -> `this session runs <own>; sessions started since <stamp> run <ref>: /reload-plugins`
-#     or undef. Bounded: one directory listing, at most $READ_MAX + 1 small reads, one stat;
+#   line() -> `this session runs <own>[, replaced by an install at <stamp>][; sessions started
+#     since <stamp> run <ref>]: /reload-plugins` (at least one of the two parts), or undef.
+#     Bounded: one directory listing, at most $READ_MAX + 2 small reads, one stat;
 #     installed_plugins.json and the machine id only when this process has no load record; never dies.
 use strict;
 use warnings;
@@ -63,6 +74,8 @@ our $GROUP_MAX = 64;
 our $PRUNE_EVERY_S = 86400;
 # About 40 ms of unlinks on a loaded Mac (75 us each).
 our $PRUNE_BATCH = 500;
+# About 50 ms of reads and decodes on a loaded Mac (50 us each).
+our $PRUNE_READS = 1000;
 my $VER_RE = qr/[0-9A-Za-z][0-9A-Za-z.+-]{0,39}/;
 my $NAME_RE = qr/\A(\d{1,12})_(\d+-\d+)_($VER_RE)_([0-9a-f]{8})\.json\z/;
 
@@ -74,6 +87,7 @@ sub _ver_ok { my ($v) = @_; return defined $v && !ref $v && $v =~ /\A$VER_RE\z/ 
 # Test seams (STORE_TEST_MODE only): small values stand in for the batch and the two caps.
 sub _seam { my ($k, $v) = @_; return util::test_mode() && ($ENV{$k} // '') =~ /\A([1-9][0-9]{0,5})\z/ ? $1 : $v }
 sub _batch { return _seam('STORE_TEST_LOADS_BATCH', $PRUNE_BATCH) }
+sub _reads { return _seam('STORE_TEST_LOADS_READS', $PRUNE_READS) }
 
 # _loads() -> [[epoch, key, version, tag, name] ...], newest first (ties: name order, reversed)
 sub _loads {
@@ -153,10 +167,42 @@ sub _same_machine {
     return defined $h && !ref $h && $h eq identity::host() ? 1 : 0;
 }
 
-sub _alive {
-    my ($pid) = @_;
-    return 0 unless defined $pid && $pid > 1;
-    return kill(0, $pid) || $!{EPERM} ? 1 : 0;
+# _starts(loads) -> identity::start_epochs over the pids the records' names hold
+sub _starts {
+    my ($all) = @_;
+    my %p = map { $_->[1] =~ /\A(\d+)-/ ? ($1 => 1) : () } @$all;
+    return identity::start_epochs([sort { $a <=> $b } keys %p]);
+}
+
+# _foreign(path) -> 1 when the load record there was written on another machine, 0 on this one,
+# undef when it cannot be read
+sub _foreign {
+    my ($path) = @_;
+    my $raw = util::read_file($path, 64 * 1024) // return undef;
+    my $j = eval { jsonc::decode($raw) };
+    return undef unless ref $j eq 'HASH';
+    return _same_machine($j, machine()) ? 0 : 1;
+}
+
+# The keep rule's two process tests, shared by the prune and the drain. foreign(name) answers
+# _foreign for the record, or undef past the read budget (unknown); a record is read only where
+# the answer decides, and an unknown answer keeps.
+# _runs(record, now, starts, foreign) -> 1 when the record's process may still run: its pid runs
+# here with the start its name holds (or one that cannot be read; identity::key_live), and the
+# record is from the window or is not another machine's (a pid number of another machine that
+# happens to run here proves nothing).
+sub _runs {
+    my ($r, $now, $st, $foreign) = @_;
+    return 0 unless identity::key_live($r->[1], $st);
+    return 1 if $now - $r->[0] <= $WINDOW_S;
+    return ($foreign->($r->[4]) // 0) != 1 ? 1 : 0;
+}
+# _far(record, now, starts, foreign) -> 1 for another machine's record from the window whose pid
+# does not run here: its process cannot be checked from this machine.
+sub _far {
+    my ($r, $now, $st, $foreign) = @_;
+    return 0 if $now - $r->[0] > $WINDOW_S || identity::key_live($r->[1], $st);
+    return ($foreign->($r->[4]) // 1) == 1 ? 1 : 0;
 }
 
 sub note_load {
@@ -211,14 +257,17 @@ sub _prune_locked {
     my ($all, $now) = @_;
     my $d = dir();
     my (%keep, %seen);
-    my ($groups, $recent) = (0, 0);
-    my ($gmax, $kmax) = (_seam('STORE_TEST_LOADS_GROUPS', $GROUP_MAX), _seam('STORE_TEST_LOADS_KEEP', $KEEP_MAX));
+    my ($groups, $recent, $run, $far, $reads) = (0, 0, 0, 0, 0);
+    my ($gmax, $kmax, $rmax) = (_seam('STORE_TEST_LOADS_GROUPS', $GROUP_MAX), _seam('STORE_TEST_LOADS_KEEP', $KEEP_MAX), _reads());
+    my $st = _starts($all);
+    my $foreign = sub { return $reads++ < $rmax ? _foreign("$d/$_[0]") : undef };
     for my $r (@$all) {
         my ($e, $k, $v, $t, $n) = @$r;
-        if (_alive($k =~ /\A(\d+)-/ ? $1 : 0)) { $keep{$n} = 1; next }
+        if ($run < $kmax && _runs($r, $now, $st, $foreign)) { $keep{$n} = 1; $run++; next }
         next if $e > $now + $FUTURE_S;
         if (!$seen{"$v $t"}++ && $groups++ < $gmax) { $keep{$n} = 1; next }
-        $keep{$n} = 1 if $now - $e <= $WINDOW_S && $recent++ < $kmax;
+        if ($now - $e <= $WINDOW_S && $recent++ < $kmax) { $keep{$n} = 1; next }
+        if ($far < $kmax && _far($r, $now, $st, $foreign)) { $keep{$n} = 1; $far++ }
     }
     my @drop = grep { !$keep{$_} } map { $_->[4] } @$all;
     my $ok = 1;
@@ -234,15 +283,19 @@ sub _prune_locked {
         }
     }
     if ($ok) {
+        eval { sessions::prune_records($now, _batch()) };
         util::write_atomic("$d/.pruned", "\n", 0600);
         utime(int($now), int($now), "$d/.pruned");
     }
     return $ok ? scalar @drop : 0;
 }
 
-# _drain(now) -> names handled: at most a batch of the oldest folder a prune moved aside; a record
-# dated from a minute before the move on (written while the folder moved) goes back to loads/.
-# Not while a prune holds the lock (it may not have moved its kept records back yet).
+# _drain(now) -> names handled: at most a batch of the oldest folder a prune moved aside. Back to
+# loads/ go a record dated from a minute before the move on (written while the folder moved) and
+# every record the prune's keep rule keeps: a process that may still run, another machine's of
+# the window, the newest of a version and scope that loads/ lacks. So a prune killed between its
+# two moves (its lock removed 120 s later) loses no record a running process needs. The rest is
+# unlinked. Not while a prune holds the lock (it may not have moved its kept records back yet).
 sub _drain {
     my ($now) = @_;
     my $dd = drop_dir();
@@ -253,14 +306,26 @@ sub _drain {
 sub _drain_locked {
     my ($now) = @_;
     my $dd = drop_dir();
-    my ($a) = sort grep { /\A\d+-\d+\z/ } util::list_dir($dd);
-    return 0 unless defined $a;
-    my $at = ($a =~ /\A(\d+)-/)[0];
-    my $p = "$dd/$a";
+    my ($af) = sort grep { /\A\d+-\d+\z/ } util::list_dir($dd);
+    return 0 unless defined $af;
+    my $at = ($af =~ /\A(\d+)-/)[0];
+    my $p = "$dd/$af";
     my $max = _batch();
     my @n = util::list_dir_max($p, $max);
+    my @r = sort { $b->[0] <=> $a->[0] || $b->[4] cmp $a->[4] } map { $_ =~ $NAME_RE ? [0 + $1, $2, $3, $4, $_] : () } @n;
+    my $st = _starts(\@r);
+    my %have = map { ("$_->[2] $_->[3]" => 1) } @{ _loads() };
+    my ($reads, $rmax) = (0, _reads());
+    my $foreign = sub { return $reads++ < $rmax ? _foreign("$p/$_[0]") : undef };
+    my %back;
+    for my $x (@r) {
+        my ($e, $k, $v, $t, $n) = @$x;
+        if (($e >= $at - 60 && $e <= $at + $FUTURE_S) || _runs($x, $now, $st, $foreign)) { $back{$n} = 1; next }
+        next if $e > $now + $FUTURE_S;
+        $back{$n} = 1 if !$have{"$v $t"}++ || _far($x, $now, $st, $foreign);
+    }
     for my $n (@n) {
-        if ($n =~ $NAME_RE && $1 >= $at - 60 && $1 <= $at + $FUTURE_S && !-e dir() . "/$n") { rename("$p/$n", dir() . "/$n"); next }
+        if ($back{$n} && !-e dir() . "/$n") { rename("$p/$n", dir() . "/$n"); next }
         unlink "$p/$n";
     }
     rmdir $p if @n < $max;
@@ -321,9 +386,27 @@ sub skew {
     return { own => $own, ref => $ref, since => $since, newest => $newest };
 }
 
+# orphaned() -> epoch | undef: when an update or uninstall replaced this copy. Claude Code then
+# writes <old version folder>/.orphaned_at (epoch milliseconds) and removes the folder 14 days
+# later; a session keeps running the copy it loaded. Read from this copy's own folder: after
+# /reload-plugins the hooks run from the new copy, which has none. Unreadable: undef.
+sub orphaned {
+    my $raw = util::read_file(ctx::root() . '/.orphaned_at', 64) // return undef;
+    return undef unless $raw =~ /\A\s*([1-9][0-9]{8,15})\s*\z/;
+    my $t = 0 + $1;
+    return $t >= 1e11 ? int($t / 1000) : $t;
+}
+
 sub line {
-    my $s = eval { skew() } or return undef;
-    return sprintf('this session runs %s; sessions started since %s run %s: /reload-plugins', $s->{own}, util::stamp($s->{since}), $s->{ref});
+    my $own = ctx::version();
+    return undef unless _ver_ok($own);
+    my $o = eval { orphaned() };
+    my $s = eval { skew() };
+    return undef unless defined $o || $s;
+    my $l = "this session runs $own";
+    $l .= ', replaced by an install at ' . util::stamp($o) if defined $o;
+    $l .= sprintf('; sessions started since %s run %s', util::stamp($s->{since}), $s->{ref}) if $s;
+    return "$l: /reload-plugins";
 }
 
 1;
