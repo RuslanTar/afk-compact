@@ -177,7 +177,7 @@ sub lint {
             while ($l =~ /($re)/g) {
                 my $p = _trim_path($1);
                 next if $seen{$p}++;
-                next if $volatile{$p} || _covered($p, \%covered);
+                next if $volatile{$p} || _covered($p, \%covered) || _test_exempt($p);
                 push @block, [ 'ephemeral-path', 'line ' . ($i + 1) ];
             }
         }
@@ -628,6 +628,20 @@ sub _range_ids {
     my ($k, $x, $k2, $y) = $r =~ /\A([UDXQB])-([0-9]+)\D+?(?:([UDXQB])-)?([0-9]+)\z/ or return undef;
     return undef if (defined $k2 && $k2 ne $k) || $y < $x || $y - $x > 1000;
     return [ map { _idn($k, $_) } $x .. $y ];
+}
+
+# Test seam (STORE_TEST_MODE only): STORE_TEST_EPHEMERAL_EXEMPT=<folder> (absolute) makes a path at
+# or under that folder not ephemeral. The case runner sets it to a repo-based case's work folder
+# (tmp_base "repo", under the repo's tmp/), so a checkout under /tmp still runs those cases; every
+# other path under a temp root stays ephemeral, and the temp-root list is unchanged. macOS's
+# /private/tmp and /private/var are compared as /tmp and /var, the names the list holds for them.
+sub _test_exempt {
+    my ($p) = @_;
+    return 0 unless skills::util::test_mode();
+    my $x = $ENV{STORE_TEST_EPHEMERAL_EXEMPT} // '';
+    return 0 unless $x =~ m{\A/[^/]} && $x !~ m{(?:\A|/)\.\.?(?:/|\z)};
+    my @f = map { (my $f = $_) =~ s{\A/private(?=/(?:tmp|var)/)}{}; $f =~ s{/+\z}{}; $f } ($x, $p);
+    return ($f[1] eq $f[0] || index($f[1], "$f[0]/") == 0) ? 1 : 0;
 }
 
 sub _covered {

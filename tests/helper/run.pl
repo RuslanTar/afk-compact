@@ -24,7 +24,10 @@
 # Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
 #   case "tmp_base": "repo"  the case's temp dir sits under the repo's git-ignored tmp/,
 #                            not the system temp folder (the publish lint treats paths
-#                            under /tmp, /private/tmp and /var/folders as ephemeral)
+#                            under /tmp, /private/tmp and /var/folders as ephemeral); its
+#                            helper calls get STORE_TEST_EPHEMERAL_EXEMPT=$TMP, so a
+#                            checkout under /tmp keeps that folder alone out of the lint's
+#                            ephemeral paths (T-8)
 #   case "tmp_base": "short" the case's temp dir sits under /tmp whatever TMPDIR is (R6: a
 #                            case whose helper output depends on its path lengths)
 #   case "teardown"        [setup action...]: run after the steps, also after a failed one (a mode
@@ -74,6 +77,13 @@
 #     in a zone (case or step "tz", an env TZ, a builtin's args "tz") whose tz database file
 #     the host lacks, "needs tzdata", with no "needs" entry, unless the zone has an exact
 #     POSIX form (Etc/GMT-3 is "<+03>-3"), which its helper calls then get (host_zone).
+#   builtin hook_lazy_audit {}: main.pl's per-event library sets (the staged copy) hold every library whose
+#     package variables or `defined &` guards a loaded library, the watcher or the event's path in
+#     cmd/hook.pl refers to (T-12)
+#   builtin hook_load_parity {steps, tz, inc_lacks, lazy_loads}: hook calls run with main.pl's per-event
+#     sets and with every core library (STORE_TEST_LAZY=full) leave the same stdout and rows (T-12)
+#   builtin junk_paths {table}: begin's cut_prefix and junk_path (the staged copy) over each row of the
+#     junk-path table (tests/fixtures/paths/junk-paths.json: path, as, junk), as the mod's units.test.ts reads it
 #   builtin begin_fit {reply, found, all, unread, pad {key, to}, json, min_bytes, max_bytes}: begin's _fit
 #     (the staged copy) over a fixed reply, independent of the temp folder's path
 #   builtin hold_parity {file, lists {<const name>: job | user | none}, min}: copies::_hold_of (the
@@ -1408,6 +1418,10 @@ sub child_env {
     $e{STORE_TEST_CLAUDE_PID} = $DEFAULT_PID;
     my $now = $st->{now} // $case->{now};
     $e{STORE_TEST_NOW} = $now if defined $now;
+    # T-8 (0.1.4): a repo-based case's work folder (tmp_base "repo", under the repo's tmp/) is not an
+    # ephemeral path to the publish lint, so a checkout under /tmp runs these cases as any other;
+    # every other temp path in such a case stays ephemeral (lib/skills/lint.pm _test_exempt)
+    $e{STORE_TEST_EPHEMERAL_EXEMPT} = $V->{TMP} if ($case->{tmp_base} // '') eq 'repo';
     my %ce = (%{ $case->{env} || {} }, %{ $st->{env} || {} });
     for my $k (keys %ce) {
         # a name may be a placeholder too ($LAUNCH_ENV)
@@ -2690,10 +2704,18 @@ sub claude_pid_walk_chains {
         }
         my $ren = sub { my ($x) = @_; return (defined $x && exists $map{"$x"}) ? $map{"$x"} : $x };
         my %t = map { $ren->($_) => { %{ $c->{procs}{$_} }, ppid => $ren->($c->{procs}{$_}{ppid}) } } keys %{ $c->{procs} || {} };
-        my $calls = 0;
-        local *identity::_parent_and_comm = sub { my $p = $t{ $_[0] } or return; return ($p->{ppid}, $p->{comm}) };
+        my ($calls, $walk_ps, $starts) = (0, 0, 0);
+        local *identity::_parent_and_comm = sub { $walk_ps++; my $p = $t{ $_[0] } or return; return ($p->{ppid}, $p->{comm}) };
         local *identity::_exe = sub { $calls++; my $p = $t{ $_[0] } or return undef; return $p->{exe} };
-        local *identity::start_time = sub { return 'stub' };
+        local *identity::start_time = sub { $starts++; return 'stub' };
+        # "alive" {pid, pid_lstart}: this session's classic-alive.json (written under args.dir), else none
+        my $sd;
+        if (ref $c->{alive} eq 'HASH') {
+            $sd = ($args->{dir} // die "claude_pid_walk: alive needs args.dir\n") . '/' . sha::hex256($c->{id});
+            util::mkdir_p($sd);
+            util::write_atomic("$sd/classic-alive.json", jsonc::encode_bytes(jsonc::obj(pid => $ren->($c->{alive}{pid}), pid_lstart => $c->{alive}{pid_lstart})) . "\n", 0600);
+        }
+        local *rc::sid_dir = sub { $sd };
         local $identity::CACHED;
         local $ENV{CLAUDE_PID} = defined $c->{env} ? $ren->($c->{env}) : '';
         local $ENV{STORE_TEST_CLAUDE_PID};
@@ -2705,12 +2727,185 @@ sub claude_pid_walk_chains {
         push @e, "$c->{id}: pid " . ($pid // 'null') . ", want " . ($want // 'null') if ($pid // 'null') ne ($want // 'null');
         push @e, "$c->{id}: found $found, want $c->{found}" if $found != ($c->{found} ? 1 : 0);
         push @e, "$c->{id}: $calls executable reads, want $c->{exe_calls}" if defined $c->{exe_calls} && $calls != $c->{exe_calls};
+        # T-14: parent-and-command reads (a `ps` call each off Linux) and start-time reads the walk made
+        push @e, "$c->{id}: $walk_ps parent reads, want $c->{walk_ps}" if defined $c->{walk_ps} && $walk_ps != $c->{walk_ps};
+        push @e, "$c->{id}: $starts start-time reads, want $c->{start_reads}" if defined $c->{start_reads} && $starts != $c->{start_reads};
+        push @e, "$c->{id}: lstart " . ($r->{lstart} // 'null') . ", want $c->{lstart}" if defined $c->{lstart} && ($r->{lstart} // '') ne $c->{lstart};
     }
     return @e;
 }
 
+# T-12 (0.1.4): main.pl's hook tables, read from the staged main.pl: (core list, base set, {event => [libs]}).
+sub hook_tables {
+    my $src = util::read_file("$STAGE/helper/main.pl") // die "no staged main.pl\n";
+    my ($core) = $src =~ /^our \@CORE = qw\((.*?)\);/ms or die "main.pl: no \@CORE\n";
+    my ($base) = $src =~ /^our \@HOOK_BASE = qw\((.*?)\);/ms or die "main.pl: no \@HOOK_BASE\n";
+    my ($ev) = $src =~ /^our %HOOK_EVENT = \((.*?)\n\);/ms or die "main.pl: no %HOOK_EVENT\n";
+    my %t;
+    while ($ev =~ /(\w+)\s*=>\s*\[(?:qw\((.*?)\))?\]/gs) { $t{$1} = [ split ' ', $2 // '' ] }
+    return ([ split ' ', $core ], [ split ' ', $base ], \%t);
+}
+
+# The package variables ($pkg::X, @pkg::X, %pkg::X) and `defined &pkg::fn` guards a source text
+# refers to, for packages in %$core other than $self: ({pkg => 'what'} vars, {pkg => 'what'} guards).
+sub pkg_refs {
+    my ($text, $core, $self) = @_;
+    $text =~ s/^\s*#.*$//mg;
+    my (%v, %g);
+    while ($text =~ /(?<![\w:\$\@%&])([\$\@%])\{?([a-z_]+)::([A-Za-z_]\w*)/g) { $v{$2} //= "$1$2::$3" if $core->{$2} && $2 ne ($self // '') }
+    while ($text =~ /\b(?:defined|exists)\s*\(?\s*&([a-z_]+)::(\w+)/g) { $g{$1} //= "defined &$1::$2" if $core->{$1} && $1 ne ($self // '') }
+    return (\%v, \%g);
+}
+
+# hook_lazy_audit: for each hook event, the set main.pl loads (base + table) holds every library
+# whose package variables, or a `defined &pkg::fn` guard on whose functions, a loaded library, a
+# watcher library or the event's path through cmd/hook.pl (run, on_<Event> and the subs they
+# reach) refers to: a variable of a library left out reads as undef, and a guard skips its
+# feature, with no error. Every name in the tables is a core library.
+sub hook_lazy_audit {
+    my @e;
+    my ($core, $base, $t) = hook_tables();
+    my %core = map { $_ => 1 } @$core;
+    push @e, "main.pl: $_ is no core library" for grep { !$core{$_} } @$base, map { @$_ } values %$t;
+    my %refs;
+    for my $l (@$core) {
+        my $txt = util::read_file("$STAGE/helper/lib/$l.pm") // do { push @e, "no lib/$l.pm"; next };
+        $refs{$l} = [ pkg_refs($txt, \%core, $l) ];
+    }
+    my (%wv, %wg);
+    for my $f (grep { /\.pm\z/ } ('watch.pm', map { "watch/$_" } util::list_dir("$STAGE/helper/lib/watch"))) {
+        my ($v, $g) = pkg_refs(util::read_file("$STAGE/helper/lib/$f") // '', \%core);
+        $wg{$_} //= "lib/$f: $g->{$_}" for keys %$g;
+        $wv{$_} //= "lib/$f: $v->{$_}" for keys %$v;
+    }
+    my $hook = util::read_file("$STAGE/helper/cmd/hook.pl") // die "no staged cmd/hook.pl\n";
+    my %sub;
+    while ($hook =~ /^sub (\w+) \{\n(.*?)^\}\n/msg) { $sub{$1} = $2 }
+    while ($hook =~ /^sub (\w+) \{([^\n]*)\}[ \t]*$/mg) { $sub{$1} //= $2 }
+    for my $ev (sort keys %$t) {
+        my %set = map { $_ => 1 } @$base, @{ $t->{$ev} };
+        my %need;
+        my @q = ('run', "on_$ev");
+        my %seen;
+        while (defined(my $n = shift @q)) {
+            next if $seen{$n}++ || !defined $sub{$n};
+            my ($v, $g) = pkg_refs($sub{$n}, \%core);
+            $need{$_} //= "cmd/hook.pl $n: $v->{$_}" for keys %$v;
+            $need{$_} //= "cmd/hook.pl $n: $g->{$_}" for keys %$g;
+            push @q, grep { defined $sub{$_} } $sub{$n} =~ /(?:\\&|\b)(\w+)\s*\(/g, $sub{$n} =~ /\\&(\w+)/g;
+        }
+        for my $l (grep { $set{$_} } @$core) {
+            my ($v, $g) = @{ $refs{$l} || [{}, {}] };
+            $need{$_} //= "lib/$l.pm: $v->{$_}" for keys %$v;
+            $need{$_} //= "lib/$l.pm: $g->{$_}" for keys %$g;
+        }
+        # the watcher runs inside the hook (cmd/hook.pl _watch_call): its guards and variables too
+        $need{$_} //= $wg{$_} for keys %wg;
+        $need{$_} //= $wv{$_} for keys %wv;
+        push @e, "$ev: $need{$_} but $_ is not loaded" for grep { !$set{$_} } sort keys %need;
+    }
+    return @e;
+}
+
+# hook_load_parity {steps, tz, inc_lacks {step name: [libs]}, lazy_loads [step names]}: the steps
+# (hook calls and setup actions; @TMP@ @HOME@ @ROOT@ @WATCH@ for this run's folders) run twice in
+# fresh folders, with main.pl's per-event sets and with every core library
+# (STORE_TEST_LAZY=full); each call exits 0, stdout and every row the store holds afterwards are
+# the same (time, pid, durations and hex ids set aside), the lazy run's named steps lack the
+# named libraries, the full run's hold every one, and the lazy run loads a library left out (a
+# hook-lazy-load trace line) only in the named steps.
+sub hook_load_parity {
+    my ($args, $cdir, $V) = @_;
+    my @e;
+    my ($core) = hook_tables();
+    my $case = { tz => $args->{tz} // 'UTC' };
+    my (%out, %inc, %late, %rows);
+    my %named = map { $_ => 1 } @{ $args->{lazy_loads} || [] };
+    for my $m (qw(lazy full)) {
+        my %W = %$V;
+        $W{TMP} = "$V->{TMP}/$m";
+        $W{HOME} = "$W{TMP}/home";
+        $W{ROOT} = "$W{HOME}/.local/state/$BRAND/handoffs";
+        $W{WATCH} = "$W{ROOT}/.watch";
+        util::mkdir_p($_) for $W{HOME}, "$W{TMP}/tmpdir";
+        local $ENV{HOME} = $W{HOME};
+        my $fill;
+        $fill = sub {
+            my ($x) = @_;
+            return [ map { $fill->($_) } @$x ] if ref $x eq 'ARRAY';
+            return { map { $_ => $fill->($x->{$_}) } keys %$x } if ref $x eq 'HASH';
+            return $x if !defined $x || ref $x;
+            (my $y = $x) =~ s/\@(TMP|HOME|ROOT|WATCH)\@/$W{$1}/g;
+            return $y;
+        };
+        my $i = 0;
+        for my $st0 (@{ $args->{steps} || [] }) {
+            $i++;
+            my $st = $fill->($st0);
+            my $label = $st->{name} // "step $i";
+            setup($_, \%W, $case, $st, $cdir) for @{ $st->{setup} || [] };
+            next unless $st->{argv};
+            my $incf = "$W{TMP}/inc-$i.txt";
+            $st->{env} = { %{ $st->{env} || {} }, STORE_TEST_INC_OUT => $incf, ($m eq 'full' ? (STORE_TEST_LAZY => 'full') : ()) };
+            my $r = invoke($st, $case, \%W, $cdir, "$m-$i")->[0];
+            push @e, "$m $label: exit $r->{exit}" if $r->{exit} != 0;
+            (my $o = $r->{out}) =~ s/\Q$W{TMP}\E/\@TMP\@/g;
+            $o =~ s/\b[0-9a-f]{6,}\b/H/g;
+            $out{$m}{$label} = $o;
+            $inc{$m}{$label} = { map { $_ => 1 } split ' ', (util::read_file($incf) // '') };
+            $late{$m}{$label} = ($r->{trace} =~ /^hook-lazy-load (\S+)/m) ? $1 : '';
+        }
+        my @files;
+        my @q = ($W{HOME});
+        while (defined(my $d = shift @q)) {
+            for my $n (sort(util::list_dir($d))) { my $p = "$d/$n"; if (-d $p && !-l $p) { push @q, $p } else { push @files, $p } }
+        }
+        my $drop;
+        $drop = sub {
+            my ($x) = @_;
+            return [ map { $drop->($_) } @$x ] if ref $x eq 'ARRAY';
+            return $x unless ref $x eq 'HASH';
+            return jsonc::obj(map { ($_ => $drop->($x->{$_})) } grep { !/\A(?:ts|pid|pid_lstart|ms|start_ms)\z|_ms\z|_s\z/ } sort keys %$x);
+        };
+        for my $f (@files) {
+            (my $rel = $f) =~ s/\A\Q$W{TMP}\E//;
+            $rel =~ s/[0-9a-f]{6,}/H/g;
+            if ($f !~ /\.jsonl\z/) { push @{ $rows{$m}{$rel} }, 'file'; next }
+            for my $l (split /\n/, util::read_file($f) // '') {
+                my $j = eval { jsonc::decode($l) };
+                my $t = ref $j eq 'HASH' ? jsonc::encode($drop->($j)) : $l;
+                $t =~ s/\Q$W{TMP}\E/\@TMP\@/g;
+                $t =~ s/\b[0-9a-f]{6,}\b/H/g;
+                $t =~ s/\b\d{4}-\d\d-\d\dT[0-9:.]+(?:Z|[+-]\d\d:?\d\d)?/T/g;
+                push @{ $rows{$m}{$rel} }, $t;
+            }
+        }
+    }
+    for my $l (sort keys %{ $out{lazy} }) {
+        push @e, "$l: stdout differs: lazy " . substr($out{lazy}{$l}, 0, 200) . " / full " . substr($out{full}{$l} // '', 0, 200)
+            if $out{lazy}{$l} ne ($out{full}{$l} // '');
+        my @miss = grep { !$inc{full}{$l}{$_} } @$core;
+        push @e, "$l: the full run lacks @miss" if @miss;
+        my @have = grep { $inc{lazy}{$l}{$_} } @{ ($args->{inc_lacks} || {})->{$l} || [] };
+        push @e, "$l: the lazy run loaded @have" if @have;
+        push @e, "$l: the lazy run loaded a library left out ($late{lazy}{$l}), want none" if $late{lazy}{$l} ne '' && !$named{$l};
+        push @e, "$l: the lazy run never loaded a library left out, want one" if $late{lazy}{$l} eq '' && $named{$l};
+    }
+    for my $rel (sort keys %{ { %{ $rows{lazy} || {} }, %{ $rows{full} || {} } } }) {
+        my ($x, $y) = map { join("\n", @{ $rows{$_}{$rel} || ['(missing)'] }) } qw(lazy full);
+        next if $x eq $y;
+        my @xl = split /\n/, $x;
+        my @yl = split /\n/, $y;
+        my $k = 0;
+        $k++ while $k < @xl && $k < @yl && $xl[$k] eq $yl[$k];
+        push @e, "$rel differs at row " . ($k + 1) . ": lazy " . substr($xl[$k] // '(none)', 0, 300) . " / full " . substr($yl[$k] // '(none)', 0, 300);
+    }
+    push @e, 'no rows written' unless %{ $rows{lazy} || {} };
+    return @e;
+}
+
 sub builtin {
-    my ($name, $a, $cdir) = @_;
+    my ($name, $a, $cdir, $V) = @_;
     _libs();
     # HOME-GUARD: a builtin runs the helper's code in this process, which may start children of
     # its own (git, a pattern child); a declared "home" goes through case_home
@@ -3517,6 +3712,24 @@ sub builtin {
         print "#   hold_parity: $total wordings\n" if $VERBOSE;
         return @e;
     }
+    if ($name eq 'junk_paths') {
+        # T-10: skills::begin's cut_prefix and junk_path (the staged copy) over every row of the one
+        # table the mod's recorder is held to as well (tests/fixtures/paths/junk-paths.json, read by
+        # units.test.ts through _gen/paths.gen.ts): {table}
+        local @INC = ("$STAGE/helper/lib", @INC);
+        require "skills/begin.pm";
+        my $t = jsonc::decode(util::read_file(src_file($a->{table}, $cdir)));
+        my $n = 0;
+        for my $r (@{ ref $t eq 'HASH' && ref $t->{rows} eq 'ARRAY' ? $t->{rows} : [] }) {
+            $n++;
+            my ($as, $want) = (skills::begin::cut_prefix($r->{path}), $r->{as} // $r->{path});
+            push @e, "$r->{path}: cut to $as, want $want" if $as ne $want;
+            my ($j, $wj) = (skills::begin::junk_path($as) ? 1 : 0, $r->{junk} ? 1 : 0);
+            push @e, "$r->{path}: junk $j, want $wj" if $j != $wj;
+        }
+        push @e, "no rows in $a->{table}" unless $n;
+        return @e;
+    }
     if ($name eq 'begin_fit') {
         # U-04: skills::begin::_fit (the staged copy) over a fixed reply, so the trim order is
         # pinned whatever the temp folder's path: {reply, found, all, unread, pad: {key, to}} where pad
@@ -3741,10 +3954,15 @@ sub builtin {
         }
         return @e;
     }
+    if ($name eq 'hook_lazy_audit') { return hook_lazy_audit() }
+    if ($name eq 'hook_load_parity') { return hook_load_parity($a, $cdir, $V) }
     if ($name eq 'claude_pid_walk') {
         # BG-PID: the walk from the helper's parent to the Claude Code process, over a process
         # table given in the case ({pid: {ppid, comm, exe}}; exe is what /proc/<pid>/exe or lsof
-        # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read.
+        # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read;
+        # `walk_ps` its parent-and-command reads, `start_reads` its start-time reads (each a `ps`
+        # call off Linux), `lstart` the start time it gives; `alive` {pid, pid_lstart}: this
+        # session's classic-alive.json, under args.dir (T-14).
         # The public entry, identity::claude_pid, starts at getppid(): the chain's `start` pid is
         # renamed to it throughout, and start times are stubbed. A recorded pid that happens to be
         # the real parent's (other than `start`) is moved to a free number, so the two never merge.

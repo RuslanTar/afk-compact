@@ -1,8 +1,11 @@
 #!/bin/sh
 # afk-compact-store: launcher for the plugin helper (POSIX sh; dash, ash,
-# bash 3.2 and Git Bash). It finds perl 5.28+ and runs helper/main.pl.
-# Without a usable perl or a readable main.pl it takes the fallback path: a
-# hook prints nothing and exits 0 after one content-free row; any other
+# bash 3.2 and Git Bash). It finds perl and runs helper/main.pl, with no
+# version check of its own: main.pl's first lines refuse a perl older than
+# 5.28, and for a hook they run this file again as `--fallback-hook hook
+# <Event>`, stdin unread. Without perl or a readable main.pl, or from that
+# call, it takes the fallback path: a hook prints nothing and exits 0 after
+# one content-free row (none under a root the helper would refuse); any other
 # command refuses.
 
 # Keep the user's perl library paths for queue_cmd children, then clear
@@ -30,20 +33,24 @@ root=$(cd "$here/.." 2>/dev/null && pwd -P) || root=$here/..
 
 perl=$(command -v perl 2>/dev/null)
 [ -n "$perl" ] || perl=/usr/bin/perl
-if [ -x "$perl" ] && [ -r "$root/helper/main.pl" ] && "$perl" -e 'exit($] < 5.028 ? 1 : 0)' 2>/dev/null; then
+if [ "${1-}" = --fallback-hook ]; then
+  shift
+elif [ -x "$perl" ] && [ -r "$root/helper/main.pl" ]; then
   # A locale the system lacks (LC_ALL, LC_*, LANG) makes perl print five warning lines on
   # stderr before main.pl runs, which a skill's Bash output would carry; 0 keeps it quiet.
   PERL_BADLANG=0
   export PERL_BADLANG
   if [ "${1-}" = hook ]; then
     # Exit 2 from a hook blocks, vetoes or re-prompts; perl exits 2 on its own when it
-    # dies with errno ENOENT. A hook always exits 0, whatever main.pl does.
-    exec "$perl" -e 'END { $? = 0 } my $main = shift @ARGV; do $main;' "$root/helper/main.pl" "$@" 2>/dev/null
+    # dies with errno ENOENT. A hook always exits 0, whatever main.pl does. main.pl's guard
+    # reads this file's path from $main::STORE_LAUNCHER to run its fallback on an old perl.
+    exec "$perl" -e 'END { $? = 0 } my $main = shift @ARGV; $main::STORE_LAUNCHER = shift @ARGV; do $main;' \
+      "$root/helper/main.pl" "$root/scripts/${self##*/}" "$@" 2>/dev/null
   fi
   exec "$perl" "$root/helper/main.pl" "$@"
 fi
 
-# Fallback: no perl, one older than 5.28, or no readable helper/main.pl.
+# Fallback: no perl, no readable helper/main.pl, or (from main.pl) a perl older than 5.28.
 if [ "${1-}" = hook ]; then
   payload=$(cat 2>/dev/null | head -c 65536 2>/dev/null)
   sid=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[ ]*:[ ]*"\([0-9A-Za-z-]\{8,64\}\)".*/\1/p' | head -n 1)
@@ -66,10 +73,40 @@ if [ "${1-}" = hook ]; then
   # a root that is not an absolute path is root-invalid (the helper refuses it): no row, since
   # it would land under the hook's working folder
   case $watch in /*) ;; *) exit 0 ;; esac
+  # MOD-SPEC 1.2 without the helper: a row only in an absolute folder that no folder from it up to
+  # / marks as a git work tree or a .planning folder (no git call, so a git-ignored root gets no
+  # row either), at most 64 levels; else nothing is written and the hook still exits 0. The walk
+  # runs on the path as given and again from the deepest folder that exists read through its
+  # symlinks (cd -P), so a root reached through a link into a work tree is refused too.
+  safe=0
+  case $watch in
+    /*)
+      t=$watch
+      while :; do case $t in */) t=${t%/} ;; *) break ;; esac; done
+      e=$t n=0
+      while [ -n "$e" ] && [ ! -d "$e" ] && [ "$n" -lt 64 ]; do n=$((n + 1)); e=${e%/*}; done
+      r=$t
+      if [ -d "${e:-/}" ] && p=$(cd -P "${e:-/}" 2>/dev/null && pwd -P); then r=${p%/}${t#"$e"}; fi
+      case /$t/$r/ in
+        */[.][Pp][Ll][Aa][Nn][Nn][Ii][Nn][Gg]/*) ;;
+        *)
+          safe=1
+          for d in "$t" "$r"; do
+            n=0
+            while :; do
+              if [ -e "$d/.git" ] || [ -e "$d/.planning" ]; then safe=0; break; fi
+              [ -n "$d" ] || break
+              n=$((n + 1))
+              if [ "$n" -gt 64 ]; then safe=0; break; fi
+              case $d in */*) d=${d%/*} ;; *) d= ;; esac
+            done
+          done ;;
+      esac ;;
+  esac
   event=$(printf '%s' "${2-}" | tr -cd 'A-Za-z')
   ts=$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null | sed 's/\([0-9][0-9]\)$/:\1/')
   umask 077
-  mkdir -p "$watch" 2>/dev/null &&
+  [ "$safe" = 1 ] && mkdir -p "$watch" 2>/dev/null &&
     printf '{"v":1,"ts":"%s","ev":"helper_runtime_missing","sid":"%s","actor":"unknown","writer":"helper","pid":%s,"plugin_version":"%s","cc_version":null,"turn_seq":null,"event":"%s"}\n' \
       "$ts" "$sid" "$$" "$ver" "$event" >>"$watch/$sid.classic.jsonl" 2>/dev/null
   exit 0

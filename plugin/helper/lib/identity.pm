@@ -275,16 +275,21 @@ sub _by_exe {
 # (`claude daemon`), whose pid every background session then shared. So the hops below the
 # anchor are checked by their executable first, nearest first; a foreground session's helper,
 # whose parent is the anchor, reads none, and with no anchor (a helper run from a terminal) none
-# is read either.
+# is read either. A hop that CLAUDE_PID names is the anchor before its own parent and command are
+# read (0.1.4 T-14): a hook's helper whose parent is Claude Code itself makes no `ps` call here.
 sub _walk {
     my ($pid) = @_;
     my $env = (defined $ENV{CLAUDE_PID} && $ENV{CLAUDE_PID} =~ /^[1-9][0-9]*$/) ? 0 + $ENV{CLAUDE_PID} : 0;
     my @below;
     for (1 .. 12) {
         last if !$pid || $pid <= 1;
+        if ($pid == $env) {
+            my $w = _by_exe(\@below);
+            return (defined $w ? 0 + $w : 0 + $pid, 1);
+        }
         my ($ppid, $comm) = _parent_and_comm($pid);
         last unless defined $ppid;
-        if ($pid == $env || _is_claude($comm)) {
+        if (_is_claude($comm)) {
             my $w = _by_exe(\@below);
             return (defined $w ? 0 + $w : 0 + $pid, 1);
         }
@@ -295,7 +300,14 @@ sub _walk {
 }
 
 our $CACHED;
-# claude_pid() -> {pid, lstart, found}
+# $OWN_START = 1 (main.pl sets it for hook SessionStart, the writer of classic-alive.json): the
+# start time is always read, never taken from that record. A new Claude Code process may hold the
+# pid of the session's earlier one (a container with fixed pids, `claude --resume`), and a record
+# trusted there would keep the earlier start time for good.
+our $OWN_START = 0;
+# claude_pid() -> {pid, lstart, found}. The start time comes from this session's
+# classic-alive.json (SessionStart writes it for the process it ran in: {pid, pid_lstart}) when
+# that record names the same pid, else from start_time (one `ps` call off Linux; 0.1.4 T-14).
 sub claude_pid {
     return $CACHED if $CACHED;
     if (util::test_mode() && defined $ENV{STORE_TEST_CLAUDE_PID} && $ENV{STORE_TEST_CLAUDE_PID} =~ /^(\d+):(.*)$/) {
@@ -307,7 +319,12 @@ sub claude_pid {
     my $first = getppid();
     my ($pid, $found) = _walk($first);
     $pid //= $first;
-    $CACHED = { pid => 0 + $pid, lstart => start_time($pid), found => $found };
+    my $d = !$OWN_START && defined &rc::sid_dir ? eval { rc::sid_dir() } : undef;
+    my $raw = defined $d ? util::read_file("$d/classic-alive.json", 4096) : undef;
+    my $rec = defined $raw ? eval { jsonc::decode($raw) } : undef;
+    my $ls = ref $rec eq 'HASH' && defined $rec->{pid} && !ref $rec->{pid} && $rec->{pid} =~ /\A[1-9][0-9]*\z/ && $rec->{pid} == $pid
+             && defined $rec->{pid_lstart} && !ref $rec->{pid_lstart} && $rec->{pid_lstart} =~ /\S/ ? $rec->{pid_lstart} : undef;
+    $CACHED = { pid => 0 + $pid, lstart => $ls // start_time($pid), found => $found };
     return $CACHED;
 }
 

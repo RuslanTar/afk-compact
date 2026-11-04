@@ -8,7 +8,11 @@
 # --input` report. The analyzer deletes nothing, writes only under DIR, refuses a DIR that is
 # not fresh, needs -I, and has no network or delete code. `forget` lists one install's files
 # and removes nothing. When WP-fix's tests/fixtures/beta/ is present, its cases.json
-# outcomes hold too.
+# outcomes hold too. 0.1.4 (T-5, T-6): the install's store also holds a sweep row with four shaped
+# main compactions (ok, ok-trailer, ok-unclosed, truncated) and a second alert that a later
+# alert_closed row closed, so the verdict mix counts ok-unclosed as ok (3 of 4) and the alerts count
+# the open ones (as status does), the closed one apart by its reason (still listed, marked closed),
+# all read from the exported rows.
 # sha256 through core's sha::hex256 (Digest::SHA when it loads, else the embedded one; the driver loads it)
 my $REPO = Cwd::abs_path(File::Basename::dirname(Cwd::abs_path(__FILE__)) . '/../../../../..');
 my $TOOL = "$REPO/tools/beta-analyze";
@@ -64,10 +68,22 @@ my $tsv = sub {
     return [ map { my @c = split /\t/, $_, -1; my %r; @r{@h} = @c; \%r } @l ];
 };
 
+my $files = T::beta_install();
+my ($classic) = grep { $_->{path} eq '$WATCH/$SID.classic.jsonl' } @$files;
+my @verdicts = qw(ok ok-trailer ok-unclosed truncated);
+push @{ $classic->{jsonl} }, T::row('sweep', 37, writer => 'classic', file => "$T::SID.jsonl", from_off => 999, to_off => 1999,
+    boundaries => [ map { { line => 10 + $_, uuid => "u-shaped-$_", ts => T::z(20 + $_), trigger => 'auto', pre => 400000,
+                            attributed => 'main', channel => 'classic', verdict => $verdicts[$_] } } 0 .. $#verdicts ]);
+my ($alog) = grep { $_->{path} eq '$WATCH/$SID.alerts.jsonl' } @$files;
+push @{ $alog->{jsonl} },
+    T::row('alert', 38, writer => 'classic', alert_id => 'a05-5678abcd', rule => 'A-05', severity => 'warn',
+           key => { session_id => $T::SID, actor => 'main', compaction_seq => 1, nonce => 'f0f00001' }, evidence => { line => 3 }),
+    T::row('alert_closed', 39, writer => 'classic', alert_id => 'a05-5678abcd', rule => 'A-05', reason => 'superseded: rule changed in 0.1.3');
+
 {
     needs => [q(cmd:python3)], needs_note => q(tools/beta-analyze is a python3 tool),
     allow_canary => 1,
-    files => T::beta_install(),
+    files => $files,
     transcript => [ T::prompt(0) ],
     steps => [
         { call => 'code', code => sub { my ($v) = @_; watch::io::mkdir_p("$v->{TMP}/out") } },
@@ -137,6 +153,7 @@ my $tsv = sub {
               $got{md} = watch::io::slurp("$ana/BETA-REPORT.md") // '';
               $got{bundles} = { map { $_->{zip} => $_ } @{ $tsv->("$ana/bundles.tsv") } };
               $got{installs} = $tsv->("$ana/installs.tsv");
+              $got{alerts} = $tsv->("$ana/alerts.tsv");
               $got{raw} = [ sort(watch::io::list_dir("$ana/raw")) ];
               $got{inst} = [ sort(watch::io::list_dir("$ana/installs")) ];
               $got{wr} = [ map { -s "$ana/installs/$_/WATCH-REPORT.md" ? 1 : 0 } @{ $got{inst} } ];
@@ -226,6 +243,20 @@ my $tsv = sub {
         $has->($md, qr/^\| auto \| \d+ \|$/m, 'trigger mix row');
         $has->($md, qr/^- \Q$got{install}\E [a-z0-9_.:-]+ A-01 critical session [0-9a-f]{12} nonce f0f00001 line 3$/m, 'per-alert line to ask about');
         $has->($md, qr/\| \Q$got{install}\E \| 3 \| /m, 'per-install row counts its bundles (two valid, one duplicate)');
+        # T-5: the four shaped main compactions of each install; ok-unclosed is an ok verdict
+        $has->($md, qr/^## Verdict mix, shaped main compactions\n\n- 75% ok\/ok-trailer\/ok-unclosed of 8$/m, 'verdict mix: 3 of 4 ok per install, ok-unclosed counted');
+        $has->($md, qr/^\| $_ \| 2 \|$/m, "verdict $_ counted once per install") for @verdicts;
+        # T-6: the closed A-05 is not an open alert; it is counted by its close reason
+        my ($by_rule) = $md =~ /^## Alerts by rule\n\n(.*?)\n\n/ms;
+        $E->is($by_rule // '', "| Value | Alerts |\n|---|---|\n| A-01 | 2 |", 'alerts by rule: the open ones only');
+        $has->($md, qr/^## Alerts closed, by reason\n\n\| Value \| Alerts \|\n\|---\|---\|\n\| superseded: rule changed in 0\.1\.3 \| 2 \|$/m, 'closed alerts by reason');
+        $has->($md, qr/^\| \Q$got{install}\E \|(?: [^|]* \|){9} 1 \|/m, 'per-install alerts: the open one');
+        $has->($md, qr/^- \Q$got{install}\E a05-5678abcd A-05 warn session [0-9a-f]{12} nonce f0f00001 line 3 \(closed: superseded: rule changed in 0\.1\.3\)$/m,
+               'the closed alert stays in the list to ask about, marked closed with its reason');
+        my %st = map { ($_->{alert_id} => $_->{state}) } grep { $_->{install_id} eq $got{install} } @{ $got{alerts} || [] };
+        $E->is($st{'a05-5678abcd'} // 'missing', 'closed: superseded: rule changed in 0.1.3', 'alerts.tsv: the closed alert, its state with the reason');
+        my @open = grep { $_ ne 'a05-5678abcd' } sort keys %st;
+        $E->is(join(',', map { $st{$_} } @open), 'open', 'alerts.tsv: the other alert is open');
         $E->ok(($md !~ m{/U[s]ers/|/h[o]me/} ? 1 : 0), 'no path in BETA-REPORT');
         # deletes nothing, writes only under DIR
         $E->is(watch::json::encode($got{in1}), watch::json::encode($got{in0}), 'INBOX unchanged');
@@ -263,7 +294,7 @@ my $tsv = sub {
         $E->is($calls, 1, 'one process call (the store launcher)');
         $E->ok(($src =~ /sys\.addaudithook\(_audit\)/ ? 1 : 0), 'the audit guard is installed');
         $E->ok(($src !~ /\b(?:claude|codex|anthropic|openai)\b/i ? 1 : 0), 'no model client named');
-        # the verdict mix line (no shaped compaction in these bundles) names every verdict OK_VERDICTS counts;
+        # the verdict mix line names every verdict OK_VERDICTS counts (T-5 above checks its output);
         # 0.1.4 (T-7): the list is the bundled spec's ok_verdicts, the three of 0.1.3 only without one
         $E->ok(($src =~ /^OK_VERDICTS = set\(ok_verdicts\(\)\)$/m && $src =~ /"plugin", "assets", "handoff-spec\.json"/
                 && $src =~ /\.get\("ok_verdicts"\)/ && $src =~ /^OK_VERDICTS_FALLBACK = \("ok", "ok-trailer", "ok-unclosed"\)$/m

@@ -1,7 +1,7 @@
 // Options (MOD-SPEC §1.2), the threshold clamp, and the paths the mod writes under. Options are
 // the only configuration source (no environment reads for configuration).
 import type { PluginOptions } from 'claude-code'
-import type { Deps } from './deps'
+import type { CompactWindow, Deps } from './deps'
 import { specValue } from './detect'
 import { log } from './log'
 
@@ -182,8 +182,9 @@ function bounded(o: PluginOptions, k: keyof Config, dflt: number, min: number, m
 }
 
 /**
- * `native_window_tokens`: 0 (or less) means Claude Code's `autoCompactWindow` setting when set
- * (0.1.3, settingWindow), else `context.window`; 1–99,999 count as 100,000, the
+ * `native_window_tokens`: 0 (or less) means the compaction window Claude Code settled (0.1.4
+ * T-11, its summary context breakdown), else its `autoCompactWindow` setting when set (0.1.3,
+ * settingWindow), else `context.window`; 1–99,999 count as 100,000, the
  * smallest window Claude Code applies (`--autocompact` floor, P5-FOLD A3), with `config_clamped`.
  */
 function nativeWindow(o: PluginOptions, notes: Config['notes']): number {
@@ -358,6 +359,13 @@ export function softCap(window: number, k: ClampConstants = CLAMP): number {
 export type Effective = {
   window: number
   native_trigger: number
+  /**
+   * 0.1.4 T-11: where the window came from: `option` (native_window_tokens), `breakdown` (Claude
+   * Code's own compaction window, CompactWindow), `setting` (autoCompactWindow) or `context`
+   * (the model's window); `autocompact_source` is the breakdown's autocompactSource, else null.
+   */
+  window_from: 'option' | 'breakdown' | 'setting' | 'context'
+  autocompact_source: string | null
   /** The computed thresholds (the raw values: negative on a tiny window; read only when enabled). */
   soft_max: number
   target: number
@@ -404,12 +412,19 @@ export function settingWindow(setting: number | undefined, contextWindow: number
 /**
  * MOD-SPEC §1.2 clamp. `contextWindow` is `$.session.usage().context.window`; `setting` is Claude
  * Code's `autoCompactWindow`, the window when `native_window_tokens` is unset (0.1.3; an option set
- * wins). With `triggers` false the thresholds, the clamped list, `small_window` and `min_window`
- * are computed as with triggers on (P5-FOLD A3), so the row shows what triggers-on would do.
+ * wins). `bd` (0.1.4 T-11), the compaction window Claude Code itself settled, comes before the
+ * setting: its window is used as it is, and its threshold, when one is given at or below that
+ * window, is the native trigger (else window − native_offset). With `triggers` false the
+ * thresholds, the clamped list, `small_window` and `min_window` are computed as with triggers on
+ * (P5-FOLD A3), so the row shows what triggers-on would do.
  */
-export function clamp(cfg: Config, contextWindow: number, k: ClampConstants = CLAMP, setting?: number): Effective {
-  const window = cfg.native_window_tokens > 0 ? cfg.native_window_tokens : settingWindow(setting, contextWindow, k) ?? contextWindow
-  const native_trigger = window - k.native_offset
+export function clamp(cfg: Config, contextWindow: number, k: ClampConstants = CLAMP, setting?: number, bd?: CompactWindow): Effective {
+  const sw = settingWindow(setting, contextWindow, k)
+  const window_from: Effective['window_from'] = cfg.native_window_tokens > 0 ? 'option' : bd && bd.window > 0 ? 'breakdown' : sw !== undefined ? 'setting' : 'context'
+  const window = window_from === 'option' ? cfg.native_window_tokens : window_from === 'breakdown' ? bd!.window : sw ?? contextWindow
+  const t = window_from === 'breakdown' ? bd!.threshold : undefined
+  const native_trigger = t !== undefined && t > 0 && t <= window ? t : window - k.native_offset
+  const autocompact_source = window_from === 'breakdown' ? bd!.source ?? null : null
   const soft_max = Math.min(cfg.compact_soft_max_tokens, native_trigger - reserve(cfg, k), softCap(window, k))
   const target = Math.min(cfg.compact_target_tokens, targetOf(soft_max, k))
   const clamped: Effective['clamped'] = []
@@ -417,7 +432,7 @@ export function clamp(cfg: Config, contextWindow: number, k: ClampConstants = CL
   if (target < cfg.compact_target_tokens) clamped.push({ key: 'target', configured: cfg.compact_target_tokens, effective: target })
   const small_window = target < k.min_target
   const disabled = !cfg.triggers ? 'triggers-off' : small_window ? 'trigger-disabled-small-window' : null
-  return { window, native_trigger, soft_max, target, disabled, small_window, min_window: minWindow(cfg, k), clamped }
+  return { window, native_trigger, window_from, autocompact_source, soft_max, target, disabled, small_window, min_window: minWindow(cfg, k), clamped }
 }
 
 /** Expands a leading `~` with the home folder; undefined when it cannot. */
@@ -486,22 +501,33 @@ export async function effective(d: Deps, sid: string): Promise<Effective> {
   } catch {
     window = 0
   }
-  // 0.1.3: an unset native_window_tokens follows Claude Code's own autoCompactWindow setting.
+  // 0.1.4 T-11: an unset native_window_tokens follows the compaction window Claude Code settled
+  // (the summary breakdown); without one, its autoCompactWindow setting (0.1.3).
   let setting: number | undefined
+  let bd: CompactWindow | undefined
   if (!(d.cfg.native_window_tokens > 0)) {
     try {
-      setting = await d.compactWindowSetting?.()
+      bd = await d.compactWindow?.()
     } catch {
-      setting = undefined
+      bd = undefined
+    }
+    if (bd === undefined) {
+      try {
+        setting = await d.compactWindowSetting?.()
+      } catch {
+        setting = undefined
+      }
     }
   }
-  const eff = clamp(d.cfg, window, CLAMP, setting)
+  const eff = clamp(d.cfg, window, CLAMP, setting, bd)
   d.state.eff = eff
   // Disabled: the thresholds are null and the computed values go in the `_raw` fields, which no
   // reader takes as thresholds (they can be negative, P5-FOLD A3).
   const off = eff.disabled !== null
   await log(d, sid, 'config_effective', {
     window: eff.window,
+    window_from: eff.window_from,
+    autocompact_source: eff.autocompact_source,
     native_offset: NATIVE_OFFSET,
     native_trigger: eff.native_trigger,
     reserve: reserve(d.cfg),

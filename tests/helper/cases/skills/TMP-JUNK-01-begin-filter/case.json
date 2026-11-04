@@ -2,7 +2,7 @@
  "id": "TMP-JUNK-01",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.3 small fixes: begin's tmp_candidates drop a recorded path that names no file and is a piece of a command (in the owner's 70 sessions 157 of 1,606 distinct paths): not absolute ($S/tasks/x.output), an unexpanded variable (${RULES}, $$), a glob or brace pattern, a backslash (an escaped newline), a ... part (/var/folders/.../T); a shell assignment or wait spec it was cut with (F=/path, exit:/path) is taken off; a missing plain path and an existing file of any name stay",
+ "note": "0.1.3 small fixes: begin's tmp_candidates drop a recorded path that names no file and is a piece of a command (in the owner's 70 sessions 157 of 1,606 distinct paths): not absolute ($S/tasks/x.output), an unexpanded variable (${RULES}, $$), a glob or brace pattern, a backslash (an escaped newline), a ... part (/var/folders/.../T), a last - (a prefix cut at a variable: /private/tmp/flow-guard-) or a printf directive (/private/tmp/claude-%d) (0.1.4 T-9); a shell assignment or wait spec it was cut with (F=/path, exit:/path) is taken off; a missing plain path and an existing file of any name stay. The text rules are pinned by tests/fixtures/paths/junk-paths.json, the table the mod's recorder (hooks/lib/nudge.ts junkPath, units.test.ts) is held to as well (0.1.4 T-10)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -35,6 +35,10 @@
      "content": "s\n"
     },
     {
+     "write": "$TMP/run/x-",
+     "content": "x\n"
+    },
+    {
      "paths": [
       "$TMP/run/real.txt",
       "$S/tasks/wm9kfyrdx.output",
@@ -46,14 +50,17 @@
       "F=$TMP/run/real2.txt",
       "exit:$TMP/run/real2.txt",
       "$TMP/run/gone.txt",
-      "$TMP/run/star*.txt"
+      "$TMP/run/star*.txt",
+      "$TMP/run/flow-guard-",
+      "$TMP/run/claude-%d",
+      "$TMP/run/x-"
      ],
      "sid": "77777777-7777-4777-8777-777777777777"
     }
    ]
   },
   {
-   "name": "junk dropped, prefixes taken off, a missing plain path and an existing file named with * kept: 4 candidates, the newest first",
+   "name": "junk dropped (also a missing prefix cut at a variable and a missing printf pattern), prefixes taken off, a missing plain path and existing files named with * or a last - kept: 5 candidates, the newest first",
    "argv": [
     "begin",
     "--sid",
@@ -66,27 +73,38 @@
     "exit": 0,
     "json": {
      "tmp_candidates": {
-      "len": 4
+      "len": 5
      },
      "tmp_candidates.0.path": {
-      "re": "/run/star\\*\\.txt$"
+      "re": "/run/x-$"
      },
      "tmp_candidates.0.exists": true,
      "tmp_candidates.1.path": {
+      "re": "/run/star\\*\\.txt$"
+     },
+     "tmp_candidates.1.exists": true,
+     "tmp_candidates.2.path": {
       "re": "/run/gone\\.txt$"
      },
-     "tmp_candidates.1.exists": false,
-     "tmp_candidates.2.path": {
+     "tmp_candidates.2.exists": false,
+     "tmp_candidates.3.path": {
       "re": "^/.*/run/real2\\.txt$"
      },
-     "tmp_candidates.2.exists": true,
-     "tmp_candidates.3.path": {
+     "tmp_candidates.3.exists": true,
+     "tmp_candidates.4.path": {
       "re": "/run/real\\.txt$"
      },
      "trimmed.cut.tmp_candidates": {
       "null": 1
      }
     }
+   }
+  },
+  {
+   "name": "the text rules over the junk-path table the mod's recorder is held to (units.test.ts)",
+   "lib": "junk_paths",
+   "args": {
+    "table": "paths/junk-paths.json"
    }
   }
  ]

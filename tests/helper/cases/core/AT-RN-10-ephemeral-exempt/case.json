@@ -1,0 +1,73 @@
+{
+ "id": "AT-RN-10 (repo-based publish cases from a checkout under /tmp)",
+ "note": "0.1.4 T-8: the publish lint treats paths under /tmp, /private/tmp and /var/folders as ephemeral, so from a checkout under a temp root (its git-ignored tmp/ folder, where the tmp_base \"repo\" cases work, then lies under one) 48 of the 51 repo-based cases failed: each publishes a body naming its own work folder (the other 3 publish none). In test mode, STORE_TEST_EPHEMERAL_EXEMPT=<folder> (the runner sets it to a tmp_base \"repo\" case's work folder) makes a path at or under it not ephemeral; the temp-root list is unchanged. A child run of those 48 with --repo-tmp under /tmp passes them all, HT-PB-01 among them, whose /tmp path outside the work folder still refuses (its step pins line 22 alone)",
+ "tmp_base": "short",
+ "steps": [
+  {
+   "name": "the 48 repo-based cases that publish their work folder, with the repo tmp folder under /tmp",
+   "lib": "runner_child",
+   "args": {
+    "tmp": "$TMP",
+    "cases": [
+     "skills/AT-AP-02-03-12-publish-approvals",
+     "skills/AT-AP-03-dialog-quotes",
+     "skills/AT-AP-04-05-measure-approvals",
+     "skills/AT-AP-13-own-rows",
+     "skills/AT-AP-14-prod-read-carry",
+     "skills/AT-AP-16-matching-item",
+     "skills/AT-AP-19-plugin-turn-context",
+     "skills/AT-AP-19b-user-turn-context",
+     "skills/AT-AP-20-denied-action",
+     "skills/AT-AP-21-denied-matcher",
+     "skills/AT-AP-22-denied-sources",
+     "skills/AT-AP-23-moved-approvals",
+     "skills/AT-AP-24-pasted-moved-items",
+     "skills/AT-AP-25-moved-references",
+     "skills/AT-AP-26-moved-carried-stamp",
+     "skills/AT-CF-01-04-carry-base",
+     "skills/AT-GR-03-gsd-handoff",
+     "skills/AT-HC-01-02-03-05-heal-recipe",
+     "skills/AT-HR-01-handoff-resume-link",
+     "skills/AT-NM-02-former-name-alias",
+     "skills/AT-P5-05-skills-bytes",
+     "skills/AT-PK-04-store-path",
+     "skills/AT-PR-RA-prod-cases",
+     "skills/AT-QA-07-08-skills",
+     "skills/AT-RM-01-02-08-10-publish-export",
+     "skills/AT-RM-06-11-12-locate",
+     "skills/AT-RM-07-repo-lifecycle",
+     "skills/AT-STATE-ROOT-01-legacy-root",
+     "skills/AT-TS-02-06-stamps",
+     "skills/AT-TX-02-04-14-AC-01-lint-texts",
+     "skills/HL-03-06-blocking-rejudge",
+     "skills/HL-04-own-previous-ids",
+     "skills/HT-B-02",
+     "skills/HT-HC-01",
+     "skills/HT-JV-03-recipes",
+     "skills/HT-JV-05-review-signals",
+     "skills/HT-LT-01-03-handoff-turn",
+     "skills/HT-LT-04-review-claim-stamp",
+     "skills/HT-LT-05-claim-without-file",
+     "skills/HT-LT-06-place-fallback",
+     "skills/HT-PB-01",
+     "skills/HT-PB-02",
+     "skills/HT-PB-04",
+     "skills/HT-PB-05-carried-stamps",
+     "skills/HT-PB-06-foreign-carried-time",
+     "skills/HT-RE-01",
+     "skills/HT-VE-01",
+     "skills/SW-LINES-01-secret-warn-lines"
+    ],
+    "args": [
+     "--repo-tmp",
+     "$TMP/rt"
+    ],
+    "exit": 0,
+    "timeout_s": 1200,
+    "stdout_has": [
+     "^# passed 48, failed 0, skipped 0, not run 0$"
+    ]
+   }
+  }
+ ]
+}

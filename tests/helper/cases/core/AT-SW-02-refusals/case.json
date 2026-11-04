@@ -222,7 +222,7 @@
      "^  watcher: not valid: not shadow or off$",
      "^  triggers: not valid: not true or false$",
      "^  log_dir: not valid: not an absolute path",
-     "^  native_window_tokens: not valid: 0 \\(Claude Code's autoCompactWindow, else the model's window\\) or at least 100000$",
+     "^  native_window_tokens: not valid: 0 \\(the window Claude Code reports\\) or at least 100000$",
      "^  deny_class_patterns: not valid: entry 1: not <class>=<pattern>",
      "^  ticket_pattern: not valid: not a pattern the plugin runs",
      "^  cooldown_ms: not valid: not a number of 0 or more$",

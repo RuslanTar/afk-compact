@@ -1,8 +1,11 @@
 {
  "id": "HS-03-stop-gsd-warm",
- "note": "0.1.3 hook speed (cmd/hook.pl _warm_gsd): Stop reads the GSD scan cache (<watch>/<sid>/gsd-scan.json) on toward the transcript's end when it is missing or 1 MiB or more behind, so the checkpoint before a compaction reads only the last bytes (a cold scan of a whole 50 MB transcript ran out of the checkpoint's 1.5 s under load: `GSD: not measured (timeout)`, and drove its p90). A Stop with no cache scans and writes it to the end; the next Stop, a few rows later, reads nothing (no work at every Stop); one 1.2 MB later reads on to the new end",
+ "note": "0.1.3 hook speed (cmd/hook.pl _warm_gsd): Stop reads the GSD scan cache (<watch>/<sid>/gsd-scan.json) on toward the transcript's end when it is missing or 1 MiB or more behind, so the checkpoint before a compaction reads only the last bytes (a cold scan of a whole 50 MB transcript ran out of the checkpoint's 1.5 s under load: `GSD: not measured (timeout)`, and drove its p90). A Stop with no cache scans and writes it to the end; the next Stop, a few rows later, reads nothing (no work at every Stop); one 1.2 MB later reads on to the new end. The case's subject is the catch-up, not the Stop budget (HS-02's): it widens the budget (STORE_TEST_STOP_BUDGET_MS, test mode only) and starts the two Stops that read 3 s late, as a host about ten times slower would; under the 3.5 s budget they would leave the catch-up no time",
  "now": "2026-10-20T10:00:00+03:00",
  "tz": "Etc/GMT-3",
+ "env": {
+  "STORE_TEST_STOP_BUDGET_MS": "60000"
+ },
  "steps": [
   {
    "name": "no cache: the Stop writes it",
@@ -24,6 +27,9 @@
      ]
     }
    ],
+   "env": {
+    "STORE_TEST_HOOK_START_AGO_MS": "3000"
+   },
    "argv": [
     "hook",
     "Stop"
@@ -116,6 +122,9 @@
      "to": "$TMP/proj/$SID.jsonl"
     }
    ],
+   "env": {
+    "STORE_TEST_HOOK_START_AGO_MS": "3000"
+   },
    "argv": [
     "hook",
     "Stop"

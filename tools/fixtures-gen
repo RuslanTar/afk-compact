@@ -5,12 +5,12 @@ Usage:
   tools/fixtures-gen                 the regenerate step (BUILD-PLAN §4.3, §4.6): refresh the
                                      brand-dependent normalized_sha256 column of
                                      summaries/expected.tsv (written only when a value changed),
-                                     then write plugin/tests/unit/_gen/{corpus,payloads,brand}.gen.ts
-  tools/fixtures-gen --out DIR       write the same three files under DIR/plugin/tests/unit/_gen/
+                                     then write plugin/tests/unit/_gen/{corpus,payloads,paths,brand}.gen.ts
+  tools/fixtures-gen --out DIR       write the same four files under DIR/plugin/tests/unit/_gen/
                                      (sha column refreshed in memory; the repo is not written)
-  tools/fixtures-gen --check         fixture checks (below) plus drift: the three files on disk
+  tools/fixtures-gen --check         fixture checks (below) plus drift: the four files on disk
                                      must equal a fresh render; exit 1 on any problem
-  tools/fixtures-gen --clean         remove the three generated files (nothing else)
+  tools/fixtures-gen --clean         remove the four generated files (nothing else)
   tools/fixtures-gen --print-expected [p5|acuity|idle|cc311|unclosed]
                                      print summaries/expected.tsv (or summaries/<table>/expected.tsv)
                                      as the reference detector computes it (authoring aid; never
@@ -93,7 +93,7 @@ sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 FIX = os.path.join(REPO, "tests", "fixtures")
 GEN_REL = os.path.join("plugin", "tests", "unit", "_gen")
-GEN_FILES = ("brand.gen.ts", "corpus.gen.ts", "payloads.gen.ts")
+GEN_FILES = ("brand.gen.ts", "corpus.gen.ts", "payloads.gen.ts", "paths.gen.ts")
 SUMMARIES = os.path.join(FIX, "summaries")
 EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
 # Sub-tables (README "Corpus"): summaries/<table>/ with its own expected.tsv, in the same columns,
@@ -112,6 +112,8 @@ EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
 # with an empty last section or out of order.
 SUB_TABLES = ("p5", "acuity", "idle", "cc311", "unclosed")
 PAYLOADS = os.path.join(FIX, "payloads")
+# 0.1.4 T-10: the junk-path table both path rules read (skills/begin.pm junk_path, nudge.ts junkPath)
+JUNK_PATHS = os.path.join(FIX, "paths", "junk-paths.json")
 SEQUENCES = os.path.join(FIX, "sequences")
 SECRET_MARK = "$SECRET{"
 COLUMNS = ["file", "verdict", "marker_line", "sentinel_from_end", "nonce", "scope",
@@ -678,6 +680,12 @@ def render(b, rows=None):
     out["payloads.gen.ts"] = (HEADER +
         "export const PAYLOADS: Readonly<Record<string, Readonly<Record<string, unknown>>>> = " + js(payloads) + "\n" +
         "export const PAYLOADS_INVALID: Readonly<Record<string, string>> = " + js(raw) + "\n")
+    rows = json.loads(read(JUNK_PATHS))["rows"]
+    out["paths.gen.ts"] = (HEADER +
+        "// paths/junk-paths.json: recorded temp paths and whether their text marks a piece of a command\n"
+        "export type JunkPathRow = { path: string; as: string; junk: boolean; why: string }\n"
+        "export const JUNK_PATHS: readonly JunkPathRow[] = " +
+        js([{"path": r["path"], "as": r.get("as", r["path"]), "junk": r["junk"], "why": r["why"]} for r in rows]) + "\n")
     return out
 
 
@@ -2595,7 +2603,7 @@ def check(b):
             problems.append("drift differs " + os.path.join(GEN_REL, name))
     if os.path.isdir(gen_dir):
         for f in sorted(os.listdir(gen_dir)):
-            if f.endswith(".gen.ts") and f not in rendered and f.startswith(("brand", "corpus", "payloads")):
+            if f.endswith(".gen.ts") and f not in rendered and f.startswith(("brand", "corpus", "payloads", "paths")):
                 problems.append("drift stale " + os.path.join(GEN_REL, f))
     # rename
     if not os.environ.get(NO_DRILL_ENV):

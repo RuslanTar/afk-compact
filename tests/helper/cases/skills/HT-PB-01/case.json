@@ -269,8 +269,11 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^LINT ephemeral-path ",
+     "^LINT ephemeral-path line 22$",
      "^REFUSED: lint \\(\\d+ blocking\\); draft kept at $STAGE/body.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT ephemeral-path line (?!22$)"
     ]
    }
   },

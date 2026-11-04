@@ -43,6 +43,14 @@ export class World {
   policy: Record<string, unknown> = {}
   /** Every `$.settings.read` rejects (IA-2: native idle then reads `unknown`). */
   settingsThrow = false
+  /**
+   * 0.1.4 T-11: the context breakdown `$.session.usage({ breakdown })` answers (its window fields
+   * only); undefined: the reply has none, as from an older Claude Code. `breakdownThrow`: such a
+   * call rejects. `usageArgs`: the argument of every `$.session.usage` call.
+   */
+  breakdown: { rawMaxTokens: number; autocompactSource: string; autoCompactThreshold?: number } | undefined = undefined
+  breakdownThrow = false
+  usageArgs: unknown[] = []
   /** `$.agent.list()` (owner xxxxxxxx-38); undefined: the call rejects. */
   agents: { id: string; status: string }[] | undefined = []
   files = new Map<string, string>()
@@ -223,7 +231,13 @@ export class World {
       if (this.sessionIdFails?.() === true) throw new Error('no session id')
       return { value: this.sid }
     })
-    on('session.usage', () => ({ value: { startedAt: T0, rateLimits: this.rateLimits as never, context: { tokens: this.tokens, window: this.window } } }))
+    on('session.usage', (_$, e) => {
+      this.usageArgs.push(e)
+      const asked = typeof e === 'object' && e !== null && 'breakdown' in e && e.breakdown !== undefined
+      if (asked && this.breakdownThrow) throw new Error('no breakdown')
+      const bd = asked && this.breakdown ? { breakdown: this.breakdown as never } : {}
+      return { value: { startedAt: T0, rateLimits: this.rateLimits as never, context: { tokens: this.tokens, window: this.window, ...bd } } }
+    })
     on('session.version', () => ({ value: this.version }))
     on('session.cwd', () => ({ value: this.cwd }))
     on('settings.read', () => {

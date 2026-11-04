@@ -889,6 +889,55 @@ test('NW-SET (0.1.3): settings unreadable: the model window', async ($, on) => {
   expect(w.rowsOf('config_effective')[0]?.window).toBe(1000000)
 })
 
+// 0.1.4 T-11: an unset native_window_tokens follows the compaction window Claude Code settled, read
+// once per load from the summary context breakdown (no token-count request): its rawMaxTokens is
+// the window and its autoCompactThreshold, when present, the native trigger; config_effective logs
+// where the window came from and the breakdown's autocompactSource. No breakdown, or a failed
+// call: the autoCompactWindow setting as in 0.1.3.
+type BdRow = { name: string; options?: Record<string, number>; bd?: { rawMaxTokens: number; autocompactSource: string; autoCompactThreshold?: number }
+  throws?: boolean; set?: number; want: [number, number, string, string | null] }
+const BD_ROWS: BdRow[] = [
+  { name: 'source env (CLAUDE_CODE_AUTO_COMPACT_WINDOW): window and trigger from the breakdown',
+    bd: { rawMaxTokens: 500000, autocompactSource: 'env', autoCompactThreshold: 480000 }, want: [500000, 480000, 'breakdown', 'env'] },
+  { name: 'source settings: the breakdown wins over the autoCompactWindow read',
+    bd: { rawMaxTokens: 800000, autocompactSource: 'settings', autoCompactThreshold: 770000 }, set: 600000, want: [800000, 770000, 'breakdown', 'settings'] },
+  { name: 'source model-default: the model default window',
+    bd: { rawMaxTokens: 400000, autocompactSource: 'model-default', autoCompactThreshold: 387000 }, want: [400000, 387000, 'breakdown', 'model-default'] },
+  { name: 'auto-compaction off (no threshold): trigger window - 33000',
+    bd: { rawMaxTokens: 1000000, autocompactSource: 'auto' }, want: [1000000, 967000, 'breakdown', 'auto'] },
+  { name: 'a threshold past the window is not the trigger',
+    bd: { rawMaxTokens: 600000, autocompactSource: 'auto', autoCompactThreshold: 700000 }, want: [600000, 567000, 'breakdown', 'auto'] },
+  { name: 'the breakdown call fails: the autoCompactWindow setting', throws: true, set: 800000, want: [800000, 767000, 'setting', null] },
+  { name: 'no breakdown in the reply (an older Claude Code), no setting: the model window', want: [1000000, 967000, 'context', null] },
+  { name: 'option 900000 set: the option, no breakdown asked for', options: { native_window_tokens: 900000 },
+    bd: { rawMaxTokens: 500000, autocompactSource: 'env', autoCompactThreshold: 480000 }, want: [900000, 867000, 'option', null] },
+]
+for (const r of BD_ROWS) {
+  test(`NW-BD (0.1.4 T-11): ${r.name}`, { options: r.options ?? {} }, async ($, on) => {
+    const w = new World().install(on)
+    w.breakdown = r.bd
+    w.breakdownThrow = r.throws === true
+    if (r.set !== undefined) w.policy = { autoCompactWindow: r.set }
+    await w.start($)
+    const eff = w.rowsOf('config_effective')[0]
+    expect([eff?.window, eff?.native_trigger, eff?.window_from, eff?.autocompact_source]).toEqual(r.want)
+    const asked = w.usageArgs.filter(a => typeof a === 'object' && a !== null && 'breakdown' in a)
+    expect(asked).toEqual(r.options?.native_window_tokens ? [] : [{ breakdown: 'summary' }])
+  })
+}
+
+test('NW-BD (0.1.4 T-11): the breakdown is read once per load, not again at later turns', async ($, on) => {
+  const w = new World().install(on)
+  w.breakdown = { rawMaxTokens: 500000, autocompactSource: 'env', autoCompactThreshold: 480000 }
+  await w.start($)
+  await w.userTurn($)
+  await w.turnEnd($)
+  await w.userTurn($)
+  await w.turnEnd($)
+  expect(w.usageArgs.filter(a => typeof a === 'object' && a !== null && 'breakdown' in a).length).toBe(1)
+  expect(w.rowsOf('config_effective').length).toBe(1)
+})
+
 // DP-30 (4): `compacted.ms` has one definition on every path: from the dispatch record written
 // (or reused) to the compaction's answer, as on the mod-hook path.
 test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'code' } }, async ($, on) => {
