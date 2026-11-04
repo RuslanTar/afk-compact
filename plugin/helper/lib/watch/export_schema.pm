@@ -129,7 +129,8 @@ our %SCHEMA = (
         section_chars => [counts => 'heading'], elements => [counts => 'word'], fabricated_check_tokens => 'int',
         measured => 'bool', measured_stamp => 'stamp',
         ledger => [obj => { lost_U => 'int', lost_D => 'int', lost_X => 'int', folded => 'int', ledger_chars => 'int',
-                            overlap_pct => 'num', ledger_src => [enum => qw(copy transcript none)] }],
+                            overlap_pct => 'num', ledger_src => [enum => qw(copy transcript none)],
+                            renumbered => q(int), carried => q(int) }],
         clutter => [counts => 'word'], tmp_paths => 'int', arm_fp => 'hash', arm_new => 'bool',
         secret_hits => [list => 'word'], keyset_hash => 'hex8', mod_alive_this_turn => 'bool',
     },
@@ -171,7 +172,9 @@ our %SCHEMA = (
             trigger_detail => 'word', nonce_match => 'bool', channel => [enum => @CHANNEL], copy => 'word',
             postcompact => 'bool', warm_gap_s => 'num', turns_since_prev => 'int', refill_per_turn => 'num',
             rapid_refill_run => 'int', nudge_driven => 'bool', idle => $IDLE,
-            idle_source => [enum => @IDLE_SRC] }]],
+            idle_source => [enum => @IDLE_SRC],
+            # 0.1.4: the native idle notice after the boundary (lib/watch/sweep.pm idle_notice)
+            idle_notice => [enum => qw(notice return)] }]],
         part => 'int',
         turns =>[obj => { tool_batches => 'int', tool_calls => 'int', classes => [counts => 'tool'],
             errors => [counts => 'word'], askq => [counts => 'word'], prompts => 'int', continues => 'int',
@@ -294,11 +297,15 @@ our %SCHEMA = (
                    cap => 'int', continues_last_hour => 'int', continue_without_nudge => 'bool', result => 'word',
                    relation => 'word', native_thrash => 'bool', mod_thrash => 'bool', batches => 'int',
                    lost_U => 'int', lost_D => 'int', lost_X => 'int', rules => [list => 'word'], hard => 'bool',
-                   chars => 'int', growth => 'num', mb => 'num', kind => 'word', read_share => 'num', prefix_read => 'num' }],
+                   chars => 'int', growth => 'num', mb => 'num', kind => 'word', read_share => 'num', prefix_read => 'num',
+                   # 0.1.4: A-09 (renumbered and carried ledger ids), A-24 (the watch folder past the walk's entry cap)
+                   renumbered => q(int), carried => q(int), watch_dir => q(bool), mb_at_least => q(num), entries_over => q(int) }],
     },
     # 0.1.3: an alert closed by a later row; the reason is a fixed text (lib/watch/supersede.pm, and
-    # an A-01 whose copy was saved late, lib/watch/rules.pm)
-    alert_closed => { alert_id => 'word', rule => 'rule', reason => [enum => 'superseded: rule changed in 0.1.3', 'resolved: copy saved'] },
+    # an A-01 whose copy was saved late, lib/watch/rules.pm; 0.1.4: an A-24 watch-size alert whose
+    # folder is back under quota)
+    alert_closed => { alert_id => q(word), rule => q(rule), reason => [enum => q(superseded: rule changed in 0.1.3), q(superseded: rule changed in 0.1.4),
+                                                                      q(resolved: copy saved), q(resolved: below quota)] },
     watch_error => { stage => 'word', error_class => 'word' },
     # --- other rows of MOD-SPEC (kebab-case there, snake_case on disk) and of the built code ---
     bypass_suspected => { nonce => 'nonce', causes => [list => 'word'] },

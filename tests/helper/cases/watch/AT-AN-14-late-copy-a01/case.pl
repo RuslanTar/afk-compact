@@ -10,6 +10,10 @@
 # {reason: "resolved: copy saved"}` (the row stays) and `status` no longer counts it; the second
 # compaction (no copy, no stash) and the third (a stash reconcile no longer waits on) raise their
 # A-01 as before.
+# 0.1.4 (W-10): the 2.4 s-late Stop leaves the watcher 0.2-0.5 s, so under load its rules might not
+# reach the boundaries and the case would pass without the waits reconcile left (budget_waits). That
+# Stop runs with a test-mode minimum watcher window (STORE_TEST_WATCH_MIN_MS), and the case asserts
+# the watcher evaluated its boundaries: no hard-stop sweep_partial, and its sweep row covers all three.
 my %got;
 my $o = "\xe2\x9f\xaa";
 my $c = "\xe2\x9f\xab";
@@ -50,6 +54,9 @@ my $snap = sub {
     my @t = grep { ($_->{ev} // '') eq 'stop_timing' } @{ watch::io::read_jsonl("$v->{WATCH}/$T::SID.classic.jsonl") };
     $got{"timing_$k"} = $t[-1];
     $got{"copies_$k"} = scalar(my @c = glob("$v->{ROOT}/*/*/compact/*.md"));
+    my @cl = @{ watch::io::read_jsonl("$v->{WATCH}/$T::SID.classic.jsonl") };
+    $got{"sweeps_$k"} = [ grep { ($_->{ev} // '') eq 'sweep' } @cl ];
+    $got{"hard_$k"} = scalar grep { ($_->{ev} // '') eq 'sweep_partial' && ($_->{reason} // '') eq 'hard-stop' } @cl;
 };
 {
     transcript => [ T::prompt(0), T::assistant_text(1) ],
@@ -77,8 +84,9 @@ my $snap = sub {
                                                                                nonce => $got{n1} }, evidence => { copy => 'missing', line => 5 } }) . "\n";
               close $fh;
           } },
+        { call => 'code', code => sub { $snap->($_[0], 'before') } },
         { call => 'cli', at => 40, argv => ['hook', 'Stop'], stdin => $stop, stdin_vars => 1,
-          env => { %env, STORE_TEST_HOOK_START_AGO_MS => '2400' } },
+          env => { %env, STORE_TEST_HOOK_START_AGO_MS => '2400', STORE_TEST_WATCH_MIN_MS => '3000' } },
         { call => 'code', code => sub { $snap->($_[0], 'late') } },
         { call => 'cli', at => 50, argv => ['hook', 'Stop'], stdin => $stop, stdin_vars => 1,
           env => { %env, STORE_TEST_HOOK_START_AGO_MS => '1700' } },
@@ -109,6 +117,12 @@ my $snap = sub {
             $E->count($got{"closed_$k"} || [], 0, "nothing closed at the $k Stop while the copy is still missing");
         }
         $E->is(($got{timing_late} || {})->{reconcile_budget_ms}, 0, 'the first late Stop left reconcile no budget');
+        # W-10: that Stop's watcher evaluated the three boundaries (the waits are what held their A-01)
+        $E->is(($got{hard_late} // 0) - ($got{hard_before} // 0), 0, 'the late Stop ran its rules to the end (no hard-stop sweep_partial)');
+        my %seen = map { ($_ => 1) } map { $_->{uuid} // () } map { @{ $_->{boundaries} || [] } } @{ $got{sweeps_late} || [] };
+        my %before = map { ($_ => 1) } map { $_->{uuid} // () } map { @{ $_->{boundaries} || [] } } @{ $got{sweeps_before} || [] };
+        $E->is(join(',', grep { $seen{$_} && !$before{$_} } qw(b-late-1 b-late-2 b-late-3)), 'b-late-1,b-late-2,b-late-3',
+               "the late Stop's sweep row covers the three boundaries");
         $E->ok($got{lost} && $got{unreadable}, 'the second stash was removed, the third made unreadable');
         $E->is($got{copies_next}, 1, 'the next Stop saves the first copy late');
         my @a = @{ $got{a01_next} || [] };

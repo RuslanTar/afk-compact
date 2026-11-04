@@ -73,7 +73,23 @@ PATTERNS = (
     ("url", re.compile(rb"[a-z][a-z0-9+.-]*://[^\s\"/]+", re.I)),
 )
 SHAPED = {"mod-hook", "mod-self", "classic"}
-OK_VERDICTS = {"ok", "ok-trailer", "ok-unclosed"}
+# The verdicts that count as ok: the bundled spec's `ok_verdicts` (plugin/assets/handoff-spec.json, as
+# the watcher reads them, watch::spec::ok_verdicts); these three when it has no usable list.
+OK_VERDICTS_FALLBACK = ("ok", "ok-trailer", "ok-unclosed")
+
+
+def ok_verdicts():
+    try:
+        with open(os.path.join(REPO, "plugin", "assets", "handoff-spec.json"), "rb") as fh:
+            v = json.loads(fh.read().decode("utf-8")).get("ok_verdicts")
+    except (OSError, ValueError, AttributeError):
+        v = None
+    if isinstance(v, list):
+        v = [x for x in v if isinstance(x, str) and WORD_RE.match(x)]
+    return tuple(v) if v else OK_VERDICTS_FALLBACK
+
+
+OK_VERDICTS = set(ok_verdicts())
 BAND_STEP = 50000
 BAR_WIDTH = 40
 
@@ -761,7 +777,7 @@ def render(bundles, installs, rows_in, rows_dup, rows_bad):
     share = "%.0f%%" % (100.0 * pooled["idle"] / pooled["comp"]) if pooled["comp"] else "n/a"
     L += ["", "- Idle share (rollup `idle` field; idle is not a trigger value): %s (%d of %d)" % (share, pooled["idle"], pooled["comp"]), ""]
 
-    okp = "%.0f%% ok/ok-trailer/ok-unclosed of %d" % (100.0 * pooled["shaped_ok"] / pooled["shaped"], pooled["shaped"]) if pooled["shaped"] else "no shaped main compaction"
+    okp = "%.0f%% %s of %d" % (100.0 * pooled["shaped_ok"] / pooled["shaped"], "/".join(ok_verdicts()), pooled["shaped"]) if pooled["shaped"] else "no shaped main compaction"
     L += ["## Verdict mix, shaped main compactions", "", "- %s" % okp, ""]
     counts("Verdicts", pooled["verdicts"], "compactions")
 

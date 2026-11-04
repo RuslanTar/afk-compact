@@ -26,8 +26,10 @@ package watch::ctx;
 #   mod_alive_this_turn  PostCompact: core's liveness answer (MOD-SPEC §3.3)
 #   copy_waits     Stop: the stashes this Stop's reconcile left for a later run
 #                  {"n:<nonce>" or "i:<id6>" => file in pending/}; their A-01 is held
+#   reconcile_busy Stop: 1 when that reconcile could not take the session's reconcile lock (0.1.4):
+#                  it left no waits, so an A-01 is held while its stash is in pending/
 #   reconcile      SessionEnd, SubagentStop: that reconcile's result (SessionEnd: its
-#                  `waits`, as copy_waits)
+#                  `waits`, as copy_waits, and `busy`, as reconcile_busy)
 #   refused        a root refusal reason: the watcher then writes nothing (unset: refused()
 #                  checks the watch dir and handoff_root itself)
 #   append         sub(path, row): core's appender (default: watch::io)
@@ -241,7 +243,12 @@ sub _identity {
     my ($ctx) = @_;
     return if defined $ctx->{pid};
     my $id;
-    $id = eval { local $SIG{__DIE__}; identity::claude_pid() } if defined &identity::claude_pid;
+    # core's process identity first: rc::claude() is identity::claude_pid() in a hook, and the
+    # ended session's newest recorded process while core finishes it across sessions
+    # (rc::as_session, lib/orphans.pm), so its rows carry that process, not the finisher's (0.1.4)
+    $id = eval { local $SIG{__DIE__}; rc::claude() } if defined &rc::claude;
+    $id = undef unless ref $id eq 'HASH' && defined $id->{pid};
+    $id //= eval { local $SIG{__DIE__}; identity::claude_pid() } if defined &identity::claude_pid;
     if (ref $id eq 'HASH' && defined $id->{pid}) {
         $ctx->{pid} = $id->{pid};
         $ctx->{pid_lstart} = $id->{lstart} unless defined $ctx->{pid_lstart};

@@ -13,6 +13,9 @@ use utf8;
 
 package cmd_reconcile;
 
+# 0.1.4: a session this pass finishes gets the watcher's end pass, as through the hooks (lib/watchcall.pm)
+require watchcall;
+
 our $FULL_MS = 10000;
 
 sub run {
@@ -23,8 +26,8 @@ sub run {
                            budget_ms => 2000, final => ($opt->{final} ? 1 : 0), cutoff => reconcile::cutoff());
     my $line = reconcile::line($n);
     if ($opt->{orphans}) {
-        my $o = $opt->{full} ? orphans::pass(budget_ms => $FULL_MS, max_sids => 1_000_000, full => 1)
-                             : orphans::pass(budget_ms => $orphans::PASS_MS);
+        my $o = $opt->{full} ? orphans::pass(budget_ms => $FULL_MS, max_sids => 1_000_000, full => 1, after => \&watchcall::finished)
+                             : orphans::pass(budget_ms => $orphans::PASS_MS, after => \&watchcall::finished);
         $line .= sprintf('; orphans finished=%d kept=%d left=%d', $o->{finished}, $o->{kept}, $o->{left});
     }
     args::out($line);

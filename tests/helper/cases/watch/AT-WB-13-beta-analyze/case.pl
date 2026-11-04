@@ -263,9 +263,12 @@ my $tsv = sub {
         $E->is($calls, 1, 'one process call (the store launcher)');
         $E->ok(($src =~ /sys\.addaudithook\(_audit\)/ ? 1 : 0), 'the audit guard is installed');
         $E->ok(($src !~ /\b(?:claude|codex|anthropic|openai)\b/i ? 1 : 0), 'no model client named');
-        # the verdict mix line (no shaped compaction in these bundles) names every verdict OK_VERDICTS counts
-        $E->ok(($src =~ /^OK_VERDICTS = \{"ok", "ok-trailer", "ok-unclosed"\}$/m && $src =~ /"%\.0f%% ok\/ok-trailer\/ok-unclosed of %d"/ ? 1 : 0),
-               'the verdict mix label names ok-unclosed, which it counts');
+        # the verdict mix line (no shaped compaction in these bundles) names every verdict OK_VERDICTS counts;
+        # 0.1.4 (T-7): the list is the bundled spec's ok_verdicts, the three of 0.1.3 only without one
+        $E->ok(($src =~ /^OK_VERDICTS = set\(ok_verdicts\(\)\)$/m && $src =~ /"plugin", "assets", "handoff-spec\.json"/
+                && $src =~ /\.get\("ok_verdicts"\)/ && $src =~ /^OK_VERDICTS_FALLBACK = \("ok", "ok-trailer", "ok-unclosed"\)$/m
+                && $src =~ /"%\.0f%% %s of %d" % \(100\.0 \* pooled\["shaped_ok"\] \/ pooled\["shaped"\], "\/"\.join\(ok_verdicts\(\)\)/ ? 1 : 0),
+               "the verdict mix counts and names the bundled spec's ok_verdicts");
         # WP-fix's fixture zips (tests/fixtures/beta, FIX-06), once that folder is on the branch
         if ($got{fx_cases}) {
             $E->is($got{fx_run}{exit}, 0, "fixture run exit 0 ($got{fx_run}{err})");

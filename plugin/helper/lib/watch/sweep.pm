@@ -144,6 +144,13 @@ sub scan_file {
         unless (ref $r eq 'HASH') { $res{bad_lines}++; next }
         my $f = watch::rows::classify($r, $ctx->{brand}, $outward);
         $last_uuid = $f->{uuid} if defined $f->{uuid};
+        # 0.1.4 (IC-1 D1, the rule reconcile reads the rollup idle by): the first native idle
+        # notice row after a main boundary, before the next one, marks that boundary idle
+        if ($is_main && $carry->{ni_b} && ($f->{kind} // '') ne 'boundary' && (my $ni = idle_notice($r))) {
+            $_->{idle_notice} = $ni for grep { ($_->{uuid} // '') eq $carry->{ni_b} } @{ $res{boundaries} };
+            $carry->{last_main_b}{idle_notice} = $ni if ref $carry->{last_main_b} eq 'HASH' && ($carry->{last_main_b}{uuid} // '') eq $carry->{ni_b};
+            delete $carry->{ni_b};
+        }
         _analyze($ctx, \%res, $carry, $f, $is_main, $stem);
     }
     close $fh;
@@ -186,6 +193,25 @@ sub _skip_to_newline {
 }
 
 sub _ev { my ($res, %e) = @_; push @{ $res->{events} }, \%e; return \%e }
+
+# idle_notice(decoded row) -> 'notice' | 'return' for a native idle-compaction notice (a system row
+# whose content starts with one of core's prefixes, transcript::idle_prefixes, the rule of
+# transcript::idle_notice), else undef. Only the prefix is matched; no text is kept.
+my $IDLE_P;
+sub idle_notice {
+    my ($r) = @_;
+    return undef unless ref $r eq 'HASH' && ($r->{type} // '') eq 'system' && defined $r->{content} && !ref $r->{content};
+    $IDLE_P //= do {
+        my $p = eval { local $SIG{__DIE__}; require transcript; transcript::idle_prefixes() };
+        $p = eval { no warnings q(once); +{ %transcript::IDLE_FALLBACK } } unless ref $p eq q(HASH);
+        ref $p eq 'HASH' && %$p ? $p : { notice => 'Compacted while idle', return => 'Compacted using a summary written while you were away' };
+    };
+    for my $k (sort keys %$IDLE_P) {
+        my $pre = $IDLE_P->{$k};
+        return $k if defined $pre && length $pre && index($r->{content}, $pre) == 0;
+    }
+    return undef;
+}
 
 sub _analyze {
     my ($ctx, $res, $c, $f, $is_main, $stem) = @_;
@@ -248,8 +274,9 @@ sub _analyze {
         $c->{nudge_since_b} = 0;
         if ($counted) {
             $c->{prev_b} = { prompts_at => $c->{prompts}, post => $f->{post}, uuid => $uuid };
-            $c->{last_main_b} = { uuid => $uuid, nudged => ($b{nudge_driven} && ${ $b{nudge_driven} }) ? 1 : 0 };
+            $c->{last_main_b} = { uuid => $uuid, nudged => ($b{nudge_driven} && ${ $b{nudge_driven} }) ? 1 : 0, ts => $f->{ts} };
         }
+        if ($is_main) { $c->{ni_b} = $uuid } else { delete $c->{ni_b} }
         $c->{win} = { kind => 'boundary', uuid => $uuid, line => $line, ts => $f->{ts}, calls => 0, consent => 0 };
         $c->{prog} = { uuid => $uuid, batches => 0, done => 0 } if $is_main;
         $c->{last_nudge} = undef;
@@ -272,12 +299,17 @@ sub _analyze {
     # M-17 (DP-14): the plugin-submitted handoff turn is a plugin-origin `user` row like a
     # continue; an open ht record (handoff-turn/<ht>.json, one submit per ht) makes it a
     # `handoff_turn`. It is a turn, not a continue: no continue event, no A-19/A-27 input.
+    # 0.1.4: a submit told by its text (rows.pm $HT_SUBMIT) whose record is gone (all 12 A-27 rows
+    # of the 0.1.2 log were such: pre-compaction and pre-idle handoff turns) is no continue either;
+    # it counts as a plugin prompt.
     my $ht;
     if ($k eq 'continue') {
         $ht = watch::hturn::submit_for($ctx, $f->{ts}, $c->{ht_used} ||= {});
         if ($ht) {
             $c->{ht_used}{ $ht->{ht} } = 1;
             $k = 'handoff_turn';
+        } elsif ($f->{ht_submit}) {
+            $k = 'plugin_prompt';
         }
     }
     if ($k eq 'prompt' || $k eq 'continue' || $k eq 'handoff_turn' || $k eq 'plugin_prompt') {
@@ -304,8 +336,8 @@ sub _analyze {
         }
         if ($k eq 'continue') {
             my $lb = $c->{last_main_b} || {};
-            _ev($res, k => 'continue', line => $line, ts => $f->{ts}, uuid => $f->{uuid},
-                b_uuid => $lb->{uuid}, b_nudged => $lb->{nudged} ? 1 : 0);
+            _ev($res, k => q(continue), line => $line, ts => $f->{ts}, uuid => $f->{uuid},
+                b_uuid => $lb->{uuid}, b_nudged => $lb->{nudged} ? 1 : 0, b_ts => $lb->{ts}, b_idle_notice => $lb->{idle_notice});
         }
         my $ln = $c->{last_nudge};
         if ($ln && !$ln->{done} && $c->{prompts} - $ln->{prompts_at} > 2 && $ln->{b_seq} == $c->{b_seq}) {
@@ -366,6 +398,11 @@ sub _analyze {
     }
     if ($k eq 'tool_result') {
         $c->{last_rel} = 'tool_result';
+        if (ref $f->{wf_task} eq q(ARRAY)) {
+            my $tr = $c->{task_runs} ||= {};
+            $tr->{ $f->{wf_task}[0] } = $f->{wf_task}[1];
+            if (keys %$tr > 100) { delete $tr->{$_} for (sort keys %$tr)[0 .. keys(%$tr) - 101] }
+        }
         for my $r (@{ $f->{results} || [] }) {
             $t->{errors}{tool}++ if $r->{is_error};
             if (defined $r->{id} && $c->{asks} && delete $c->{asks}{ $r->{id} }) {

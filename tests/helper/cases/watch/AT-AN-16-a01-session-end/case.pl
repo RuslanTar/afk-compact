@@ -9,11 +9,21 @@
 # closes the planted A-01 as `resolved: copy saved`, drops the second one's hold and raises the
 # third one's A-01 (no copy, a stash reconcile no longer waits on). The hold is gone from the
 # session state.
+# 0.1.4: before that end, two SessionEnds that cannot settle anything: one while another reconciler
+# holds the session's reconcile.lock (W-8: reconcile is busy, so its waits say nothing; the stashes
+# are still in pending/), one that starts 2 s late (W-9: its reconcile has no time to sweep a save and
+# leaves the stashes waiting). Both keep the three A-01 held and write no A-01. AT-AN-17 and AT-AN-21
+# finish the session across sessions instead (the next session's start, the `reconcile --orphans`
+# CLI, W-7): the rows the end pass writes there carry the ended session's recorded Claude Code
+# process (W-13), not the finisher's.
 my $finish = $T::AN_FINISH ? 1 : 0;
+my $cli = ($T::AN_FINISH // '') eq 'cli' ? 1 : 0;
 my %got;
 my $o = "\xe2\x9f\xaa";
 my $c = "\xe2\x9f\xab";
-my %env = (CLAUDE_CODE_TMPDIR => '$TMP/cctmp', CLAUDE_PROJECT_DIR => '$HOME/work');
+my %env = (CLAUDE_CODE_TMPDIR => '$TMP/cctmp', CLAUDE_PROJECT_DIR => '$HOME/work', STORE_TEST_CLAUDE_PID => '1111:Tue Oct 21 13:00:00 2026');
+my %benv = (%env, STORE_TEST_CLAUDE_PID => '2222:Tue Oct 21 13:30:00 2026');
+my $lock;
 my $B = 'b0b0b0b0-1111-4222-8333-444444444444';
 my $pl = sub {
     my ($v, %f) = @_;
@@ -59,7 +69,22 @@ my $snap = sub {
     $got{"closed_$k"} = [ grep { ($_->{ev} // '') eq 'alert_closed' } @rows ];
     $got{"copies_$k"} = scalar(my @c = glob("$v->{ROOT}/*/*/compact/*.md"));
     $got{"held_$k"} = $held->($v);
+    $got{"rows_$k"} = \@rows;
 };
+my @before_end = $finish ? () : (
+    # W-8: another reconciler holds the session's reconcile.lock through the SessionEnd
+    { call => 'code', code => sub {
+          my ($v) = @_;
+          open($lock, '>>', "$v->{WATCH}/$T::SID/reconcile.lock") or die "lock: $!";
+          flock($lock, 2) or die "flock: $!";
+      } },
+    { call => 'cli', at => 45, argv => ['hook', 'SessionEnd'], stdin => $end, stdin_vars => 1, env => \%env },
+    { call => 'code', code => sub { close $lock; $snap->($_[0], 'busy') } },
+    # W-9: a SessionEnd that starts 2 s late: its reconcile leaves the saves waiting
+    { call => 'cli', at => 47, argv => ['hook', 'SessionEnd'], stdin => $end, stdin_vars => 1,
+      env => { %env, STORE_TEST_HOOK_START_AGO_MS => '2000' } },
+    { call => 'code', code => sub { $snap->($_[0], 'lateend') } },
+);
 my @ending = $finish ? (
     # the session's process is gone with no SessionEnd: its records say ended, and the next
     # session's start finishes it
@@ -73,7 +98,9 @@ my @ending = $finish ? (
               $got{ended}++;
           }
       } },
-    { call => 'cli', at => 60, argv => ['hook', 'SessionStart'], stdin => $bstart, stdin_vars => 1, any_stdout => 1, env => \%env },
+    ($cli ? { call => 'cli', at => 60, argv => ['reconcile', '--sid', $B, '--cwd', '$HOME/work', '--orphans'], any_stdout => 1,
+              stdout_re => qr/; orphans finished=1 /, env => \%benv }
+          : { call => 'cli', at => 60, argv => ['hook', 'SessionStart'], stdin => $bstart, stdin_vars => 1, any_stdout => 1, env => \%benv }),
 ) : (
     { call => 'cli', at => 60, argv => ['hook', 'SessionEnd'], stdin => $end, stdin_vars => 1, env => \%env },
 );
@@ -101,14 +128,15 @@ my @ending = $finish ? (
         { call => 'cli', at => 40, argv => ['hook', 'Stop'], stdin => $stop, stdin_vars => 1,
           env => { %env, STORE_TEST_HOOK_START_AGO_MS => '1700' } },
         { call => 'code', code => sub { $snap->($_[0], 'late') } },
+        @before_end,
         { call => 'code', code => sub {
               my ($v) = @_;
               for my $f (watch::io::list_dir("$v->{WATCH}/$T::SID/pending")) {
                   next unless $f =~ /\A([0-9a-f]{6}|h[0-9a-f]{5})\.post\.json\z/;
                   my $m = watch::io::read_json_file("$v->{WATCH}/$T::SID/pending/$f") || {};
                   next unless ($m->{nonce} // '') eq $got{n3};
-                  chmod 0, "$v->{WATCH}/$T::SID/pending/$1.post.md" or die "chmod: $!";
-                  $got{unreadable} = 1;
+                  # a stash an earlier end already saved is gone: the assertions below say so
+                  $got{unreadable} = 1 if chmod 0, "$v->{WATCH}/$T::SID/pending/$1.post.md";
               }
           } },
         @ending,
@@ -131,5 +159,17 @@ my @ending = $finish ? (
         $E->is(join(',', map { "$_->{alert_id}/$_->{rule}/$_->{reason}" } @{ $got{closed_end} || [] }), "$got{planted}/A-01/resolved: copy saved",
                'the planted A-01, whose copy landed at the end, is closed as resolved');
         $E->is($got{held_end}, 0, 'no A-01 is held after the end');
+        for my $k ($finish ? () : qw(busy lateend)) {
+            my $what = $k eq 'busy' ? 'the SessionEnd whose reconcile found the lock held' : 'the SessionEnd that started late';
+            $E->is(join(',', map { $_->{alert_id} } @{ $got{"a01_$k"} || [] }), $got{planted}, "$what raises no A-01 (only the planted row)");
+            $E->is($got{"held_$k"}, 3, "$what keeps the three A-01 held");
+            $E->is($got{"copies_$k"}, 0, "$what saves no copy");
+            $E->count($got{"closed_$k"} || [], 0, "$what closes nothing");
+        }
+        # W-13: the end pass's rows carry the ended session's own Claude Code process
+        my ($third) = grep { ($_->{key}{nonce} // '') eq ($got{n3} // 'x') } @{ $got{a01_end} || [] };
+        $E->is($third ? $third->{pid} : undef, 1111, "the A-01 the end pass raised carries the ended session's recorded pid");
+        my @cl = grep { ($_->{ev} // '') eq 'alert_closed' } @{ $got{rows_end} || [] };
+        $E->is(join(',', map { $_->{pid} // '-' } @cl), '1111', 'so does its alert_closed row');
     },
 };

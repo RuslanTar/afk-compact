@@ -3,7 +3,8 @@
 # every `ev` the shipped code writes (found in the plugin source: rc::emit, log_row,
 # log_event/ctx::log, the mod's log()) has an export-schema entry, and every class in the
 # schema is one the transform knows. An `ev` not in the schema drops the whole row (counted). Every
-# verdict of the spec is in the export enum, and the watcher's ok sets are the spec's ok_verdicts (0.1.3).
+# verdict of the spec is in the export enum, and the watcher's ok sets are the spec's ok_verdicts (0.1.3; read from
+# the spec at run time since 0.1.4).
 use Cwd ();
 use File::Basename ();
 my $plugin = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../../plugin');
@@ -75,9 +76,16 @@ sub _check {
         my %en = map { $_ => 1 } @enum;
         $E->ok(($en{$_} ? 1 : 0), "spec verdict $_ is in the export enum") for @sv;
         my $okv = join ' ', sort @{ $spec->{ok_verdicts} || [] };
+        # 0.1.4 (T-7): rules.pm and report.pm read the ok set from the spec at run time
+        # (watch::spec::ok_verdicts); its fallback list is the spec's too, and neither hard-codes one
+        require watch::spec;
+        $E->is(join(' ', sort keys %{ watch::spec::ok_verdicts($spec) }), $okv, "watch::spec::ok_verdicts reads the spec's ok_verdicts");
+        $E->is(join(' ', sort @watch::spec::OK_VERDICTS), $okv, "watch::spec's fallback list is the spec's ok_verdicts");
+        $E->is(join(' ', sort keys %{ watch::spec::ok_verdicts({}) }), $okv, 'a spec without the list falls back to it');
+        $E->is(join(' ', sort keys %{ watch::spec::ok_verdicts({ ok_verdicts => ['ok'] }) }), 'ok', "another spec's list is the one read");
         for my $m (qw(rules report)) {
-            my ($set) = (watch::io::slurp("$plugin/helper/lib/watch/$m.pm") // '') =~ /^my %OKV = map \{ \$_ => 1 \} qw\(([^)]*)\);/m;
-            $E->is(join(' ', sort split ' ', $set // ''), $okv, "watch/$m.pm %OKV is the spec's ok_verdicts");
+            my $src = watch::io::slurp("$plugin/helper/lib/watch/$m.pm") // '';
+            $E->ok(($src !~ /%OKV\b/ && $src =~ /watch::spec::ok_verdicts\(/ ? 1 : 0), "watch/$m.pm reads the ok set from the spec");
         }
     },
 };
