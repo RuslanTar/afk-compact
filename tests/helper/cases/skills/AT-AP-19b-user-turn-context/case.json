@@ -6,7 +6,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.2 D-8: without a plugin handoff turn (a handoff the user asked for) today's scoped carry holds: a line without state or note is approval-shape, a usable line is checked and carries; a context-only own line is accepted (never checked, never hashed) and measure lists it under Approvals (context only, re-ask); X-2 / HL-2: a usable line may keep the question its short answer replies to, `(answer to \"<question>\")`, and is checked on the words alone; review finding 2: in a later plugin handoff turn a context-only line carries from the own handoff's untagged `## Approvals` lines without a quote check, while the words of a tagged (foreign) line there do not carry (approval-quote)",
+ "note": "0.1.2 D-8: without a plugin handoff turn (a handoff the user asked for) today's scoped carry holds: a line without state or note is approval-shape, a usable line is checked and carries; a context-only own line is accepted (never checked, never hashed) and measure lists it under Approvals (context only, re-ask); X-2 / HL-2: a usable line may keep the question its short answer replies to, `(answer to \"<question>\")`, and is checked on the words alone; review finding 2: in a later plugin handoff turn a context-only line carries from the own handoff's untagged `## Approvals` lines without a quote check, while the words of a tagged (foreign) line there do not carry (approval-quote) 0.1.4 A-7 (another session, a handoff the user asked for): a plain context-only line that repeats the id of a line moved for its quote is then the id's only line and stays when its own quote passes; while the earlier line stays, the repeat still refuses on approval-shape.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -264,6 +264,152 @@
      "approval-quote line 10\\b",
      "approval-quote line 11\\b",
      "approval-quote line 12\\b"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/4194001-1072915200.live-fafafafa.json",
+     "content": "{\"pid\": 4194001, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"fafafafa-1111-4222-8333-444444444444\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T13:40:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/fafafafa-1111-4222-8333-444444444444.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"f1\", \"timestamp\": \"2026-10-21T13:41:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"please push feat/x to origin once the suite is green\"}}\n{\"type\": \"assistant\", \"uuid\": \"f2\", \"timestamp\": \"2026-10-21T13:42:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"The suite is running.\"}]}}\n{\"type\": \"user\", \"uuid\": \"f3\", \"timestamp\": \"2026-10-21T13:43:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"ok\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "A-7: begin in another session, a handoff the user asked for",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "fafafafa-1111-4222-8333-444444444444",
+    "--topic",
+    "repeat"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn": {
+      "null": 1
+     }
+    }
+   },
+   "capture": {
+    "STAGE3": "json:stage",
+    "STEM3": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time (A-7)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE3"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE3/body.md",
+   "content": "# LAB-9 — a repeated approval id\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-5: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "A-7: both U-5 lines pass their quote, so the repeat still refuses on approval-shape",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE3",
+    "--slug",
+    "repeat",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-shape line 11$",
+     "^REFUSED: lint \\(1 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "approval-shape line 10\\b",
+     "^ADVISORY approval-quote"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE3/body.md",
+   "content": "# LAB-9 — a repeated approval id\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-5: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n- U-5: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "A-7: the first U-5 fails its quote and moves; the repeated context line is then U-5's only line and stays",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE3",
+    "--slug",
+    "repeat",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY approval-quote line 10: U-5 goes to Open questions as Q-1, a re-ask; a quote under 4 words counts only as the user's whole message, or one line of a numbered reply, answering your message that names its target$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "approval-shape",
+     "line 11\\b"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/fafafafa-1111-4222-8333-444444444444.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "approvals": {
+        "lines": 1,
+        "checked": 0,
+        "unchecked": 0,
+        "context": 1
+       },
+       "approvals_moved": 1
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB3": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "A-7: the published file keeps the context line in Approvals and the moved one as Q-1",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "fafafafa-1111-4222-8333-444444444444"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB3",
+      "has": [
+       "^## Approvals\n- U-5: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions",
+       "^- Q-1: re-ask before acting: delete branch old/x · targets branch old/x @ 5e5e5e5 · words recorded as the user's: \"ok\" \\(was U-5; "
+      ],
+      "lacks": [
+       "U-5: approval \"ok\""
+      ]
+     }
     ]
    }
   }

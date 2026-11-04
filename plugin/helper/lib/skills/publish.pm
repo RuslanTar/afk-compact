@@ -42,9 +42,6 @@ use skills::approvals;
 
 my %STATUS = map { $_ => 1 } qw(in-progress blocked completed);
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
-# The lint's advisories that name body line numbers (skills::lint, skills::approvals): after
-# publish moves approval lines they keep the draft's numbers (run).
-my %DRAFT_LINE_ADVISORY = map { $_ => 1 } qw(secret-warn store-path code-block log-lines hash-lines approval-unchecked);
 # Frontmatter keys and their order: the spec's frontmatter_keys_handoff (TPL §3); empty
 # values are omitted. The list is read at publish time (fail closed: spec-missing).
 
@@ -151,15 +148,21 @@ sub run {
     # The reason a quote failed (copy, claim, pasted: review round 2) comes from the lint.
     # A carried line whose only change is that rewrite stays carried for the re-lint (its old stamps
     # stay exempt, review round 3).
-    my ($mbody, $moved, $keep, $was) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
-                                                                     $prev_text, $own_text, $extra{'ledger.md'});
+    my ($mbody, $moved, $keep, $was, $lmap) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
+                                                                            $prev_text, $own_text, $extra{'ledger.md'});
     my %rules;
-    my $draft_adv = $res->{advisory};
     if (@$moved) {
         $rules{ $_->{rule} } = 1 for @$moved;
         if (!@$keep) {
             $body = $mbody;
             $res = $lint->($body, $was);
+            # One numbering per output (0.1.4 A-1): the moved-line ADVISORY lines and the skill's
+            # "edit those body lines" read the draft (body.md), while the moved text exists only in
+            # memory (and the written file adds a header), so every line number the re-lint names,
+            # blocking or advisory, is printed as the draft's line (an inserted re-ask item: its
+            # moved approval's line; integration review: secret-warn printed lines=13,35 for draft
+            # lines 19,34).
+            $res = { %$res, blocking => _draft_lines($res->{blocking}, $lmap), advisory => _draft_lines($res->{advisory}, $lmap) };
             $keep = $res->{blocking};
         }
     }
@@ -167,17 +170,6 @@ sub run {
     $row->{size_band} = _band($row->{bytes});
     my @b = @$keep;
     my @a = @{ $res->{advisory} };
-    # One numbering per output: the moved-line ADVISORY lines and the skill's "edit those body
-    # lines" read the draft (body.md), so an advisory that names body lines keeps the draft lint's
-    # entry; the moved text exists only in memory and the written file adds a header (integration
-    # review: secret-warn printed lines=13,35 for draft lines 19,34). A rule the moved text no
-    # longer has is dropped; one only the moved text has keeps its own entry.
-    if ($draft_adv != $res->{advisory}) {
-        my %first;
-        push @{ $first{ $_->[0] } }, $_ for grep { $DRAFT_LINE_ADVISORY{ $_->[0] } } @$draft_adv;
-        my %done;
-        @a = map { !$DRAFT_LINE_ADVISORY{ $_->[0] } || !$first{ $_->[0] } ? ($_) : $done{ $_->[0] }++ ? () : @{ $first{ $_->[0] } } } @a;
-    }
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
     $row->{acuity} = $res->{acuity} // '-';
@@ -209,7 +201,8 @@ sub run {
     for (@$moved) {
         # Review round 2: the draft lines whose references now read the new id or Open questions.
         my $refs = $_->{refs} ? sprintf('; line%s %s cite%s %s instead', (@{ $_->{refs} } > 1 ? ('s', join(', ', @{ $_->{refs} }), '') : ('', $_->{refs}[0], 's')), $_->{q}) : '';
-        my $see = $_->{see} ? sprintf('; line%s %s say%s see Open questions instead', (@{ $_->{see} } > 1 ? ('s', join(', ', @{ $_->{see} }), '') : ('', $_->{see}[0], 's'))) : '';
+        my $see = join '', map { my ($l, $to) = @$_; $l ? sprintf('; line%s %s say%s see %s instead', (@$l > 1 ? ('s', join(', ', @$l), '') : ('', $l->[0], 's')), $to) : '' }
+            [ $_->{see}, 'Open questions' ], [ $_->{see_both}, 'Approvals and Open questions' ];
         skills::cli::say("ADVISORY $_->{rule} line $_->{line}: $_->{id} goes to Open questions as $_->{q}, a re-ask; $_->{why}$refs$see");
         next if !%$texts || $told{"moved $_->{rule}"}++;
         my $t = $texts->{ $_->{rule} } or die "lint id $_->{rule} has no lint_texts entry in the spec\n";
@@ -287,6 +280,8 @@ sub run {
         session_id => $s->{session_id}, actor => 'main',
         previous_session_id => $s->{previous_session_id}, lineage_reason => $s->{lineage_reason},
         claude_pid => ($cp ? $cp->{pid} : undef), cc_version => _cc_version($ctx),
+        # 0.1.4 A-10: the plugin copy that wrote it, as a summary copy names it (spec §8).
+        plugin_version => skills::ctx::version(), plugin_root => skills::util::text(skills::ctx::plugin_root()),
         repository => $s->{repo}, bucket => $s->{bucket_rel}, worktree => $g->{worktree} // $s->{worktree},
         branch => $g->{branch} // $s->{branch}, git_commit => $g->{head_full} // $s->{head},
         status => $o->{status},
@@ -392,6 +387,33 @@ sub run {
         skills::cli::say("Not exported: repository asks for repo mode; accept it by adding $mc to repo_roots in /config");
     }
     return 0;
+}
+
+# _draft_lines([[rule, where]…], {moved-text line => draft line}) -> the same entries with every
+# body line number of `where` (`line <n>` at its start, the bare numbers of `lines=<n>,…`) read
+# through the map; a mapped list is sorted and has no repeats (its other items, `<file>:<n>` and
+# `+<n>`, stay after the numbers, in order).
+sub _draft_lines {
+    my ($es, $map) = @_;
+    return $es unless ref $map eq 'HASH' && %$map;
+    my @out;
+    for my $e (@{ $es || [] }) {
+        my $w = $e->[1];
+        if (defined $w && !ref $w) {
+            $w =~ s{\A(line )([0-9]+)\b}{ $1 . ($map->{$2} // $2) }e;
+            $w =~ s{(\blines=)(\S+)}{
+                my $p = $1;
+                my (%seen, @n, @o);
+                for my $x (split /,/, $2) {
+                    if ($x =~ /\A[0-9]+\z/) { my $d = $map->{$x} // $x; push @n, $d unless $seen{$d}++ }
+                    else { push @o, $x }
+                }
+                $p . join(',', (sort { $a <=> $b } @n), @o);
+            }e;
+        }
+        push @out, [ $e->[0], $w, @$e[ 2 .. $#$e ] ];
+    }
+    return \@out;
 }
 
 # Dev-1 job rows of this stage's session, newest per task: {task id => row}.

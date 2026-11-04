@@ -590,7 +590,8 @@ sub quotes_found {
     # that reason, by the same rules otherwise (_why_near; the first one seen stays), else undef
     # (the plain rule: not typed by the user, or a short quote that is no whole message answering a
     # message naming a target): a typed row or a dialog (its ask and its answer) of a copy or from
-    # before a claim (_why_of), or an own message or dialog answer that was pasted ($PASTED).
+    # before a claim (_why_of), an own answer to a dialog a copy asked (`copy`, 0.1.4 A-8), or an
+    # own message or dialog answer that was pasted ($PASTED).
     # `start`: the session's own start when `since` is a successor's claim
     # (skills::core::quotes_found); rows before it are copies, rows after it and before `since`
     # come before the claim.
@@ -647,8 +648,13 @@ sub quotes_found {
                         $asst = substr($asst, -$ASSISTANT_KEEP) if length($asst) > $ASSISTANT_KEEP;
                     }
                     _dialogs_asked($j, \%asked, \@asked_order);
-                } elsif ($why && !$j->{isSidechain} && defined _why_of($j, $sid, $start, $since)) {
+                } elsif ($why && !$j->{isSidechain} && defined(my $xc = _why_of($j, $sid, $start, $since))) {
                     _dialogs_asked($j, \%xasked, \@xorder);
+                    # Which part asked it (0.1.4 A-8: an own answer to a copied question).
+                    for my $it (ref $j->{message} eq 'HASH' && ref $j->{message}{content} eq 'ARRAY' ? @{ $j->{message}{content} } : ()) {
+                        my $d = ref $it eq 'HASH' && defined $it->{id} && !ref $it->{id} ? $xasked{ $it->{id} } : undef;
+                        $d->{why} = $xc if $d;
+                    }
                 }
                 next;
             }
@@ -669,10 +675,24 @@ sub quotes_found {
                 }
                 next;
             }
-            next unless %asked;
+            next unless %asked || ($why && %xasked);
             my $ok = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
             next if defined $ok && !$human{$ok};
             my @pa;
+            # `why` (0.1.4 A-8): an own answer to a dialog asked in a copied part never counts (only
+            # an own question's dialog does); a quote found only there is labelled `copy`, by the
+            # same test as a copy's own rows (a pasted one `pasted`).
+            if ($why && %xasked) {
+                my $xd;
+                for my $r (ref $j->{message} eq 'HASH' && ref $j->{message}{content} eq 'ARRAY' ? @{ $j->{message}{content} } : ()) {
+                    $xd //= $xasked{ $r->{tool_use_id} } if ref $r eq 'HASH' && defined $r->{tool_use_id} && !ref $r->{tool_use_id};
+                }
+                my $xcat = $xd ? $xd->{why} : undef;
+                my @xans = _dialog_answers($j, \%xasked, \@pa);
+                if (defined $xcat && $xcat eq 'copy') { _why_near(\@q, \@found, \@near, 'copy', $_->{text}, $_->{ctx}, 0) for @xans }
+                _why_near(\@q, \@found, \@near, 'pasted', $_->{text}, '', 1) for splice @pa;
+            }
+            next unless %asked;
             my @ans = _dialog_answers($j, \%asked, ($why ? \@pa : undef));
             _why_near(\@q, \@found, \@near, 'pasted', $_->{text}, '', 1) for @pa;
             for my $d (@ans) {
