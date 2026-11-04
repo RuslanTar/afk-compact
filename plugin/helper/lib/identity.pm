@@ -317,6 +317,12 @@ sub claude_pid {
         return $CACHED;
     }
     my $first = getppid();
+    # A hook's perl runs as the launcher's child (0.1.4 review F-1: a perl that cannot start falls
+    # back), which hands main.pl "<launcher pid>:<its parent>". While the launcher is still this
+    # process's parent the walk starts at that parent, as when perl took the launcher's place: the
+    # launcher, a shell, costs no parent read (T-14).
+    my $lp = do { no warnings q(once); $main::STORE_LAUNCHER_PARENT };
+    $first = 0 + $2 if defined $lp && !ref $lp && $lp =~ /\A([1-9][0-9]*):([1-9][0-9]*)\z/ && $1 == $first;
     my ($pid, $found) = _walk($first);
     $pid //= $first;
     my $d = !$OWN_START && defined &rc::sid_dir ? eval { rc::sid_dir() } : undef;

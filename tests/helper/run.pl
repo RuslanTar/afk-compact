@@ -1545,9 +1545,9 @@ sub invoke {
 #   sha_vectors       {}: embedded SHA-256 vs Digest::SHA and a known vector
 #   json_roundtrip    {dir}: embedded codec vs JSON::PP on every *.json under dir
 #   proc_stat_lines   {file}: identity::_proc_stat over recorded Linux /proc/<pid>/stat lines (R-4)
-#   claude_pid_walk   {chains: [{id, start, env?, procs {pid: {ppid, comm, exe?}}, want, found,
-#                     exe_calls?}]}: identity::claude_pid over a recorded process table, `start`
-#                     standing for the runner's parent (no ps, no lsof)
+#   claude_pid_walk   {chains: [{id, start, env?, launcher? [pid, parent], procs {pid: {ppid, comm,
+#                     exe?}}, want, found, exe_calls?}]}: identity::claude_pid over a recorded
+#                     process table, `start` standing for the runner's parent (no ps, no lsof)
 #   linux_start_time  {image | images, probe, mb, steps}: identity::start_time on Linux in Docker
 #                     (R-4; a subprocess: the case "needs" ["docker-image:<image>"]; images: the
 #                     first one held here, none: a note and not run)
@@ -2718,6 +2718,8 @@ sub claude_pid_walk_chains {
         local *rc::sid_dir = sub { $sd };
         local $identity::CACHED;
         local $ENV{CLAUDE_PID} = defined $c->{env} ? $ren->($c->{env}) : '';
+        # "launcher" [pid, parent]: what the launcher hands a hook's main.pl ($main::STORE_LAUNCHER_PARENT)
+        local $main::STORE_LAUNCHER_PARENT = ref $c->{launcher} eq 'ARRAY' ? join(':', map { $ren->($_) } @{ $c->{launcher} }) : undef;
         local $ENV{STORE_TEST_CLAUDE_PID};
         delete $ENV{STORE_TEST_CLAUDE_PID};
         my $r = identity::claude_pid();
@@ -3962,7 +3964,8 @@ sub builtin {
         # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read;
         # `walk_ps` its parent-and-command reads, `start_reads` its start-time reads (each a `ps`
         # call off Linux), `lstart` the start time it gives; `alive` {pid, pid_lstart}: this
-        # session's classic-alive.json, under args.dir (T-14).
+        # session's classic-alive.json, under args.dir (T-14); `launcher` [pid, parent]: what the
+        # launcher hands a hook's main.pl (0.1.4 review F-1).
         # The public entry, identity::claude_pid, starts at getppid(): the chain's `start` pid is
         # renamed to it throughout, and start times are stubbed. A recorded pid that happens to be
         # the real parent's (other than `start`) is moved to a free number, so the two never merge.

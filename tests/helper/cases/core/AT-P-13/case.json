@@ -1,6 +1,6 @@
 {
  "id": "AT-P-13",
- "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH older than 5.28: a stand-in that runs this host's perl with STORE_TEST_PERL_V=5.026003; the launcher checks no version, main.pl's guard runs the launcher's fallback for a hook (the path the launcher's hook wrapper hands it), stdin unread; the stand-in counts its starts, one per hook, and refuses anything else), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3. 0.1.4 T-15: the fallback writes its row only under an absolute folder that no folder from it up to / holds a .git (folder or file: a git work tree) or a .planning folder, and with no .planning part (also one not made yet, any letter case); the walk runs on the path as given and from its deepest existing folder read through symlinks (cd -P); a root in a git work tree (also through a symlink), a relative root and a .planning root get no row and no folder, the hook still exits 0 with nothing on stdout; a handoff_root or log_dir that is not an absolute path (root-invalid in the helper) gets no row, which would land under the hook's working folder (an exec step sets those roots: the runner's home guard refuses a root env value that is not absolute)",
+ "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH older than 5.28: a stand-in that runs this host's perl with STORE_TEST_PERL_V=5.026003; the launcher checks no version, main.pl's guard runs the launcher's fallback for a hook (the path the launcher's hook wrapper hands it), stdin unread; the stand-in counts its starts, one per hook, and refuses anything else), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3. 0.1.4 T-15: the fallback writes its row only under an absolute folder that no folder from it up to / holds a .git (folder or file: a git work tree) or a .planning folder, and with no .planning part (also one not made yet, any letter case); the walk runs on the path as given and from its deepest existing folder read through symlinks (cd -P); a root in a git work tree (also through a symlink), a relative root and a .planning root get no row and no folder, the hook still exits 0 with nothing on stdout; a log_dir that is not an absolute path (root-invalid in the helper) gets no row, which would land under the hook's working folder; such a handoff_root with log_dir unset sends the row to the default folder, as the helper's logs go (0.1.4 review F-4(g)) (an exec step sets those roots: the runner's home guard refuses a root env value that is not absolute) 0.1.4 review F-1: a hook's perl runs as the launcher's child, so a perl that is found but cannot start (an interpreter line that points nowhere, a version manager's shim with no perl picked: it ends with 1 to 128) takes the same fallback: exit 0, nothing printed, one row, under /bin/sh, dash and bash",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "path_prepend": [
@@ -204,7 +204,7 @@
    }
   },
   {
-   "name": "a relative handoff_root is root-invalid: no row, nothing under the hook's working folder",
+   "name": "a relative handoff_root is root-invalid: with log_dir unset the row goes to the default folder (as the helper; here under an absolute XDG_STATE_HOME), nothing under the hook's working folder",
    "setup": [
     {
      "mkdir": "$TMP/work"
@@ -217,11 +217,22 @@
     "$STORE",
     "$TMP/work",
     "$SID",
-    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=rel/h"
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=rel/h XDG_STATE_HOME=$TMP/xdg5"
    ],
    "expect": {
     "exit": 0,
-    "stdout": "rc=0\n.\n"
+    "stdout": "rc=0\n.\n",
+    "rows": [
+     {
+      "file": "$TMP/xdg5/$BRAND/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 1,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
    }
   },
   {
@@ -246,7 +257,7 @@
    }
   },
   {
-   "name": "a drive-form handoff_root (not absolute outside Git Bash's perl): no row either",
+   "name": "a drive-form handoff_root (not absolute outside Git Bash's perl): the row goes to the default folder too",
    "setup": [
     {
      "mkdir": "$TMP/work"
@@ -263,7 +274,18 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout": "rc=0\n.\n"
+    "stdout": "rc=0\n.\n",
+    "rows": [
+     {
+      "file": "$HOME/.local/state/$BRAND/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 3,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
    }
   },
   {
@@ -445,7 +467,7 @@
    }
   },
   {
-   "name": "a relative handoff_root (read against the cwd, whose first folder exists there): no row; set by a shell in the case's work folder, since the runner's guard refuses a relative folder option it passes itself",
+   "name": "a relative handoff_root (read against the cwd, whose first folder exists there): nothing under it, the row in the default folder; set by a shell in the case's work folder, since the runner's guard refuses a relative folder option it passes itself",
    "setup": [
     {
      "mkdir": "$TMP/work/rel"
@@ -473,7 +495,21 @@
     "absent": [
      "$LEGACY",
      "$TMP/work/rel/handoffs"
+    ],
+    "rows": [
+     {
+      "file": "$TMP/xdg13/$BRAND/handoffs/.watch/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 1,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
     ]
+   },
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg13"
    }
   },
   {
@@ -579,6 +615,110 @@
    "expect": {
     "exit": 3,
     "stdout": "REFUSED: helper-runtime\n"
+   }
+  },
+  {
+   "name": "a perl on PATH that is found but cannot start (its interpreter line points nowhere): the hook still exits 0, prints nothing and writes its row (0.1.4 review F-1)",
+   "setup": [
+    {
+     "write": "$TMP/bin/perl",
+     "text": "#!/nonexistent/perl\n",
+     "mode": "0755"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/broken"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "rows": [
+     {
+      "file": "$TMP/broken/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 1,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the same under /bin/sh, dash and bash (each one found)",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "for s in /bin/sh dash bash; do p=$(command -v \"$s\") || continue; d=\"$1/logs-${s##*/}\"; printf '{\"session_id\":\"%s\",\"hook_event_name\":\"PreCompact\",\"trigger\":\"auto\"}' \"$2\" | CLAUDE_PLUGIN_OPTION_LOG_DIR=$d \"$p\" \"$0\" hook PreCompact >\"$1/out\" 2>&1; rc=$?; n=$(grep -c helper_runtime_missing \"$d/$2.classic.jsonl\" 2>/dev/null); echo \"${s##*/} rc=$rc rows=${n:-0} out=$(wc -c <\"$1/out\" | tr -d ' ')\"; done",
+    "$STORE",
+    "$TMP",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^sh rc=0 rows=1 out=0$",
+     "^bash rc=0 rows=1 out=0$"
+    ],
+    "stdout_lacks": [
+     "rc=[1-9]",
+     "rows=[02-9]",
+     "out=[1-9]"
+    ]
+   }
+  },
+  {
+   "name": "a version manager's shim with no perl picked (it starts, complains and exits 126): exit 0, nothing printed, the row",
+   "setup": [
+    {
+     "stub": "perl",
+     "script": "echo 'No version is set for command perl' >&2; exit 126"
+    }
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR": "$TMP/shim"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "rows": [
+     {
+      "file": "$TMP/shim/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 1,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
    }
   }
  ]
