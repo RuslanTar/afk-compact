@@ -3,9 +3,10 @@ package identity;
 # Owner: WP-core. Ancestor walk to the first process whose command is the Claude
 # Code binary (or whose pid CLAUDE_PID names); a nearer process whose command hides the
 # binary but whose executable is it wins (a background session's worker). Start time:
-# Linux /proc/<pid>/stat field 22 + btime (R-4); else `ps -o lstart=`. Every start-time
-# read in the helper goes through _read_start.
-# Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk.
+# Linux, MSYS and Cygwin /proc/<pid>/stat field 22 + btime (R-4, RF-3); else `ps -o lstart=`.
+# Every start-time read in the helper goes through _read_start.
+# Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk; STORE_TEST_PROC_ROOT=<dir>
+# stands in for /proc in the start-time read (with util::os's STORE_TEST_OS).
 use strict;
 use warnings;
 use utf8;
@@ -30,7 +31,7 @@ sub _is_claude {
 # fields and read field 23 (the process size in bytes), so a start time moved with memory.
 sub _proc_stat {
     my ($pid) = @_;
-    my $raw = util::read_file("/proc/$pid/stat") // return;
+    my $raw = util::read_file(_proc() . "/$pid/stat") // return;
     return unless $raw =~ /^\d+ \((.*)\) (\S) (\d+)(?: \S+){17} (\d+)/s;
     return ($1, $3, $4);
 }
@@ -38,19 +39,29 @@ sub _proc_stat {
 my $BTIME;
 sub _btime {
     return $BTIME if defined $BTIME;
-    my $raw = util::read_file('/proc/stat') // '';
+    my $raw = util::read_file(_proc() . '/stat') // '';
     ($BTIME) = $raw =~ /^btime (\d+)/m;
     $BTIME //= 0;
     return $BTIME;
 }
 
+# _proc() -> /proc, or STORE_TEST_PROC_ROOT in test mode.
+sub _proc {
+    return $ENV{STORE_TEST_PROC_ROOT} if util::test_mode() && defined $ENV{STORE_TEST_PROC_ROOT} && $ENV{STORE_TEST_PROC_ROOT} =~ m{\A/};
+    return '/proc';
+}
+
 # _read_start(pid, ps) -> (epoch, lstart string), both undef when unreadable; never cached.
 # Linux with a readable /proc/<pid>/stat: field 22 + btime (R-4), so no `ps` is needed (a
 # slim image has no procps); else `ps -o lstart=` (ps: a path, default the first on PATH).
+# MSYS and Cygwin (Git Bash's perl): /proc/<pid>/stat only, as on Linux; their ps has no -o
+# (RF-3, Windows sitting 2: `ps: unknown option -- o`), so without it the start stays unknown.
 sub _read_start {
     my ($pid, $ps) = @_;
     return (undef, undef) unless defined $pid && $pid =~ /^\d+$/;
-    if ($^O eq 'linux' && -r "/proc/$pid/stat") {
+    my $os = util::os();
+    my $cyg = $os eq 'msys' || $os eq 'cygwin';
+    if (($os eq 'linux' || $cyg) && -r (_proc() . "/$pid/stat")) {
         my (undef, undef, $ticks) = _proc_stat($pid);
         return (undef, undef) unless defined $ticks;
         my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
@@ -59,6 +70,7 @@ sub _read_start {
         $s =~ s/  / /g;
         return ($epoch, $s);
     }
+    return (undef, undef) if $cyg;
     $ps //= util::which('ps') // return (undef, undef);
     my $r = util::run([$ps, '-o', 'lstart=', '-p', $pid], timeout_ms => 2000, env => { LC_ALL => 'C', LANG => 'C' });
     return (undef, undef) unless $r->{exit} == 0;
@@ -112,7 +124,7 @@ sub _fake_proc {
 sub _parent_and_comm {
     my ($pid) = @_;
     return _fake_proc($pid) if util::test_mode() && defined $ENV{STORE_TEST_PROC} && $ENV{STORE_TEST_PROC} ne '';
-    if ($^O eq 'linux' && -r "/proc/$pid/stat") {
+    if ($^O eq 'linux' && -r (_proc() . "/$pid/stat")) {
         my ($comm, $ppid) = _proc_stat($pid);
         my $exe = readlink("/proc/$pid/exe");
         return ($ppid, defined $exe ? $exe : $comm);
@@ -210,7 +222,12 @@ sub claude_pid {
     return $CACHED;
 }
 
-# alive(pid, lstart) -> 1 when the pid runs and its start time matches.
+# alive(pid, lstart) -> 1 when the pid runs and its start time matches, or cannot be read now
+# (alive-unknown, RF-3): a record that has a start time is never taken as ended on a start time
+# this call cannot read (MSYS before its /proc read, a `ps` that timed out under load), so a lock
+# holder's record waits out lock-timeout and is never broken. A record without a start time
+# rests on kill 0. A caller that acts on the process (a kill, a caller check) asks
+# alive_verified instead.
 # A Linux record written before the R-4 fix holds btime + vsize/HZ in place of the start time.
 # It is judged like any other: its pid runs with another start time, so it counts as ended
 # (S-17). The old code reached the same verdict once the process's size had changed since the
@@ -226,8 +243,22 @@ sub alive {
         return $2 eq $lstart ? 1 : 0;
     }
     my $now = start_time($pid);
-    return 0 unless defined $now;
+    return 1 unless defined $now;
     return $now eq $lstart ? 1 : 0;
+}
+
+# alive_verified(pid, lstart) -> 1 only when the pid runs and its start time, read now, equals
+# lstart: a missing or unreadable start time is never proof that the process is the one recorded.
+sub alive_verified {
+    my ($pid, $lstart) = @_;
+    return 0 unless defined $pid && $pid =~ /^\d+$/ && $pid > 0;
+    return 0 unless kill(0, $pid) || $!{EPERM};
+    return 0 unless defined $lstart && $lstart ne '';
+    if (util::test_mode() && defined $ENV{STORE_TEST_CLAUDE_PID} && $ENV{STORE_TEST_CLAUDE_PID} =~ /^(\d+):(.*)$/ && $1 == $pid) {
+        return $2 eq $lstart ? 1 : 0;
+    }
+    my $now = start_time($pid);
+    return defined $now && $now eq $lstart ? 1 : 0;
 }
 
 # launcher_above(pid, launcher, max) -> 'ok', 'nested' or 'not-ancestor' (SESSION-RESTART G3):

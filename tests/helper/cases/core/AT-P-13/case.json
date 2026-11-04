@@ -1,6 +1,6 @@
 {
  "id": "AT-P-13",
- "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH that fails the 5.28 check), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3",
+ "note": "ROOT-RULINGS R-2/R-5: with no usable perl (a perl on PATH that fails the 5.28 check), hook PreCompact prints nothing, exits 0 and appends one helper_runtime_missing row (the launcher's shell fallback: under the default ~/.local/state/<plugin>/handoffs/.watch, STATE-ROOT, or $XDG_STATE_HOME/<plugin>/handoffs/.watch while handoff_root is the default and XDG_STATE_HOME is an absolute path, and nothing under ~/.claude/handoffs); any other subcommand prints REFUSED: helper-runtime and exits 3; a handoff_root or log_dir that is not an absolute path (root-invalid in the helper) gets no row, which would land under the hook's working folder (an exec step sets those roots: the runner's home guard refuses a root env value that is not absolute)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "path_prepend": [
@@ -186,6 +186,101 @@
     "rows": [
      {
       "file": "$TMP/own/.watch/$SID.classic.jsonl",
+      "ev": "helper_runtime_missing",
+      "count": 1,
+      "fields": {
+       "event": "PreCompact",
+       "writer": "helper"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a relative handoff_root is root-invalid: no row, nothing under the hook's working folder",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "cd \"$1\" || exit 9; printf '{\"session_id\":\"%s\",\"cwd\":\"%s\",\"hook_event_name\":\"PreCompact\",\"trigger\":\"auto\"}' \"$2\" \"$1\" | env $3 \"$0\" hook PreCompact; echo \"rc=$?\"; find . | LC_ALL=C sort",
+    "$STORE",
+    "$TMP/work",
+    "$SID",
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=rel/h"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "rc=0\n.\n"
+   }
+  },
+  {
+   "name": "a relative log_dir: no row either",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "cd \"$1\" || exit 9; printf '{\"session_id\":\"%s\",\"cwd\":\"%s\",\"hook_event_name\":\"PreCompact\",\"trigger\":\"auto\"}' \"$2\" \"$1\" | env $3 \"$0\" hook PreCompact; echo \"rc=$?\"; find . | LC_ALL=C sort",
+    "$STORE",
+    "$TMP/work",
+    "$SID",
+    "CLAUDE_PLUGIN_OPTION_LOG_DIR=logs"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "rc=0\n.\n"
+   }
+  },
+  {
+   "name": "a drive-form handoff_root (not absolute outside Git Bash's perl): no row either",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "cd \"$1\" || exit 9; printf '{\"session_id\":\"%s\",\"cwd\":\"%s\",\"hook_event_name\":\"PreCompact\",\"trigger\":\"auto\"}' \"$2\" \"$1\" | env $3 \"$0\" hook PreCompact; echo \"rc=$?\"; find . | LC_ALL=C sort",
+    "$STORE",
+    "$TMP/work",
+    "$SID",
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=C:\\h"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "rc=0\n.\n"
+   }
+  },
+  {
+   "name": "with an absolute log_dir beside a relative handoff_root the row is written there",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "cd \"$1\" || exit 9; printf '{\"session_id\":\"%s\",\"cwd\":\"%s\",\"hook_event_name\":\"PreCompact\",\"trigger\":\"auto\"}' \"$2\" \"$1\" | env $3 \"$0\" hook PreCompact; echo \"rc=$?\"; find . | LC_ALL=C sort",
+    "$STORE",
+    "$TMP/work",
+    "$SID",
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT=rel/h CLAUDE_PLUGIN_OPTION_LOG_DIR=$TMP/logs"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "rc=0\n.\n",
+    "rows": [
+     {
+      "file": "$TMP/logs/$SID.classic.jsonl",
       "ev": "helper_runtime_missing",
       "count": 1,
       "fields": {

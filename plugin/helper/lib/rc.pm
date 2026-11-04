@@ -11,7 +11,7 @@ our %R;
 sub init {
     my (%a) = @_;
     %R = ();
-    $R{sid} = $a{sid};
+    $R{sid} = util::fsb($a{sid});
     $R{writer} = $a{writer} // 'helper';
     $R{actor} = $a{actor} // 'unknown';
     $R{settings} = settings::resolve($a{flags} || {});
@@ -36,7 +36,13 @@ sub init {
 }
 
 sub sid      { $R{sid} }
-sub set_sid  { $R{sid} = $_[0] }
+# The session id is held as bytes, as the watch dir is: a skill passes the sid it read from a
+# stage's JSON as a character string, which joined to a non-ASCII watch dir (bytes) made the
+# path a character string and its folder name encoded twice (RF-4: publish wrote its
+# handoff_mode row under a second, double-encoded root). init and as_session hold it the same
+# way; their callers pass bytes today (argv, jsonc's ASCII strings, file names), so there it only
+# keeps the rule.
+sub set_sid  { $R{sid} = util::fsb($_[0]) }
 sub settings { $R{settings} }
 sub val      { $R{settings}{values}{ $_[0] } }
 sub paths    { $R{paths} }
@@ -88,7 +94,7 @@ sub as_session {
     my @keys = qw(sid claude finished_by cc_dispatch cc_transcript cc_version cc_version_src);
     my %save = map { ($_ => $R{$_}) } grep { exists $R{$_} } @keys;
     delete @R{@keys};
-    $R{sid} = $sid;
+    $R{sid} = util::fsb($sid);
     $R{finished_by} = $o->{finished_by};
     my $c = $o->{claude};
     $R{claude} = { pid => (ref $c eq 'HASH' ? $c->{pid} : undef), lstart => (ref $c eq 'HASH' ? $c->{lstart} : undef), found => 0 };

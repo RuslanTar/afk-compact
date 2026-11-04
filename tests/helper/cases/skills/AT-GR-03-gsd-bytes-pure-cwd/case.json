@@ -1,0 +1,36 @@
+{
+ "id": "AT-GR-03 gsd path guard, non-ASCII checkout, pure-Perl Cwd",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "RF-1, the GSD path guard of measure <handoff> (R3): with Cwd::abs_path and Cwd::realpath bound to the pure-Perl fast_abs_path, as Perl under MSYS and Cygwin (Git Bash) binds them (a perl stub first on PATH loads FastCwd.pm, which aliases them), the frontmatter gsd path (a character string) given to Cwd::realpath came back encoded twice, `-e \"$d/.git\"` missed the nested checkout's .git and a foreign handoff's STATE.md in another checkout was read. The guard now resolves through skills::util::abs_path, which hands Cwd bytes. A STATE.md of this checkout is still read.",
+ "path_prepend": ["$TMP/fastcwd-bin"],
+ "now": "2026-10-26T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"setup": [
+    {"write": "$TMP/fastcwd-lib/FastCwd.pm", "content": "package FastCwd;\nuse strict;\nuse warnings;\nuse Cwd ();\n# Cwd's binding under cygwin and msys (Cwd.pm %METHOD_MAP)\n{ no warnings 'redefine'; *Cwd::abs_path = \\&Cwd::fast_abs_path; *Cwd::realpath = \\&Cwd::fast_abs_path; }\n1;\n"},
+    {"stub": "perl", "dir": "$TMP/fastcwd-bin", "script": "exec /usr/bin/perl -I'$TMP/fastcwd-lib' -MFastCwd \"$@\""},
+    {"repo": {"branch": "main", "commits": [{"files": {"app/retry.rb": "x = 1\n", ".planning/STATE.md": "---\nstatus: executing\ncurrent_phase: 3\nlast_activity: 2026-10-20\n---\n"}, "msg": "seed"}]}, "at": "$TMP/rëpo"},
+    {"write": "$TMP/rëpo/.claude/worktrees/feat/.git", "content": "gitdir: $TMP/rëpo/.git/worktrees/feat\n"},
+    {"write": "$TMP/rëpo/.claude/worktrees/feat/.planning/STATE.md", "content": "---\nstatus: executing\ncurrent_phase: 7\nlast_activity: 2026-10-26\n---\n"},
+    {"write": "$TMP/foreign/nested.md", "content": "---\nkind: handoff\nsession_id: 99999999-9999-4999-8999-999999999999\ngsd: $TMP/rëpo/.claude/worktrees/feat/.planning/STATE.md\n---\n# LAB-9 x\n"},
+    {"write": "$TMP/foreign/inside.md", "content": "---\nkind: handoff\nsession_id: 99999999-9999-4999-8999-999999999999\ngsd: $TMP/rëpo/.planning/STATE.md\n---\n# LAB-9 x\n"}
+  ]},
+  {"name": "the perl first on PATH binds Cwd::realpath to fast_abs_path",
+   "exec": ["perl", "-e", "print \\&Cwd::realpath == \\&Cwd::fast_abs_path ? qq(fast\\n) : qq(xs\\n)"],
+   "expect": {"exit": 0, "stdout": "fast\n"}},
+  {"name": "foreign handoff naming a nested checkout's STATE.md (its .git a file) in a non-ASCII checkout: not read",
+   "cwd": "$TMP/rëpo",
+   "argv": ["measure", "--sid", "44444444-4444-4444-8444-444444444444", "$TMP/foreign/nested.md"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^GSD \\(handoff\\): not read \\(outside this worktree\\)$"],
+     "stdout_lacks": ["phase 7", "Ã"]}},
+  {"name": "foreign handoff naming this checkout's STATE.md: read",
+   "cwd": "$TMP/rëpo",
+   "argv": ["measure", "--sid", "44444444-4444-4444-8444-444444444444", "$TMP/foreign/inside.md"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^GSD \\(handoff\\): \\S*/rëpo/\\.planning/STATE\\.md: status executing · phase 3 · last activity 2026-10-20$"],
+     "stdout_lacks": ["Ã"]}}
+ ]
+}

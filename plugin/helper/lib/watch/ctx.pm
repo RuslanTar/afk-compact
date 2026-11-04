@@ -307,6 +307,9 @@ sub _root_refusal {
                ['handoff_root', $s->{handoff_root}]) {
         my ($key, $p) = @$c;
         next unless defined $p && !ref $p && $p ne '';
+        # RF-2, as paths::for: a root with no absolute form in this platform (relative, \x, C:x,
+        # a drive path outside MSYS and Cygwin perl) is refused before any cwd join or git call
+        $p = util::root_form($p) // return "$key: root-invalid";
         # core's form (paths::for): roots.pm caches by the exact string, so a raw `~/x/./h`
         # or a HOME with a trailing slash would miss core's entry and run git check-ignore again
         $p = util::clean_path($p) // next;

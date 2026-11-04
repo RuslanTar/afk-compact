@@ -524,7 +524,8 @@ sub save {
                 finished_by         => rc::finished_by(),
             ]);
             util::mkdir_p($dir);
-            my $ok = util::write_excl($path, $fm . ($body =~ /\n\z/ ? $body : $body . "\n"), 0400);
+            # the frontmatter is bytes; the body is joined as bytes too, so neither is encoded twice
+            my $ok = util::write_excl($path, $fm . util::to_bytes($body =~ /\n\z/ ? $body : $body . "\n"), 0400);
             return { kind => 'race', path => $path } unless $ok;
             my $back = util::read_file($path);
             my ($pfm) = frontmatter::read($back);

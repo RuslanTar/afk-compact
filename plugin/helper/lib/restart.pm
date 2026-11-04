@@ -1073,7 +1073,8 @@ sub respawn_cancel {
     my $p = _json_file(pid_path($d), 4096);
     return { ok => 1, killed => 0, note => $note } unless $p && ($p->{nonce} // '') eq $nonce && ($p->{pid} // '') =~ /\A[1-9][0-9]*\z/;
     my $pid = $p->{pid};
-    return { ok => 1, killed => 0, note => $note } unless identity::alive($pid, $p->{lstart});
+    # a start time this call cannot read never authorises the TERM (alive_verified, RF-3)
+    return { ok => 1, killed => 0, note => $note } unless identity::alive_verified($pid, $p->{lstart});
     my $n = kill('TERM', -$pid);
     $n += kill('TERM', $pid);
     unlink pid_path($d);
