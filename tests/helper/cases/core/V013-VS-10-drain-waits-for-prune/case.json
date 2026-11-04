@@ -1,6 +1,6 @@
 {
  "id": "V013-VS-10-drain-waits-for-prune",
- "note": "0.1.3 version skew (lib/plugver.pm), review round 2 (scen.sh race): a prune moves loads/ aside, then moves its kept records back, holding loads-drop/.lock. A process that starts between the two steps must not drain that folder: its drain takes the same lock, and while another process holds it, it drains nothing (the kept record of a live process, dated before the move, is not unlinked) and does not prune. Once the prune has moved its kept records back and let go of the lock, the next start drains the rest and removes the folder. 0.1.4 (V-4): the drain moves back every record the prune's keep rule keeps, not only those written while the folder moved: here the newest 0.1.4 record (no 0.1.4 record left in loads/), and, after a prune killed between its two moves left its lock (removed once over 120 s old, the next start drains), the record of a process that still runs (by the seam-fed process table); a dead record that is not its group's newest is unlinked.",
+ "note": "0.1.3 version skew (lib/plugver.pm), review round 2 (scen.sh race): a prune moves loads/ aside, then moves its kept records back, holding loads-drop/.lock. A process that starts between the two steps must not drain that folder: its drain takes the same lock, and while another process holds it, it drains nothing (the kept record of a live process, dated before the move, is not unlinked) and does not prune. Once the prune has moved its kept records back and let go of the lock, the next start drains the rest and removes the folder. 0.1.4 (V-4): the drain moves back every record the prune's keep rule keeps, not only those written while the folder moved: here the newest 0.1.4 record (no 0.1.4 record left in loads/), and, after a prune killed between its two moves left its lock (removed once over 120 s old, the next start drains), the record of a process that still runs (by the seam-fed process table); a dead record that is not its group's newest is unlinked. Review F-3: another machine's record from the window whose pid does not run here is kept by the drain too (_far); one past the window is not kept as running though a process with its pid and start runs here (_runs).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "manifest": {
@@ -171,7 +171,7 @@
    "setup": [
     {
      "write": "$TMP/procs",
-     "content": "60000011 1792000000\n"
+     "content": "60000011 1792000000\n60000014 1791949990\n"
     },
     {
      "write": "$ROOT/.sessions/loads-drop/1792580000-88888/1792000010_60000011-1792000000_0.1.3_$UTAG.json",
@@ -200,6 +200,32 @@
      }
     },
     {
+     "write": "$ROOT/.sessions/loads-drop/1792580000-88888/1792500000_60000013-1792499990_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "other-mac.example",
+      "session_id": "60000013-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
+     "write": "$ROOT/.sessions/loads-drop/1792580000-88888/1791950000_60000014-1791949990_0.1.3_$UTAG.json",
+     "json": {
+      "v": 1,
+      "plugin_version": "0.1.3",
+      "plugin_root": "$PLUGIN_PARENT/0.1.3",
+      "host": "other-mac.example",
+      "session_id": "60000014-1111-4222-8333-444444444444",
+      "source": "startup",
+      "ts": "fixture",
+      "scope": "user"
+     }
+    },
+    {
      "write": "$ROOT/.sessions/loads-drop/.lock",
      "content": "88888\n",
      "mtime_ago_s": 200
@@ -210,7 +236,7 @@
     "files": [
      {
       "path": "$ROOT/.sessions/loads-drop/1792580000-88888/*",
-      "count": 2
+      "count": 4
      }
     ],
     "absent": [
@@ -219,7 +245,7 @@
    }
   },
   {
-   "name": "V-4: the next start drains that folder: the running process's record goes back to loads/ (so its next /clear writes none), the dead one is unlinked",
+   "name": "V-4: the next start drains that folder: the running process's record goes back to loads/ (so its next /clear writes none), the dead one is unlinked; another machine's record from the window whose pid does not run here goes back too (its process cannot be checked from here), another machine's record past the window is unlinked though its pid number runs here with that start (0.1.4 review F-3: mutants R31, R04)",
    "now": "2026-10-21T14:08:12+03:00",
    "argv": [
     "hook",
@@ -243,12 +269,16 @@
       "path": "$ROOT/.sessions/loads/1792000010_60000011-1792000000_0.1.3_$UTAG.json"
      },
      {
+      "path": "$ROOT/.sessions/loads/1792500000_60000013-1792499990_0.1.3_$UTAG.json"
+     },
+     {
       "path": "$ROOT/.sessions/loads-drop/*",
       "count": 0
      }
     ],
     "absent": [
      "$ROOT/.sessions/loads/1791900000_60000012-1791899990_0.1.3_$UTAG.json",
+     "$ROOT/.sessions/loads/1791950000_60000014-1791949990_0.1.3_$UTAG.json",
      "$ROOT/.sessions/loads-drop/1792580000-88888"
     ]
    }

@@ -20,8 +20,9 @@ package watch::supersede;
 # The re-check uses what the session's own files recorded: the boundary record the sweep row
 # kept (its time, whether a PostCompact row or dispatch was joined, its idle notice), the
 # session's first row, its dispatch records and rollup, its copies and copy rows, its background
-# slots, task output files and the output paths its session state kept. A row that cannot be tied
-# to its compaction, continue or item stays open.
+# slots, task output files and the output paths its session state kept, and for an A-27 the
+# continue's own transcript row. A row that cannot be tied to its compaction, continue or item
+# stays open.
 use strict;
 use warnings;
 use utf8;
@@ -30,6 +31,7 @@ use watch::io;
 use watch::json;
 use watch::alerts;
 use watch::rules;
+use watch::rows;
 use watch::shape;
 
 # The version each re-checked rule last changed in.
@@ -212,7 +214,8 @@ sub _a09 {
 
 # A-27 (0.1.4): the continue's last main boundary (the main sweep rows' boundary record with the
 # highest line before the continue's line) is a history boundary or an idle compaction: closed;
-# a continue that cannot be tied to a boundary stays open.
+# so is a row whose continue is the plugin's handoff-turn submit, told by its text (W-2: no
+# continue). Any other continue, also one that cannot be tied to a boundary, stays open.
 sub _a27 {
     my ($K, $r) = @_;
     my $ev = ref $r->{evidence} eq 'HASH' ? $r->{evidence} : {};
@@ -220,15 +223,45 @@ sub _a27 {
     return 0 unless defined $line && !ref $line && $line =~ /\A[0-9]+\z/;
     _bounds($K);
     my ($B) = sort { $b->{line} <=> $a->{line} } grep { $_->{line} < $line } @{ $K->{main_b} };
-    return 0 unless $B;
-    my $joined = defined $B->{join} && !ref $B->{join};
-    return 1 if watch::rules::history_boundary($B->{_t}, _true($B->{postcompact}), $joined, _obs($K));
-    my $S = _session($K);
-    my $nonce = $B->{nonce};
-    my $roll = defined $nonce && !ref $nonce ? $S->{rollup}{$nonce} : undef;
-    my $D = ($joined && defined $nonce && !ref $nonce) ? $S->{disp}{$nonce} : undef;
-    return watch::rules::idle_compaction($S, { idle => (watch::rules::rollup_idle($roll) // $B->{idle}), D => $D,
-                                               B => { ts_epoch => $B->{_t}, idle_notice => $B->{idle_notice} } });
+    if ($B) {
+        my $joined = defined $B->{join} && !ref $B->{join};
+        return 1 if watch::rules::history_boundary($B->{_t}, _true($B->{postcompact}), $joined, _obs($K));
+        my $S = _session($K);
+        my $nonce = $B->{nonce};
+        my $roll = defined $nonce && !ref $nonce ? $S->{rollup}{$nonce} : undef;
+        my $D = ($joined && defined $nonce && !ref $nonce) ? $S->{disp}{$nonce} : undef;
+        return 1 if watch::rules::idle_compaction($S, { idle => (watch::rules::rollup_idle($roll) // $B->{idle}), D => $D,
+                                                        B => { ts_epoch => $B->{_t}, idle_notice => $B->{idle_notice} } });
+    }
+    return _ht_submit_at($K, 0 + $line);
+}
+
+# _ht_submit_at(K, line) -> 1 when the main transcript's row at that line (1-based, as the sweep
+# counts) is the plugin's handoff-turn submit by its text (rows.pm $HT_SUBMIT). The transcript is
+# read from its start (only for an A-27 row the boundary checks keep), with the Stop's hard stop
+# checked every 2,000 lines; an unreadable or oversized row is no submit.
+sub _ht_submit_at {
+    my ($K, $line) = @_;
+    my $sc = $K->{sc};
+    my ($pd) = watch::rules::project_dirs($sc);
+    return 0 unless defined $pd && $line >= 1;
+    my $p = "$pd/$sc->{sid}.jsonl";
+    return 0 if -l $p;
+    open(my $fh, '<:raw', $p) or return 0;
+    my ($n, $row) = (0);
+    while (defined(my $l = <$fh>)) {
+        $n++;
+        watch::rules::tick($sc) unless $n % 2000;
+        next if $n < $line;
+        $row = $l;
+        last;
+    }
+    close $fh;
+    return 0 unless defined $row && length($row) <= (2 << 20);
+    my $j = eval { watch::json::decode($row) };
+    return 0 unless ref $j eq 'HASH';
+    my $f = watch::rows::classify($j, $sc->{brand});
+    return (($f->{kind} // '') eq 'continue' && $f->{ht_submit}) ? 1 : 0;
 }
 
 sub _obs { my ($K) = @_; $K->{obs} = [ watch::rules::observed_from($K->{sc}) ] unless $K->{obs}; return $K->{obs}[0] }

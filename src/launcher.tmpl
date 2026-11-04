@@ -3,10 +3,10 @@
 # bash 3.2 and Git Bash). It finds perl and runs helper/main.pl, with no
 # version check of its own: main.pl's first lines refuse a perl older than
 # 5.28, and for a hook they run this file again as `--fallback-hook hook
-# <Event>`, stdin unread. Without perl or a readable main.pl, or from that
-# call, it takes the fallback path: a hook prints nothing and exits 0 after
-# one content-free row (none under a root the helper would refuse); any other
-# command refuses.
+# <Event>`, stdin unread. Without perl or a readable main.pl, from that call,
+# or for a hook whose perl cannot start, it takes the fallback path: a hook
+# prints nothing and exits 0 after one content-free row (none under a root the
+# helper would refuse); any other command refuses.
 
 # Keep the user's perl library paths for queue_cmd children, then clear
 # every variable that can inject modules or change byte handling.
@@ -40,17 +40,25 @@ elif [ -x "$perl" ] && [ -r "$root/helper/main.pl" ]; then
   # stderr before main.pl runs, which a skill's Bash output would carry; 0 keeps it quiet.
   PERL_BADLANG=0
   export PERL_BADLANG
-  if [ "${1-}" = hook ]; then
-    # Exit 2 from a hook blocks, vetoes or re-prompts; perl exits 2 on its own when it
-    # dies with errno ENOENT. A hook always exits 0, whatever main.pl does. main.pl's guard
-    # reads this file's path from $main::STORE_LAUNCHER to run its fallback on an old perl.
-    exec "$perl" -e 'END { $? = 0 } my $main = shift @ARGV; $main::STORE_LAUNCHER = shift @ARGV; do $main;' \
-      "$root/helper/main.pl" "$root/scripts/${self##*/}" "$@" 2>/dev/null
+  if [ "${1-}" != hook ]; then
+    exec "$perl" "$root/helper/main.pl" "$@"
   fi
-  exec "$perl" "$root/helper/main.pl" "$@"
+  # Exit 2 from a hook blocks, vetoes or re-prompts; perl exits 2 on its own when it
+  # dies with errno ENOENT. A hook always exits 0, whatever main.pl does. main.pl's guard
+  # reads this file's path from $main::STORE_LAUNCHER to run its fallback on an old perl.
+  # perl runs as a child, not in this shell's place: a perl found but unable to start (an
+  # interpreter line that points nowhere, a version manager's shim with no perl picked) ends
+  # with 1 to 128, stdin unread, and the fallback below runs. One that started ends 0 (its END)
+  # or above 128 (a signal). Its walk to Claude Code starts at this shell's parent
+  # ($main::STORE_LAUNCHER_PARENT, "<this pid>:<parent>"), as when perl took this shell's place.
+  "$perl" -e 'END { $? = 0 } my $main = shift @ARGV; $main::STORE_LAUNCHER = shift @ARGV; $main::STORE_LAUNCHER_PARENT = shift @ARGV; do $main;' \
+    "$root/helper/main.pl" "$root/scripts/${self##*/}" "$$:${PPID-}" "$@" 2>/dev/null
+  rc=$?
+  if [ "$rc" -lt 1 ] || [ "$rc" -gt 128 ]; then exit 0; fi
 fi
 
-# Fallback: no perl, no readable helper/main.pl, or (from main.pl) a perl older than 5.28.
+# Fallback: no perl, no readable helper/main.pl, a hook's perl that could not start, or (from
+# main.pl) a perl older than 5.28.
 if [ "${1-}" = hook ]; then
   payload=$(cat 2>/dev/null | head -c 65536 2>/dev/null)
   sid=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[ ]*:[ ]*"\([0-9A-Za-z-]\{8,64\}\)".*/\1/p' | head -n 1)
@@ -62,6 +70,9 @@ if [ "${1-}" = hook ]; then
     hroot=${CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT-}
     case $hroot in '${user_config.'*) hroot= ;; esac
     [ -n "$hroot" ] || hroot='~/.local/state/{{plugin}}/handoffs'
+    # a handoff_root that is not an absolute path is root-invalid: as in the helper, the logs of
+    # an unset log_dir then go to the default folder
+    case $hroot in /*|'~'|'~/'*) ;; *) hroot='~/.local/state/{{plugin}}/handoffs' ;; esac
     # the default root reads under $XDG_STATE_HOME when that is an absolute path (as the helper)
     case $hroot in
       '~/.local/state/{{plugin}}/handoffs'|'~/.local/state/{{plugin}}/handoffs/'|"${HOME-}/.local/state/{{plugin}}/handoffs"|"${HOME-}/.local/state/{{plugin}}/handoffs/")
@@ -70,8 +81,8 @@ if [ "${1-}" = hook ]; then
     watch=$hroot/.watch
   fi
   case $watch in '~'|'~/'*) watch=${HOME-}${watch#\~} ;; esac
-  # a root that is not an absolute path is root-invalid (the helper refuses it): no row, since
-  # it would land under the hook's working folder
+  # a watch folder that is not an absolute path (a relative log_dir) is root-invalid (the helper
+  # refuses it): no row, since it would land under the hook's working folder
   case $watch in /*) ;; *) exit 0 ;; esac
   # MOD-SPEC 1.2 without the helper: a row only in an absolute folder that no folder from it up to
   # / marks as a git work tree or a .planning folder (no git call, so a git-ignored root gets no

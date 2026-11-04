@@ -1,6 +1,6 @@
 {
  "id": "BG-PID-01-claude-pid-walk",
- "note": "Probe 2026-10-27 (P4, P5, P12): in a background session the helper's parent is the worker, whose command hides the Claude Code binary, so the walk passed it and the pty host and took the supervisor (`claude daemon`), whose pid every background session then shared. identity::claude_pid (the public entry; a chain's start pid stands for the runner's parent) over recorded process tables: the worker is taken by its executable (one read); a foreground session, a hook under sh and a CLAUDE_PID match read no executable; a nearer non-claude hop does not win; with no claude process the walk finds nothing and reads no executable; a worker whose executable cannot be read leaves the anchor, never the pty host past it. Worker command names are stand-ins (the probe did not record them); the supervisor and pty host commands are as the probe saw them. 0.1.4 T-14: a hop CLAUDE_PID names is the anchor before its parent and command are read (a hook whose parent is Claude Code makes no ps call for the walk), and the start time is this session's classic-alive.json's when that record names the same pid (no start-time read), else it is read as before",
+ "note": "Probe 2026-10-27 (P4, P5, P12): in a background session the helper's parent is the worker, whose command hides the Claude Code binary, so the walk passed it and the pty host and took the supervisor (`claude daemon`), whose pid every background session then shared. identity::claude_pid (the public entry; a chain's start pid stands for the runner's parent) over recorded process tables: the worker is taken by its executable (one read); a foreground session, a hook under sh and a CLAUDE_PID match read no executable; a nearer non-claude hop does not win; with no claude process the walk finds nothing and reads no executable; a worker whose executable cannot be read leaves the anchor, never the pty host past it. Worker command names are stand-ins (the probe did not record them); the supervisor and pty host commands are as the probe saw them. 0.1.4 T-14: a hop CLAUDE_PID names is the anchor before its parent and command are read (a hook whose parent is Claude Code makes no ps call for the walk; 0.1.4 review F-1: neither does one whose launcher, now its parent, names its own parent Claude Code), and the start time is this session's classic-alive.json's when that record names the same pid (no start-time read), else it is read as before",
  "steps": [
   {
    "lib": "claude_pid_walk",
@@ -139,6 +139,38 @@
       "id": "a hook under sh -c with CLAUDE_PID: the shell is read, Claude Code is not",
       "start": 600,
       "env": "500",
+      "procs": {
+       "600": { "ppid": 500, "comm": "/bin/sh" },
+       "500": { "ppid": 400, "comm": "claude" },
+       "400": { "ppid": 1, "comm": "-zsh" }
+      },
+      "want": 500,
+      "found": true,
+      "exe_calls": 0,
+      "walk_ps": 1,
+      "start_reads": 1
+     },
+     {
+      "id": "a hook's perl under its launcher, which names itself and its parent Claude Code: the walk starts there, no parent read (0.1.4 review F-1)",
+      "start": 600,
+      "env": "500",
+      "launcher": [600, 500],
+      "procs": {
+       "600": { "ppid": 500, "comm": "/bin/sh" },
+       "500": { "ppid": 400, "comm": "claude" },
+       "400": { "ppid": 1, "comm": "-zsh" }
+      },
+      "want": 500,
+      "found": true,
+      "exe_calls": 0,
+      "walk_ps": 0,
+      "start_reads": 1
+     },
+     {
+      "id": "a launcher pid that is not this process's parent (perl outlived it, or a value passed on): ignored, the walk reads the parent as before",
+      "start": 600,
+      "env": "500",
+      "launcher": [601, 500],
       "procs": {
        "600": { "ppid": 500, "comm": "/bin/sh" },
        "500": { "ppid": 400, "comm": "claude" },

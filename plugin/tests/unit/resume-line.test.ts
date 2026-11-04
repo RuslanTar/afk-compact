@@ -197,17 +197,35 @@ describe('resume line (A): the block', () => {
     await w.userTurn($)
     await raiseCompact($, { trigger: 'auto' })
     expect(resumedLine(await nextBlock($, w))).toBe(RESUMED ? lineFor('Resumed · step 1: `npm test`') : undefined)
-    // No surface, but CLAUDE_CODE_ENTRYPOINT names the IDE extension: still a person's.
+    // No surface, but CLAUDE_CODE_ENTRYPOINT names the desktop app or the IDE extension: still a person's.
     w.surfaceList = []
-    w.env['CLAUDE_CODE_ENTRYPOINT'] = 'claude-vscode'
-    await raiseCompact($, { trigger: 'auto' })
-    expect(resumedLine(await nextBlock($, w))).toBe(RESUMED ? lineFor('Resumed · step 1: `npm test`') : undefined)
+    for (const ep of ['claude-desktop', 'claude-vscode']) {
+      w.env['CLAUDE_CODE_ENTRYPOINT'] = ep
+      await raiseCompact($, { trigger: 'auto' })
+      expect([ep, resumedLine(await nextBlock($, w))]).toEqual([ep, RESUMED ? lineFor('Resumed · step 1: `npm test`') : undefined])
+    }
     // No surface and the `-p` entrypoint: a script reads it.
     w.env['CLAUDE_CODE_ENTRYPOINT'] = 'sdk-cli'
     await raiseCompact($, { trigger: 'auto' })
     const b = await nextBlock($, w)
     expect(b).toBeDefined()
     expect(resumedLine(b)).toBeUndefined()
+  })
+
+  // 0.1.4 review F-4: the other entrypoints Claude Code 2.1.317 counts as a person's surface (its
+  // person-surface set beside isInteractive) keep the line in a headless load with no surface too.
+  test('a headless load with no surface whose entrypoint is another app a person reads (desktop 3P, Cowork, remote desktop and mobile, SSH remote, Slack) keeps the [resumed] line', async ($, on) => {
+    const w = new World().install(on)
+    w.interactive = false
+    w.surfaceList = []
+    w.resumeHere = 'Status: working\nStep 1: `npm test`\nGate: none\n'
+    await w.start($)
+    await w.userTurn($)
+    for (const ep of ['claude-desktop-3p', 'local-agent', 'remote_desktop', 'remote_mobile', 'ssh-remote', 'claude-in-slack']) {
+      w.env['CLAUDE_CODE_ENTRYPOINT'] = ep
+      await raiseCompact($, { trigger: 'auto' })
+      expect([ep, resumedLine(await nextBlock($, w))]).toEqual([ep, RESUMED ? lineFor('Resumed · step 1: `npm test`') : undefined])
+    }
   })
 
   test('an interactive load keeps the line whatever its surfaces (only a headless load is a script\'s)', async ($, on) => {
@@ -584,6 +602,43 @@ describe('no re-ask after a timeout (B)', () => {
     await raiseCompact($, { trigger: 'auto' })
     b = await nextBlock($, w) ?? ''
     expect(b).toContain('"Which cache?"')
+    if (TIMEOUT) expect(b).toContain(TIMED)
+  })
+
+  // 0.1.4 R-7 (review F-3): a person typing into a later background turn clears the mark an earlier
+  // turn left on the open question (personTyped's openTimedOut).
+  test('an earlier turn left the timed-out question open; the person types into a background turn: a mid-turn block has no [question-timeout]', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    await w.turnEnd($, 'Went on.\n\nWhich database?')
+    await w.userTurn($, 'background result', 'task-notification')
+    await raiseCompact($, { trigger: 'auto' })
+    let b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Which database?"')
+    if (TIMEOUT) expect(b).toContain(TIMED)
+    await $.prompt.submit({ text: 'use postgres later, busy now', origin: { kind: 'composer' }, turnId: 't2' } as never)
+    await raiseCompact($, { trigger: 'auto' })
+    b = await nextBlock($, w) ?? ''
+    expect(b).toContain('"Which database?"')
+    expect(b).not.toContain(TIMED)
+  })
+
+  // 0.1.4 R-7 (review F-3): a dialog that times out after the person typed into the turn is a new
+  // timeout (noteDialog resets askPersonSince).
+  test('a dialog that times out after the person typed into the turn marks its question', async ($, on) => {
+    const w = new World().install(on)
+    dialogs(w, 'timeout')
+    await w.start($)
+    await w.userTurn($)
+    await $.tool.call(ask('Which database?'))
+    await $.prompt.submit({ text: 'later', origin: { kind: 'composer' }, turnId: 't1' } as never)
+    await $.tool.call(ask('Which cache?'))
+    await raiseCompact($, { trigger: 'auto' })
+    const b = await nextBlock($, w) ?? ''
+    expect(b).toContain('Which cache?')
     if (TIMEOUT) expect(b).toContain(TIMED)
   })
 

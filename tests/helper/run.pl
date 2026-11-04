@@ -1545,9 +1545,9 @@ sub invoke {
 #   sha_vectors       {}: embedded SHA-256 vs Digest::SHA and a known vector
 #   json_roundtrip    {dir}: embedded codec vs JSON::PP on every *.json under dir
 #   proc_stat_lines   {file}: identity::_proc_stat over recorded Linux /proc/<pid>/stat lines (R-4)
-#   claude_pid_walk   {chains: [{id, start, env?, procs {pid: {ppid, comm, exe?}}, want, found,
-#                     exe_calls?}]}: identity::claude_pid over a recorded process table, `start`
-#                     standing for the runner's parent (no ps, no lsof)
+#   claude_pid_walk   {chains: [{id, start, env?, launcher? [pid, parent], procs {pid: {ppid, comm,
+#                     exe?}}, want, found, exe_calls?}]}: identity::claude_pid over a recorded
+#                     process table, `start` standing for the runner's parent (no ps, no lsof)
 #   linux_start_time  {image | images, probe, mb, steps}: identity::start_time on Linux in Docker
 #                     (R-4; a subprocess: the case "needs" ["docker-image:<image>"]; images: the
 #                     first one held here, none: a note and not run)
@@ -1555,8 +1555,11 @@ sub invoke {
 #                     read here (ioreg's IOPlatformUUID on macOS, /etc/machine-id on Linux); images:
 #                     the /etc/machine-id form on Linux in Docker as well (the first one held here,
 #                     none: a note and not run)
+#   ephemeral_exempt  {pairs: [[exempt, path, want]...]}: the publish lint's test seam
+#                     (skills::lint::_test_exempt) of the staged copy, in a test-mode child
 #   start_epochs      {}: identity::start_epochs and key_live of the staged copy with no seam (a
-#                     running pid, an ended one, a reused start)
+#                     running pid, an ended one, a reused start); {os: msys|cygwin, dir}: under that
+#                     perl with a stand-in /proc at dir (a stat file, a folder with none, no folder)
 #   own_start         {root, sid, want}: sessions::own_start over a store's per-process records,
 #                     "<since> <until> <coarse>" (3 decimals) or "undef"
 my $LIBS_READY;
@@ -2718,6 +2721,8 @@ sub claude_pid_walk_chains {
         local *rc::sid_dir = sub { $sd };
         local $identity::CACHED;
         local $ENV{CLAUDE_PID} = defined $c->{env} ? $ren->($c->{env}) : '';
+        # "launcher" [pid, parent]: what the launcher hands a hook's main.pl ($main::STORE_LAUNCHER_PARENT)
+        local $main::STORE_LAUNCHER_PARENT = ref $c->{launcher} eq 'ARRAY' ? join(':', map { $ren->($_) } @{ $c->{launcher} }) : undef;
         local $ENV{STORE_TEST_CLAUDE_PID};
         delete $ENV{STORE_TEST_CLAUDE_PID};
         my $r = identity::claude_pid();
@@ -3962,7 +3967,8 @@ sub builtin {
         # would read). `env` is CLAUDE_PID; `exe_calls` the executables the walk may read;
         # `walk_ps` its parent-and-command reads, `start_reads` its start-time reads (each a `ps`
         # call off Linux), `lstart` the start time it gives; `alive` {pid, pid_lstart}: this
-        # session's classic-alive.json, under args.dir (T-14).
+        # session's classic-alive.json, under args.dir (T-14); `launcher` [pid, parent]: what the
+        # launcher hands a hook's main.pl (0.1.4 review F-1).
         # The public entry, identity::claude_pid, starts at getppid(): the chain's `start` pid is
         # renamed to it throughout, and start times are stubbed. A recorded pid that happens to be
         # the real parent's (other than `start`) is moved to a free number, so the two never merge.
@@ -4068,6 +4074,50 @@ sub builtin {
             (my $dg = $d->{out} // '') =~ s/\s+\z//;
             push @e, "$img: machine() $dg, want $dw (/etc/machine-id)" unless $d->{exit} == 0 && $dg eq $dw;
         }
+        return @e;
+    }
+    if ($name eq 'ephemeral_exempt') {
+        # 0.1.4 T-8 seam (review F-3): skills::lint::_test_exempt of the staged copy, in a test-mode
+        # child perl per pair: args.pairs [[exempt folder, path, want 0|1]...].
+        return ('no pairs') unless @{ $a->{pairs} || [] };
+        for my $pr (@{ $a->{pairs} || [] }) {
+            my ($x, $path, $want) = @$pr;
+            my $r = run_cmd([$^X, "-I$STAGE/helper/lib", '-e', 'require "util.pm"; require "skills/util.pm"; require "skills/lint.pm"; '
+                             . 'print skills::lint::_test_exempt($ARGV[0])', $path],
+                            timeout_ms => 20000, env => { STORE_TEST_MODE => '1', STORE_TEST_EPHEMERAL_EXEMPT => $x });
+            push @e, "exempt $x, path $path: " . ($r->{exit} == 0 ? ($r->{out} // '') : "exit $r->{exit} " . ($r->{err} // '')) . ", want $want"
+                unless $r->{exit} == 0 && ($r->{out} // '') eq "$want";
+        }
+        return @e;
+    }
+    if ($name eq 'start_epochs' && ($a->{os} // '') ne '') {
+        # 0.1.4 review F-2: start_epochs under MSYS or Cygwin perl (seams STORE_TEST_OS and
+        # STORE_TEST_PROC_ROOT, args.dir the stand-in /proc), in a test-mode child perl: a pid with a
+        # stat file (one that does not run) reads btime + ticks/HZ; the child's own pid, a /proc
+        # folder with no stat, reads undef; the runner's pid (it runs) with no /proc folder reads 0;
+        # no `ps -axo` listing is made; key_live keeps the first two and drops the third.
+        my $d = $a->{dir} // return ("start_epochs: os needs args.dir");
+        my $code = 'require "util.pm"; require "jsonc.pm"; require "identity.pm"; '
+                 . 'my ($d, $run) = @ARGV; my $k = fork; POSIX::_exit(0) if defined $k && !$k; waitpid($k, 0); '
+                 . 'util::mkdir_p("$d/$k"); util::mkdir_p("$d/$$"); util::mkdir_p("$d/self"); '
+                 . 'my $st = "$k (perl) S 1 " . join(" ", (0) x 17) . " 123456 0 0\n"; '
+                 . 'util::write_atomic("$d/$_", $_ eq "stat" ? "cpu 0\nbtime 1761000000\n" : $st, 0600) for "stat", "self/stat", "$k/stat"; '
+                 . 'my $n = 0; { no warnings "redefine"; my $o = \&identity::_ps_starts; *identity::_ps_starts = sub { $n++; $o->() } } '
+                 . 'my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100; my $want = 1761000000 + int(123456 / $hz); '
+                 . 'my $s = identity::start_epochs([$k, $$, $run]); '
+                 . 'print join(" ", $want, map({ $s->{$_} // "undef" } $k, $$, $run), $n, '
+                 . 'identity::key_live("$k-$want", $s), identity::key_live("$$-1761000000", $s), identity::key_live("$run-1761000000", $s))';
+        my $r = run_cmd([$^X, "-I$STAGE/helper/lib", '-MPOSIX', '-e', $code, $d, $$], timeout_ms => 20000,
+                        env => { STORE_TEST_MODE => '1', STORE_TEST_OS => $a->{os}, STORE_TEST_PROC_ROOT => $d, STORE_TEST_PROC_STARTS => undef });
+        my ($want, $stat, $nostat, $nodir, $lists, $l1, $l2, $l3) = split ' ', ($r->{out} // '');
+        return ("child exit $r->{exit}: " . ($r->{out} // '') . ($r->{err} // '')) unless $r->{exit} == 0 && defined $l3;
+        push @e, "$a->{os}: a pid with a stat file: $stat, want $want (btime + ticks/HZ)" unless $stat eq $want;
+        push @e, "$a->{os}: a running pid with a /proc folder, no stat: $nostat, want undef" unless $nostat eq 'undef';
+        push @e, "$a->{os}: a running pid with no /proc folder: $nodir, want 0" unless $nodir eq '0';
+        push @e, "$a->{os}: $lists ps listings, want 0" unless $lists eq '0';
+        push @e, "$a->{os}: key_live of the stat pid's key: $l1, want 1" unless $l1 eq '1';
+        push @e, "$a->{os}: key_live of the no-stat pid: $l2, want 1" unless $l2 eq '1';
+        push @e, "$a->{os}: key_live of the pid with no /proc folder: $l3, want 0" unless $l3 eq '0';
         return @e;
     }
     if ($name eq 'start_epochs') {

@@ -12,7 +12,9 @@
 # main compactions (ok, ok-trailer, ok-unclosed, truncated) and a second alert that a later
 # alert_closed row closed, so the verdict mix counts ok-unclosed as ok (3 of 4) and the alerts count
 # the open ones (as status does), the closed one apart by its reason (still listed, marked closed),
-# all read from the exported rows.
+# all read from the exported rows. T-7: the verdicts counted ok are the bundled spec's ok_verdicts (a
+# copy of the tool beside a spec listing ok and truncated counts those), the three of 0.1.3 only
+# when the spec has no list.
 # sha256 through core's sha::hex256 (Digest::SHA when it loads, else the embedded one; the driver loads it)
 my $REPO = Cwd::abs_path(File::Basename::dirname(Cwd::abs_path(__FILE__)) . '/../../../../..');
 my $TOOL = "$REPO/tools/beta-analyze";
@@ -171,6 +173,21 @@ push @{ $alog->{jsonl} },
               $got{nostore} = $analyze->('run', $in, '--out', "$v->{TMP}/beta/y", '--store', "$v->{TMP}/none");
               $got{tmp5} = T::tree($v->{TMP});
               $got{src} = watch::io::slurp($TOOL);
+              # 0.1.4 (T-7, review F-4): the verdict mix takes the bundled spec's ok_verdicts, the three
+              # of 0.1.3 only without a usable list: the tool copied beside a spec whose list differs
+              # from that fallback, and beside one with no list, over the install's bundle alone
+              for my $k (qw(list none)) {
+                  my $fr = "$v->{TMP}/spec-$k";
+                  watch::io::mkdir_p("$fr/tools");
+                  watch::io::mkdir_p("$fr/plugin/assets");
+                  watch::io::mkdir_p("$fr/inbox");
+                  main::write_file("$fr/tools/beta-analyze", watch::io::slurp($TOOL), 0700);
+                  main::write_file("$fr/plugin/assets/handoff-spec.json",
+                                   watch::json::encode($k eq 'list' ? { ok_verdicts => [ 'ok', 'truncated' ] } : {}) . "\n", 0600);
+                  main::write_file("$fr/inbox/good.zip", watch::io::slurp("$in/good.zip"), 0600);
+                  my $sr = $run->('python3', '-I', "$fr/tools/beta-analyze", 'run', "$fr/inbox", '--out', "$fr/ana", '--store', $l);
+                  $got{"spec_$k"} = { exit => $sr->{exit}, err => $sr->{err}, md => watch::io::slurp("$fr/ana/BETA-REPORT.md") // '' };
+              }
               if (-f "$REPO/tests/fixtures/beta/cases.json") {
                   my $fin = "$v->{TMP}/fx/inbox";
                   $got{fx_cases} = $render_fixtures->("$REPO/tests/fixtures/beta", $fin, $T::BRAND);
@@ -294,12 +311,14 @@ push @{ $alog->{jsonl} },
         $E->is($calls, 1, 'one process call (the store launcher)');
         $E->ok(($src =~ /sys\.addaudithook\(_audit\)/ ? 1 : 0), 'the audit guard is installed');
         $E->ok(($src !~ /\b(?:claude|codex|anthropic|openai)\b/i ? 1 : 0), 'no model client named');
-        # the verdict mix line names every verdict OK_VERDICTS counts (T-5 above checks its output);
-        # 0.1.4 (T-7): the list is the bundled spec's ok_verdicts, the three of 0.1.3 only without one
-        $E->ok(($src =~ /^OK_VERDICTS = set\(ok_verdicts\(\)\)$/m && $src =~ /"plugin", "assets", "handoff-spec\.json"/
-                && $src =~ /\.get\("ok_verdicts"\)/ && $src =~ /^OK_VERDICTS_FALLBACK = \("ok", "ok-trailer", "ok-unclosed"\)$/m
-                && $src =~ /"%\.0f%% %s of %d" % \(100\.0 \* pooled\["shaped_ok"\] \/ pooled\["shaped"\], "\/"\.join\(ok_verdicts\(\)\)/ ? 1 : 0),
-               "the verdict mix counts and names the bundled spec's ok_verdicts");
+        # 0.1.4 (T-7): the verdict mix counts and names the bundled spec's ok_verdicts (T-5 above checks
+        # the shipped spec's output), the three of 0.1.3 only without a list
+        for my $k (qw(list none)) {
+            my $sr = $got{"spec_$k"} || {};
+            $E->is($sr->{exit}, 0, "spec $k: run exit 0 ($sr->{err})");
+        }
+        $has->($got{spec_list}{md}, qr/^- 50% ok\/truncated of 4$/m, "a spec listing ok and truncated: 2 of the install's 4 shaped compactions ok, by that list");
+        $has->($got{spec_none}{md}, qr/^- 75% ok\/ok-trailer\/ok-unclosed of 4$/m, 'a spec with no list: the three of 0.1.3');
         # WP-fix's fixture zips (tests/fixtures/beta, FIX-06), once that folder is on the branch
         if ($got{fx_cases}) {
             $E->is($got{fx_run}{exit}, 0, "fixture run exit 0 ($got{fx_run}{err})");

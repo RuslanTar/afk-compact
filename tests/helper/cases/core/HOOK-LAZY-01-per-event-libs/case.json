@@ -1,6 +1,6 @@
 {
  "id": "HOOK-LAZY-01-per-event-libs",
- "note": "0.1.4 T-12 (main.pl): `hook <Event>` loads a base set of libraries and its event's table, not every core library; cmd/hook.pl is unchanged. (1) The tables hold every library whose package variables, or a `defined &pkg::fn` guard on whose functions, a loaded library, the watcher or the event's path through cmd/hook.pl refers to: a variable of a library left out reads as undef and a guard skips its feature with no error (detect::summary, secrets::scan, identity::claude_pid). (2) Each event run with its set and with every core library (STORE_TEST_LAZY=full) prints the same and leaves the same rows and files; the plain SessionStart does not load reconcile (nor copies, postcompact, scope, bucket, frontmatter; rollup it loads since resumeblock's script_reader reads the mod's headless row, 0.1.4 R-2), SubagentStop and StopFailure far fewer; only the SessionStart that finishes an ended session (the cross-session finish calls reconcile) loads the libraries left out, through the AUTOLOAD fallback, and its rows are the full run's",
+ "note": "0.1.4 T-12 (main.pl): `hook <Event>` loads a base set of libraries and its event's table, not every core library; cmd/hook.pl is unchanged. (1) The tables hold every library whose package variables, or a `defined &pkg::fn` guard on whose functions, a loaded library, the watcher or the event's path through cmd/hook.pl refers to: a variable of a library left out reads as undef and a guard skips its feature with no error (detect::summary, secrets::scan, identity::claude_pid). (2) Each event run with its set (a PostCompact deferred to the mod and one proven main by its dispatch and marker, which saves the copy and runs the sweep: 0.1.4 review F-3, T-12) and with every core library (STORE_TEST_LAZY=full) prints the same and leaves the same rows and files; the plain SessionStart does not load reconcile (nor copies, postcompact, scope, bucket, frontmatter; rollup it loads since resumeblock's script_reader reads the mod's headless row, 0.1.4 R-2), SubagentStop and StopFailure far fewer; only the SessionStart that finishes an ended session (the cross-session finish calls reconcile) loads the libraries left out, through the AUTOLOAD fallback, and its rows are the full run's",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -144,6 +144,37 @@
        "stop_hook_active": false,
        "background_tasks": [],
        "session_crons": []
+      }
+     },
+     {
+      "name": "PostCompact main-proven (its dispatch and marker): the copy saved and the sweep run",
+      "setup": [
+       {
+        "dispatch": {
+         "nonce": "5e5e0001",
+         "actor": "main",
+         "channel": "mod-hook",
+         "trigger": "auto",
+         "age_s": 5,
+         "midturn": false
+        }
+       }
+      ],
+      "now": "2026-10-21T14:03:05+03:00",
+      "env": {
+       "STORE_TEST_STOP_BUDGET_MS": "60000"
+      },
+      "argv": [
+       "hook",
+       "PostCompact"
+      ],
+      "stdin_json": {
+       "session_id": "$SID",
+       "transcript_path": "@TMP@/proj/$SID.jsonl",
+       "cwd": "@TMP@/work",
+       "hook_event_name": "PostCompact",
+       "trigger": "auto",
+       "compact_summary": "<summary>\n⟪$BRAND v1 n=5e5e0001 s=main⟫\n# LAB-42 PROVENBODY\n## Resume here\nStatus: active\n⟪/$BRAND n=5e5e0001⟫\n</summary>"
       }
      },
      {
