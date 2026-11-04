@@ -222,12 +222,13 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // 5,580 since D-22's [auto-mode] line, root 2026-10-31; 5,846 since the 0.1.3 resume-text lane's
   // [resumed] first line, step 6's no-dialog clause and the [question-timeout] note; 5,874 since its
   // review round 1's edits to [handoff-ack], [handoff-partial] and [question-timeout]; 5,894 since
-  // 0.1.4 R-1 names in [auto-mode] the classes still blocked; 6,134 since G-1, root 2026-11-04:
-  // step 4 says the gate asks even when an approval carries and names protected branches).
-  test('resume protocol ≤6,134 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', SLOW, () => {
+  // 0.1.4 R-1 names in [auto-mode] the classes still blocked; 6,114 since G-1, root 2026-11-04:
+  // step 4 says the gate asks even when an approval carries and names protected branches, 240
+  // chars on a worst path measured at 5,871 before it, so a further growth fails here).
+  test('resume protocol ≤6,114 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', SLOW, () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 6134).toBe(true)
+      expect(s.length <= 6114).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
