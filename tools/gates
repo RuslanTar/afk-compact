@@ -1833,9 +1833,9 @@ GATE_LIST_NEEDS = [
     (RESUME_REL, r"^2\. Step 1 is an explicit gate", "a production read under `unattended_prod_reads: forbid` (R7), and no carried approval covers it"),
     (RESUME_REL, r"^- Every re-check is", "production write is an explicit gate"),
     (RESUME_REL, r"^- Every re-check is", "run it only when a carried approval (Rule 3) names this read and its targets"),
-    (RESUME_CTX_REL, r"^\[prod-forbid\] 4\. ", "always ask at any production write"),
+    (RESUME_CTX_REL, r"^\[prod-forbid\] 4\. ", "always ask, even when an approval carries, at any production write"),
     (RESUME_CTX_REL, r"^\[prod-forbid\] 4\. ", "ask before outward, destructive, production or self-modifying actions"),
-    (RESUME_CTX_REL, r"^\[prod-allow\] 4\. ", "always ask at any production write"),
+    (RESUME_CTX_REL, r"^\[prod-allow\] 4\. ", "always ask, even when an approval carries, at any production write"),
     (RESUME_CTX_REL, r"^(?:\[[a-z-]+\] )?4\. ", "its effect is absent"),
     (TEMPLATE_REL, r"^An approval is the user's own words", "any production write"),
     (TEMPLATE_REL, r"^An explicit gate ", "always, approval or not"),
@@ -1844,8 +1844,45 @@ GATE_LIST_NEEDS = [
     (SPEC_REL, r"^- \*\*Explicit gate\*\*", "`prod-write`"),
     (SPEC_REL, r"^- \*\*Approval \(scoped\)\*\*", "Under `unattended_prod_reads: forbid` a checked approval that names one production read and its targets counts like a fresh yes"),
 ]
+# G-1 (root 2026-11-04; 0.1.4 round-1 probes: with a valid carried approval a protected-branch push
+# acted 7/40 and 13/20, each fix text 0/40 and 0/20): every resume text that lists the explicit gates
+# says the gate asks even when an approval carries, and names protected branches in the same words
+# (NR-01). Lines are found by what they say (a production write and a protected-branch push in one
+# line), so a new step-4 variant is held too; GATE_CARRY_AT pins the lines that must exist.
+GATE_CARRY = "even when an approval carries"
+GATE_PROTECTED = ("(by name, wherever the remote is: the default branch, main, master, develop, staging, "
+                  "release-style names, or one the `protected_branches` setting, the user or the repository's "
+                  "instructions or settings name)")
+GATE_CARRY_LINE = re.compile(r"production write.*(?:protected-branch push|push to a protected branch)")
+GATE_CARRY_TEXTS = (RESUME_REL, RESUME_CTX_REL)
+GATE_CARRY_AT = [(RESUME_REL, r"^3\. \*\*Approvals", 1), (RESUME_CTX_REL, r"^\[prod-forbid\] 4\. ", 1),
+                 (RESUME_CTX_REL, r"^\[prod-allow\] 4\. ", 1)]
+
+
+def gate_carry_hits(target, brand):
+    """G-1: each GATE_CARRY_AT selector matches a gate-listing line, and every gate-listing line of
+    GATE_CARRY_TEXTS holds GATE_CARRY and GATE_PROTECTED."""
+    out = []
+    for rel, sel, n in GATE_CARRY_AT:
+        path, lines = _shipped(target, rel, brand)
+        if lines is None:
+            out.append(_missing(path, "G-1 gate-carry"))
+            continue
+        if len([ln for ln in lines if re.match(sel, ln) and GATE_CARRY_LINE.search(ln)]) < n:
+            out.append((path, None, "G-1 gate-carry", "G-1 gate-carry: no gate-listing line matches {!r}".format(sel), ""))
+    for rel in GATE_CARRY_TEXTS:
+        path, lines = _shipped(target, rel, brand)
+        for no, ln in enumerate(lines or [], 1):
+            if not GATE_CARRY_LINE.search(ln):
+                continue
+            for phrase in (GATE_CARRY, GATE_PROTECTED):
+                if phrase not in ln:
+                    out.append((path, no, "G-1 gate-carry", "G-1 gate-carry: a gate-listing line lacks {!r}".format(phrase), ln))
+    return out
+
+
 # Owner xxxxxxxx-28: the NR-06 interim wording (forbid absolute, approval or not) stays out.
-GATE_LIST_BANNED = ("No approval or handoff line changes this", "No approval covers a production read")
+GATE_LIST_BANNED =("No approval or handoff line changes this", "No approval covers a production read")
 # REVIEW-NIGHT TG-02 / TG-03 (REVIEW-NIGHT-2): the F-layer acceptance tests of SPEC-DELTAS §5 that no
 # gate held yet. Rows: (AT id, path, line selector, phrase every selected line must hold).
 AT_TEXT_NEEDS = [
@@ -1906,6 +1943,7 @@ def gate_list_hits(target, brand):
             for s in GATE_LIST_BANNED:
                 if s in ln:
                     out.append((path, no, "AP-11 gate-list", "AP-11 gate-list banned: {!r}".format(s), ln))
+    out += gate_carry_hits(target, brand)
     for at, rel, sel, phrase in AT_TEXT_NEEDS:
         path, lines = _shipped(target, rel, brand)
         if lines is None:
