@@ -1,9 +1,9 @@
 package measure;
 # lib/measure.pm: facts measured by code (MOD-SPEC §2.6 `measure --compact`, §10
-# measured block). Order: the plugin line when this session runs another plugin version than
-# sessions started since (0.1.3, lib/plugver.pm; first, so the cap never cuts it and no git line
-# sits under it: between the git header and its porcelain list the indented files read as its own,
-# 0.1.3 integration review); this session's GSD lines (lib/gsd.pm: from its own transcript, never
+# measured block). Order: the plugin line when sessions started since run another plugin version
+# than this session, or an install replaced this session's copy (0.1.3, 0.1.4 V-1, lib/plugver.pm;
+# first, so the cap never cuts it and no git line sits under it: between the git header and its
+# porcelain list the indented files read as its own, 0.1.3 integration review); this session's GSD lines (lib/gsd.pm: from its own transcript, never
 # from the worktree alone; none for a session that worked with neither GSD nor a driver skill;
 # before the git header for the same reason, 0.1.4 R-10: between the header and its list the
 # changed files read as the GSD line's); the git header line; the porcelain list (<= 20 lines);
@@ -57,7 +57,8 @@ sub inflight_lines {
 }
 
 # 0.1.3 version skew (lib/plugver.pm): one line, only when sessions started since this session
-# run another plugin version; /reload-plugins is the user's command, so the model relays it.
+# run another plugin version, or (0.1.4 V-1) an install replaced this session's copy;
+# /reload-plugins is the user's command, so the model relays it.
 sub plugin_lines {
     my $l = plugver::line();
     return defined $l ? ("plugin: $l (tell the user)") : ();

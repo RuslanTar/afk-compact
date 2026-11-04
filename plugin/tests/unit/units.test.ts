@@ -169,8 +169,11 @@ function combos(tags: Tag[]): Tag[][] {
 
 describe('AT-P-07 assembler (14-character name)', () => {
   const text = (a: (typeof ASSET_NAMES)[number]) => assetText(a, NAME)
+  // The tests that render every tag combination take 4 to 7 s on a loaded host against the kit's
+  // 5 s default (0.1.4 review): they get 30 s.
+  const SLOW = { timeoutMs: 30_000 }
 
-  test('every asset, every tag combination: no [tag] line, @name@, brace token or review comment survives', () => {
+  test('every asset, every tag combination: no [tag] line, @name@, brace token or review comment survives', SLOW, () => {
     for (const a of ASSET_NAMES) {
       for (const tags of combos(TAGS[a] ?? [])) {
         const s = assembleText(text(a), tags, WORST)
@@ -182,7 +185,7 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // 0.1.3 small fixes: 3 of 77 saved summaries had no closing line, each the summary Claude Code
   // installed byte for byte (the summarizer left it out, where it stood mid-text after Next steps):
   // the closing-line rule is the last line on every path, after the rules and Measured facts.
-  test('SENTINEL-LAST: every main instructions path ends with the closing-line rule', () => {
+  test('SENTINEL-LAST: every main instructions path ends with the closing-line rule', SLOW, () => {
     for (const tags of combos(TAGS['handoff-instructions'] ?? [])) {
       const lines = assembleText(text('handoff-instructions'), tags, { ...WORST, measured_facts: 'Measured facts (x):\ngit: branch main' }).trimEnd().split('\n')
       expect([tags.join('+'), lines[lines.length - 1]]).toEqual([tags.join('+'), 'Last line before </summary>: ' + sentinelText(NAME, WORST.nonce)])
@@ -218,11 +221,12 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // since the 0.1.2 question carry's [question] line quotes an open question of up to 240 chars;
   // 5,580 since D-22's [auto-mode] line, root 2026-10-31; 5,846 since the 0.1.3 resume-text lane's
   // [resumed] first line, step 6's no-dialog clause and the [question-timeout] note; 5,874 since its
-  // review round 1's edits to [handoff-ack], [handoff-partial] and [question-timeout]).
-  test('resume protocol ≤5,874 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', () => {
+  // review round 1's edits to [handoff-ack], [handoff-partial] and [question-timeout]; 5,894 since
+  // 0.1.4 R-1 names in [auto-mode] the classes still blocked).
+  test('resume protocol ≤5,894 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', SLOW, () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 5874).toBe(true)
+      expect(s.length <= 5894).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
@@ -233,7 +237,7 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // it are rendered, which bounds the rest (fitBlock trims only over BLOCK_MAX).
   const fullest = (c: Tag[]): boolean => (c.includes('resumed') || c.includes('handoff-ack') || c.includes('idle-again'))
     && (c.includes('question-timeout') || !c.includes('question'))
-  test('AT-TX-11 (U half): every shipped resume protocol beside a 3,000-byte measured block goes out untrimmed (≤BLOCK_MAX 9,500; soft 6,500)', () => {
+  test('AT-TX-11 (U half): every shipped resume protocol beside a 3,000-byte measured block goes out untrimmed (≤BLOCK_MAX 9,500; soft 6,500)', SLOW, () => {
     const measured = Array.from({ length: 30 }, (_, i) => 'm'.repeat(98) + String(i % 10)).join('\n').slice(0, 3000)
     let worst: Tag[] = []
     let worstLen = 0

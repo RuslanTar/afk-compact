@@ -1,8 +1,71 @@
 {
  "id": "AT-RN-10 (repo-based publish cases from a checkout under /tmp)",
- "note": "0.1.4 T-8: the publish lint treats paths under /tmp, /private/tmp and /var/folders as ephemeral, so from a checkout under a temp root (its git-ignored tmp/ folder, where the tmp_base \"repo\" cases work, then lies under one) 48 of the 51 repo-based cases failed: each publishes a body naming its own work folder (the other 3 publish none). In test mode, STORE_TEST_EPHEMERAL_EXEMPT=<folder> (the runner sets it to a tmp_base \"repo\" case's work folder) makes a path at or under it not ephemeral; the temp-root list is unchanged. A child run of those 48 with --repo-tmp under /tmp passes them all, HT-PB-01 among them, whose /tmp path outside the work folder still refuses (its step pins line 22 alone)",
+ "note": "0.1.4 T-8: the publish lint treats paths under /tmp, /private/tmp and /var/folders as ephemeral, so from a checkout under a temp root (its git-ignored tmp/ folder, where the tmp_base \"repo\" cases work, then lies under one) 48 of the 51 repo-based cases failed: each publishes a body naming its own work folder (the other 3 publish none). In test mode, STORE_TEST_EPHEMERAL_EXEMPT=<folder> (the runner sets it to a tmp_base \"repo\" case's work folder) makes a path at or under it not ephemeral; the temp-root list is unchanged. A child run of those 48 with --repo-tmp under /tmp passes them all, HT-PB-01 among them, whose /tmp path outside the work folder still refuses (its step pins line 22 alone). The seam itself: a path at or under the folder, /private/tmp and /private/var read as /tmp and /var on either side; a sibling whose name only starts with the folder's, a relative folder or one with a .. part exempts nothing (review F-3)",
  "tmp_base": "short",
  "steps": [
+  {
+   "name": "the seam: a path at or under the exempt folder, read with macOS's /private/tmp and /private/var as /tmp and /var either way; a sibling folder whose name starts with it, or an exempt folder with a .. part, is not exempt (review F-3: mutants r-t8-noprivate, r-t8-sibling)",
+   "lib": "ephemeral_exempt",
+   "args": {
+    "pairs": [
+     [
+      "/tmp/ab",
+      "/tmp/ab",
+      1
+     ],
+     [
+      "/tmp/ab",
+      "/tmp/ab/c/x.md",
+      1
+     ],
+     [
+      "/private/tmp/ab",
+      "/tmp/ab/x.md",
+      1
+     ],
+     [
+      "/tmp/ab/",
+      "/private/tmp/ab/x.md",
+      1
+     ],
+     [
+      "/private/var/folders/q1/T/w",
+      "/var/folders/q1/T/w/x.md",
+      1
+     ],
+     [
+      "/tmp/ab",
+      "/tmp/abc/x.md",
+      0
+     ],
+     [
+      "/tmp/ab",
+      "/tmp/abc",
+      0
+     ],
+     [
+      "/private/tmp/ab",
+      "/private/tmp/abc/x.md",
+      0
+     ],
+     [
+      "/tmp/ab/../cd",
+      "/tmp/cd/x.md",
+      0
+     ],
+     [
+      "tmp/ab",
+      "/tmp/ab/x.md",
+      0
+     ],
+     [
+      "/private/home/ab",
+      "/home/ab/x.md",
+      0
+     ]
+    ]
+   }
+  },
   {
    "name": "the 48 repo-based cases that publish their work folder, with the repo tmp folder under /tmp",
    "lib": "runner_child",

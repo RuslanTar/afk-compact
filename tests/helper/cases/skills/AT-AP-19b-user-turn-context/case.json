@@ -6,7 +6,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.2 D-8: without a plugin handoff turn (a handoff the user asked for) today's scoped carry holds: a line without state or note is approval-shape, a usable line is checked and carries; a context-only own line is accepted (never checked, never hashed) and measure lists it under Approvals (context only, re-ask); X-2 / HL-2: a usable line may keep the question its short answer replies to, `(answer to \"<question>\")`, and is checked on the words alone; review finding 2: in a later plugin handoff turn a context-only line carries from the own handoff's untagged `## Approvals` lines without a quote check, while the words of a tagged (foreign) line there do not carry (approval-quote) 0.1.4 A-7 (another session, a handoff the user asked for): a plain context-only line that repeats the id of a line moved for its quote is then the id's only line and stays when its own quote passes; while the earlier line stays, the repeat still refuses on approval-shape.",
+ "note": "0.1.2 D-8: without a plugin handoff turn (a handoff the user asked for) today's scoped carry holds: a line without state or note is approval-shape, a usable line is checked and carries; a context-only own line is accepted (never checked, never hashed) and measure lists it under Approvals (context only, re-ask); X-2 / HL-2: a usable line may keep the question its short answer replies to, `(answer to \"<question>\")`, and is checked on the words alone; review finding 2: in a later plugin handoff turn a context-only line carries from the own handoff's untagged `## Approvals` lines without a quote check, while the words of a tagged (foreign) line there do not carry (approval-quote) 0.1.4 A-7 (another session, a handoff the user asked for): a plain context-only line that repeats the id of a line moved for its quote is then the id's only line and stays when its own quote passes; while the earlier line stays, the repeat still refuses on approval-shape. A repeat that keeps its question (`(answer to \"...\")`) or a denial note is no plain context line: it refuses on approval-shape even when the earlier line moves (0.1.4 review F-3).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -339,6 +339,33 @@
     "stdout_lacks": [
      "approval-shape line 10\\b",
      "^ADVISORY approval-quote"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE3/body.md",
+   "content": "# LAB-9 — a repeated approval id\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-5: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n- U-5: approval \"push feat/x to origin\" (answer to \"May I push feat/x to origin?\") — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "A-7: the repeat waits for the quote check only in the plain form: one that keeps its question refuses on approval-shape though the first U-5 fails its quote (0.1.4 review F-3, mutant X2)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE3",
+    "--slug",
+    "repeat",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT approval-shape line 11$",
+     "^REFUSED: lint \\(1 blocking\\)"
+    ],
+    "stdout_lacks": [
+     "^Wrote handoff to: "
     ]
    }
   },

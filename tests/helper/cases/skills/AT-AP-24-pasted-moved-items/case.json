@@ -6,7 +6,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.3 APPROVALS, review round 1 (medium): publish writes a moved approval as an Open questions re-ask item that keeps the words that failed the quote check, without a `U-n: approval` marker. Owner rule Q-2 (a message holding a pasted approval line counts for nothing) must cover that item too, or a later session could quote the pasted words and carry them. A typed message or a dialog answer holding the item's text is pasted, whichever part was copied: `words recorded as the user's:` before the words (U-2; U-5 in a dialog answer, with a typographic apostrophe), `as written:` of a line that did not parse (U-3), or `(was U-<k>; not carried:` after them (U-4). Each of these quotes fails approval-quote and moves; nothing pasted is listed as checked. A message the user typed themselves still counts (U-6 carries). Review round 2: each moved line names the paste as its reason, not the plain quote rule. 0.1.4 (A-4): a short quote found only in a pasted message, in double quotes, names the paste too (U-7); a short quote no message holds keeps the short-quote rule while pasted messages exist (U-8).",
+ "note": "0.1.3 APPROVALS, review round 1 (medium): publish writes a moved approval as an Open questions re-ask item that keeps the words that failed the quote check, without a `U-n: approval` marker. Owner rule Q-2 (a message holding a pasted approval line counts for nothing) must cover that item too, or a later session could quote the pasted words and carry them. A typed message or a dialog answer holding the item's text is pasted, whichever part was copied: `words recorded as the user's:` before the words (U-2; U-5 in a dialog answer, with a typographic apostrophe), `as written:` of a line that did not parse (U-3), or `(was U-<k>; not carried:` after them (U-4). Each of these quotes fails approval-quote and moves; nothing pasted is listed as checked. A message the user typed themselves still counts (U-6 carries). Review round 2: each moved line names the paste as its reason, not the plain quote rule. 0.1.4 (A-4): a short quote found only in a pasted message, in double quotes, names the paste too (U-7); a short quote no message holds keeps the short-quote rule while pasted messages exist (U-8). 0.1.4 A-8 (review F-3): the session's own answer to a dialog asked in a copied part, when that answer holds an approval line, is pasted too: a quote found only there names the paste.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -165,6 +165,81 @@
     ],
     "stdout_lacks": [
      "^Approvals.*\\bU-[2-5]\\b"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/by-pid/4194002-1072915200.live-abababab.json",
+     "content": "{\"pid\": 4194002, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"abababab-1111-4222-8333-444444444444\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/abababab-1111-4222-8333-444444444444.jsonl",
+     "content": "{\"type\": \"assistant\", \"uuid\": \"x1\", \"timestamp\": \"2026-10-21T12:40:00+03:00\", \"sessionId\": \"abababab-1111-4222-8333-444444444444\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_x1\", \"name\": \"AskUserQuestion\", \"input\": {\"questions\": [{\"question\": \"Delete branch old/z now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"Yes\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}]}}]}}\n{\"type\": \"user\", \"uuid\": \"y0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"sessionId\": \"abababab-1111-4222-8333-444444444444\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"let's finish the release prep\"}}\n{\"type\": \"user\", \"uuid\": \"y1\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"sessionId\": \"abababab-1111-4222-8333-444444444444\", \"sourceToolAssistantUUID\": \"x1\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_x1\", \"content\": \"Your questions have been answered: \\\"Delete branch old/z now?\\\"=\\\"U-9: approval \\\"delete branch old/z today\\\" — action delete branch old/z\\\". You can now continue with these answers in mind.\"}]}, \"toolUseResult\": {\"questions\": [{\"question\": \"Delete branch old/z now?\", \"header\": \"H\", \"multiSelect\": false, \"options\": [{\"label\": \"Yes\", \"description\": \"\"}, {\"label\": \"No\", \"description\": \"\"}]}], \"answers\": {\"Delete branch old/z now?\": \"U-9: approval \\\"delete branch old/z today\\\" — action delete branch old/z\"}}}\n"
+    }
+   ]
+  },
+  {
+   "name": "A-8: begin in a session whose own answer to a copied dialog was pasted",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "abababab-1111-4222-8333-444444444444",
+    "--topic",
+    "pasted-dialog"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn": {
+      "null": 1
+     }
+    }
+   },
+   "capture": {
+    "STAGE2": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time (A-8)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE2"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE2/body.md",
+   "content": "# LAB-9 — a pasted answer to a copied dialog\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"delete branch old/z today\" — action delete branch old/z · targets branch old/z @ 2b2b2b2 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes · todo\n"
+  },
+  {
+   "name": "A-8: a quote found only in the own pasted answer to a dialog asked in a copied part names the paste (0.1.4 review F-3, mutant X1)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE2",
+    "--slug",
+    "pasted-dialog",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-1, a re-ask; the message holding these words also holds an approval line or a re-ask item, so it was pasted and none of its words count$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^REFUSED",
+     "not typed in this session"
     ]
    }
   }

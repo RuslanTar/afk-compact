@@ -163,9 +163,12 @@ export function personWrote(a: BlockArgs): BlockArgs {
 /**
  * 0.1.4 R-3: Claude Code's hosts where a person reads the reply though no person is at a prompt
  * (session.start `isInteractive` false): its desktop app and its VS Code extension
- * (CLAUDE_CODE_ENTRYPOINT, `Deps.entrypoint`).
+ * (CLAUDE_CODE_ENTRYPOINT, `Deps.entrypoint`). Review F-4: also the other entrypoints 2.1.317 counts
+ * as a person's surface (its own set beside `isInteractive`): the desktop app's third-party form,
+ * Cowork's local agent, the remote desktop and mobile apps, an SSH remote and the Slack app.
  */
-const PERSON_HOSTS: readonly string[] = ['claude-desktop', 'claude-vscode']
+const PERSON_HOSTS: readonly string[] = ['claude-desktop', 'claude-vscode', 'claude-desktop-3p', 'local-agent',
+  'remote_desktop', 'remote_mobile', 'ssh-remote', 'claude-in-slack']
 
 /**
  * 0.1.4 R-3 (the line's audience decides; the 0.1.3 follow-up's escalation: Claude Code reports

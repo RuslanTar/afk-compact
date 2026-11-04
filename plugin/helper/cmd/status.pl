@@ -496,7 +496,8 @@ sub _drift_text {
 # `off` what stays written. The first-run notice line while its marker is missing (the mod
 # claims it at session.start; a session where the mod never ran shows it here).
 # 0.1.3 version skew: this session's plugin copy (its version and folder), then the notice when
-# sessions started since run another version (lib/plugver.pm); also without a session id.
+# sessions started since run another version or (0.1.4 V-1) an install replaced this copy
+# (lib/plugver.pm); also without a session id.
 sub plugin_lines {
     my @l = ('plugin: ' . ctx::version() . ' · ' . util::abbrev(ctx::root()));
     my $n = plugver::line();
