@@ -2,6 +2,6 @@
 export const BRAND = {
  "name": "afk-compact",
  "marketplace": "afk-compact",
- "version": "0.1.3",
+ "version": "0.1.4",
  "plugin_id": "afk-compact@afk-compact"
 } as const

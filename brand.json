@@ -1,6 +1,6 @@
 {
   "name": "afk-compact",
   "marketplace": "afk-compact",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going."
 }
