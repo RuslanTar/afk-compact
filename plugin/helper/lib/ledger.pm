@@ -1,0 +1,275 @@
+package ledger;
+# lib/ledger.pm: the stable ledger, helper side (0.1.5, E-1; usage review "the helper copies U/D/X
+# lines from the previous copy and lints the difference; ids unique across a chain"). Owner: WP-core.
+# Pure text functions, no I/O: publish (skills::core seam) and the summary copies (copies.pm) call
+# them with the spec literals they read themselves. Text is characters.
+#
+#   check(base, draft, %o) -> {carry => [[line, section literal]…], ids => [id…], changed => [[id, n]…],
+#                              reused => [[id, n]…], renumbered => n}
+#     base: the own chain's previous file (a handoff, or the session's previous summary copy);
+#     draft: the new body. n is the draft's 1-based line number.
+#   carry(draft, check result, %o) -> the draft with the carried lines in their sections
+#   o: sections (the spec's sections_main literals, in order), user (the User constraints
+#      literal), decisions (the Decisions literal), approvals (the Approvals literal),
+#      fold_re (the spec's fold_line_re), tag_re (carry.tag_re), none_res ([regex…]: the none-form
+#      of User constraints), end_re (a line before which a missing section goes, e.g. the sentinel)
+#
+# A base line is carried when it is a ledger line of the base's User constraints or Decisions
+# section (an entry `- U-3: …`, `- D-2: …`, `- X-1: …`, or a §7 fold or ledger.md pointer line) and
+# the draft has none of its ids: not as an entry, in the id list an entry or one of its merged
+# clauses starts with, nor on a `Superseded:`, fold or pointer line (the same reading as the
+# watcher's A-09, watch::shape::_ledger); an entry whose text the draft holds under another id
+# (renumbered) is not carried either. Approval lines never are: an approval the draft drops stays
+# dropped (the safe direction; the approval rules decide what carries). Lines are copied byte for
+# byte, so the lint treats them as carried lines.
+#
+# The difference: a draft entry whose id a base entry has with other text is `changed` (an ask whose
+# quoted request is the same, and an approval, only change state: not reported), or `reused` when
+# the two name different items: their identity (the first quoted text, else the text before the
+# first ` — `) shares under half of its words. Two draft entries with one id and different items
+# are `reused` too. Only the defining lines (led by one id: `- D-2: …`) of User constraints,
+# Approvals and Decisions are compared: a line elsewhere, or one led by an id list, names the item.
+use strict;
+use warnings;
+use utf8;
+
+my $ID = qr/\b([UDX])-0*([0-9]+)\b/;
+# between the ids of a list (as the watcher reads them): spaces, `,` `/` `&` `+`, and/or/to/through,
+# an en dash
+my $LIST_SEP = qr/(?:\s|,|\/|&|\+|\b(?:and|or|to|through)\b|\x{2013})/;
+my $DASH = qr/\s(?:\x{2014}|\x{2013}|-{1,2})\s/;
+my %STOP = map { $_ => 1 } qw(the and for with not but are was were this that from into onto its has have had
+                               because user agent external rejected refuted failed ask approval scope status
+                               open partly done superseded left ends start unknown none per via all any);
+
+sub _id { return "$_[0]-" . ($_[1] + 0) }
+
+# The ids a line defines or names, as the watcher's _ledger reads them: {ids => [...], kind}
+# kind: entry (an id leads the line), fold (§7 fold or ledger.md pointer line), superseded, or undef.
+# an id range, left out as the watcher leaves it out (`..` or `…`; a dash after an id is a separator)
+my $RANGE = qr/\b[UDX]-[0-9]+\s*(?:\.\.|\x{2026})\s*(?:[UDX]-)?[0-9]+\b/;
+sub _line_ids {
+    my ($l, $o) = @_;
+    my $t = $l;
+    $t =~ s/\A\s*(?:[-*]\s+)?//;
+    my $entry = $t =~ /\A[UDX]-[0-9]+\b/;
+    my $kind = $l =~ /\bSuperseded:/ ? 'superseded'
+             : (($o->{fold_re} && $l =~ $o->{fold_re}) || $l =~ /\bsettled;\s*full text in\s/
+                || ($l =~ /\bledger\.md\b/ && $t !~ /\A[UDX]-[0-9]+\s*:/)) ? 'fold' : undef;
+    if ($kind) {
+        (my $s = $l) =~ s/$RANGE//g;
+        my @ids;
+        push @ids, _id($1, $2) while $s =~ /$ID/g;
+        return { ids => \@ids, kind => $kind };
+    }
+    return { ids => [], kind => undef } unless $entry;
+    (my $s = $t) =~ s/$RANGE//g;
+    my (@ids, %seen, $lead);
+    for my $clause (split /;|\x{b7}|\|/, $s) {
+        while ($clause =~ /\G$LIST_SEP*([UDX])-0*([0-9]+)\b/gc) { my $i = _id($1, $2); push @ids, $i unless $seen{$i}++ }
+    }
+    # the ids leading the line as written (a range there counts as more than one)
+    $lead = 0;
+    $lead++ while $t =~ /\G$LIST_SEP*[UDX]-[0-9]+\b(?:\s*(?:\.\.|\x{2026})\s*(?:[UDX]-)?[0-9]+\b)?/gc && $lead < 2;
+    $lead = 2 if $lead == 1 && $t =~ /\A[UDX]-[0-9]+\s*(?:\.\.|\x{2026})/;
+    return { ids => [], kind => undef } unless @ids;
+    # Only a line led by one id (`- D-2: …`, `U-1 "…" — …`) defines an item; a line led by an id
+    # list (`- D-7, D-8 kept …`) names them.
+    return { ids => \@ids, kind => 'entry', first => $ids[0], defines => (($lead // 0) == 1 ? 1 : 0) };
+}
+
+# An entry's text without bullet, leading id and its separator, carry tags; spaces folded.
+sub _text {
+    my ($l, $o) = @_;
+    my $t = $l;
+    $t =~ s/\A\s*(?:[-*]\s+)?[UDX]-[0-9]+\b\s*(?::|\.|\)|\x{2014}|-)?\s*//;
+    $t =~ s/$o->{tag_re}//g if $o->{tag_re};
+    $t =~ s/\s+/ /g;
+    $t =~ s/\A | \z//g;
+    return $t;
+}
+
+sub _norm { return lc _text(@_) }
+
+sub _words {
+    my ($s) = @_;
+    my %w;
+    for my $x (split /[^\w.\/-]+/, lc($s // '')) {
+        $x =~ s/\A[.\/-]+|[.\/-]+\z//g;
+        next unless length $x;
+        next unless length($x) >= 3 || $x =~ /[0-9]/;
+        next if $STOP{$x};
+        $w{$x} = 1;
+    }
+    return \%w;
+}
+
+# The words that name the item: the first quoted text, else the text before the first dash.
+sub _identity {
+    my ($text) = @_;
+    return _words($1) if $text =~ /"([^"]+)"/ || $text =~ /\x{201c}([^\x{201d}]+)\x{201d}/;
+    my ($head) = split $DASH, $text, 2;
+    return _words($head);
+}
+
+sub _quote { my ($t) = @_; return ($t =~ /"([^"]+)"/ || $t =~ /\x{201c}([^\x{201d}]+)\x{201d}/) ? lc($1) =~ s/\s+/ /gr : undef }
+
+sub _different_item {
+    my ($x, $y) = (_identity($_[0]), _identity($_[1]));
+    my ($nx, $ny) = (scalar(keys %$x), scalar(keys %$y));
+    return 0 unless $nx && $ny;
+    my $shared = grep { $y->{$_} } keys %$x;
+    my $min = $nx < $ny ? $nx : $ny;
+    return $shared / $min < 0.5 ? 1 : 0;
+}
+
+sub _approval { return $_[0] =~ /\A\s*(?:[-*]\s+)?U-[0-9]+:\s*approval\b/ ? 1 : 0 }
+sub _ask { return _text($_[0], {}) =~ /\Aask\b/ ? 1 : 0 }
+
+# [{n, text, sec, li}] with sec the literal of the `## ` section the line is in.
+sub _scan {
+    my ($text, $o) = @_;
+    my (@out, $sec);
+    my $n = 0;
+    for my $l (split /\n/, $text // '', -1) {
+        $n++;
+        if ($l =~ /\A##\s/ && $l !~ /\A###/) {
+            ($sec) = grep { index($l, $_) == 0 } @{ $o->{sections} || [] };
+            $sec //= '';
+            next;
+        }
+        push @out, { n => $n, text => $l, sec => $sec // '', li => _line_ids($l, $o) };
+    }
+    return \@out;
+}
+
+sub check {
+    my ($base, $draft, %o) = @_;
+    my $res = { carry => [], ids => [], changed => [], reused => [], renumbered => 0 };
+    my $d = _scan($draft, \%o);
+    my %ledger_sec = map { $_ => 1 } grep { defined && length } @o{qw(user decisions)};
+    my %cmp_sec = (%ledger_sec, map { $_ => 1 } grep { defined && length } $o{approvals});
+    my (%present, %dnorm, %dfirst);
+    for my $r (@$d) {
+        $present{$_} = 1 for @{ $r->{li}{ids} };
+        next unless ($r->{li}{kind} // '') eq 'entry';
+        $dnorm{ _norm($r->{text}, \%o) } = 1;
+        # Only the ledger sections define items; a line elsewhere that starts with an id cites it.
+        next unless $cmp_sec{ $r->{sec} } && $r->{li}{defines};
+        my $id = $r->{li}{first};
+        if (my $f = $dfirst{$id}) {
+            push @{ $res->{reused} }, [ $id, $r->{n} ]
+                if !_approval($f->{text}) && !_approval($r->{text}) && _different_item(_text($f->{text}, \%o), _text($r->{text}, \%o));
+        } else {
+            $dfirst{$id} = $r;
+        }
+    }
+    return $res unless defined $base && $base =~ /\S/;
+    my $bs = _scan($base, \%o);
+    my (%bfirst, %carried);
+    for my $r (@$bs) {
+        my $k = $r->{li}{kind} // next;
+        if ($k eq 'entry' && $r->{li}{defines} && $cmp_sec{ $r->{sec} } && !$bfirst{ $r->{li}{first} }) {
+            $bfirst{ $r->{li}{first} } = $r;
+        }
+        next unless $ledger_sec{ $r->{sec} } && ($k eq 'entry' || $k eq 'fold');
+        next if $k eq 'entry' && _approval($r->{text});
+        my @miss = grep { !$present{$_} } @{ $r->{li}{ids} };
+        next unless @miss;
+        if ($k eq 'entry' && $dnorm{ _norm($r->{text}, \%o) }) { $res->{renumbered}++; next }
+        my $to = ($k eq 'entry' && $r->{li}{first} =~ /\AU-/) ? $o{user} : $o{decisions};
+        push @{ $res->{carry} }, [ $r->{text}, $to ];
+        $carried{$_} = 1 for @miss;
+    }
+    $res->{ids} = [ sort { _ord($a) <=> _ord($b) } keys %carried ];
+    for my $id (sort { _ord($a) <=> _ord($b) } keys %dfirst) {
+        my $br = $bfirst{$id} or next;
+        my $dr = $dfirst{$id};
+        my ($bt, $dt) = (_text($br->{text}, \%o), _text($dr->{text}, \%o));
+        next if lc $bt eq lc $dt;
+        if (_different_item($bt, $dt)) { push @{ $res->{reused} }, [ $id, $dr->{n} ]; next }
+        next if _approval($br->{text}) || _approval($dr->{text});
+        my ($qb, $qd) = (_quote($bt), _quote($dt));
+        next if _ask($br->{text}) && _ask($dr->{text}) && defined $qb && defined $qd && $qb eq $qd;
+        push @{ $res->{changed} }, [ $id, $dr->{n} ];
+    }
+    @{ $res->{reused} } = sort { $a->[1] <=> $b->[1] } @{ $res->{reused} };
+    return $res;
+}
+
+# U before D before X, then by number.
+my %KIND_ORD = (U => 1, D => 2, X => 3);
+sub _ord { my ($k, $n) = $_[0] =~ /\A([UDX])-([0-9]+)\z/ or return 0; return $KIND_ORD{$k} * 1e6 + $n }
+
+sub carry {
+    my ($draft, $res, %o) = @_;
+    return $draft unless $res && @{ $res->{carry} || [] };
+    my @lines = split /\n/, $draft, -1;
+    my $final_nl = @lines && $lines[-1] eq '' ? 1 : 0;
+    pop @lines if $final_nl;
+    for my $sec (grep { defined && length } $o{user}, $o{decisions}) {
+        my @add = map { $_->[0] } grep { ($_->[1] // '') eq $sec } @{ $res->{carry} };
+        next unless @add;
+        _insert(\@lines, $sec, \@add, \%o);
+    }
+    return join("\n", @lines) . ($final_nl ? "\n" : '');
+}
+
+sub _heading_at {
+    my ($l, $o) = @_;
+    return undef unless $l =~ /\A##\s/ && $l !~ /\A###/;
+    my $secs = $o->{sections} || [];
+    for my $i (0 .. $#$secs) { return $i if index($l, $secs->[$i]) == 0 }
+    return -1;
+}
+
+sub _insert {
+    my ($lines, $sec, $add, $o) = @_;
+    my $secs = $o->{sections} || [];
+    my ($want) = grep { $secs->[$_] eq $sec } 0 .. $#$secs;
+    my ($start, $end);
+    for my $i (0 .. $#$lines) {
+        my $h = _heading_at($lines->[$i], $o);
+        next unless defined $h;
+        if (defined $start) { $end = $i; last }
+        $start = $i if $h == ($want // -2);
+    }
+    if (!defined $start) {
+        # The section is missing: it goes before the first later section, else before end_re's line,
+        # else at the end.
+        my $at;
+        for my $i (0 .. $#$lines) {
+            my $h = _heading_at($lines->[$i], $o);
+            if (defined $h && defined $want && $h > $want) { $at = $i; last }
+        }
+        if (!defined $at && $o->{end_re}) { for my $i (0 .. $#$lines) { if ($lines->[$i] =~ $o->{end_re}) { $at = $i; last } } }
+        $at //= scalar @$lines;
+        splice @$lines, $at, 0, $sec, @$add;
+        return;
+    }
+    $end //= do {
+        my $e = scalar @$lines;
+        if ($o->{end_re}) { for my $i ($start + 1 .. $#$lines) { if ($lines->[$i] =~ $o->{end_re}) { $e = $i; last } } }
+        $e;
+    };
+    my @body = grep { $lines->[$_] =~ /\S/ } $start + 1 .. $end - 1;
+    # A lone none-form (`none stated`) gives way to the carried lines.
+    if (@body == 1) {
+        (my $v = $lines->[ $body[0] ]) =~ s/\A\s*(?:[-*]\s+)?|\s+\z//g;
+        if (grep { $v =~ $_ } @{ $o->{none_res} || [] }) {
+            splice @$lines, $body[0], 1, @$add;
+            return;
+        }
+    }
+    my $at = @body ? $body[-1] + 1 : $start + 1;
+    splice @$lines, $at, 0, @$add;
+}
+
+# The frontmatter value a summary copy records: `<n> lines (U-3, D-2); sha256 <summary sha>`.
+sub copy_note {
+    my ($res, $sha) = @_;
+    my $n = scalar @{ $res->{carry} || [] };
+    return sprintf('%d line%s (%s); sha256 %s', $n, ($n == 1 ? '' : 's'), join(', ', @{ $res->{ids} }), $sha);
+}
+
+1;

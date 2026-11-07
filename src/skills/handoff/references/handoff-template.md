@@ -93,7 +93,7 @@ Lines carried from another session's handoff (rule 8) keep their words and their
 - U-9: "<their words>" — scope <what it covers>; user, ab12cd34 [from ab12cd34 · U-3 · 2026-10-21 09:14 +0300]
 ```
 
-At most 12 foreign lines (U 6, D 4, X 2); the rest become one line `<n> more ledger lines in <their stem> [from <sid8> · - · <stamp>]`. Own-chain ledger lines the base lacks are carried too, unchanged.
+At most 12 foreign lines (U 6, D 4, X 2); the rest become one line `<n> more ledger lines in <their stem> [from <sid8> · - · <stamp>]`.
 
 ### 4.3 Decisions and do-not-re-raise
 

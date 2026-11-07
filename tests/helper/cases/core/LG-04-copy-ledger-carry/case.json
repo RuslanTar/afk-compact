@@ -1,0 +1,158 @@
+{
+ "id": "LG-04 (0.1.5 E-1, stable ledger: summary copies)",
+ "note": "a main copy of a shaped summary gets the ledger lines of the session's previous copy that the summary dropped without a Superseded line (U-2; D-1 is superseded, so not), copied unchanged into its section; frontmatter ledger_carried names them with the summary's own sha256, and a second save of the same summary (the mod's after-step) still matches it (EXISTS sha-match); the copy row counts what was carried",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "1a1a1a1a",
+      "actor": "main",
+      "channel": "classic",
+      "trigger": "auto",
+      "age_s": 300,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "2b2b2b2b",
+      "actor": "main",
+      "channel": "classic",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$TMP/s1.md",
+     "content": "⟪$BRAND v1 n=1a1a1a1a s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-2: ask \"fix the retry window\" — status open\n## Decisions and do-not-re-raise\n- D-1: retry budget 3 — because the gateway caps at 3 (user)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=1a1a1a1a⟫\n"
+    },
+    {
+     "write": "$TMP/s2.md",
+     "content": "⟪$BRAND v1 n=2b2b2b2b s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1 by D-2 (2026-10-21 14:00 +0300)\n- D-2: retry budget 5 — because the gateway now allows 5 (external)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=2b2b2b2b⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "first copy: nothing to carry",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a1a1a1a",
+    "--from",
+    "$TMP/s1.md",
+    "--writer",
+    "postcompact",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^VERDICT ok ",
+     "^Saved copy: "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c1-1a1a1a.md",
+      "lacks": [
+       "^ledger_carried:"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "second copy: U-2 carried from the first, the superseded D-1 not",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2b2b2b2b",
+    "--from",
+    "$TMP/s2.md",
+    "--writer",
+    "postcompact",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^VERDICT ok ",
+     "^Saved copy: "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c2-2b2b2b.md",
+      "has": [
+       "^ledger_carried: \"1 line \\(U-2\\); sha256 [0-9a-f]{64}\"$",
+       "^\\-\\ U\\-1:\\ \"keep\\ the\\ 45\\ s\\ window\"\\ —\\ scope\\ retry\\ window;\\ user,\\ 11111111\n\\-\\ U\\-2:\\ ask\\ \"fix\\ the\\ retry\\ window\"\\ —\\ status\\ open\n## Decisions and do-not-re-raise\n\\-\\ Superseded:\\ D\\-1\\ by\\ D\\-2\\ \\(2026\\-10\\-21\\ 14:00\\ \\+0300\\)\n\\-\\ D\\-2:\\ retry\\ budget\\ 5\\ —\\ because\\ the\\ gateway\\ now\\ allows\\ 5\\ \\(external\\)\n## In flight\n"
+      ],
+      "lacks": [
+       "^\\-\\ D\\-1:\\ retry\\ budget\\ 3\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)$"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "fields": {
+       "nonce": "2b2b2b2b",
+       "result": "saved",
+       "ledger": {
+        "carried": 1,
+        "changed": 0,
+        "reused": 0
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the same summary again: the carried copy still matches",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2b2b2b2b",
+    "--from",
+    "$TMP/s2.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^EXISTS: .* sha-match$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 2
+     }
+    ]
+   }
+  }
+ ]
+}

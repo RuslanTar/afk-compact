@@ -25,7 +25,11 @@ package skills::lint;
 #        approval must be the context-only form (approval-plugin-turn).
 #      0.1.3: carried_as {line => draft line} (publish's re-lint after moving approvals: a line
 #        whose draft text was carried stays carried).
-# The result also carries `acuity`: the rating found in Resume here, or undef; and
+#      0.1.5 (E-1, stable ledger): ledger_base (the own chain's previous file: the carry base when
+#        it is own or chain, own_previous with a foreign base; undef without one) for
+#        ledger-id-reuse, ledger-changed and ledger-carried (lib/ledger.pm).
+# The result also carries `acuity`: the rating found in Resume here, or undef; `ledger`: the
+# ledger::check result publish carries the dropped lines with; and
 # `approvals`: {checked => [U-n…], lines, unchecked, classes, origins} for the frontmatter, the row
 # and the line-hash record.
 # Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
@@ -267,6 +271,15 @@ sub lint {
     push @block, @{ $approvals->{blocking} };
     push @adv, @{ $approvals->{advisory} };
 
+    # ---- the stable ledger (0.1.5 E-1, spec §7): against the own chain's previous file, an id the
+    # draft gives to another item blocks (ids stay unique across a chain); a ledger line whose text
+    # changed is advisory; the ledger lines the draft dropped without a Superseded line are named,
+    # and publish copies them back when it writes the file.
+    my $ledger = skills::core::ledger_check($in->{ledger_base}, $body);
+    push @block, [ 'ledger-id-reuse', "line $_->[1] $_->[0]" ] for @{ $ledger->{reused} };
+    push @adv, [ 'ledger-changed', "line $_->[1] $_->[0]" ] for @{ $ledger->{changed} };
+    push @adv, [ 'ledger-carried', join(', ', @{ $ledger->{ids} }) ] if @{ $ledger->{ids} };
+
     # ---- private-path (D-12 Block F; repo mode only): a machine-private path left in the
     # text the export would write after its rewrite (own home already ~/). A durable copy
     # or a Volatile: line does not excuse it: the path would reach git.
@@ -470,7 +483,7 @@ sub lint {
     my $ids = skills::spec::lint_ids();
     for my $r (@block) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{blocking}{ $r->[0] } }
     for my $r (@adv) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{advisory}{ $r->[0] } }
-    return { blocking => \@block, advisory => \@adv, acuity => $acuity, approvals => $approvals };
+    return { blocking => \@block, advisory => \@adv, acuity => $acuity, approvals => $approvals, ledger => $ledger };
 }
 
 # A U-, D- or X- ledger line's content with its bullet, id and carry tags removed and

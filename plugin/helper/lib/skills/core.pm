@@ -48,11 +48,13 @@ package skills::core;
 #   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
 #   settings::protected($resolved)     -> {globs => [{id, re}], user, invalid} (owner xxxxxxxx-29)
 #   settings::protected_user($name, $p) -> the id of the user's entry naming the branch | undef
+#   ledger::check($base, $draft, %o) / ledger::carry($draft, $res, %o) (0.1.5 E-1, stable ledger)
 use strict;
 use warnings;
 use utf8;
 use POSIX ();
 use skills::util;
+use skills::spec;
 use settings;
 use paths;
 use roots;
@@ -71,6 +73,7 @@ use repomode;
 use handoff_turn;
 use sidecar;
 use jobrec;
+use ledger;
 
 sub settings {
     my ($flags) = @_;
@@ -580,5 +583,22 @@ sub detect_summary {
     return undef unless ref $r eq 'HASH';
     return skills::util::text_deep($r);
 }
+
+# 0.1.5 (E-1, stable ledger): ledger::check and ledger::carry (lib/ledger.pm) with the spec's literals:
+# the main headings, the sections of User constraints, Approvals and Decisions (by their fixed
+# section ids), the fold line, the carry tag and the User constraints none-form.
+sub ledger_opts {
+    my @secs = map { $_->{literal} } @{ skills::spec::sections_main() };
+    my $ids = skills::spec::get('section_ids');
+    my %lit = ref $ids eq 'HASH' ? reverse %$ids : ();
+    my $nf = skills::spec::get('none_forms_handoff');
+    my $user = $lit{'main:user-constraints'};
+    my @none = map { my $f = $_; eval { qr/$f/ } || () } grep { defined && !ref } @{ (ref $nf eq 'HASH' && defined $user && ref $nf->{$user} eq 'ARRAY') ? $nf->{$user} : [] };
+    return (sections => \@secs, user => $user, approvals => $lit{'main:approvals'}, decisions => $lit{'main:decisions'},
+            fold_re => skills::spec::fold_line_re(), tag_re => skills::spec::regex_at('carry.tag_re'), none_res => \@none);
+}
+
+sub ledger_check { my ($base, $draft) = @_; return ledger::check($base, $draft, ledger_opts()) }
+sub ledger_carry { my ($draft, $res) = @_; return ledger::carry($draft, $res, ledger_opts()) }
 
 1;

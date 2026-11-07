@@ -218,6 +218,37 @@ sub _ledger {
              text => \%text, by_text => \%by_text, carried => \%carried };
 }
 
+# 0.1.5 (E-1, stable ledger): a saved copy's body without the ledger lines the helper carried into
+# it, given its `ledger_carried` value (`<n> lines (U-3, D-2); sha256 <hex>`, maybe JSON-quoted).
+# The summary named none of those ids anywhere (that is why they were carried), so every line that
+# defines or names one (an entry, the id list it or a merged clause starts with, a Superseded or
+# fold line) is a carried line.
+sub uncarried {
+    my ($body, $note) = @_;
+    return $body unless defined $body && defined $note && !ref $note;
+    (my $ids = $note) =~ s/sha256.*\z//s;
+    my %c;
+    $c{"$1-" . ($2 + 0)} = 1 while $ids =~ /\b([UDX])-0*([0-9]+)\b/g;
+    return $body unless %c;
+    my @keep;
+    for my $line (split /\n/, $body, -1) {
+        my $t = $line;
+        $t =~ s/^\s*(?:[-*]\s+)?//;
+        my @ids;
+        if ($line =~ /\bSuperseded:/ || $line =~ /\bsettled;\s*full text in\s/ || $line =~ /\bledger\.md\b/) {
+            push @ids, "$1-" . ($2 + 0) while $line =~ /\b([UDX])-0*([0-9]+)\b/g;
+        } elsif ($t =~ /\A[UDX]-[0-9]+\b/) {
+            (my $s = $t) =~ s/\b[UDX]-[0-9]+\s*(?:\.\.|\xe2\x80\xa6)\s*[UDX]-[0-9]+\b//g;
+            for my $clause (split /;|\xc2\xb7|\|/, $s) {
+                while ($clause =~ /\G$LIST_SEP*([UDX])-0*([0-9]+)\b/gc) { push @ids, "$1-" . ($2 + 0) }
+            }
+        }
+        next if grep { $c{$_} } @ids;
+        push @keep, $line;
+    }
+    return join "\n", @keep;
+}
+
 # M-11 against the previous summary text (or undef). 0.1.4: an old id is lost only when the new
 # ledger has neither the id (as an entry, in the id list another entry line or one of its merged
 # clauses starts with, or named on a Superseded/fold line) nor an entry with the same normalised

@@ -91,7 +91,7 @@
    }
   },
   {
-   "note": "RV-30: a quiet chained draft whose shared lines are only none-forms (regexes in the spec block) and one carried line stays under 30%, so no overlap advisory",
+   "note": "RV-30: a quiet chained draft whose shared lines are only none-forms (regexes in the spec block) and one carried line stays under 30%, so no overlap advisory; 0.1.5 (E-1): the draft drops U-1 and D-1 without a Superseded line, so publish carries them (its only ADVISORY)",
    "cwd": "$TMP/repo",
    "now": "2026-10-21T14:06:30+03:00",
    "argv": ["begin", "--sid", "$SID", "--topic", "retry"],
@@ -106,7 +106,7 @@
    "cwd": "$TMP/repo",
    "now": "2026-10-21T14:06:40+03:00",
    "argv": ["publish", "--stage", "$STAGE", "--slug", "retry", "--status", "blocked"],
-   "expect": {"exit": 0, "stdout_lacks": ["^LINT ", "^ADVISORY overlap"], "stdout_has": ["\\AWrote handoff to: $ROOT/repo/LAB-7/$STEM.md\\n\\z"]}
+   "expect": {"exit": 0, "stdout_lacks": ["^LINT ", "^ADVISORY overlap"], "stdout_has": ["\\AADVISORY ledger-carried U-1, D-1\\n  why: [^\\n]*\\nWrote handoff to: $ROOT/repo/LAB-7/$STEM.md\\n\\z"]}
   }
  ]
 }

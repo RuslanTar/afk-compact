@@ -326,7 +326,8 @@
     "channel",
     "seat_state",
     "evidence",
-    "redacted"
+    "redacted",
+    "ledger_carried"
   ],
   "frontmatter_keys_export": [
     "kind",
@@ -428,6 +429,10 @@
       "why": "an approval carries only along your own chain, where its use is tracked; another session's approval is context",
       "fix": "write: context only, not valid here; re-ask, and drop used / not yet used"
     },
+    "ledger-id-reuse": {
+      "why": "an id names one item across the chain; a reused id makes the next session read one item as another",
+      "fix": "give the new item the next free id (begin's next_ids) and keep the earlier line, or write Superseded: <old id> by <new id> (<stamp>)"
+    },
     "approval-shape": {
       "why": "the next session can act on an approval only when it can check its scope",
       "fix": "write the user's words, any (answer to \"<question>\"), the action, each target with its state, once or standing, and not yet used or used <stamp>"
@@ -500,6 +505,14 @@
       "why": "a copied previous file carries stale state",
       "fix": "rewrite non-ledger lines with the latest values; carry only ledger lines unchanged"
     },
+    "ledger-changed": {
+      "why": "ledger lines carry unchanged, so the chain keeps one wording per id",
+      "fix": "none needed when the line states the item's new state; else keep the earlier text, or supersede it"
+    },
+    "ledger-carried": {
+      "why": "a ledger line leaves the chain only through a Superseded line",
+      "fix": "none needed: publish copies them unchanged into the written file; list them in the report"
+    },
     "recipe-mismatch": {
       "why": "a recorded job is relaunched only byte for byte",
       "fix": "copy command: from the job record, or class the row ask"
@@ -536,6 +549,7 @@
       "id-range",
       "carry-provenance",
       "carry-approval",
+      "ledger-id-reuse",
       "private-path",
       "recipe-placeholder",
       "recipe-script",
@@ -560,7 +574,9 @@
       "secret-warn",
       "acuity",
       "store-path",
-      "approval-unchecked"
+      "approval-unchecked",
+      "ledger-changed",
+      "ledger-carried"
     ],
     "repo_mode_only": [
       "private-path"
