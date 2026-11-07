@@ -231,10 +231,11 @@ sub _test_corrupt {
 #   finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person, pronoun or person's
 #   say stands anywhere in it. A job hold is not a step that can run: the copy is taken with no
 #   result in, so it stays blocked (only the session's result turn reads it working). A wait mark
-#   (`· waits: job` or `· waits: you`, lane.ts `WAITS_SRC`) leads the wording: either holds the
-#   step, and Next steps item 1's mark, while it is to do, holds Step 1 under `Gate: none`.
+#   (`· waits: job` or `· waits: you`, a dash for the `·` too; lane.ts `WAITS_SRC`) leads the
+#   wording: either holds the step, an item with one and no step mark read is to do, and Next
+#   steps item 1's mark, while it is to do, holds Step 1 under `Gate: none`.
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
-my $WAITS_RE = qr/·\s*waits:\s*(job|you)\b/i;
+my $WAITS_RE = qr/[·—–]\s*waits:\s*(job|you)\b/i;
 my $GATED_RE = qr/\b(?:gated|ask user)\b/i;
 # The hold regexes below read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
 # non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
@@ -318,7 +319,7 @@ sub _last_mark {
     my $mark;
     (my $t = $item) =~ s/$WAITS_RE//g;
     $mark = $1 while $t =~ /$MARK_RE/g;
-    return $mark;
+    return $mark // ($item =~ $WAITS_RE ? 'todo' : undef);
 }
 
 # The items of a Next steps section, split as lane.ts `items` splits them.

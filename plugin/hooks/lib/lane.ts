@@ -99,9 +99,10 @@ const MARK_SRC = '·\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
 /**
  * A wait mark (0.1.5, E-4): `· waits: job` (the step needs a running job's result first) or
  * `· waits: you` (it needs the user), which the summary's model writes on a todo step that waits,
- * before its `· todo` (read after it too). Code reads the hold from the mark, not the wording.
+ * before its `· todo` (read after it too). Code reads the hold from the mark, not the wording. A
+ * dash may stand for the `·` (`— waits: you · todo`: 8 of 20 probe summaries wrote one so).
  */
-const WAITS_SRC = '·\\s*waits:\\s*(job|you)\\b'
+const WAITS_SRC = '[·—–]\\s*waits:\\s*(job|you)\\b'
 /** An explicit gate in the summary form's own words (`gated …: ask user: …`): a `waits: job` mark does not lift it. */
 const GATED_RE = /\b(?:gated|ask user)\b/i
 /**
@@ -249,11 +250,15 @@ function section(text: string, heading: string): string[] | undefined {
   return out
 }
 
-/** The item's last step mark, or undefined; a wait mark after it (`· todo · waits: job`) does not hide it. */
+/**
+ * The item's last step mark, or undefined; a wait mark after it (`· todo · waits: job`) does not
+ * hide it. An item with a wait mark and no step mark code can read (`· waits: you · todo (gated
+ * by U-2)`: 3 of 24 probe summaries) is to do: only a step to do is given one.
+ */
 function lastMark(item: string): 'todo' | 'done' | undefined {
   let mark: 'todo' | 'done' | undefined
   for (const m of item.replace(new RegExp(WAITS_SRC, 'gi'), '').matchAll(new RegExp(MARK_SRC, 'gm'))) mark = m[1] === 'done' ? 'done' : 'todo'
-  return mark
+  return mark ?? (new RegExp(WAITS_SRC, 'i').test(item) ? 'todo' : undefined)
 }
 
 /**

@@ -1642,6 +1642,8 @@ const MARKED_JOB = [
   'Merge the findings into NOTES.md · Waits: Job',
   'Tag the release·waits:job',
   'Wait for B-3, then commit · waits: job (the B-3 shell)',
+  'Check B-1 with `tail -n 30 /tmp/it.log` — done when the suite ended — waits: job',
+  'Record the counts in RELEASE-NOTES.md – waits: job',
 ]
 const MARKED_USER = [
   'On the timer notification, reply with one line acknowledging it · waits: you',
@@ -1656,6 +1658,8 @@ const MARKED_USER = [
   'When the build finishes, push · waits: job — ask user: push (! git push)',
   'Rebase onto main · WAITS: YOU',
   'Publish the notes · waits: you (the wording of the release note)',
+  'Tell the user the notes are ready and ask for an explicit yes before pushing tag v1.4.0 — waits: you',
+  'ask user: push tag v1.4.0 and branch release/1.4 after they review notes — waits: job',
 ]
 /**
  * release-0.1.1b's `HELD_RE`, kept here as a fixture: what that release read held (on the user);
@@ -1806,8 +1810,9 @@ test('E-4 wait marks: read before or after the todo mark, in the one-line form t
   const done = laneFacts('## Resume here\nStatus: finished\nStep 1: none\nGate: none\n## Next steps\n1. Read the TB log · waits: job · done\n2. Push · done · waits: you\n')
   expect([done.done, done.todo, done.unmarked]).toEqual([2, 0, 0])
   expect(laneOf(done, M).lane).toBe('finished')
-  // A mark alone is not a step mark.
-  expect(laneFacts('## Next steps\n1. Read the TB log · waits: job\n').unmarked).toBe(1)
+  // Only a step to do gets a wait mark: with no step mark code can read (a note after `· todo`), it is to do.
+  const note = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps\n1. Read the TB log · waits: job\n2. Ask user: push tag v1.4.0 — waits: you · todo (gated by U-2; no approval yet)\n3. Write notes · todo (after lunch)\n')
+  expect([note.todo, note.unmarked, note.free, note.onJob, note.onUser]).toEqual([2, 1, 0, 1, 1])
 })
 
 test('E-4 wait marks: Next steps item 1 to do holds Step 1 under `Gate: none`; a Gate line naming a blocker stays one', () => {
