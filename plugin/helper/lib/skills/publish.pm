@@ -23,6 +23,8 @@ package skills::publish;
 # 0.1.3 APPROVALS: an own approval line of `## Approvals` failing approval-quote or
 # approval-plugin-turn moves to `## Open questions` as a re-ask instead of refusing (one ADVISORY
 # line each; skills::approvals::move_lines); a written row gains `approvals_moved` (a count).
+# 0.1.5 (E-3): the mechanical lints (an id range, a missing Next steps item 1) are fixed instead of
+# refusing (skills::lint::fix; one ADVISORY line each); a written row gains `lint_fixed` (a count).
 use strict;
 use warnings;
 use utf8;
@@ -137,6 +139,18 @@ sub run {
         return $r;
     };
     my $res = $lint->($body);
+    # 0.1.5 (E-3): the mechanical blocking lints are fixed here instead of refusing
+    # (skills::lint::fix: an id range written as its ids, Step 1 added as Next steps item 1 when
+    # that item is missing); one ADVISORY line per fix says what changed, at the draft's line.
+    # The fixed text is linted again (a rewritten line that was carried stays carried) and goes
+    # on as the draft would; a refused publish keeps body.md as written.
+    my $fx = skills::lint::fix($body, $res->{blocking});
+    my %cas = %{ $fx->{was} };
+    if (@{ $fx->{fixes} }) {
+        $body = $fx->{body};
+        $res = $lint->($body, \%cas);
+    }
+    my $fmap = $fx->{map};
     # 0.1.3 APPROVALS: an own approval line of `## Approvals` that fails approval-quote or
     # approval-plugin-turn no longer refuses: it moves to `## Open questions` as a re-ask
     # (skills::approvals::move_lines) and one ADVISORY line per moved approval says so, with the
@@ -151,21 +165,32 @@ sub run {
     my ($mbody, $moved, $keep, $was, $lmap) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
                                                                             $prev_text, $own_text, $extra{'ledger.md'});
     my %rules;
+    my $map = $fmap;
     if (@$moved) {
         $rules{ $_->{rule} } = 1 for @$moved;
         if (!@$keep) {
             $body = $mbody;
-            $res = $lint->($body, $was);
+            # A line move_lines rewrote reads through to its draft text (0.1.5: through a fix too).
+            $res = $lint->($body, { %cas, map { ($_ => $cas{ $was->{$_} } // $was->{$_}) } keys %$was });
             # One numbering per output (0.1.4 A-1): the moved-line ADVISORY lines and the skill's
             # "edit those body lines" read the draft (body.md), while the moved text exists only in
             # memory (and the written file adds a header), so every line number the re-lint names,
             # blocking or advisory, is printed as the draft's line (an inserted re-ask item: its
             # moved approval's line; integration review: secret-warn printed lines=13,35 for draft
             # lines 19,34).
-            $res = { %$res, blocking => _draft_lines($res->{blocking}, $lmap), advisory => _draft_lines($res->{advisory}, $lmap) };
+            $map = { map { ($_ => $fmap->{ $lmap->{$_} } // $lmap->{$_}) } keys %$lmap };
             $keep = $res->{blocking};
         }
+        # The moved lines' numbers name the fixed text's lines (0.1.5): printed as the draft's.
+        for my $m (@$moved) {
+            $m->{line} = $fmap->{ $m->{line} } // $m->{line};
+            $m->{$_} = [ map { $fmap->{$_} // $_ } @{ $m->{$_} } ] for grep { ref $m->{$_} eq 'ARRAY' } qw(refs see see_both);
+        }
     }
+    $res = { %$res, advisory => _draft_lines($res->{advisory}, $map) };
+    $keep = _draft_lines($keep, $map);
+    my @fixed = @{ $fx->{fixes} };
+    $rules{ $_->{rule} } = 1 for @fixed;
     $row->{bytes} = skills::util::blen($body);
     $row->{size_band} = _band($row->{bytes});
     my @b = @$keep;
@@ -208,6 +233,15 @@ sub run {
         my $t = $texts->{ $_->{rule} } or die "lint id $_->{rule} has no lint_texts entry in the spec\n";
         skills::cli::say("  why: $t->{why} · fix: $moved_fix");
     }
+    # 0.1.5 (E-3): one line per fix publish made, the same way (no Edit, no second round).
+    my $fixed_fix = @b ? 'none needed: publish makes this change once the LINT lines are fixed'
+                       : 'none needed: the handoff is written with this change';
+    for (@fixed) {
+        skills::cli::say("ADVISORY $_->{rule} line $_->{line}: $_->{text}");
+        next if !%$texts || $told{"fixed $_->{rule}"}++;
+        my $t = $texts->{ $_->{rule} } or die "lint id $_->{rule} has no lint_texts entry in the spec\n";
+        skills::cli::say("  why: $t->{why} · fix: $fixed_fix");
+    }
     for (@a) { skills::cli::say("ADVISORY $_->[0] $_->[1]"); $why->($_->[0]) }
     if (@b) {
         $row->{result} = 'REFUSED:lint';
@@ -217,6 +251,7 @@ sub run {
     }
     # Only a written file holds moved lines (a refused draft is kept as written).
     $row->{approvals_moved} = scalar @$moved if @$moved;
+    $row->{lint_fixed} = scalar @fixed if @fixed;
 
     # ---- file the stage into evidence/<stem>/
     my $now = skills::util::now();
