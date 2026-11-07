@@ -476,15 +476,22 @@ sub lint {
 
 # The most ids fix() writes for one id range; a longer range is left as written (and blocks).
 our $FIX_RANGE_MAX = 50;
+# A fenced code block's fence line (as skills::approvals::move_lines reads one).
+our $FENCE_RE = qr/\A[ \t]*(?:```|~~~)/;
 
 # fix($body, $blocking) (0.1.5, E-3: the usage review counted 14 drafts refused for id ranges,
 # each round a Write and a publish): the blocking entries of lint() that are mechanical, written
 # into a copy of the body.
 # - id-range: on a flagged line every range is written as its ids (`U-1..U-3` as `U-1, U-2, U-3`;
-#   a zero-padded start keeps its width), when each range there is one _range_ids reads and it
-#   covers at most $FIX_RANGE_MAX ids; otherwise the line stays as written.
+#   a zero-padded start keeps its width), when each range there is one _range_ids reads, it
+#   covers at most $FIX_RANGE_MAX ids and none is in quotes, a code span, a fenced code block or
+#   a file name or path (_list_ranges; review: a rewritten quote lost a real approval, and a
+#   rewritten command changed its arguments); otherwise the line stays as written (and blocks).
+#   Step 1 and Next steps item 1 that matched still match: when one of them is rewritten the
+#   other is rewritten the same way, or, when that cannot be done, neither is.
 # - step1-mismatch: when Next steps has no item 1 (no line starting `1.` or `1)`), Step 1's text
-#   goes in as item 1, before the section's first line of content; an item 1 that differs stays.
+#   goes in as item 1, before the section's first list line (after its text when it has none);
+#   an item 1 that differs stays. The added line counts as carried when Step 1 does.
 # Returns {body, fixes => [{rule, line, text}…] (line: the body line it changed, Step 1's for an
 # added item), map => {fixed body line => body line; the added item reads as the Next steps
 # heading's line, so a finding on it is told apart from one on Step 1},
@@ -492,54 +499,97 @@ our $FIX_RANGE_MAX = 50;
 sub fix {
     my ($body, $blocking) = @_;
     my @lines = split /\n/, $body // '', -1;
-    my (%at, @fixes, %was);
+    my (%at, @fixes, %was, %fx);
     for my $e (@{ $blocking || [] }) {
         push @{ $at{ $e->[0] } }, $1 if ($e->[1] // '') =~ /\Aline ([0-9]+)\z/;
     }
     my $idr = $at{'id-range'} ? skills::spec::id_range_re() : undef;
+    my %fenced;
+    my $infence = 0;
+    for my $i (0 .. $#lines) {
+        if ($lines[$i] =~ $FENCE_RE) { $fenced{$i} = 1; $infence = !$infence } elsif ($infence) { $fenced{$i} = 1 }
+    }
+    my $list = sub { my ($i) = @_; return $idr && defined $lines[$i] && !$fenced{$i} ? _list_ranges($lines[$i], $idr) : () };
     my %seen;
     for my $n (grep { $idr && !$seen{$_}++ } @{ $at{'id-range'} || [] }) {
-        my $l = $lines[ $n - 1 ];
-        next unless defined $l;
-        my (@r, $bad);
-        (my $new = $l) =~ s{($idr)}{
-            my $r = $1;
-            my $x = _range_list($r);
-            if (defined $x) { push @r, "$r as $x" } else { $bad = 1 }
-            $x // $r;
-        }ge;
-        next if $bad || !@r || $new eq $l;
-        $lines[ $n - 1 ] = $new;
-        $was{$new} = $l;
-        push @fixes, { rule => 'id-range', line => $n, text => 'publish lists each id: ' . join('; ', @r) };
+        my ($new, $r) = $list->($n - 1) or next;
+        $fx{ $n - 1 } = [ $new, $r ];
+    }
+    my $mains = skills::spec::sections_main();
+    my $sec = sub {
+        my ($lit) = @_;
+        my ($h) = grep { $lines[$_] =~ /\A##\s/ && $lines[$_] !~ /\A###/ && index($lines[$_], $lit) == 0 } 0 .. $#lines;
+        return undef unless defined $h;
+        my $e = $h + 1;
+        $e++ while $e <= $#lines && !($lines[$e] =~ /\A##\s/ && $lines[$e] !~ /\A###/);
+        return { h => $h, body => [ $h + 1 .. $e - 1 ] };
+    };
+    my ($rh, $ns) = @$mains ? ($sec->($mains->[0]{literal}), $sec->($mains->[-1]{literal})) : ();
+    my ($si) = $rh ? grep { $lines[$_] =~ /\A\s*Step 1:\s*\S/ } @{ $rh->{body} } : ();
+    # Step 1 and item 1 as lint() reads them: a pair that matched keeps matching (review: only
+    # item 1 led its line, so only it was flagged and rewritten, and step1-mismatch blocked).
+    my ($ni) = $ns ? grep { $lines[$_] =~ /\A\s*1\.\s+/ } @{ $ns->{body} } : ();
+    if (defined $si && defined $ni && ($fx{$si} || $fx{$ni})) {
+        my $pair = sub {
+            my ($s, $n) = @_;
+            my ($s1) = $s =~ /\A\s*Step 1:\s*(.*)\z/;
+            my ($n1) = $n =~ /\A\s*1\.\s+(.*)\z/;
+            return _step1_same($s1, $n1);
+        };
+        if ($pair->($lines[$si], $lines[$ni])) {
+            for my $i (grep { !$fx{$_} } $si, $ni) { my ($new, $r) = $list->($i); $fx{$i} = [ $new, $r ] if defined $new }
+            my ($s, $n) = map { $fx{$_} ? $fx{$_}[0] : $lines[$_] } $si, $ni;
+            delete @fx{ $si, $ni } unless $pair->($s, $n);
+        }
+    }
+    for my $i (sort { $a <=> $b } keys %fx) {
+        my ($new, $r) = @{ $fx{$i} };
+        $was{$new} = $lines[$i];
+        $lines[$i] = $new;
+        push @fixes, { rule => 'id-range', line => $i + 1, text => 'publish lists each id: ' . join('; ', @$r) };
     }
     my @org = map { $_ + 1 } 0 .. $#lines;
-    if ($at{'step1-mismatch'}) {
-        my $mains = skills::spec::sections_main();
-        my $sec = sub {
-            my ($lit) = @_;
-            my ($h) = grep { $lines[$_] =~ /\A##\s/ && $lines[$_] !~ /\A###/ && index($lines[$_], $lit) == 0 } 0 .. $#lines;
-            return undef unless defined $h;
-            my $e = $h + 1;
-            $e++ while $e <= $#lines && !($lines[$e] =~ /\A##\s/ && $lines[$e] !~ /\A###/);
-            return { h => $h, body => [ $h + 1 .. $e - 1 ] };
-        };
-        my ($rh, $ns) = @$mains ? ($sec->($mains->[0]{literal}), $sec->($mains->[-1]{literal})) : ();
-        my ($si) = $rh ? grep { $lines[$_] =~ /\A\s*Step 1:\s*\S/ } @{ $rh->{body} } : ();
-        if (defined $si && $ns && !grep { $lines[$_] =~ /\A\s*1[.)](?:\s|\z)/ } @{ $ns->{body} }) {
-            my ($s1) = $lines[$si] =~ /\A\s*Step 1:\s*(.*?)\s*\z/;
-            if ($s1 =~ tr/`//dr =~ /\S/) {
-                my ($first) = grep { $lines[$_] =~ /\S/ } @{ $ns->{body} };
-                my $i = $first // $ns->{h} + 1;
-                splice @lines, $i, 0, "1. $s1";
-                splice @org, $i, 0, $ns->{h} + 1;
-                push @fixes, { rule => 'step1-mismatch', line => $si + 1, text => 'Next steps has no item 1; publish adds Step 1 there as item 1' };
-            }
+    if ($at{'step1-mismatch'} && defined $si && $ns && !grep { $lines[$_] =~ /\A\s*1[.)]/ } @{ $ns->{body} }) {
+        my ($s1) = $lines[$si] =~ /\A\s*Step 1:\s*(.*?)\s*\z/;
+        if ($s1 =~ tr/`//dr =~ /\S/) {
+            # Before the first list line, so a lead-in (`In this order:`) stays above the list.
+            my ($li) = grep { $lines[$_] =~ /\A\s*(?:[-*+]|[0-9]+[.)])\s/ } @{ $ns->{body} };
+            my @c = grep { $lines[$_] =~ /\S/ } @{ $ns->{body} };
+            my $i = $li // (@c ? $c[-1] + 1 : $ns->{h} + 1);
+            $was{"1. $s1"} = $was{ $lines[$si] } // $lines[$si];
+            splice @lines, $i, 0, "1. $s1";
+            splice @org, $i, 0, $ns->{h} + 1;
+            push @fixes, { rule => 'step1-mismatch', line => $si + 1, text => 'Next steps has no item 1; publish adds Step 1 there as item 1' };
         }
     }
     return { body => $body, fixes => [], map => {}, was => {} } unless @fixes;
     return { body => join("\n", @lines), fixes => [ sort { $a->{line} <=> $b->{line} } @fixes ],
              map => { map { ($_ + 1 => $org[$_]) } 0 .. $#org }, was => \%was };
+}
+
+# _list_ranges($line, $id_range_re) -> ($new line, ["<range> as <ids>"…]): every range on the
+# line written as its ids, or () when a range there is not listable (_range_list), sits in
+# double quotes or a code span (the user's words, a command: the segments move_lines leaves
+# alone) or is part of a file name or path (`/` or `-` before it; `/` or `.` and a word
+# character after it).
+sub _list_ranges {
+    my ($l, $idr) = @_;
+    my (@r, $bad);
+    my @seg = split /("[^"]*"|\x{201c}[^\x{201d}]*\x{201d}|`[^`]*`)/, $l, -1;
+    for my $k (0 .. $#seg) {
+        if ($k % 2) { $bad = 1 if $seg[$k] =~ $idr; next }
+        my $orig = $seg[$k];
+        $seg[$k] =~ s{($idr)}{
+            my ($r, $x0, $x1) = ($1, $-[0], $+[0]);
+            my $x = _range_list($r);
+            $bad = 1 if !defined $x || substr($orig, 0, $x0) =~ m{[/-]\z} || substr($orig, $x1) =~ m{\A(?:/|\.\w)};
+            push @r, "$r as $x" if defined $x;
+            $x // $r;
+        }ge;
+    }
+    return () if $bad || !@r;
+    my $new = join '', @seg;
+    return $new eq $l ? () : ($new, \@r);
 }
 
 # The ids an id range covers as fix() writes them (`D-1, D-2, D-3`; a zero-padded start keeps its
@@ -647,13 +697,15 @@ sub _step1_same {
 #   value (`prompt="<the brief above>"`), a pointer or part of a path (`<scratch>/out.md`,
 #   `$TMP/<name>.md`);
 # - in `spawns:`, a counter `<n>` that ends an agent's label after `-` (`fix-7c-<n>`: one agent
-#   per round, numbered as it starts; 0.1.5, E-3), not followed by `/`, `.` or a word character.
+#   per round, numbered as it starts; 0.1.5, E-3), not followed by `/`, `.` or a word character;
+#   the label is one word of letters, digits, `_` and `-`, so the end of a path (`$TMP/run-<n>`)
+#   still counts.
 # A pointer stands for text stated elsewhere: a `<…>` with a word such as above, same or that
 # (`<the brief above>`, `<same path>`, `<that copy>`).
 sub _placeholder {
     my ($l) = @_;
     my $ph = qr/<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/;
-    $l =~ s{(?<=[A-Za-z0-9_]-)<n>(?![\w/.<])}{}g if $l =~ /\A\s*spawns:/;
+    $l =~ s{(?<![^\s(\[,=:'"`])([A-Za-z0-9_][A-Za-z0-9_-]*-)<n>(?![\w/.<])}{$1}g if $l =~ /\A\s*spawns:/;
     my $pointer = sub {
         my ($t) = @_;
         while ($t =~ /($ph)/g) {
