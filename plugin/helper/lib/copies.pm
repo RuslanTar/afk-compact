@@ -230,8 +230,12 @@ sub _test_corrupt {
 #   a job only when a job trigger leads it (`On the timer notification, reply …`, `when CI
 #   finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person, pronoun or person's
 #   say stands anywhere in it. A job hold is not a step that can run: the copy is taken with no
-#   result in, so it stays blocked (only the session's result turn reads it working).
+#   result in, so it stays blocked (only the session's result turn reads it working). A wait mark
+#   (`· waits: job` or `· waits: you`, lane.ts `WAITS_SRC`) leads the wording: either holds the
+#   step, and Next steps item 1's mark, while it is to do, holds Step 1 under `Gate: none`.
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
+my $WAITS_RE = qr/·\s*waits:\s*(job|you)\b/i;
+my $GATED_RE = qr/\b(?:gated|ask user)\b/i;
 # The hold regexes below read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
 # non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
@@ -269,10 +273,22 @@ my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029
 # job trigger leads it and no user-wins word stands in it; else free, as on 0.1.1b.
 sub _hold_of {
     my ($text) = @_;
+    my $w = _waits_of($text);
+    return $w if defined $w;
     return 'user' if $text =~ $HELD_RE;
     $text =~ s/$JS_SPACE/ /g;
     (my $u = $text) =~ s/$OWN_REPLY_RE/$1$2/g;
     return $text =~ $JOB_RE && $u !~ $USER_WINS_RE ? 'job' : undef;
+}
+
+# The hold a step's wait marks give (lane.ts `waitsOf`): 'user' when one says `you`, 'job' when
+# they say `job` and the step is not gated, else undef.
+sub _waits_of {
+    my ($item) = @_;
+    my @marks = map { lc } $item =~ /$WAITS_RE/g;
+    return undef unless @marks;
+    my $you = grep { $_ eq 'you' } @marks;
+    return $you || $item =~ $GATED_RE ? 'user' : 'job';
 }
 
 sub _trim { my ($s) = @_; $s =~ s/\A\s+|\s+\z//g; return $s }
@@ -300,7 +316,8 @@ sub _section {
 sub _last_mark {
     my ($item) = @_;
     my $mark;
-    $mark = $1 while $item =~ /$MARK_RE/g;
+    (my $t = $item) =~ s/$WAITS_RE//g;
+    $mark = $1 while $t =~ /$MARK_RE/g;
     return $mark;
 }
 
@@ -341,10 +358,12 @@ sub copy_status {
     my ($g) = $where =~ /^\s*Gate:[ \t]*([^·\n]*)/m;
     $g = defined $g ? _trim($g) : '';
     (my $cmd = $step) =~ s/\s+—\s+for\s+".*\z//;
-    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && !defined _hold_of($cmd)) ? 'none' : 'set';
     my ($listed, @next) = _section($t, 'next steps');
+    my @list = _items(@next);
+    my $mark1 = @list && (_last_mark($list[0]) // '') eq 'todo' ? _waits_of($list[0]) : undef;
+    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && !defined($mark1 // _hold_of($cmd))) ? 'none' : 'set';
     my ($todo, $unmarked, $free) = (0, 0, 0);
-    for my $item (_items(@next)) {
+    for my $item (@list) {
         my $m = _last_mark($item);
         if (!defined $m) { $unmarked++ }
         elsif ($m eq 'todo') { $todo++; $free++ unless defined _hold_of($item) }

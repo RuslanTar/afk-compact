@@ -1101,8 +1101,8 @@ const TRIGGERS = [
 /**
  * The known limit of 0.1.1: a wait on a job (`Wait for the timer notification, then reply`, `Wait
  * for CI, then merge`) is held on the user, as release-0.1.1b reads every wait (its `HELD_RE`);
- * a job's result does not unblock it. Planned for 0.1.2: an explicit `waits: job` / `waits: you`
- * mark in the summary's steps, read by code instead of the wording.
+ * a job's result does not unblock it, unless the step carries a `waits: job` mark (0.1.5, E-4:
+ * `MARKED_JOB` below).
  */
 const KNOWN_LIMITS = [
   // From the earlier TRIGGERS list.
@@ -1624,6 +1624,40 @@ const NO_REGRESSION_FREE = [
 /** Every wording above. */
 const NO_REGRESSION = [...TRIGGERS, ...KNOWN_LIMITS, ...NO_REGRESSION_USER, ...NO_REGRESSION_JOB, ...NO_REGRESSION_FREE]
 /**
+ * 0.1.5 (E-4): steps with a wait mark, which leads the wording: `waits: job` is held on the job
+ * (a wait on a job in so many words, the known limit above, and free-looking work such as AD1's
+ * own acknowledge step too), `waits: you` on the user (a job trigger and AD2's gate step too).
+ * Helper case AD-11 reads these two lists as well.
+ */
+const MARKED_JOB = [
+  'Wait for the timer notification, then reply with one line · waits: job',
+  'Wait for CI, then merge · waits: job',
+  'waiting on B-2, then read its log · waits: job',
+  "Awaiting the agent's output before writing the summary · waits: job",
+  'Acknowledge the timer result in one line · waits: job',
+  'Read the TB log and report its exit code · waits: job',
+  'Summarise the subagent findings · waits: job',
+  'On the timer notification, reply with one line acknowledging it · waits: job',
+  'Wait for the build to finish — done when tagged · waits: job',
+  'Merge the findings into NOTES.md · Waits: Job',
+  'Tag the release·waits:job',
+  'Wait for B-3, then commit · waits: job (the B-3 shell)',
+]
+const MARKED_USER = [
+  'On the timer notification, reply with one line acknowledging it · waits: you',
+  'When CI finishes, report the result · waits: you',
+  'After the run, commit · waits: you',
+  'Run the docs build · waits: you',
+  'Push the tag v1.4 · waits: you',
+  "Ship v1.4 on the user's explicit yes · waits: you",
+  'Wait for CI, then merge · waits: you',
+  'Wait for CI, then merge · waits: job · waits: you',
+  'after CI finishes, deploy · waits: job; gated: ask user: deploy',
+  'When the build finishes, push · waits: job — ask user: push (! git push)',
+  'Rebase onto main · WAITS: YOU',
+  'Publish the notes · waits: you (the wording of the release note)',
+]
+/**
  * release-0.1.1b's `HELD_RE`, kept here as a fixture: what that release read held (on the user);
  * any other step it read free.
  */
@@ -1739,6 +1773,55 @@ test('rule (a), the known limit of 0.1.1: a wait on a job reads held on the user
   const wait = laneFacts('## Resume here\n' + onJob('Wait for the timer notification, then reply with one line'))
   expect([on.onJob, on.onUser, wait.onJob, wait.onUser]).toEqual([1, 1, 0, 2])
   expect([laneOf(on, { ...M, result: true }).lane, laneOf(wait, { ...M, result: true }).lane]).toEqual(['working', 'hard-blocked'])
+})
+
+test('E-4 wait marks: `waits: job` holds a step on the job and `waits: you` on the user, whatever its wording; an unmarked step reads as before', () => {
+  for (const step of MARKED_JOB) {
+    const f = laneFacts('## Resume here\n' + onJob(step))
+    expect([step, f.todo, f.free, f.onJob, f.onUser]).toEqual([step, 2, 0, 1, 1])
+    expect([step, laneOf(f, { ...M, running: 1 }).lane, laneOf(f, M).lane]).toEqual([step, 'soft-blocked', 'hard-blocked'])
+    expect([step, laneOf(f, { ...M, result: true }).byResult]).toEqual([step, true])
+  }
+  for (const step of MARKED_USER) {
+    const f = laneFacts('## Resume here\n' + onJob(step))
+    expect([step, f.todo, f.free, f.onJob, f.onUser]).toEqual([step, 2, 0, 0, 2])
+    expect([step, laneOf(f, { ...M, running: 1 }).lane, laneOf(f, { ...M, result: true }).lane]).toEqual([step, 'soft-blocked', 'hard-blocked'])
+  }
+  // Every earlier wording: `waits: you` is the user's; `waits: job` the job's, unless the step is gated.
+  for (const step of NO_REGRESSION) {
+    expect([step, holdVia(`${step} · waits: you`)]).toEqual([step, 'user'])
+    expect([step, holdVia(`${step} · waits: job`)]).toEqual([step, /\b(?:gated|ask user)\b/i.test(step) ? 'user' : 'job'])
+  }
+  // Unmarked, the same steps read by their words, as on 0.1.4.
+  expect(['Acknowledge the timer result in one line', 'Wait for CI, then merge', 'When CI finishes, report the result'].map(holdVia)).toEqual(['free', 'user', 'job'])
+  // Not a mark: no `·`, another word, a longer word.
+  expect(['Run the docs build, waits: job', 'Run the docs build · waits: CI', 'Run the docs build · waits: jobs', 'Run the docs build · waits you'].map(holdVia)).toEqual(['free', 'free', 'free', 'free'])
+})
+
+test('E-4 wait marks: read before or after the todo mark, in the one-line form too; a done step with a mark counts done', () => {
+  const after = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps\n1. Read the TB log · todo · waits: job\n2. Push · todo · waits: you; gated: ask user: push\n')
+  expect([after.todo, after.unmarked, after.free, after.onJob, after.onUser]).toEqual([2, 0, 0, 1, 1])
+  const one = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read the TB log · waits: job · todo 2. Push · todo · waits: you 3. Write notes · todo\n')
+  expect([one.todo, one.free, one.onJob, one.onUser]).toEqual([3, 1, 1, 1])
+  const done = laneFacts('## Resume here\nStatus: finished\nStep 1: none\nGate: none\n## Next steps\n1. Read the TB log · waits: job · done\n2. Push · done · waits: you\n')
+  expect([done.done, done.todo, done.unmarked]).toEqual([2, 0, 0])
+  expect(laneOf(done, M).lane).toBe('finished')
+  // A mark alone is not a step mark.
+  expect(laneFacts('## Next steps\n1. Read the TB log · waits: job\n').unmarked).toBe(1)
+})
+
+test('E-4 wait marks: Next steps item 1 to do holds Step 1 under `Gate: none`; a Gate line naming a blocker stays one', () => {
+  const s1 = (gate: string, item: string): LaneFacts =>
+    laneFacts(`## Resume here\nStatus: soft-blocked\nStep 1: \`make docs\` — for "ship"\nGate: ${gate} · Don't: x\n## Next steps\n1. ${item}\n`)
+  // Unmarked: Step 1's words read free, so a Step 1 with no gate keeps the lane working.
+  expect([s1('none', '`make docs` · todo').gate, laneOf(s1('none', '`make docs` · todo'), M).lane]).toEqual(['none', 'working'])
+  const you = s1('none', '`make docs` · waits: you · todo')
+  expect([you.gate, you.onUser, laneOf(you, { ...M, running: 1 }).lane, laneOf(you, { ...M, result: true }).lane]).toEqual(['set', 1, 'soft-blocked', 'hard-blocked'])
+  const job = s1('none', '`make docs` · waits: job · todo')
+  expect([job.gate, job.onJob, laneOf(job, { ...M, running: 1 }).lane, laneOf(job, { ...M, result: true }).lane]).toEqual(['job', 1, 'soft-blocked', 'working'])
+  expect(s1('protected-branch push', '`make docs` · waits: job · todo').gate).toBe('set')
+  // Item 1 done: its mark is not Step 1's.
+  expect(s1('none', '`make docs` · waits: you · done').gate).toBe('none')
 })
 
 /** The AD2 shape: an idle compaction while the timer shell b7 runs; the summary's only free-looking step waits on its result. */
