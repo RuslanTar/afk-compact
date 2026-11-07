@@ -100,9 +100,10 @@ const MARK_SRC = '·\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
  * A wait mark (0.1.5, E-4): `· waits: job` (the step needs a running job's result first) or
  * `· waits: you` (it needs the user), which the summary's model writes on a todo step that waits,
  * before its `· todo` (read after it too). Code reads the hold from the mark, not the wording. A
- * dash may stand for the `·` (`— waits: you · todo`: 8 of 20 probe summaries wrote one so).
+ * dash may stand for the `·` (`— waits: you · todo`: 8 of 20 probe summaries wrote one so). The
+ * form's own placeholder copied as it stands (`waits: job|you`) is no mark: it names neither.
  */
-const WAITS_SRC = '[·—–]\\s*waits:\\s*(job|you)\\b'
+const WAITS_SRC = '[·—–]\\s*waits:\\s*(job|you)\\b(?!\\s*[|/])'
 /** An explicit gate in the summary form's own words (`gated …: ask user: …`): a `waits: job` mark does not lift it. */
 const GATED_RE = /\b(?:gated|ask user)\b/i
 /**
@@ -201,15 +202,17 @@ const OWN_REPLY_RE = /(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answ
 /**
  * What holds a step (Step 1's text, or a Next steps item): the user, a running job's result (owner
  * 2026-10-28 digest rules (a): it runs once the result is in), or nothing (it can run). No step
- * reads more held on a job, or freer, than on release-0.1.1b:
+ * with no wait mark reads more held on a job, or freer, than on release-0.1.1b:
  * - a step release-0.1.1b reads held (`HELD_RE`, on the step as it is) is held on the user, as
  *   there; so is a wait on a job (`Wait for the timer notification, then reply`: a known limit of
  *   0.1.1, which reads no job in a wait's words);
  * - a step it reads free is held on a job only when a job trigger leads it (`JOB_RE`) and no
  *   user-wins word stands anywhere in it (`USER_WINS_RE`); else it is free, as there.
  * A wait mark (`waitsOf`) leads the wording: `waits: you` is held on the user, `waits: job` on
- * the job (`Wait for CI, then merge · waits: job` too, the known limit of the wording), unless
- * the step is gated; the wording is the fallback for a step with no mark (an older summary, a
+ * the job (`Wait for CI, then merge · waits: job` too, the known limit of the wording, and a step
+ * whose words wait on a person, `Merge, needs owner approval · waits: job`: the model's mark
+ * leads, owner D-61), unless the step is gated; so a mark never makes a step free. The wording is
+ * the fallback for a step with no mark (an older summary, a
  * step the model left unmarked). The job reading takes every space (a no-break space too) as a
  * plain one, as copies.pm `_hold_of` does.
  */
@@ -250,21 +253,27 @@ function section(text: string, heading: string): string[] | undefined {
   return out
 }
 
-/**
- * The item's last step mark, or undefined; a wait mark after it (`· todo · waits: job`) does not
- * hide it. An item with a wait mark and no step mark code can read (`· waits: you · todo (gated
- * by U-2)`: 3 of 24 probe summaries) is to do: only a step to do is given one.
- */
-function lastMark(item: string): 'todo' | 'done' | undefined {
+/** The item's last step mark, or undefined: a wait mark after it (`· todo · waits: job`) does not hide it. */
+function stepMark(item: string): 'todo' | 'done' | undefined {
   let mark: 'todo' | 'done' | undefined
   for (const m of item.replace(new RegExp(WAITS_SRC, 'gi'), '').matchAll(new RegExp(MARK_SRC, 'gm'))) mark = m[1] === 'done' ? 'done' : 'todo'
-  return mark ?? (new RegExp(WAITS_SRC, 'i').test(item) ? 'todo' : undefined)
+  return mark
+}
+
+/**
+ * The item's step mark (`stepMark`); an item with a wait mark and no step mark code can read
+ * (`· waits: you · todo (gated by U-2)`: 3 of 24 probe summaries) is to do: only a step to do is
+ * given one.
+ */
+function lastMark(item: string): 'todo' | 'done' | undefined {
+  return stepMark(item) ?? (new RegExp(WAITS_SRC, 'i').test(item) ? 'todo' : undefined)
 }
 
 /**
  * The items of a Next steps section: one per line that starts with `N. `; a line holding several
  * (the one-line form, `1. a · done 2. b · todo`) is split before the next number in sequence, and
- * only once the item before it carries its mark, so `bump to 2. then ship` stays one item.
+ * only once the item before it carries its step mark or ends on a wait mark, so `bump to 2. then
+ * ship` stays one item (`· waits: job, bump to 2. then ship` too).
  * Continuation lines (`if … → …`, `- pending answer: …`) belong to no item.
  */
 function items(lines: string[]): string[] {
@@ -278,7 +287,7 @@ function items(lines: string[]): string[] {
     for (const m of line.matchAll(/\s(\d+)\.\s/g)) {
       if (Number(m[1]) !== next || m.index === undefined) continue
       const cur = line.slice(start, m.index)
-      if (lastMark(cur) === undefined) continue
+      if (stepMark(cur) === undefined && !new RegExp(WAITS_SRC + '\\s*$', 'i').test(cur)) continue
       out.push(cur.trim())
       start = m.index + 1
       next++
@@ -303,10 +312,13 @@ export function laneFacts(text: string): LaneFacts {
   // A Step 1 that itself asks the user or waits is behind a gate, whatever the Gate line says (its
   // `— for "<the user's request>"` tail is the user's words, not the step's). Step 1 is Next steps
   // item 1, so that item's wait mark, while it is to do, is Step 1's; a Gate line that names a
-  // blocker stays one, whatever the mark.
+  // blocker stays one, whatever the mark, and so does a Step 1 that is gated (`GATED_RE`), as in
+  // `waitsOf`: then item 1's `waits: job` is the user's too, so its result does not unblock it.
   const first = list[0]
-  const mark1 = first !== undefined && lastMark(first) === 'todo' ? waitsOf(first) : undefined
-  const held = /^`?none\b/i.test(g ?? '') ? mark1 ?? holdOf(step.replace(FOR_TAIL, '')) : 'user'
+  const own = step.replace(FOR_TAIL, '')
+  const w1 = first !== undefined && lastMark(first) === 'todo' ? waitsOf(first) : undefined
+  const mark1 = w1 === 'job' && GATED_RE.test(own) ? 'user' : w1
+  const held = /^`?none\b/i.test(g ?? '') ? mark1 ?? holdOf(own) : 'user'
   const gate = g === undefined || g === '' ? 'missing' : held === undefined ? 'none' : held === 'job' ? 'job' : 'set'
   let todo = 0
   let done = 0
@@ -314,12 +326,12 @@ export function laneFacts(text: string): LaneFacts {
   let free = 0
   let onJob = 0
   let onUser = 0
-  for (const item of list) {
+  for (const [i, item] of list.entries()) {
     const m = lastMark(item)
     if (m === 'done') done++
     else if (m === 'todo') {
       todo++
-      const h = holdOf(item)
+      const h = i === 0 && mark1 !== w1 ? mark1 : holdOf(item)
       if (h === 'job') onJob++
       else if (h === 'user') onUser++
       else free++

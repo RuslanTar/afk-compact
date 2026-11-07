@@ -1662,6 +1662,23 @@ const MARKED_USER = [
   'ask user: push tag v1.4.0 and branch release/1.4 after they review notes — waits: job',
 ]
 /**
+ * Not a wait mark, so the step reads by its words (here free): no `·` or dash, another word, a
+ * longer word, no colon, or the form's placeholder copied as it stands (`waits: job|you`).
+ * Helper case AD-11 reads this list too.
+ */
+const NOT_MARKED = [
+  'Run the docs build, waits: job',
+  'Run the docs build · waits: CI',
+  'Run the docs build · waits: jobs',
+  'Run the docs build · waits you',
+  'Run the docs build · wait: job',
+  'Run the docs build · waits: youth',
+  'Run the docs build · waits — job',
+  'Run the docs build · waits: job|you',
+  'Run the docs build · waits: you | job',
+  'Run the docs build · waits: job/you',
+]
+/**
  * release-0.1.1b's `HELD_RE`, kept here as a fixture: what that release read held (on the user);
  * any other step it read free.
  */
@@ -1798,8 +1815,9 @@ test('E-4 wait marks: `waits: job` holds a step on the job and `waits: you` on t
   }
   // Unmarked, the same steps read by their words, as on 0.1.4.
   expect(['Acknowledge the timer result in one line', 'Wait for CI, then merge', 'When CI finishes, report the result'].map(holdVia)).toEqual(['free', 'user', 'job'])
-  // Not a mark: no `·`, another word, a longer word.
-  expect(['Run the docs build, waits: job', 'Run the docs build · waits: CI', 'Run the docs build · waits: jobs', 'Run the docs build · waits you'].map(holdVia)).toEqual(['free', 'free', 'free', 'free'])
+  for (const step of NOT_MARKED) expect([step, holdVia(step)]).toEqual([step, 'free'])
+  // The placeholder leaves the words to read: a wait in so many words is still the user's.
+  expect(holdVia('Wait for CI, then merge · waits: job|you')).toBe('user')
 })
 
 test('E-4 wait marks: read before or after the todo mark, in the one-line form too; a done step with a mark counts done', () => {
@@ -1813,6 +1831,12 @@ test('E-4 wait marks: read before or after the todo mark, in the one-line form t
   // Only a step to do gets a wait mark: with no step mark code can read (a note after `· todo`), it is to do.
   const note = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps\n1. Read the TB log · waits: job\n2. Ask user: push tag v1.4.0 — waits: you · todo (gated by U-2; no approval yet)\n3. Write notes · todo (after lunch)\n')
   expect([note.todo, note.unmarked, note.free, note.onJob, note.onUser]).toEqual([2, 1, 0, 1, 1])
+  // A one-line section splits before the next number only once the item carries its step mark or
+  // ends on a wait mark: a wait mark inside the item's words (`· waits: job, bump to 2. …`) does not split it.
+  const split = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps: 1. After CI · waits: job, bump to 2. then push · done 2. Write notes · todo\n')
+  expect([split.done, split.todo, split.free, split.onJob]).toEqual([1, 1, 1, 0])
+  const ends = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read the TB log · waits: job 2. Write notes · todo\n')
+  expect([ends.todo, ends.unmarked, ends.free, ends.onJob]).toEqual([2, 0, 1, 1])
 })
 
 test('E-4 wait marks: Next steps item 1 to do holds Step 1 under `Gate: none`; a Gate line naming a blocker stays one', () => {
@@ -1827,6 +1851,13 @@ test('E-4 wait marks: Next steps item 1 to do holds Step 1 under `Gate: none`; a
   expect(s1('protected-branch push', '`make docs` · waits: job · todo').gate).toBe('set')
   // Item 1 done: its mark is not Step 1's.
   expect(s1('none', '`make docs` · waits: you · done').gate).toBe('none')
+  // A `waits: job` mark on item 1 never lifts a gated Step 1 (`ask user: …`): both stay the user's.
+  const gated = laneFacts('## Resume here\nStatus: hard-blocked\nStep 1: ask user: push (! git push)\nGate: none · Don\'t: x\n## Next steps\n1. Push the branch · waits: job · todo\n')
+  expect([gated.gate, gated.onJob, gated.onUser, laneOf(gated, M).lane, laneOf(gated, { ...M, result: true }).lane]).toEqual(['set', 0, 1, 'hard-blocked', 'hard-blocked'])
+  expect(laneOf(gated, { ...M, result: true }).byResult).toBeUndefined()
+  // Step 1 not gated: item 1's `waits: job` holds both on the job, and the result unblocks them.
+  const free1 = laneFacts('## Resume here\nStatus: hard-blocked\nStep 1: push (! git push)\nGate: none · Don\'t: x\n## Next steps\n1. Push the branch · waits: job · todo\n')
+  expect([free1.gate, free1.onJob, laneOf(free1, { ...M, result: true }).lane]).toEqual(['job', 1, 'working'])
 })
 
 /** The AD2 shape: an idle compaction while the timer shell b7 runs; the summary's only free-looking step waits on its result. */

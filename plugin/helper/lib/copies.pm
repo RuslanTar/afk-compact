@@ -223,22 +223,25 @@ sub _test_corrupt {
 #   Step 1 none or proposed; else in-progress;
 # - a blocked word counts as in-progress while a step can run (owner xxxxxxxx-08): one marked
 #   todo that names no gate, ask, pending answer, wait or needed approval, or Step 1 set with
-#   `Gate: none` (Step 1 itself naming none of them). No step reads more held on a job, or
-#   freer, than on release-0.1.1b (owner 2026-10-28 digest rules (a), lane.ts `holdOf`): a step
-#   0.1.1b reads held ($HELD_RE, unchanged) is held on the user, a wait on a job too (`Wait for
-#   the timer notification, then reply`: a known limit of 0.1.1); a step it reads free is held on
-#   a job only when a job trigger leads it (`On the timer notification, reply …`, `when CI
-#   finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person, pronoun or person's
-#   say stands anywhere in it. A job hold is not a step that can run: the copy is taken with no
-#   result in, so it stays blocked (only the session's result turn reads it working). A wait mark
-#   (`· waits: job` or `· waits: you`, a dash for the `·` too; lane.ts `WAITS_SRC`) leads the
-#   wording: either holds the step, an item with one and no step mark read is to do, and Next
-#   steps item 1's mark, while it is to do, holds Step 1 under `Gate: none`.
+#   `Gate: none` (Step 1 itself naming none of them). No step with no wait mark reads more held
+#   on a job, or freer, than on release-0.1.1b (owner 2026-10-28 digest rules (a), lane.ts
+#   `holdOf`): a step 0.1.1b reads held ($HELD_RE, unchanged) is held on the user, a wait on a
+#   job too (`Wait for the timer notification, then reply`: a known limit of 0.1.1); a step it
+#   reads free is held on a job only when a job trigger leads it (`On the timer notification,
+#   reply …`, `when CI finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person,
+#   pronoun or person's say stands anywhere in it. A job hold is not a step that can run: the
+#   copy is taken with no result in, so it stays blocked (only the session's result turn reads
+#   it working). A wait mark (`· waits: job` or `· waits: you`, a dash for the `·` too; lane.ts
+#   `WAITS_SRC`) leads the wording: either holds the step (a mark never makes one free; `waits:
+#   job` holds a step whose words wait on a person on the job, unless it is gated), an item with
+#   one and no step mark read is to do, and Next steps item 1's mark, while it is to do, holds
+#   Step 1 under `Gate: none`. The form's placeholder copied as it stands (`waits: job|you`) is
+#   no mark.
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
-my $WAITS_RE = qr/[·—–]\s*waits:\s*(job|you)\b/i;
-my $GATED_RE = qr/\b(?:gated|ask user)\b/i;
-# The hold regexes below read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
+# The hold regexes from here on read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
 # non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
+my $WAITS_RE = qr/[·—–]\s*waits:\s*(job|you)\b(?!\s*[|\/])/iaa;
+my $GATED_RE = qr/\b(?:gated|ask user)\b/iaa;
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
 # lane.ts `JOB_RE` and its parts, word for word.
 my $J_WORD = q{(?:(?!(?:of|from|by|for)\s)[\w.#/"`-]+\s+)};
@@ -314,12 +317,19 @@ sub _section {
     return (1, @out);
 }
 
-sub _last_mark {
+# The item's last step mark, a wait mark after it hidden (lane.ts `stepMark`).
+sub _step_mark {
     my ($item) = @_;
     my $mark;
     (my $t = $item) =~ s/$WAITS_RE//g;
     $mark = $1 while $t =~ /$MARK_RE/g;
-    return $mark // ($item =~ $WAITS_RE ? 'todo' : undef);
+    return $mark;
+}
+
+# The step mark; with none, an item with a wait mark is to do (lane.ts `lastMark`).
+sub _last_mark {
+    my ($item) = @_;
+    return _step_mark($item) // ($item =~ $WAITS_RE ? 'todo' : undef);
 }
 
 # The items of a Next steps section, split as lane.ts `items` splits them.
@@ -334,7 +344,7 @@ sub _items {
             my ($n, $at) = ($1, $-[0]);
             next unless $n == $next;
             my $cur = substr($line, $start, $at - $start);
-            next unless defined _last_mark($cur);
+            next unless defined _step_mark($cur) || $cur =~ /$WAITS_RE\s*\z/;
             push @out, _trim($cur);
             $start = $at + 1;
             $next++;
