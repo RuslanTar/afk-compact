@@ -282,9 +282,11 @@ sub lint {
     push @adv, [ 'ledger-carried', join(', ', @{ $ledger->{ids} }) ] if @{ $ledger->{ids} };
     # The carried lines reach the written file and its export, so they pass the private-path and
     # secret checks too (a file published before repo mode was on may hold a private path); a hit
-    # names the line `carried <id>`: writing the line, fixed, into the draft keeps it from carrying.
+    # names the line `carried <id>` by the first id it carries, as ledger-carried names it (a foreign
+    # pointer line's `<sid8>:D-1`): writing the line, fixed, into the draft keeps it from carrying.
     my @carried = map { $_->[0] } @{ $ledger->{carry} || [] };
-    my $cname = sub { my ($id) = $_[0] =~ /\b([UDX]-[0-9]+)\b/; 'carried ' . ($id // 'line') };
+    my %cid = map { ($_->[0] => ($_->[2] || [])->[0]) } @{ $ledger->{carry} || [] };
+    my $cname = sub { 'carried ' . ($cid{ $_[0] } // 'line') };
 
     # ---- private-path (D-12 Block F; repo mode only): a machine-private path left in the
     # text the export would write after its rewrite (own home already ~/). A durable copy

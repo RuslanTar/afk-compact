@@ -220,10 +220,12 @@ sub _ledger {
 
 # 0.1.5 (E-1, stable ledger): a saved copy's body without the ledger lines the helper carried into
 # it, given its `ledger_carried` value (`<n> lines (U-3, D-2, ab12cd34:D-1); sha256 <hex>`, maybe
-# JSON-quoted). The summary named none of those ids anywhere (that is why they were carried), so
-# every line that names one is a carried line, read with the reader that chose them
-# (ledger::line_ids, with the spec's fold line and carry tag): the two cannot differ. lib/ledger.pm
-# ships beside the watcher; were it missing, a line led by a carried id would still be dropped.
+# JSON-quoted). The helper carries a line into User constraints or Decisions only when the
+# summary's User constraints, Approvals and Decisions named none of its ids, so every line of those
+# two sections that names one is a carried line, read with the reader that chose them
+# (ledger::line_ids, with the spec's fold line and carry tag as characters, as the helper reads
+# them); a line of another section is the summary's own. lib/ledger.pm ships beside the watcher;
+# were it missing, a line led by a carried id would still be dropped.
 sub uncarried {
     my ($body, $note, $spec) = @_;
     return $body unless defined $body && defined $note && !ref $note;
@@ -232,16 +234,30 @@ sub uncarried {
     $c{ (defined $1 ? "$1:" : '') . "$2-" . ($3 + 0) } = 1 while $ids =~ /(?:\b([0-9a-f]{8}):)?\b([UDX])-0*([0-9]+)\b/g;
     return $body unless %c;
     my $lib = eval { require ledger; 1 };
-    my $carry = ref $spec eq 'HASH' && ref $spec->{carry} eq 'HASH' ? $spec->{carry} : {};
-    my %o = (fold_re => (ref $spec eq 'HASH' ? watch::spec::regex($spec, 'fold_line_re') : undef),
-             tag_re => watch::spec::compile($carry->{tag_re}));
+    my $sp = ref $spec eq 'HASH' ? $spec : {};
+    my $carry = ref $sp->{carry} eq 'HASH' ? $sp->{carry} : {};
+    # The JSON reader keeps strings as bytes; the lines are read as characters, so the patterns are too
+    # (the tag's ` · ` is not ASCII).
+    my $chars = sub { my $v = $_[0]; $v = $v->[0] if ref $v eq 'ARRAY'; return undef if !defined $v || ref $v;
+                      utf8::decode($v) unless utf8::is_utf8($v); return watch::spec::compile($v) };
+    my %o = (fold_re => $chars->($sp->{fold_line_re}), tag_re => $chars->($carry->{tag_re}));
+    my $sid = ref $sp->{section_ids} eq 'HASH' ? $sp->{section_ids} : {};
+    my @ledger = grep { ($sid->{$_} // '') =~ /\Amain:(?:user-constraints|decisions)\z/ } keys %$sid;
+    my $in = @ledger ? 0 : 1;
     my @keep;
     for my $line (split /\n/, $body, -1) {
-        my $c = $line;
-        utf8::decode($c);
-        my @ids = $lib ? @{ ledger::line_ids($c, \%o)->{ids} || [] }
-                : $c =~ /\A\s*(?:[-*]\s+)?([UDX])-0*([0-9]+)\b/ ? ("$1-" . ($2 + 0)) : ();
-        next if grep { $c{$_} } @ids;
+        if (@ledger && $line =~ /\A##\s/ && $line !~ /\A###/) {
+            $in = (grep { index($line, $_) == 0 } @ledger) ? 1 : 0;
+            push @keep, $line;
+            next;
+        }
+        if ($in) {
+            my $c = $line;
+            utf8::decode($c);
+            my @ids = $lib ? @{ ledger::line_ids($c, \%o)->{ids} || [] }
+                    : $c =~ /\A\s*(?:[-*]\s+)?([UDX])-0*([0-9]+)\b/ ? ("$1-" . ($2 + 0)) : ();
+            next if grep { $c{$_} } @ids;
+        }
         push @keep, $line;
     }
     return join "\n", @keep;

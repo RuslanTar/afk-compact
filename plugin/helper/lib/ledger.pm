@@ -5,8 +5,8 @@ package ledger;
 # them with the spec literals they read themselves; the watcher reads a copy's carried lines with
 # line_ids (watch::shape::uncarried). Text is characters.
 #
-#   check(base, draft, %o) -> {carry => [[line, section literal]…], ids => [id…], changed => [[id, n]…],
-#                              reused => [[id, n]…], renumbered => n}
+#   check(base, draft, %o) -> {carry => [[line, section literal, [the ids it carries]]…], ids => [id…],
+#                              changed => [[id, n]…], reused => [[id, n]…], renumbered => n}
 #     base: the own chain's previous file (a handoff, or the session's newest earlier ok copy);
 #     draft: the new body. n is the draft's 1-based line number.
 #   carry(draft, check result, %o) -> the draft with the carried lines in their sections
@@ -17,10 +17,11 @@ package ledger;
 #   line_ids(line, \%o) -> {ids, kind, retired, first, defines} (below)
 #
 # A base line is carried when it is a ledger line of the base's User constraints or Decisions
-# section (an entry `- U-3: …`, `- D-2: …`, `- X-1: …`, or a §7 fold or ledger.md pointer line) and
-# the draft has none of its ids: not as an entry, in the id list an entry or one of its merged
-# clauses starts with, nor on a `Superseded:`, fold or pointer line (the watcher's A-09 reading,
-# watch::shape::_ledger; a carry tag's id is the other chain's and counts for nothing); an entry
+# section (an entry `- U-3: …`, `- D-2: …`, `- X-1: …`, a `Superseded:` line, or a §7 fold or
+# ledger.md pointer line) and the draft's User constraints, Approvals and Decisions have none of its
+# ids: not as an entry, in the id list an entry or one of its merged clauses starts with, nor on a
+# `Superseded:`, fold or pointer line (a line elsewhere that starts with the id only cites it; a
+# carry tag's id is the other chain's and counts for nothing); an entry
 # whose text the draft holds under another id (renumbered) is not carried either. Approval lines
 # never are: an approval the draft drops stays dropped (the safe direction; the approval rules
 # decide what carries). Lines are copied byte for byte, so the lint treats them as carried lines;
@@ -75,9 +76,15 @@ sub _line_ids {
     my $t = $l;
     $t =~ s/\A\s*(?:[-*]\s+)?//;
     my $entry = $t =~ /\A[UDX]-[0-9]+\b/;
-    my $kind = $l =~ /\bSuperseded:/ ? 'superseded'
+    # A Superseded mark is `Superseded: <id>` outside quoted words. A line naming ledger.md is a
+    # pointer line only when it says no item: not `- D-7: …`, and after its leading ids no ask,
+    # quoted constraint, rejected option or because-clause (`- D-7 (45 s) — because …; see ledger.md`
+    # is D-7's entry).
+    (my $uq = $l) =~ s/"[^"]*"|\x{201c}[^\x{201d}]*\x{201d}//g;
+    (my $rest = $t) =~ s/\A(?:$LIST_SEP*[UDX]-[0-9]+\b(?:\s*(?:\.\.|\x{2026})\s*(?:[UDX]-)?[0-9]+\b)?)+\s*(?:[:.)]|\x{2014}|\x{2013}|-)?\s*//;
+    my $kind = $uq =~ /\bSuperseded:\s*[UDX]-[0-9]+\b/ ? 'superseded'
              : (($o->{fold_re} && $l =~ $o->{fold_re}) || $l =~ /\bsettled;\s*full text in\s/
-                || ($l =~ /\bledger\.md\b/ && $t !~ /\A[UDX]-[0-9]+\s*:/)) ? 'fold' : undef;
+                || ($l =~ /\bledger\.md\b/ && $t !~ /\A[UDX]-[0-9]+\s*:/ && _form($rest) eq 'status')) ? 'fold' : undef;
     if ($kind) {
         my $s = $l;
         my @old;
@@ -218,11 +225,13 @@ sub check {
     my %cmp_sec = (%ledger_sec, map { $_ => 1 } grep { defined && length } $o{approvals});
     my (%present, %dnorm, %dfirst);
     for my $r (@$d) {
+        # Only the ledger sections hold or define items; a line elsewhere that starts with an id
+        # (`- D-3 implemented — commit abc1234` in Work done) cites it.
+        next unless $cmp_sec{ $r->{sec} };
         $present{$_} = 1 for @{ $r->{li}{ids} };
         next unless ($r->{li}{kind} // '') eq 'entry';
         $dnorm{ _norm($r->{text}, \%o) } = 1;
-        # Only the ledger sections define items; a line elsewhere that starts with an id cites it.
-        next unless $cmp_sec{ $r->{sec} } && $r->{li}{defines};
+        next unless $r->{li}{defines};
         my $id = $r->{li}{first};
         if (my $f = $dfirst{$id}) {
             push @{ $res->{reused} }, [ $id, $r->{n} ]
@@ -241,13 +250,16 @@ sub check {
         }
         # an id the base folds or supersedes has left the chain: it is taken for good
         if ($cmp_sec{ $r->{sec} }) { $bretired{$_} //= $r for @{ $r->{li}{retired} || [] } }
-        next unless $ledger_sec{ $r->{sec} } && ($k eq 'entry' || $k eq 'fold');
+        # A Superseded line carries as a fold line does (template rule 8): the ids it retires stay
+        # taken over the whole chain, not for one hop.
+        next unless $ledger_sec{ $r->{sec} };
         next if $k eq 'entry' && _approval($r->{text});
         my @miss = grep { !$present{$_} } @{ $r->{li}{ids} };
         next unless @miss;
         if ($k eq 'entry' && $dnorm{ _norm($r->{text}, \%o) }) { $res->{renumbered}++; next }
-        my $to = ($k eq 'entry' && $r->{li}{first} =~ /\AU-/) ? $o{user} : $o{decisions};
-        push @{ $res->{carry} }, [ $r->{text}, $to ];
+        my $lead = $k eq 'entry' ? $r->{li}{first} : $k eq 'superseded' ? ($r->{li}{ids}[0] // '') : '';
+        my $to = $lead =~ /\AU-/ ? $o{user} : $o{decisions};
+        push @{ $res->{carry} }, [ $r->{text}, $to, [@miss] ];
         $carried{$_} = 1 for @miss;
     }
     $res->{ids} = [ sort { _ord($a) <=> _ord($b) || $a cmp $b } keys %carried ];
