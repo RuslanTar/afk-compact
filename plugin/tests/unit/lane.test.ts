@@ -2089,7 +2089,10 @@ test('off: the result turn\'s answer gives the one line with Nothing needed from
 // say it is not the main session's; the answer is the main conversation's cached context. 0.1.4
 // took that call as the delivery (with the person's origin of the last main prompt), which ended
 // the idle episode: the result turn got no lane read and the return no [idle-again]. Each test
-// failed on 0.1.4.
+// failed on 0.1.4. Its review (release gate): prompt.context is asked once per conversation, and
+// in the AD1 log the result turn made no call of its own, so the block goes beside the next main
+// prompt, and no test here asks prompt.context again before it reads what that prompt carried
+// (the first three failed on 88a5db9e, which waited for a second prompt.context call).
 
 /** A background agent's loop: its turn runs from `start` to `end` (Claude Code's turn.start and turn.complete with its agentId). */
 async function agentLoop($: Engine, id: string, phase: 'start' | 'end'): Promise<void> {
@@ -2097,13 +2100,8 @@ async function agentLoop($: Engine, id: string, phase: 'start' | 'end'): Promise
   else await $.turn.complete({ answer: 'done', durationMs: 1000, isAborted: false, turnId: id + '-t1', reason: 'answer', agentId: id } as never)
 }
 
-test('D-1: a prompt.context call while no main turn runs and an agent loop runs (its summary fork) delivers nothing and leaves the episode; the result turn gets the block, its lane read with the result in; the return gets [idle-again]', async ($, on) => {
-  const w = new World().install(on)
-  const invalidated: string[] = []
-  on('ui.invalidate', (_$, e, next) => {
-    invalidated.push(String(e.event))
-    return next(e)
-  })
+/** An idle compaction while agent a1 runs, then its summary fork's prompt.context call, which takes nothing. */
+async function forkPassed($: Engine, w: World): Promise<void> {
   w.resumeHere = FINISHED
   w.agents = [{ id: 'a1', status: 'running' }]
   await w.start($)
@@ -2111,20 +2109,30 @@ test('D-1: a prompt.context call while no main turn runs and an agent loop runs 
   await idleCompaction($, w)
   await w.advance(5000)
   expect(w.submits).toEqual([])
-  // The fork's call: no block, no delivery row, no lane row.
   expect(blockOf(w, await $.prompt.context({ blocks: [] }))).toBe(undefined)
   expect(w.rowsOf('mod_outcome')).toEqual([])
   expect(w.rowsOf('lane_outcome').map(r => r.at)).toEqual(['build'])
-  // The agent ends; its result opens a turn: the cached answer is dropped before that turn, and
-  // its own prompt.context call delivers the block.
+}
+
+test('D-1: a prompt.context call while no main turn runs and an agent loop runs (its summary fork) delivers nothing and leaves the episode; the result turn\'s prompt carries the block, its lane read with the result in; the return gets [idle-again]', async ($, on) => {
+  const w = new World().install(on)
+  const invalidated: string[] = []
+  on('ui.invalidate', (_$, e, next) => {
+    invalidated.push(String(e.event))
+    return next(e)
+  })
+  await forkPassed($, w)
+  // The agent ends; its result opens a turn, whose prompt carries the block: no second
+  // prompt.context call is needed, and one asked again adds nothing.
   await agentLoop($, 'a1', 'end')
   w.agents = [{ id: 'a1', status: 'completed' }]
   await w.userTurn($, notif('a1'), 'task-notification')
-  expect(invalidated).toEqual(['prompt.context'])
-  const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
-  expect(block).toContain(SID_A)
-  if (HAS) expect(block).toContain('code reads the work lane as finished')
-  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.context'])
+  const ctx = ctxOf(w)
+  expect(ctx).toContain(SID_A)
+  if (HAS) expect(ctx).toContain('code reads the work lane as finished')
+  expect(invalidated).toEqual([])
+  expect(blockOf(w, await $.prompt.context({ blocks: [] }))).toBe(undefined)
+  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.submit'])
   expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at])).toEqual([['working', 'build'], ['finished', 'delivery']])
   await w.turnEnd($)
   // The person is back: the whole block again beside their prompt, once.
@@ -2133,21 +2141,36 @@ test('D-1: a prompt.context call while no main turn runs and an agent loop runs 
   expect(w.rowsOf('idle_return').length).toBe(1)
 })
 
-test('D-1: after a fork\'s call passed the block over, a person\'s own prompt gets it (a person\'s turn: the episode ends, no [idle-again])', async ($, on) => {
+test('D-1: after a fork\'s call passed the block over, a person\'s own prompt carries it (a person\'s turn: the episode ends, no [idle-again])', async ($, on) => {
   const w = new World().install(on)
-  w.resumeHere = FINISHED
-  w.agents = [{ id: 'a1', status: 'running' }]
-  await w.start($)
-  await agentLoop($, 'a1', 'start')
-  await idleCompaction($, w)
-  expect(blockOf(w, await $.prompt.context({ blocks: [] }))).toBe(undefined)
+  await forkPassed($, w)
   await w.userTurn($, 'back')
-  expect(blockOf(w, await $.prompt.context({ blocks: [] })) ?? '').toContain(SID_A)
-  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.context'])
+  expect(ctxOf(w)).toContain(SID_A)
+  expect(blockOf(w, await $.prompt.context({ blocks: [] }))).toBe(undefined)
+  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.submit'])
   await w.turnEnd($)
   await w.userTurn($, 'and again')
   expect(ctxOf(w)).toBe('')
   expect(w.rowsOf('idle_return')).toEqual([])
+})
+
+test('D-1: a result prompt that carried the passed block and did not enter hands it back: the next main prompt carries it, once', async ($, on) => {
+  const w = new World().install(on)
+  await forkPassed($, w)
+  await agentLoop($, 'a1', 'end')
+  w.agents = [{ id: 'a1', status: 'completed' }]
+  w.dropIf = t => (t.includes('<task-id>a1</task-id>') ? 'held' : undefined)
+  const r = (await $.prompt.submit({ text: notif('a1'), origin: { kind: 'task-notification' } } as never)) as { drop?: string }
+  expect(r.drop).toBe('held')
+  expect(ctxOf(w)).toContain(SID_A)
+  expect(w.rowsOf('mod_outcome')).toEqual([])
+  w.dropIf = undefined
+  await w.userTurn($, 'A shell finished.', 'task-notification')
+  expect(ctxOf(w)).toContain(SID_A)
+  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.submit'])
+  await w.turnEnd($)
+  await w.userTurn($, 'Another result.', 'task-notification')
+  expect(ctxOf(w)).not.toContain(SID_A)
 })
 
 test('D-1: with no agent loop running, a prompt.context call outside a main turn still delivers (as before)', async ($, on) => {
