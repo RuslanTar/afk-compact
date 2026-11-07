@@ -520,10 +520,13 @@ sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }
 # riding along) blocks, while a one-word span (an identifier, a path, a file name) is prose. A
 # proposed mark's `(…)` note holding such a command is compared too. Anything else after the
 # command on either side (an extra argument, a glued word, other words) is compared as text,
-# so it blocks unless both sides say the same.
+# so it blocks unless both sides say the same. The form's marks are not the step's words: a wait
+# mark (`· waits: job`, `— waits: you`, wherever it stands) and a trailing `· todo` or `· done`
+# do not count (0.1.5 E-4).
 sub _step1_same {
     my ($s1, $n1) = @_;
     return 0 unless defined $s1 && defined $n1;
+    for my $t ($s1, $n1) { $t =~ s/\s*[·—–]\s*waits:\s*(?:job|you)\b(?!\s*[|\/])//gi; $t =~ s/\s*·\s*(?:todo|done)\s*\z//i }
     my $flat = sub { my ($t) = @_; $t =~ s/`//g; $t =~ s/\s+/ /g; $t =~ s/\A | \z//g; return $t };
     my $cmd = sub { my ($t) = @_; while ($t =~ /`([^`]*)`/g) { return 1 if $1 =~ /\S\s+\S/ } return 0 };
     return 0 if $flat->($s1) eq '';

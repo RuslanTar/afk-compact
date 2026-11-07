@@ -312,12 +312,13 @@ export function laneFacts(text: string): LaneFacts {
   // A Step 1 that itself asks the user or waits is behind a gate, whatever the Gate line says (its
   // `— for "<the user's request>"` tail is the user's words, not the step's). Step 1 is Next steps
   // item 1, so that item's wait mark, while it is to do, is Step 1's; a Gate line that names a
-  // blocker stays one, whatever the mark, and so does a Step 1 that is gated (`GATED_RE`), as in
-  // `waitsOf`: then item 1's `waits: job` is the user's too, so its result does not unblock it.
+  // blocker stays one, whatever the mark, and so does a Step 1 that is gated (`GATED_RE`) or
+  // marked `waits: you` itself, as in `waitsOf`: then item 1's `waits: job` is the user's too, so
+  // its result does not unblock it.
   const first = list[0]
   const own = step.replace(FOR_TAIL, '')
   const w1 = first !== undefined && lastMark(first) === 'todo' ? waitsOf(first) : undefined
-  const mark1 = w1 === 'job' && GATED_RE.test(own) ? 'user' : w1
+  const mark1 = w1 === 'job' && (GATED_RE.test(own) || waitsOf(own) === 'user') ? 'user' : w1
   const held = /^`?none\b/i.test(g ?? '') ? mark1 ?? holdOf(own) : 'user'
   const gate = g === undefined || g === '' ? 'missing' : held === undefined ? 'none' : held === 'job' ? 'job' : 'set'
   let todo = 0

@@ -238,9 +238,14 @@ sub _test_corrupt {
 #   Step 1 under `Gate: none`. The form's placeholder copied as it stands (`waits: job|you`) is
 #   no mark.
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
-# The hold regexes from here on read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
-# non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
-my $WAITS_RE = qr/[·—–]\s*waits:\s*(job|you)\b(?!\s*[|\/])/iaa;
+# JS `\s`: wider than /aa's ASCII `\s` (a no-break or thin space is one), so a regex lane.ts
+# applies to raw text reads its spaces as this class; `holdOf` reads them as a plain space for
+# the job reading.
+my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]/;
+# The hold regexes from here on read with /aa, as JS does: \w, \d and \b are ASCII, and no
+# non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts). The wait
+# mark is read on raw text, so its spaces are JS's (`·<no-break space>waits: job` is one).
+my $WAITS_RE = qr/[·—–]$JS_SPACE*waits:$JS_SPACE*(job|you)\b(?!$JS_SPACE*[|\/])/iaa;
 my $GATED_RE = qr/\b(?:gated|ask user)\b/iaa;
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
 # lane.ts `JOB_RE` and its parts, word for word.
@@ -269,8 +274,6 @@ my $J_APPROVAL = q{(?:approv\w*|accept(?:s|ed|ing|ance)?|permi(?:ssions?|ts?|tte
     . q{check(?:s|ed|ing)?\s+(?:in\s+)?with|pending|needs?|needed|manual(?:ly)?|gat(?:e|es|ed|ing))};
 my $USER_WINS_RE = qr/\b(?:$J_PRONOUN|$J_PERSON|$J_APPROVAL)(?![\w-])/iaa;
 my $OWN_REPLY_RE = qr/(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|(?:with|and|in)\b))/iaa;
-# JS `\s`, which lane.ts `holdOf` reads as a plain space for the job reading.
-my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]/;
 
 # What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run. Held on the
 # user where release-0.1.1b reads it held ($HELD_RE on the step as it is); else on a job when a
@@ -344,7 +347,7 @@ sub _items {
             my ($n, $at) = ($1, $-[0]);
             next unless $n == $next;
             my $cur = substr($line, $start, $at - $start);
-            next unless defined _step_mark($cur) || $cur =~ /$WAITS_RE\s*\z/;
+            next unless defined _step_mark($cur) || $cur =~ /$WAITS_RE$JS_SPACE*\z/;
             push @out, _trim($cur);
             $start = $at + 1;
             $next++;

@@ -1644,6 +1644,8 @@ const MARKED_JOB = [
   'Wait for B-3, then commit · waits: job (the B-3 shell)',
   'Check B-1 with `tail -n 30 /tmp/it.log` — done when the suite ended — waits: job',
   'Record the counts in RELEASE-NOTES.md – waits: job',
+  'Write notes · waits: job',
+  'Write notes · waits: job · waits: job',
 ]
 const MARKED_USER = [
   'On the timer notification, reply with one line acknowledging it · waits: you',
@@ -1660,6 +1662,8 @@ const MARKED_USER = [
   'Publish the notes · waits: you (the wording of the release note)',
   'Tell the user the notes are ready and ask for an explicit yes before pushing tag v1.4.0 — waits: you',
   'ask user: push tag v1.4.0 and branch release/1.4 after they review notes — waits: job',
+  'Write notes · waits: you',
+  'Write notes · waits: job · waits: you',
 ]
 /**
  * Not a wait mark, so the step reads by its words (here free): no `·` or dash, another word, a
@@ -1858,6 +1862,9 @@ test('E-4 wait marks: Next steps item 1 to do holds Step 1 under `Gate: none`; a
   // Step 1 not gated: item 1's `waits: job` holds both on the job, and the result unblocks them.
   const free1 = laneFacts('## Resume here\nStatus: hard-blocked\nStep 1: push (! git push)\nGate: none · Don\'t: x\n## Next steps\n1. Push the branch · waits: job · todo\n')
   expect([free1.gate, free1.onJob, laneOf(free1, { ...M, result: true }).lane]).toEqual(['job', 1, 'working'])
+  // Step 1 marked `waits: you` on its own line: the user wins item 1's `waits: job`, as in a mixed pair.
+  const own = laneFacts('## Resume here\nStatus: hard-blocked\nStep 1: `make docs` · waits: you — for "ship"\nGate: none · Don\'t: x\n## Next steps\n1. `make docs` — done when built · waits: job · todo\n')
+  expect([own.gate, own.onJob, own.onUser, laneOf(own, { ...M, result: true }).lane]).toEqual(['set', 0, 1, 'hard-blocked'])
 })
 
 /** The AD2 shape: an idle compaction while the timer shell b7 runs; the summary's only free-looking step waits on its result. */
