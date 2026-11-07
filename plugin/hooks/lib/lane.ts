@@ -92,9 +92,11 @@ const GATE_RE = /^\s*Gate:[ \t]*([^·\n]*)/m
 const ITEM_RE = /^\s*\d+\.\s/
 /**
  * A step mark: `· todo` or `· done` that ends the item's own words (the line end, a `;`, `,`, `.`
- * or `)`, or the next item of a one-line section), so `· done when green` is not one.
+ * or `)`, or the next item of a one-line section), so `· done when green` is not one. 0.1.5 D-2
+ * (AD2 on 0.1.4: a summary wrote `— done`, so its Basis read 0 of 3 done): the other common
+ * marks read the same, after `—`, `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case.
  */
-const MARK_SRC = '·\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
+const MARK_SRC = '(?:·|•|—|–|:|\\(|\\s--?)\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
 /**
  * A step that cannot run now, as release-0.1.1b reads it (its own `HELD_RE`, unchanged): it is
  * gated, asks the user, holds a pending answer, waits on something (`waits for`, `waiting on`,
@@ -230,7 +232,7 @@ function section(text: string, heading: string): string[] | undefined {
 /** The item's last step mark, or undefined. */
 function lastMark(item: string): 'todo' | 'done' | undefined {
   let mark: 'todo' | 'done' | undefined
-  for (const m of item.matchAll(new RegExp(MARK_SRC, 'gm'))) mark = m[1] === 'done' ? 'done' : 'todo'
+  for (const m of item.matchAll(new RegExp(MARK_SRC, 'gim'))) mark = m[1]?.toLowerCase() === 'done' ? 'done' : 'todo'
   return mark
 }
 
@@ -541,7 +543,7 @@ export function laneNote(name: string, r: LaneResult, basis: string, again = fal
       ? 'Else start nothing: ' + laneLine(r, basis)
       : again
       ? 'Else start nothing; the away digest went out already: ' + laneLine(r, basis)
-      : `Else start nothing and print the away digest: the lane state and why; Basis: ${basis} (by code, as is); Done (listed steps marked done); ` +
+      : `Else start nothing and print the away digest, its first line exactly "Basis: ${basis}"; then the lane state and why; Done (listed steps marked done); ` +
         'Left (each listed step not done, what blocks it; commits not pushed); Running; Decided without you; ' +
         'last, Needs you (numbered, each with what it blocks) or Nothing needed from you.')
 }
@@ -558,7 +560,7 @@ export function resultDigestLine(name: string, r: LaneResult, basis: string, off
     'A step that can still run without the user: continue it, unless it hits a gate. ' +
     (off
       ? 'Else start nothing: ' + laneLine(r, basis)
-      : `Else start nothing and print the away digest: the lane state and why; Basis: ${basis} (by code, as is); Done (listed steps marked done, and what the last turn did); ` +
+      : `Else start nothing and print the away digest, its first line exactly "Basis: ${basis}"; then the lane state and why; Done (listed steps marked done, and what the last turn did); ` +
         'Left (each listed step not done, what blocks it; commits not pushed); Running; Decided without you; ' +
         'last, Needs you (numbered, each with what it blocks) or Nothing needed from you.')
 }

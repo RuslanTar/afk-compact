@@ -224,11 +224,13 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // review round 1's edits to [handoff-ack], [handoff-partial] and [question-timeout]; 5,894 since
   // 0.1.4 R-1 names in [auto-mode] the classes still blocked; 6,114 since G-1, root 2026-11-04:
   // step 4 says the gate asks even when an approval carries and names protected branches, 240
-  // chars on a worst path measured at 5,871 before it, so a further growth fails here).
-  test('resume protocol ≤6,114 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', SLOW, () => {
+  // chars on a worst path measured at 5,871 before it; 6,127 since 0.1.5 D-2 gives the digest's
+  // Basis as its first line, exactly, in [idle] and [idle-done] (13 chars on the worst path), so a
+  // further growth fails here).
+  test('resume protocol ≤6,127 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', SLOW, () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
-      expect(s.length <= 6114).toBe(true)
+      expect(s.length <= 6127).toBe(true)
     }
   })
   // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.

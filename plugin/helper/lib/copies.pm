@@ -231,7 +231,9 @@ sub _test_corrupt {
 #   finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person, pronoun or person's
 #   say stands anywhere in it. A job hold is not a step that can run: the copy is taken with no
 #   result in, so it stays blocked (only the session's result turn reads it working).
-my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
+# 0.1.5 D-2: the other common marks read the same (lane.ts MARK_SRC, word for word): after `—`,
+# `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case.
+my $MARK_RE = qr/(?:·|•|—|–|:|\(|\s--?)\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/mi;
 # The hold regexes below read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
 # non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
@@ -300,7 +302,7 @@ sub _section {
 sub _last_mark {
     my ($item) = @_;
     my $mark;
-    $mark = $1 while $item =~ /$MARK_RE/g;
+    $mark = lc $1 while $item =~ /$MARK_RE/g;
     return $mark;
 }
 

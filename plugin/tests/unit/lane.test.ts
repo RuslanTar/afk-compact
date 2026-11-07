@@ -725,7 +725,7 @@ test('owner 2026-10-27 22:32: the step-5 digest of [idle] carries the Basis line
   expect(block).toContain(STEP5)
   // The model writes the digest; code fills the Basis when the block goes out (a step still todo
   // keeps the lane working, so this is [idle], not [idle-done]).
-  expect(block).toContain('lane state and why; Basis: 1 of 2 listed steps marked done; 0 units running; git: 2 commits not pushed, 1 file changed (by code, as is); Done;')
+  expect(block).toContain('its first line exactly "Basis: 1 of 2 listed steps marked done; 0 units running; git: 2 commits not pushed, 1 file changed"; then lane state and why; Done;')
   expect(block).not.toContain('@lane_basis@')
   expect(block).not.toContain('code reads the work lane as')
 })
@@ -757,7 +757,7 @@ test('M7: the [idle-done] block and a later lane note carry the Basis line, rend
   w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'running' }]
   const first = (await resultTurn($, w, notif('a1'))).block ?? ''
   expect(first).toContain('code reads the work lane as soft-blocked')
-  expect(first).toContain('Basis: 1 of 2 listed steps marked done; 1 unit running; git: 2 commits not pushed, 1 file changed (by code, as is)')
+  expect(first).toContain('its first line exactly "Basis: 1 of 2 listed steps marked done; 1 unit running; git: 2 commits not pushed, 1 file changed"')
   expect(first).toContain('Left (each listed step not done, what blocks it; commits not pushed)')
   await w.turnEnd($)
   w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
@@ -781,7 +781,7 @@ test('M7: a note that asks for the first digest carries the Basis line too', asy
   w.agents = [{ id: 'a1', status: 'completed' }, { id: 'a2', status: 'completed' }]
   const note = (await resultTurn($, w, notif('a2'))).ctx
   expect(note).toContain('print the away digest')
-  expect(note).toContain(`Basis: 1 of 1 listed step marked done; 0 units running; git as of ${stampOf(first)}: 2 commits not pushed, 1 file changed (by code, as is)`)
+  expect(note).toContain(`its first line exactly "Basis: 1 of 1 listed step marked done; 0 units running; git as of ${stampOf(first)}: 2 commits not pushed, 1 file changed"`)
 })
 
 test('soft-blocked with nothing running reads hard-blocked (owner xxxxxxxx-06: soft means something still runs)', () => {
@@ -943,7 +943,7 @@ test('R3-2: through the kit, the digest turn of a finished lane on a branch with
   if (!HAS) return
   expect(w.submits.length).toBe(1)
   const sent = w.submits[0] ?? ''
-  expect(sent).toContain('Basis: 1 of 1 listed step marked done; 0 units running; git: no upstream, unpushed unknown, 0 files changed (by code, as is)')
+  expect(sent).toContain('its first line exactly "Basis: 1 of 1 listed step marked done; 0 units running; git: no upstream, unpushed unknown, 0 files changed"')
   expect(sent).not.toContain('0 commits not pushed')
 })
 
@@ -1768,7 +1768,7 @@ for (const step of ['On the timer notification, reply with one line acknowledgin
     const sent = w.submits[0] ?? ''
     expect(sent).toContain('code now reads the work lane as hard-blocked (the summary says soft-blocked, but nothing runs)')
     expect(sent).toContain('print the away digest')
-    expect(sent).toContain('Basis: 0 of 2 listed steps marked done; 0 units running; git: not measured (by code, as is)')
+    expect(sent).toContain('its first line exactly "Basis: 0 of 2 listed steps marked done; 0 units running; git: not measured"')
     expect(sent.endsWith('or Nothing needed from you.')).toBe(true)
     expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['soft-blocked', 'skipped:running'], ['hard-blocked', 'submitted']])
     expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.source, r.at])).toEqual([
@@ -1940,7 +1940,7 @@ test('off: laneNote and resultDigestLine give the one-line form; submit\'s texts
   const line = resultDigestLine('p', r, 'B2', true)
   noDigest(line)
   expect(line.endsWith('Else start nothing: say in one line that the lane is now hard-blocked (Basis: B2), then last, ' + ENDING + '.')).toBe(true)
-  expect(laneNote('p', r, 'B1')).toContain('Else start nothing and print the away digest: the lane state and why; Basis: B1 (by code, as is); Done')
+  expect(laneNote('p', r, 'B1')).toContain('Else start nothing and print the away digest, its first line exactly "Basis: B1"; then the lane state and why; Done')
   expect(laneNote('p', r, 'B1', true)).toContain('Else start nothing; the away digest went out already: say in one line that the lane is now hard-blocked (Basis: B1)')
   expect(resultDigestLine('p', r, 'B2')).toContain('Else start nothing and print the away digest')
 })
@@ -2082,4 +2082,38 @@ test('off: the result turn\'s answer gives the one line with Nothing needed from
   await w.turnEnd($)
   await w.advance(5000)
   expect(w.submits).toEqual([])
+})
+
+// ---- 0.1.5 D-2 (AD2 on 0.1.1c and 0.1.4): the digest left out the code's Basis line, and the
+// summary marked its steps `— done`, which read as unmarked (0 of 3 done). Each failed on 0.1.4.
+
+test('D-2: every away-digest text gives the Basis as its first line, exactly; the one-line forms keep theirs', () => {
+  const r = laneOf({ ...F, status: 'hard-blocked' }, M)
+  const first = 'print the away digest, its first line exactly "Basis: B1"; then the lane state and why; Done'
+  expect(laneNote('p', r, 'B1')).toContain(first)
+  expect(resultDigestLine('p', r, 'B1')).toContain(first)
+  const rt = { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x', lane: 'finished', lane_why: 'w', lane_basis: 'B9' }
+  for (const tag of ['idle', 'idle-done'] as const) {
+    if (!hasTag('resume-context', tag)) continue
+    const text = assemble('p', 'resume-context', ['prod-forbid', tag], rt)
+    expect(text).toContain('print the away digest (step 6 allows it), its first line exactly "Basis: B9"; then ')
+    expect(text).not.toContain('(by code, as is)')
+  }
+  expect(laneNote('p', r, 'B1', true)).toContain('(Basis: B1)')
+})
+
+test('D-2: a step mark after a dash, a bullet, a colon or in brackets reads as `· done` does, in any case; `— done when` is still none', () => {
+  const ns = (lines: string[]) => laneFacts('## Resume here\nStatus: finished\nStep 1: none\nGate: none\n## Next steps\n' + lines.join('\n') + '\n')
+  const f = ns(['1. read the files — done', '2. start the timer – Done', '3. tidy - done', '4. log -- done.', '5. ship • done', '6. tag: done', '7. note (done)'])
+  expect([f.done, f.todo, f.unmarked]).toEqual([7, 0, 0])
+  const g = ns(['1. run the suite — done when green', '2. push — todo, waits on the user\'s explicit yes', '3. merge — done when merged · todo'])
+  expect([g.done, g.todo, g.unmarked, g.onUser]).toEqual([0, 2, 1, 1])
+  // The AD2 summary's own steps (0.1.4 run 150406): 2 of 3 done, the push held on the user.
+  const ad2 = laneFacts('## Resume here (≤5 lines)\nStatus: hard-blocked · Acuity: watch · State: steps 1 and 2 done, step 3 (push) waits on user\'s explicit yes (checkpoint: clean)\n' +
+    'Step 1: none. Wait for the user\'s explicit yes, then `git push origin main` — for "push branch main to origin" | proposed\nGate: user\'s explicit yes for the push · Don\'t: push\n' +
+    '## Next steps\n1. Read the files — done\n2. Start the kit timer — done\n3. Push main to origin — todo, waits on the user\'s explicit yes (do not ask now)\n')
+  expect([ad2.done, ad2.todo, ad2.unmarked, ad2.onUser]).toEqual([2, 1, 0, 1])
+  expect(laneBasis(ad2, 0, undefined)).toContain('2 of 3 listed steps marked done')
+  // The one-line form splits at a dash mark too.
+  expect(ns(['1. a — done 2. b — todo']).done).toBe(1)
 })
