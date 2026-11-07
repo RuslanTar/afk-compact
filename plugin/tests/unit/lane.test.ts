@@ -2191,3 +2191,26 @@ test('D-2: a step mark after a dash, a bullet, a colon or in brackets reads as `
   // The one-line form splits at a dash mark too.
   expect(ns(['1. a — done 2. b — todo']).done).toBe(1)
 })
+
+// The D-2 review: a note inside a step (`(review: done)`, `, build: done`) never turns the step
+// done, a `·` mark reads as on 0.1.4, and a mark may take a note in brackets. Each failed on 9420a950.
+test('D-2 review: a mark inside a note does not override the step\'s own mark; `— done (commit …)` reads done', () => {
+  const sum = (status: string, lines: string[]) =>
+    laneFacts(`## Resume here\nStatus: ${status} · State: x (checkpoint: clean)\nStep 1: none\nGate: none\n## Next steps\n` + lines.join('\n') + '\n')
+  const dot = sum('finished', ['1. build — done', '3. deploy · todo, waits on the user (build: done)', '4. run the suite · todo (the earlier run - done)'])
+  expect([dot.done, dot.todo, dot.unmarked, dot.onUser, dot.free]).toEqual([1, 2, 0, 1, 1])
+  expect(laneOf(dot, M).lane).toBe('working')
+  // Status working with Step 1 none: still working, not all done (the D-3 turn keeps its floor).
+  const work = sum('working', ['1. write the fix — done', '2. merge the MR — todo (review: done)', '3. tag — todo, build: done'])
+  expect([work.done, work.todo]).toEqual([1, 2])
+  expect(laneOf(work, M).lane).toBe('working')
+  // Hard-blocked with a free step whose note says done: that step can run.
+  const hb = sum('hard-blocked', ['1. push — todo, waits on the user\'s explicit yes', '2. write the changelog — todo (draft: done)'])
+  expect([hb.free, hb.onUser]).toEqual([1, 1])
+  expect(laneOf(hb, M).lane).toBe('working')
+  // A note after the mark, in brackets.
+  const fin = sum('finished', ['1. fix the bug — done (commit 1a2b3c)', '2. push · done (to origin)', '3. tag: done (v1)'])
+  expect([fin.done, fin.todo, fin.unmarked]).toEqual([3, 0, 0])
+  expect(laneOf(fin, M).lane).toBe('finished')
+  expect(sum('finished', ['1. push — todo (waits on the user)']).onUser).toBe(1)
+})

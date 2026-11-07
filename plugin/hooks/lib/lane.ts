@@ -94,9 +94,10 @@ const ITEM_RE = /^\s*\d+\.\s/
  * A step mark: `· todo` or `· done` that ends the item's own words (the line end, a `;`, `,`, `.`
  * or `)`, or the next item of a one-line section), so `· done when green` is not one. 0.1.5 D-2
  * (AD2 on 0.1.4: a summary wrote `— done`, so its Basis read 0 of 3 done): the other common
- * marks read the same, after `—`, `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case.
+ * marks read too, after `—`, `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case, and a mark
+ * may take a note in brackets (`— done (commit 1a2b3c)`). `lastMark` says which one counts.
  */
-const MARK_SRC = '(?:·|•|—|–|:|\\(|\\s--?)\\s*(todo|done)(?=\\s*$|\\s*[;,.)]|\\s+\\d+\\.\\s)'
+const MARK_SRC = '(·|•|—|–|:|\\(|\\s--?)\\s*(todo|done)(?=\\s*$|\\s*[;,.()]|\\s+\\d+\\.\\s)'
 /**
  * A step that cannot run now, as release-0.1.1b reads it (its own `HELD_RE`, unchanged): it is
  * gated, asks the user, holds a pending answer, waits on something (`waits for`, `waiting on`,
@@ -229,11 +230,30 @@ function section(text: string, heading: string): string[] | undefined {
   return out
 }
 
-/** The item's last step mark, or undefined. */
+/**
+ * The item's step mark, or undefined: with a `·` mark, its last `·` mark, as on 0.1.4. Else the
+ * other marks outside brackets, `todo` if any is (0.1.5 D-2 review: a note never turns a step
+ * done, so `— todo (review: done)` and `— todo, build: done` stay todo). copies.pm `_last_mark`.
+ */
 function lastMark(item: string): 'todo' | 'done' | undefined {
-  let mark: 'todo' | 'done' | undefined
-  for (const m of item.matchAll(new RegExp(MARK_SRC, 'gim'))) mark = m[1]?.toLowerCase() === 'done' ? 'done' : 'todo'
-  return mark
+  let dot: 'todo' | 'done' | undefined
+  let other: 'todo' | 'done' | undefined
+  for (const m of item.matchAll(new RegExp(MARK_SRC, 'gim'))) {
+    const mark = m[2]?.toLowerCase() === 'done' ? 'done' : 'todo'
+    if (m[1] === '·') dot = mark
+    else if (depthAt(item, m.index ?? 0) === 0 && other !== 'todo') other = mark
+  }
+  return dot ?? other
+}
+
+/** How many brackets are open before `at` (a `)` with none open counts none). */
+function depthAt(text: string, at: number): number {
+  let depth = 0
+  for (const c of text.slice(0, at)) {
+    if (c === '(') depth++
+    else if (c === ')' && depth > 0) depth--
+  }
+  return depth
 }
 
 /**
