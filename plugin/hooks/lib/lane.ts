@@ -476,6 +476,19 @@ export async function runningUnits(d: Deps, remeasure: string | undefined, ended
 }
 
 /**
+ * 0.1.5 D-3 (owner 2026-11-07, "3. yes"): the work lane at the idle check, as this session's open
+ * idle episode reads it now: its summary's facts, with the units running now and no result in.
+ * Undefined with no episode open (none since the last idle compaction, or a person's message closed
+ * it): no lane is read between compactions, so none counts as finished.
+ */
+export async function laneAtCheck(d: Deps, sid: string): Promise<Lane | undefined> {
+  const l = d.state.idleLane
+  if (!l || l.closed || l.sid !== sid) return undefined
+  const running = await runningUnits(d, l.restored ? undefined : l.remeasure, l.ended)
+  return laneOf(l.facts, { running, midturn: false, nonok: l.nonok, driver: l.driver, superseded: l.superseded }).lane
+}
+
+/**
  * The statuses a notification ends its task with (Claude Code's UserMessageTask: `completed`,
  * `failed` or `killed`; `stopped` and `cancelled` read the same).
  */
