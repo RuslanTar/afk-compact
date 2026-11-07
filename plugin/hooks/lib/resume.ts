@@ -368,13 +368,49 @@ export function blockName(name: string): string {
 }
 
 /**
+ * 0.1.5 D-1 (AD1 on 2.1.319): a `prompt.context` call that is not the main session's. Claude Code
+ * asks it for other requests too, with nothing in the call to say whose (its `[AgentSummary]`
+ * fork of a running background agent, about 140 s before that agent's result turn), and the
+ * answer is the main conversation's cached context. The main session's call comes with its own
+ * turn: from its prompt's `prompt.submit` (an entering prompt counted, or our own submit pending)
+ * to that turn's end. A call with no main turn running or starting while an agent loop runs is
+ * that loop's; with none running it reads as before.
+ */
+export function otherLoopContext(s: LoadState): boolean {
+  return !s.mainTurnRunning && s.foreignPrompts === 0 && !s.ourSubmitPending && s.agentTurns.size > 0
+}
+
+/**
+ * The origin kind of the main turn a `prompt.context` call serves: Claude Code raises it beside
+ * that turn's `turn.start`, so before `claimTurn` ran it is the entering prompt's (or ours).
+ */
+function servedOrigin(s: LoadState): string | undefined {
+  if (s.mainTurnRunning) return s.turnOrigin
+  if (s.foreignPrompts > 0) return s.enteringKinds[0]
+  return s.ourSubmitPending ? 'plugin' : s.turnOrigin
+}
+
+/**
+ * 0.1.5 D-1: the next main prompt (from `prompt.submit`, before it enters) or main `turn.start`
+ * after another loop's call passed the block over: its cached answer, which lacks the block,
+ * is dropped, so the main turn's own `prompt.context` call delivers it.
+ */
+export function contextPassedOn(d: Deps): void {
+  const s = d.state
+  if (!s.ctxPassed) return
+  s.ctxPassed = false
+  if (s.pending) d.invalidateContext()
+}
+
+/**
  * `prompt.context`: sets ctxSeen; when a block is pending for this session, claims the channel
- * and adds the block, else leaves the blocks as they are (nothing pending, nothing added).
+ * and adds the block, else leaves the blocks as they are (nothing pending, nothing added). A call
+ * of another loop (`otherLoopContext`) leaves the block pending and the idle episode as it is.
  */
 export async function contextBlock(d: Deps, sid: string): Promise<string | undefined> {
   const s = d.state
   s.ctxSeen = true
-  const human = isHuman(s.turnOrigin)
+  const human = isHuman(servedOrigin(s))
   // AT-RP-02: once per session id in this load, a block the classic SessionStart(resume) armed.
   let restored = false
   if (!s.pending && s.restoreChecked !== sid) {
@@ -393,6 +429,12 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   // `prompt.submit`): `prompt.context` is asked once per conversation, so a note here would not
   // reach them.
   if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
+  // D-1: not a delivery; its answer, which Claude Code caches for the main conversation too, goes
+  // without the block.
+  if (otherLoopContext(s)) {
+    s.ctxPassed = true
+    return undefined
+  }
   const c = await claimBy(d, sid, pend.nonce, 'prompt.context')
   s.pending = undefined
   // A continue that claimed the block and was dropped for a user prompt (cont.ts) holds it for this
@@ -412,7 +454,7 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:prompt.context')
   // Owner xxxxxxxx-37: a background result (not a person) took an idle compaction's block; the
   // first human-origin prompt gets it again, beside that prompt (`againFor`).
-  if (pend.args.idle === true && !isHuman(s.turnOrigin)) {
+  if (pend.args.idle === true && !human) {
     s.idleAgain = { sid, pend: { ...pend, args }, usedAt: await d.now(), remeasure: out.remeasure, measuredAt: out.measuredAt }
   }
   return out.block

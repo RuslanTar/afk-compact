@@ -393,6 +393,11 @@ export type LoadState = {
   haltToasted: boolean
   /** prompt.context ran in this load (MOD-SPEC §3.4 ctxSeen). */
   ctxSeen: boolean
+  /**
+   * 0.1.5 D-1: a `prompt.context` call of another loop passed the pending block over (resume.ts
+   * `otherLoopContext`); the next main prompt or turn has the context read again for it.
+   */
+  ctxPassed: boolean
   /** Nonces of this load's mod-self dispatches (the self-call check, §3.1 step 0). */
   selfNonces: Set<string>
   /** The pending main resume block for prompt.context or the continue text. */
@@ -727,6 +732,7 @@ export function newState(loadId: string): LoadState {
     halt: { active: false, reason: null },
     haltToasted: false,
     ctxSeen: false,
+    ctxPassed: false,
     selfNonces: new Set(),
     pending: undefined,
     restoreChecked: undefined,

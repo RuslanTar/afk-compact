@@ -2084,6 +2084,80 @@ test('off: the result turn\'s answer gives the one line with Nothing needed from
   expect(w.submits).toEqual([])
 })
 
+// ---- 0.1.5 D-1 (AD1 on 2.1.319): Claude Code's [AgentSummary] fork of a running background agent
+// calls prompt.context about 140 s before that agent's result turn, with nothing in the call to
+// say it is not the main session's; the answer is the main conversation's cached context. 0.1.4
+// took that call as the delivery (with the person's origin of the last main prompt), which ended
+// the idle episode: the result turn got no lane read and the return no [idle-again]. Each test
+// failed on 0.1.4.
+
+/** A background agent's loop: its turn runs from `start` to `end` (Claude Code's turn.start and turn.complete with its agentId). */
+async function agentLoop($: Engine, id: string, phase: 'start' | 'end'): Promise<void> {
+  if (phase === 'start') await $.turn.start({ text: 'work', turnId: id + '-t1', agentId: id } as never)
+  else await $.turn.complete({ answer: 'done', durationMs: 1000, isAborted: false, turnId: id + '-t1', reason: 'answer', agentId: id } as never)
+}
+
+test('D-1: a prompt.context call while no main turn runs and an agent loop runs (its summary fork) delivers nothing and leaves the episode; the result turn gets the block, its lane read with the result in; the return gets [idle-again]', async ($, on) => {
+  const w = new World().install(on)
+  const invalidated: string[] = []
+  on('ui.invalidate', (_$, e, next) => {
+    invalidated.push(String(e.event))
+    return next(e)
+  })
+  w.resumeHere = FINISHED
+  w.agents = [{ id: 'a1', status: 'running' }]
+  await w.start($)
+  await agentLoop($, 'a1', 'start')
+  await idleCompaction($, w)
+  await w.advance(5000)
+  expect(w.submits).toEqual([])
+  // The fork's call: no block, no delivery row, no lane row.
+  expect(blockOf(w, await $.prompt.context({ blocks: [] }))).toBe(undefined)
+  expect(w.rowsOf('mod_outcome')).toEqual([])
+  expect(w.rowsOf('lane_outcome').map(r => r.at)).toEqual(['build'])
+  // The agent ends; its result opens a turn: the cached answer is dropped before that turn, and
+  // its own prompt.context call delivers the block.
+  await agentLoop($, 'a1', 'end')
+  w.agents = [{ id: 'a1', status: 'completed' }]
+  await w.userTurn($, notif('a1'), 'task-notification')
+  expect(invalidated).toEqual(['prompt.context'])
+  const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  expect(block).toContain(SID_A)
+  if (HAS) expect(block).toContain('code reads the work lane as finished')
+  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.context'])
+  expect(w.rowsOf('lane_outcome').map(r => [r.lane, r.at])).toEqual([['working', 'build'], ['finished', 'delivery']])
+  await w.turnEnd($)
+  // The person is back: the whole block again beside their prompt, once.
+  await w.userTurn($, 'back')
+  expect(ctxOf(w)).toContain("A background result's turn got this block at")
+  expect(w.rowsOf('idle_return').length).toBe(1)
+})
+
+test('D-1: after a fork\'s call passed the block over, a person\'s own prompt gets it (a person\'s turn: the episode ends, no [idle-again])', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = FINISHED
+  w.agents = [{ id: 'a1', status: 'running' }]
+  await w.start($)
+  await agentLoop($, 'a1', 'start')
+  await idleCompaction($, w)
+  expect(blockOf(w, await $.prompt.context({ blocks: [] }))).toBe(undefined)
+  await w.userTurn($, 'back')
+  expect(blockOf(w, await $.prompt.context({ blocks: [] })) ?? '').toContain(SID_A)
+  expect(w.rowsOf('mod_outcome').map(r => r.resume)).toEqual(['delivered:prompt.context'])
+  await w.turnEnd($)
+  await w.userTurn($, 'and again')
+  expect(ctxOf(w)).toBe('')
+  expect(w.rowsOf('idle_return')).toEqual([])
+})
+
+test('D-1: with no agent loop running, a prompt.context call outside a main turn still delivers (as before)', async ($, on) => {
+  const w = new World().install(on)
+  w.resumeHere = FINISHED
+  await w.start($)
+  await idleCompaction($, w)
+  expect(blockOf(w, await $.prompt.context({ blocks: [] })) ?? '').toContain(SID_A)
+})
+
 // ---- 0.1.5 D-2 (AD2 on 0.1.1c and 0.1.4): the digest left out the code's Basis line, and the
 // summary marked its steps `— done`, which read as unmarked (0 of 3 done). Each failed on 0.1.4.
 

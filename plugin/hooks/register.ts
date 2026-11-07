@@ -15,7 +15,7 @@ import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer, resumeIdle } from './lib/idle'
 import { cancelKeepWarmTimer, noteBackground, noteEndedTasks, resumeKeepWarm } from './lib/keepwarm'
 import { startsWork } from './lib/lane'
-import { againFor, againLost, againSent, blockName, contextBlock, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
+import { againFor, againLost, againSent, blockName, contextBlock, contextPassedOn, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
 import { noteMode, onAttach, onCommandRun, onWorktreeTool, restartInterrupt } from './lib/restart'
 
@@ -62,6 +62,8 @@ export const register: Register = (on, options) => {
       laneAgentStarted(state, e.agentId)
       return next(e)
     }
+    // 0.1.5 D-1: a block another loop's prompt.context call passed over has the context read again.
+    contextPassedOn(realDeps($, options, state))
     // SESSION-RESTART D10: a permission mode read before this turn's start is older than the last turn.
     try {
       state.lastMainTurnAt = await $.clock.now()
@@ -146,6 +148,9 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     const own = isOwnOrigin(e.origin, $.plugin.name)
     if (own && refuseOwnSubmit(state)) return { drop: 'a user prompt came first' }
+    // 0.1.5 D-1: the turn this prompt opens or joins reads the context again for a block another
+    // loop's prompt.context call passed over (resume.ts), so that turn's own call delivers it.
+    contextPassedOn(realDeps($, options, state))
     const entering = e.turnId === undefined && !own
     // IC-1 D6: the entering prompt's origin kind decides at its turn.start whether halt clears.
     const kind = e.origin.kind
