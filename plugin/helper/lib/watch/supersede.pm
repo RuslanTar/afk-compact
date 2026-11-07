@@ -208,7 +208,7 @@ sub _a09 {
         return 0 unless defined $rel && !ref $rel && $rel !~ m{(?:\A|/)\.\.(?:/|\z)} && defined $sc->{root};
         my $body = watch::io::slurp($rel =~ m{\A/} ? $rel : "$sc->{root}/$rel", 1 << 20);
         return 0 unless defined $body;
-        push @text, watch::hooks::copy_text($body);
+        push @text, watch::hooks::copy_text($body, $sc->{spec});
     }
     my $l = watch::shape::ledger_diff($text[0], $text[1], 'copy', $sc->{spec});
     return (($l->{lost_U} // 1) + ($l->{lost_D} // 1) + ($l->{lost_X} // 1)) == 0 ? 1 : 0;

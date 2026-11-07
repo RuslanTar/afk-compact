@@ -2,33 +2,38 @@ package ledger;
 # lib/ledger.pm: the stable ledger, helper side (0.1.5, E-1; usage review "the helper copies U/D/X
 # lines from the previous copy and lints the difference; ids unique across a chain"). Owner: WP-core.
 # Pure text functions, no I/O: publish (skills::core seam) and the summary copies (copies.pm) call
-# them with the spec literals they read themselves. Text is characters.
+# them with the spec literals they read themselves; the watcher reads a copy's carried lines with
+# line_ids (watch::shape::uncarried). Text is characters.
 #
 #   check(base, draft, %o) -> {carry => [[line, section literal]…], ids => [id…], changed => [[id, n]…],
 #                              reused => [[id, n]…], renumbered => n}
-#     base: the own chain's previous file (a handoff, or the session's previous summary copy);
+#     base: the own chain's previous file (a handoff, or the session's newest earlier ok copy);
 #     draft: the new body. n is the draft's 1-based line number.
 #   carry(draft, check result, %o) -> the draft with the carried lines in their sections
 #   o: sections (the spec's sections_main literals, in order), user (the User constraints
 #      literal), decisions (the Decisions literal), approvals (the Approvals literal),
 #      fold_re (the spec's fold_line_re), tag_re (carry.tag_re), none_res ([regex…]: the none-form
 #      of User constraints), end_re (a line before which a missing section goes, e.g. the sentinel)
+#   line_ids(line, \%o) -> {ids, kind, retired, first, defines} (below)
 #
 # A base line is carried when it is a ledger line of the base's User constraints or Decisions
 # section (an entry `- U-3: …`, `- D-2: …`, `- X-1: …`, or a §7 fold or ledger.md pointer line) and
 # the draft has none of its ids: not as an entry, in the id list an entry or one of its merged
-# clauses starts with, nor on a `Superseded:`, fold or pointer line (the same reading as the
-# watcher's A-09, watch::shape::_ledger); an entry whose text the draft holds under another id
-# (renumbered) is not carried either. Approval lines never are: an approval the draft drops stays
-# dropped (the safe direction; the approval rules decide what carries). Lines are copied byte for
-# byte, so the lint treats them as carried lines.
+# clauses starts with, nor on a `Superseded:`, fold or pointer line (the watcher's A-09 reading,
+# watch::shape::_ledger; a carry tag's id is the other chain's and counts for nothing); an entry
+# whose text the draft holds under another id (renumbered) is not carried either. Approval lines
+# never are: an approval the draft drops stays dropped (the safe direction; the approval rules
+# decide what carries). Lines are copied byte for byte, so the lint treats them as carried lines;
+# each goes after the last entry of its kind in its section (D- before X-).
 #
 # The difference: a draft entry whose id a base entry has with other text is `changed` (an ask whose
-# quoted request is the same, and an approval, only change state: not reported), or `reused` when
-# the two name different items: their identity (the first quoted text, else the text before the
-# first ` — `) shares under half of its words. Two draft entries with one id and different items
-# are `reused` too. Only the defining lines (led by one id: `- D-2: …`) of User constraints,
-# Approvals and Decisions are compared: a line elsewhere, or one led by an id list, names the item.
+# quoted request is the same, and an approval, only change state: not reported; check stamps are
+# not text), or `reused` when the two name different items (_different_item: two whole entries,
+# never a status line, whose identities share under half of their words, and of one form whose
+# texts do too). Two draft entries with one id and different items are `reused` too, and so is a
+# draft entry for an id the base folded or superseded without defining it: ids stay unique across
+# the chain. Only the defining lines (led by one id: `- D-2: …`) of User constraints, Approvals and
+# Decisions are compared: a line elsewhere, or one led by an id list, names the item.
 use strict;
 use warnings;
 use utf8;
@@ -44,12 +49,29 @@ my %STOP = map { $_ => 1 } qw(the and for with not but are was were this that fr
 
 sub _id { return "$_[0]-" . ($_[1] + 0) }
 
-# The ids a line defines or names, as the watcher's _ledger reads them: {ids => [...], kind}
+# The ids a line defines or names: {ids => [...], kind, retired => [...]}; also the watcher's reader
+# of a copy's carried lines (watch::shape::uncarried), so the two never differ.
 # kind: entry (an id leads the line), fold (§7 fold or ledger.md pointer line), superseded, or undef.
-# an id range, left out as the watcher leaves it out (`..` or `…`; a dash after an id is a separator)
+# retired: the ids that left the chain on the line (a fold line's, the ids before `by` on a
+# Superseded line). A carry tag is read first and removed: the id it names is the other chain's.
+# A tagged fold or pointer line keeps the other chain's ids, so they are named `<sid8>:<id>`.
+# An id range is left out as the watcher leaves it out (`..` or `…`; a dash after an id is a
+# separator), except before `by` on a Superseded line, where it names each id (at most 64).
 my $RANGE = qr/\b[UDX]-[0-9]+\s*(?:\.\.|\x{2026})\s*(?:[UDX]-)?[0-9]+\b/;
+sub _range_list {
+    my ($k, $lo, $k2, $hi) = $_[0] =~ /\A([UDX])-0*([0-9]+)\s*(?:\.\.|\x{2026})\s*(?:([UDX])-)?0*([0-9]+)\z/ or return ();
+    return () if (defined $k2 && $k2 ne $k) || $hi < $lo || $hi - $lo >= 64;
+    return map { _id($k, $_) } $lo .. $hi;
+}
+sub line_ids { return _line_ids(@_) }
 sub _line_ids {
     my ($l, $o) = @_;
+    my $sid;
+    if ($o->{tag_re} && $l =~ $o->{tag_re}) {
+        ($sid) = substr($l, $-[0], $+[0] - $-[0]) =~ /\A\[from ([0-9a-f]{8})\b/;
+        $l =~ s/$o->{tag_re}//g;
+        $l =~ s/\s+\z//;
+    }
     my $t = $l;
     $t =~ s/\A\s*(?:[-*]\s+)?//;
     my $entry = $t =~ /\A[UDX]-[0-9]+\b/;
@@ -57,10 +79,22 @@ sub _line_ids {
              : (($o->{fold_re} && $l =~ $o->{fold_re}) || $l =~ /\bsettled;\s*full text in\s/
                 || ($l =~ /\bledger\.md\b/ && $t !~ /\A[UDX]-[0-9]+\s*:/)) ? 'fold' : undef;
     if ($kind) {
-        (my $s = $l) =~ s/$RANGE//g;
-        my @ids;
+        my $s = $l;
+        my @old;
+        if ($kind eq 'superseded' && $s =~ /\bSuperseded:\s*(.*?)\s+by\s/) {
+            my ($from, $to) = ($-[1], $+[1]);
+            my $head = $1;
+            for my $r ($head =~ /($RANGE)/g) { push @old, _range_list($r) }
+            (my $h = $head) =~ s/$RANGE//g;
+            push @old, _id($1, $2) while $h =~ /$ID/g;
+            substr($s, $from, $to - $from) = '';
+        }
+        $s =~ s/$RANGE//g;
+        my @ids = @old;
         push @ids, _id($1, $2) while $s =~ /$ID/g;
-        return { ids => \@ids, kind => $kind };
+        my @retired = $kind eq 'fold' ? @ids : @old;
+        if ($kind eq 'fold' && defined $sid) { @ids = map { "$sid:$_" } @ids; @retired = () }
+        return { ids => \@ids, kind => $kind, retired => \@retired };
     }
     return { ids => [], kind => undef } unless $entry;
     (my $s = $t) =~ s/$RANGE//g;
@@ -78,12 +112,18 @@ sub _line_ids {
     return { ids => \@ids, kind => 'entry', first => $ids[0], defines => (($lead // 0) == 1 ? 1 : 0) };
 }
 
-# An entry's text without bullet, leading id and its separator, carry tags; spaces folded.
+# An entry's text without bullet, leading id and its separator, carry tags and check stamps
+# (`[verified <stamp>: <cmd>]`, `(checked <stamp>)`, `checked <stamp>`: a refreshed check is the
+# same line, as the watcher's norm_entry reads it); spaces folded.
+my $STAMP = qr/[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?)?(?:\s*(?:Z|[+-][0-9]{2}:?[0-9]{2}))?/;
 sub _text {
     my ($l, $o) = @_;
     my $t = $l;
     $t =~ s/\A\s*(?:[-*]\s+)?[UDX]-[0-9]+\b\s*(?::|\.|\)|\x{2014}|-)?\s*//;
     $t =~ s/$o->{tag_re}//g if $o->{tag_re};
+    $t =~ s/\s*\[verified\s+$STAMP[^\]\n]*\]//g;
+    $t =~ s/\s*\(\s*(?:checked|verified)\s+$STAMP\s*\)//g;
+    $t =~ s/\s*\b(?:checked|verified)\s+$STAMP//g;
     $t =~ s/\s+/ /g;
     $t =~ s/\A | \z//g;
     return $t;
@@ -96,10 +136,13 @@ sub _words {
     my %w;
     for my $x (split /[^\w.\/-]+/, lc($s // '')) {
         $x =~ s/\A[.\/-]+|[.\/-]+\z//g;
-        next unless length $x;
-        next unless length($x) >= 3 || $x =~ /[0-9]/;
-        next if $STOP{$x};
-        $w{$x} = 1;
+        # a path or a dotted name counts as its parts too (`lib/ledger.pm`: lib, ledger)
+        for my $y ($x, ($x =~ m{[./]} ? split(m{[./]+}, $x) : ())) {
+            next unless length $y;
+            next unless length($y) >= 3 || $y =~ /[0-9]/;
+            next if $STOP{$y};
+            $w{$y} = 1;
+        }
     }
     return \%w;
 }
@@ -114,13 +157,37 @@ sub _identity {
 
 sub _quote { my ($t) = @_; return ($t =~ /"([^"]+)"/ || $t =~ /\x{201c}([^\x{201d}]+)\x{201d}/) ? lc($1) =~ s/\s+/ /gr : undef }
 
-sub _different_item {
-    my ($x, $y) = (_identity($_[0]), _identity($_[1]));
+# The share of the smaller word set that the other one holds, or undef when one is empty.
+sub _share {
+    my ($x, $y) = @_;
     my ($nx, $ny) = (scalar(keys %$x), scalar(keys %$y));
-    return 0 unless $nx && $ny;
+    return undef unless $nx && $ny;
     my $shared = grep { $y->{$_} } keys %$x;
-    my $min = $nx < $ny ? $nx : $ny;
-    return $shared / $min < 0.5 ? 1 : 0;
+    return $shared / ($nx < $ny ? $nx : $ny);
+}
+
+# The template form of an entry's text: approval, ask, constraint (`"<words>" — scope …`), option
+# (`rejected …`, `refuted …`), decision (a because-clause), else status (`done (commit …)`,
+# `done · U-3: done`: a state, not an item).
+sub _form {
+    my ($t) = @_;
+    return $t =~ /\Aapproval\b/i ? 'approval' : $t =~ /\Aask\b/i ? 'ask' : $t =~ /\A["\x{201c}]/ ? 'constraint'
+         : $t =~ /\A(?:rejected|refuted)\b/i ? 'option' : $t =~ /\bbecause\b/i ? 'decision' : 'status';
+}
+
+# Two texts of one id name different items (the id was reused) only when both are whole entries
+# (never a status line) and their identities (the first quoted text, else the text before the
+# first dash) share under half of their words; of one form, the whole texts must share under half
+# too, so a reworded line or a changed choice with its reason kept stays one item (ledger-changed).
+sub _different_item {
+    my ($p, $q) = @_;
+    my ($fa, $fb) = (_form($p), _form($q));
+    return 0 if $fa eq 'status' || $fb eq 'status';
+    my $id = _share(_identity($p), _identity($q));
+    return 0 unless defined $id && $id < 0.5;
+    return 1 if $fa ne $fb;
+    my $all = _share(_words($p), _words($q));
+    return defined $all && $all < 0.5 ? 1 : 0;
 }
 
 sub _approval { return $_[0] =~ /\A\s*(?:[-*]\s+)?U-[0-9]+:\s*approval\b/ ? 1 : 0 }
@@ -166,12 +233,14 @@ sub check {
     }
     return $res unless defined $base && $base =~ /\S/;
     my $bs = _scan($base, \%o);
-    my (%bfirst, %carried);
+    my (%bfirst, %bretired, %carried);
     for my $r (@$bs) {
         my $k = $r->{li}{kind} // next;
         if ($k eq 'entry' && $r->{li}{defines} && $cmp_sec{ $r->{sec} } && !$bfirst{ $r->{li}{first} }) {
             $bfirst{ $r->{li}{first} } = $r;
         }
+        # an id the base folds or supersedes has left the chain: it is taken for good
+        if ($cmp_sec{ $r->{sec} }) { $bretired{$_} //= $r for @{ $r->{li}{retired} || [] } }
         next unless $ledger_sec{ $r->{sec} } && ($k eq 'entry' || $k eq 'fold');
         next if $k eq 'entry' && _approval($r->{text});
         my @miss = grep { !$present{$_} } @{ $r->{li}{ids} };
@@ -181,10 +250,12 @@ sub check {
         push @{ $res->{carry} }, [ $r->{text}, $to ];
         $carried{$_} = 1 for @miss;
     }
-    $res->{ids} = [ sort { _ord($a) <=> _ord($b) } keys %carried ];
-    for my $id (sort { _ord($a) <=> _ord($b) } keys %dfirst) {
-        my $br = $bfirst{$id} or next;
+    $res->{ids} = [ sort { _ord($a) <=> _ord($b) || $a cmp $b } keys %carried ];
+    for my $id (sort { _ord($a) <=> _ord($b) || $a cmp $b } keys %dfirst) {
         my $dr = $dfirst{$id};
+        # a new entry for an id the base folded or superseded (and does not define itself)
+        if (!$bfirst{$id} && $bretired{$id}) { push @{ $res->{reused} }, [ $id, $dr->{n} ]; next }
+        my $br = $bfirst{$id} or next;
         my ($bt, $dt) = (_text($br->{text}, \%o), _text($dr->{text}, \%o));
         next if lc $bt eq lc $dt;
         if (_different_item($bt, $dt)) { push @{ $res->{reused} }, [ $id, $dr->{n} ]; next }
@@ -197,9 +268,12 @@ sub check {
     return $res;
 }
 
-# U before D before X, then by number.
+# U before D before X, then by number; the ids of another chain's pointer line (`<sid8>:D-1`) last.
 my %KIND_ORD = (U => 1, D => 2, X => 3);
-sub _ord { my ($k, $n) = $_[0] =~ /\A([UDX])-([0-9]+)\z/ or return 0; return $KIND_ORD{$k} * 1e6 + $n }
+sub _ord {
+    my ($p, $k, $n) = $_[0] =~ /\A((?:[0-9a-f]{8}:)?)([UDX])-([0-9]+)\z/ or return 0;
+    return (length $p ? 1e7 : 0) + $KIND_ORD{$k} * 1e6 + $n;
+}
 
 sub carry {
     my ($draft, $res, %o) = @_;
@@ -261,8 +335,34 @@ sub _insert {
             return;
         }
     }
-    my $at = @body ? $body[-1] + 1 : $start + 1;
-    splice @$lines, $at, 0, @$add;
+    # Each entry goes after the section's last entry of its kind, else before the first entry of a
+    # later kind (U, D, X) or a Superseded line, else after the section's last line, so D- lines stay
+    # before X- lines as the template orders them; a fold or pointer line goes last.
+    my %rank = (U => 1, D => 2, X => 3);
+    for my $l (@$add) {
+        my @b = grep { $lines->[$_] =~ /\S/ } $start + 1 .. $end - 1;
+        my $k = _entry_kind($l, $o);
+        my $at;
+        if (defined $k) {
+            my ($last) = reverse grep { (_entry_kind($lines->[$_], $o) // '') eq $k } @b;
+            if (defined $last) { $at = $last + 1 }
+            else {
+                ($at) = grep { my $x = _entry_kind($lines->[$_], $o);
+                               (defined $x && $rank{$x} > $rank{$k}) || (_line_ids($lines->[$_], $o)->{kind} // '') eq 'superseded' } @b;
+            }
+        }
+        $at //= @b ? $b[-1] + 1 : $start + 1;
+        splice @$lines, $at, 0, $l;
+        $end++;
+    }
+}
+
+# The kind letter of an entry line (`- D-2: …` -> D), else undef (a fold, Superseded or other line).
+sub _entry_kind {
+    my ($l, $o) = @_;
+    my $li = _line_ids($l, $o);
+    return undef unless ($li->{kind} // '') eq 'entry' && defined $li->{first};
+    return substr($li->{first}, 0, 1);
 }
 
 # The frontmatter value a summary copy records: `<n> lines (U-3, D-2); sha256 <summary sha>`.

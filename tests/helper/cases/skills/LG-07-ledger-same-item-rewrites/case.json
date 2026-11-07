@@ -1,0 +1,93 @@
+{
+ "id": "LG-07 (0.1.5 E-1, stable ledger: a rewritten line of one item is advisory)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "a status line beside its ask (U-2), an ask shortened to its status (U-4) and a paraphrased decision (D-1) keep their item: never LINT ledger-id-reuse; the status and the paraphrase are ADVISORY ledger-changed, and a line whose only change is a refreshed verified stamp (D-2) is not reported",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-2: ask \"fix the retry window\" — status open\n- U-3: ask \"log the retries\" — status open\n- U-4: ask \"cap the retry log\" — status open\n## Decisions and do-not-re-raise\n- D-1: use the ledger module for the carry — because one reader (agent)\n- D-2: no jitter — because the tests pin the delays (agent) [verified 2026-10-21 09:00 +0300: bin/test retry]\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "own"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "name": "own base"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-2: ask \"fix the retry window\" — status open\n- U-2: done · U-3: done\n- U-4: done (commit abc1234)\n## Decisions and do-not-re-raise\n- D-1: carry logic lives in lib/ledger.pm — because one reader (agent)\n- D-2: no jitter — because the tests pin the delays (agent) [verified 2026-10-21 14:05 +0300: bin/test retry]\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY ledger-changed line 11 U-4$",
+     "^ADVISORY ledger-changed line 13 D-1$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "ledger-id-reuse",
+     "^ADVISORY ledger-changed line [0-9]+ (?:U-2|D-2)$",
+     "^ADVISORY ledger-carried"
+    ]
+   },
+   "name": "same-item rewrites publish with advisories only"
+  }
+ ]
+}

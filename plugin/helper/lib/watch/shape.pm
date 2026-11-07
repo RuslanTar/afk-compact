@@ -219,30 +219,28 @@ sub _ledger {
 }
 
 # 0.1.5 (E-1, stable ledger): a saved copy's body without the ledger lines the helper carried into
-# it, given its `ledger_carried` value (`<n> lines (U-3, D-2); sha256 <hex>`, maybe JSON-quoted).
-# The summary named none of those ids anywhere (that is why they were carried), so every line that
-# defines or names one (an entry, the id list it or a merged clause starts with, a Superseded or
-# fold line) is a carried line.
+# it, given its `ledger_carried` value (`<n> lines (U-3, D-2, ab12cd34:D-1); sha256 <hex>`, maybe
+# JSON-quoted). The summary named none of those ids anywhere (that is why they were carried), so
+# every line that names one is a carried line, read with the reader that chose them
+# (ledger::line_ids, with the spec's fold line and carry tag): the two cannot differ. lib/ledger.pm
+# ships beside the watcher; were it missing, a line led by a carried id would still be dropped.
 sub uncarried {
-    my ($body, $note) = @_;
+    my ($body, $note, $spec) = @_;
     return $body unless defined $body && defined $note && !ref $note;
     (my $ids = $note) =~ s/sha256.*\z//s;
     my %c;
-    $c{"$1-" . ($2 + 0)} = 1 while $ids =~ /\b([UDX])-0*([0-9]+)\b/g;
+    $c{ (defined $1 ? "$1:" : '') . "$2-" . ($3 + 0) } = 1 while $ids =~ /(?:\b([0-9a-f]{8}):)?\b([UDX])-0*([0-9]+)\b/g;
     return $body unless %c;
+    my $lib = eval { require ledger; 1 };
+    my $carry = ref $spec eq 'HASH' && ref $spec->{carry} eq 'HASH' ? $spec->{carry} : {};
+    my %o = (fold_re => (ref $spec eq 'HASH' ? watch::spec::regex($spec, 'fold_line_re') : undef),
+             tag_re => watch::spec::compile($carry->{tag_re}));
     my @keep;
     for my $line (split /\n/, $body, -1) {
-        my $t = $line;
-        $t =~ s/^\s*(?:[-*]\s+)?//;
-        my @ids;
-        if ($line =~ /\bSuperseded:/ || $line =~ /\bsettled;\s*full text in\s/ || $line =~ /\bledger\.md\b/) {
-            push @ids, "$1-" . ($2 + 0) while $line =~ /\b([UDX])-0*([0-9]+)\b/g;
-        } elsif ($t =~ /\A[UDX]-[0-9]+\b/) {
-            (my $s = $t) =~ s/\b[UDX]-[0-9]+\s*(?:\.\.|\xe2\x80\xa6)\s*[UDX]-[0-9]+\b//g;
-            for my $clause (split /;|\xc2\xb7|\|/, $s) {
-                while ($clause =~ /\G$LIST_SEP*([UDX])-0*([0-9]+)\b/gc) { push @ids, "$1-" . ($2 + 0) }
-            }
-        }
+        my $c = $line;
+        utf8::decode($c);
+        my @ids = $lib ? @{ ledger::line_ids($c, \%o)->{ids} || [] }
+                : $c =~ /\A\s*(?:[-*]\s+)?([UDX])-0*([0-9]+)\b/ ? ("$1-" . ($2 + 0)) : ();
         next if grep { $c{$_} } @ids;
         push @keep, $line;
     }

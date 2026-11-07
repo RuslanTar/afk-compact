@@ -1,0 +1,116 @@
+{
+ "id": "LG-05 (0.1.5 E-1, stable ledger: a foreign base whose tags name own ids)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "with a foreign base the ledger base is own_previous_handoff; the foreign lines the draft carries keep a tag naming their own id (U-1, D-1), which is the other chain's id: it does not stand for the own chain's U-1 and D-1, so the own lines the draft dropped are still carried into the written file",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: retry budget 3 — because the gateway caps at 3 (user)\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_ab12cd34_other.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T12:00:00+03:00\nsession_id: ab12cd34-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\ngit_commit: 1234567890abcdef1234567890abcdef12345678\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-7 — other session\n## User constraints\n- U-1: \"never push\" — scope repo; user, ab12cd34\n## Decisions and do-not-re-raise\n- D-1: log to stderr — because CI reads it (agent)\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "foreign",
+     "previous_sid8": "ab12cd34"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "name": "foreign base, own previous file"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-2: \"never push\" — scope repo; user, ab12cd34 [from ab12cd34 · U-1 · 2026-10-21 12:00 +0300]\n## Decisions and do-not-re-raise\n- D-2: log to stderr — because CI reads it (agent) [from ab12cd34 · D-1 · 2026-10-21 12:00 +0300]\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY ledger-carried U-1, D-1$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^\\-\\ U\\-2:\\ \"never\\ push\"\\ —\\ scope\\ repo;\\ user,\\ ab12cd34\\ \\[from\\ ab12cd34\\ ·\\ U\\-1\\ ·\\ 2026\\-10\\-21\\ 12:00\\ \\+0300\\]\n\\-\\ U\\-1:\\ \"keep\\ the\\ 45\\ s\\ window\"\\ —\\ scope\\ retry\\ window;\\ user,\\ 11111111\n\\#\\#\\ Decisions\\ and\\ do\\-not\\-re\\-raise\n\\-\\ D\\-2:\\ log\\ to\\ stderr\\ —\\ because\\ CI\\ reads\\ it\\ \\(agent\\)\\ \\[from\\ ab12cd34\\ ·\\ D\\-1\\ ·\\ 2026\\-10\\-21\\ 12:00\\ \\+0300\\]\n\\-\\ D\\-1:\\ retry\\ budget\\ 3\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)\n## In flight\n"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "ledger": {
+        "carried": 2,
+        "changed": 0,
+        "reused": 0
+       }
+      }
+     }
+    ]
+   },
+   "name": "own U-1 and D-1 carried next to the tagged foreign lines"
+  }
+ ]
+}

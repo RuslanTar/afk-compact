@@ -90,7 +90,7 @@
       "path": "$ROOT/repo/LAB-7/$STEM.md",
       "has": [
        "^\\-\\ U\\-2:\\ ask\\ \"fix\\ the\\ retry\\ window\"\\ —\\ status\\ partly\\ 1\\ of\\ 2,\\ left\\ the\\ suite\n\\-\\ U\\-1:\\ \"keep\\ the\\ 45\\ s\\ window\"\\ —\\ scope\\ retry\\ window;\\ user,\\ 11111111\n## Decisions and do-not-re-raise\n",
-       "^\\-\\ D\\-5:\\ jitter\\ of\\ 50\\ ms\\ —\\ because\\ the\\ new\\ tests\\ allow\\ it\\ \\(agent\\)\n\\-\\ X\\-1:\\ rejected\\ exponential\\ backoff\\ —\\ because\\ the\\ gateway\\ times\\ out\\ at\\ 10\\ s\n\\-\\ D\\-4,\\ X\\-2\\ settled;\\ full\\ text\\ in\\ evidence/2026\\-10\\-20_10\\-00\\-00_11111111_retry/ledger\\.md\n## In flight\n",
+       "^\\-\\ X\\-1:\\ rejected\\ exponential\\ backoff\\ —\\ because\\ the\\ gateway\\ times\\ out\\ at\\ 10\\ s\n\\-\\ Superseded:\\ D\\-2\\ by\\ D\\-5\\ \\(2026\\-10\\-21\\ 14:05\\ \\+0300\\)\n\\-\\ D\\-5:\\ jitter\\ of\\ 50\\ ms\\ —\\ because\\ the\\ new\\ tests\\ allow\\ it\\ \\(agent\\)\n\\-\\ D\\-4,\\ X\\-2\\ settled;\\ full\\ text\\ in\\ evidence/2026\\-10\\-20_10\\-00\\-00_11111111_retry/ledger\\.md\n## In flight\n",
        "^\\-\\ D\\-1:\\ retry\\ budget\\ of\\ 3\\ calls\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)$",
        "^\\-\\ Superseded:\\ D\\-2\\ by\\ D\\-5\\ \\(2026\\-10\\-21\\ 14:05\\ \\+0300\\)$"
       ],

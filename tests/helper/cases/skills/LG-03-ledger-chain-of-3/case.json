@@ -128,7 +128,7 @@
      {
       "path": "$ROOT/repo/LAB-7/$STEM.md",
       "has": [
-       "^\\-\\ D\\-2:\\ log\\ each\\ retry\\ —\\ because\\ support\\ asked\\ \\(external\\)\n\\-\\ X\\-1:\\ rejected\\ exponential\\ backoff\\ —\\ because\\ the\\ gateway\\ times\\ out\\ at\\ 10\\ s\n\\-\\ D\\-1:\\ retry\\ budget\\ 3\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)\n## In flight\n"
+       "^\\-\\ D\\-2:\\ log\\ each\\ retry\\ —\\ because\\ support\\ asked\\ \\(external\\)\n\\-\\ D\\-1:\\ retry\\ budget\\ 3\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)\n\\-\\ X\\-1:\\ rejected\\ exponential\\ backoff\\ —\\ because\\ the\\ gateway\\ times\\ out\\ at\\ 10\\ s\n## In flight\n"
       ]
      }
     ]
@@ -212,7 +212,7 @@
       "path": "$ROOT/repo/LAB-7/$STEM.md",
       "has": [
        "## User constraints\n\\-\\ U\\-1:\\ \"keep\\ the\\ 45\\ s\\ window\"\\ —\\ scope\\ retry\\ window;\\ user,\\ 11111111\n\\-\\ U\\-2:\\ ask\\ \"fix\\ the\\ retry\\ window\"\\ —\\ status\\ open\n## Decisions and do-not-re-raise\n",
-       "^\\-\\ D\\-3:\\ move\\ the\\ window\\ to\\ 60\\ s\\ —\\ because\\ the\\ vendor\\ asked\\ \\(external\\)\n\\-\\ X\\-1:\\ rejected\\ exponential\\ backoff\\ —\\ because\\ the\\ gateway\\ times\\ out\\ at\\ 10\\ s\n\\-\\ D\\-1:\\ retry\\ budget\\ 3\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)\n## In flight\n"
+       "^\\-\\ D\\-3:\\ move\\ the\\ window\\ to\\ 60\\ s\\ —\\ because\\ the\\ vendor\\ asked\\ \\(external\\)\n\\-\\ D\\-1:\\ retry\\ budget\\ 3\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)\n\\-\\ X\\-1:\\ rejected\\ exponential\\ backoff\\ —\\ because\\ the\\ gateway\\ times\\ out\\ at\\ 10\\ s\n## In flight\n"
       ],
       "lacks": [
        "^none stated$"

@@ -141,6 +141,7 @@ sub run {
             queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
             quote_floor => $floor, carried_as => $carried_as,
             approval_context_only => (defined $ht ? 1 : 0), ledger_base => $ledger_base,
+            export_fn => ($repo ? sub { skills::export::body($_[0], $m, $xplan) } : undef),
         }) };
         if (!$r) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
         return $r;

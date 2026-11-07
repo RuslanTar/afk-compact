@@ -8,10 +8,10 @@ package copies;
 # replaced; a true h-id collision with other content gets -2. seq under seq.lock.
 # Mode 0400; frontmatter from the dispatch record and the boundary row only.
 # 0.1.5 (E-1, stable ledger): a main copy of a shaped summary (an ok verdict) also holds the
-# ledger lines of the session's previous copy that the summary dropped without a Superseded line
-# (lib/ledger.pm), copied unchanged into their sections; frontmatter `ledger_carried` names them
-# with the summary's own sha256, which copy_sha returns, so a second save of the same summary
-# still matches; a late save from a stash carries nothing (a newer copy may exist by then). The
+# ledger lines of the session's newest earlier ok copy (ledger_base) that the summary dropped
+# without a Superseded line (lib/ledger.pm), copied unchanged into their sections; frontmatter
+# `ledger_carried` names them with the summary's own sha256, which copy_sha returns, so a second
+# save of the same summary still matches; a late save from a stash carries nothing (a newer copy may exist by then). The
 # `copy` row gains `ledger {carried, changed, reused}` (counts).
 use strict;
 use warnings;
@@ -408,8 +408,24 @@ sub session_copies {
     return [sort { $a->{epoch} <=> $b->{epoch} || $a->{path} cmp $b->{path} } @out];
 }
 
-# _ledger(scope, verdict, previous copy path, nonce, summary sha, body) -> undef (no previous copy,
-# not a main copy of a shaped summary, the previous copy is this summary's) or {text, note, counts}:
+# The carry base of a main copy (0.1.5 E-1): the newest earlier main copy of the session whose own
+# verdict was ok. An unshaped copy has no ledger sections, so the chain carries past it; a copy of
+# this summary (its nonce or sha256) ends the search: nothing is carried then.
+sub ledger_base {
+    my ($sid, $bucket, $nonce, $sha) = @_;
+    my %ok = map { $_ => 1 } spec::list('ok_verdicts');
+    for my $c (reverse @{ session_copies($sid, 'main', $bucket) }) {
+        my $fm = $c->{fm} || {};
+        return undef if defined $nonce && ($fm->{nonce} // '') eq $nonce;
+        my ($psha) = copy_sha($c->{path});
+        return undef if defined $psha && defined $sha && $psha eq $sha;
+        return $c->{path} if !defined $fm->{verdict} || $ok{ $fm->{verdict} };
+    }
+    return undef;
+}
+
+# _ledger(scope, verdict, carry base path, nonce, summary sha, body) -> undef (no carry base, not a
+# main copy of a shaped summary, the base is this summary's) or {text, note, counts}:
 # ledger::check of the body against the previous copy (0.1.5 E-1). A summary is already written,
 # so nothing refuses: the copy gets the dropped lines, and the counts say what differed.
 sub _ledger {
@@ -532,7 +548,8 @@ sub save {
             }
             my $seq = $scope eq 'unknown' ? undef : _seq($dir, $sid8, $actor_tag);
             # a late save (reconcile, from a stash) may come after a newer copy: no carry then
-            my $lg = $a{late} ? undef : _ledger($scope, $verdict, $prev, $nonce, $s->{sha256}, $body);
+            my $lg = $a{late} || $scope ne 'main' ? undef
+                   : _ledger($scope, $verdict, ledger_base($sid, $bk->{path}, $nonce, $s->{sha256}), $nonce, $s->{sha256}, $body);
             $body = $lg->{text} if $lg && defined $lg->{text};
             $ret{ledger} = $lg->{counts} if $lg && $lg->{counts};
             my $stamp = util::file_stamp(util::now());

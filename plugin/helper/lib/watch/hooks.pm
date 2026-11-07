@@ -123,14 +123,14 @@ sub _strip_frontmatter {
 # lines the helper carried into it from the previous copy (0.1.5 E-1, frontmatter
 # `ledger_carried`; watch::shape::uncarried), so A-09 still counts what the summary itself lost.
 sub copy_text {
-    my ($t) = @_;
+    my ($t, $spec) = @_;
     return $t unless defined $t;
     my $body = _strip_frontmatter($t);
     return $body unless $t =~ /\A---\n/;
     my $i = index($t, "\n---\n", 4);
     my $head = $i >= 0 ? substr($t, 0, $i + 1) : '';
     my ($v) = $head =~ /^ledger_carried: (.*)$/m;
-    return defined $v ? watch::shape::uncarried($body, $v) : $body;
+    return defined $v ? watch::shape::uncarried($body, $v, $spec) : $body;
 }
 
 # The previous summary of the same chain: the newest saved copy of this
@@ -152,7 +152,7 @@ sub previous_summary {
         if (defined $rel && !ref $rel && $rel !~ m{(?:\A|/)\.\.(?:/|\z)}) {
             my $path = $rel =~ m{\A/} ? $rel : $ctx->{root} . '/' . $rel;
             my $t = watch::io::slurp($path, 1 << 20);
-            return (copy_text($t), 'copy') if defined $t;
+            return (copy_text($t, $ctx->{spec}), 'copy') if defined $t;
         }
     }
     my $tp = $ctx->{payload}{transcript_path};
