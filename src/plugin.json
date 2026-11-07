@@ -208,7 +208,7 @@
     "idle_handoff_min_tokens": {
       "type": "number",
       "title": "Handoff when idle: minimum size (tokens) [default 200,000]",
-      "description": "The handoff-when-idle turn runs only for conversations of at least this many tokens, since smaller ones are cheap to reload. Default 200,000 (allowed 100,000 to 1,000,000); raise it to run that turn less often, lower it to cover medium-size sessions too. A work lane that reads finished gets the turn at any size.",
+      "description": "The handoff-when-idle turn runs only for conversations of at least this many tokens, since smaller ones are cheap to reload. Default 200,000 (allowed 100,000 to 1,000,000); raise it to run that turn less often, lower it to cover medium-size sessions too. A work lane that reads finished after an idle compaction (until your next message) gets the turn at any known size.",
       "default": 200000,
       "min": 100000,
       "max": 1000000

@@ -300,15 +300,16 @@ sub _section {
     return (1, @out);
 }
 
-# The item's step mark (lane.ts `lastMark`): with a `·` mark, its last `·` mark, as on 0.1.4.
-# Else the other marks outside brackets, `todo` if any is: a note never turns a step done.
+# The item's step mark (lane.ts `lastMark`); a mark inside brackets is a note's and never counts.
+# Of the marks outside brackets: the last `·` mark, as on 0.1.4; else the others, `todo` if any is.
 sub _last_mark {
     my ($item) = @_;
     my ($dot, $other);
     while ($item =~ /$MARK_RE/g) {
         my ($sep, $mark, $at) = ($1, lc $2, $-[0]);
+        next if _depth_at($item, $at) > 0;
         if ($sep eq '·') { $dot = $mark; next }
-        next if _depth_at($item, $at) > 0 || (defined $other && $other eq 'todo');
+        next if defined $other && $other eq 'todo';
         $other = $mark;
     }
     return $dot // $other;

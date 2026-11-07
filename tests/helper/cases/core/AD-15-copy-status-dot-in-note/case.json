@@ -1,0 +1,136 @@
+{
+ "id": "AD-15-copy-status-dot-in-note",
+ "note": "0.1.5 D-2 second review: a `·` mark inside brackets is a note's too (copies.pm _last_mark and lane.ts lastMark, word for word): `— todo (review · done)` and `· todo (build · done)` stay todo. Status finished, Step 1 none: in-progress (completed on ee54fb51, which took the last `·` mark wherever it stood)",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": "$TMP/work",
+     "branch": "feature/LAB-42-retry"
+    },
+    {
+     "dispatch": {
+      "nonce": "1a2b3c4d",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "age_s": 120
+       }
+      },
+      {
+       "boundary": {
+        "age_s": 5,
+        "precomputed": false
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=1a2b3c4d s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: finished · State: fix in review (checkpoint: clean)\nStep 1: none\n## User constraints: none stated\n## Next steps\n1. write the fix — done\n2. merge the MR — todo (review · done)\n3. deploy the build · todo (build · done)\n⟪/$BRAND n=1a2b3c4d⟫\n</summary>"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true,
+    "files": [
+     {
+      "path": "$ROOT/work/LAB-42/compact/2026-10-21_14-05-12_${SID8}_c1-1a2b3c.md",
+      "mode": "0400",
+      "frontmatter": {
+       "kind": "compact-summary",
+       "writer": "postcompact",
+       "nonce": "1a2b3c4d",
+       "date": "2026-10-21T14:05:12+03:00",
+       "session_id": "$SID",
+       "actor": "main",
+       "transcript_path": "$TMP/proj/$SID.jsonl",
+       "claude_pid": "424242",
+       "repository": "work",
+       "bucket": "work/LAB-42",
+       "bucket_source": "branch",
+       "worktree": "*",
+       "branch": "feature/LAB-42-retry",
+       "git_commit": "*",
+       "status": "in-progress",
+       "trigger": "auto",
+       "compaction_seq": "1",
+       "tokens_before": "612000",
+       "tokens_after": "41000",
+       "verdict": "ok",
+       "channel": "mod-hook",
+       "seat_state": "mod-hook",
+       "redacted": null
+      },
+      "contains": [
+       "⟪$BRAND v1 n=1a2b3c4d s=main⟫",
+       "⟪/$BRAND n=1a2b3c4d⟫",
+       "## Resume here"
+      ],
+      "absent_text": [
+       "<summary>",
+       "</summary>"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "fields": {
+       "nonce": "1a2b3c4d",
+       "result": "saved",
+       "slot": "main"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "verdict",
+      "fields": {
+       "nonce": "1a2b3c4d",
+       "verdict": "ok",
+       "verdict_source": "postcompact"
+      }
+     },
+     {
+      "file": "$WATCH/$SID/compactions.jsonl",
+      "ev": "compaction",
+      "count": 1,
+      "fields": {
+       "actor": "main",
+       "compaction_seq": 1,
+       "nonce": "1a2b3c4d",
+       "verdict": "ok",
+       "seat_state": "mod-hook",
+       "channel": "mod-hook",
+       "trigger": "auto",
+       "copy": "saved",
+       "pre_tokens": 612000
+      }
+     }
+    ],
+    "files_extra": []
+   }
+  }
+ ]
+}

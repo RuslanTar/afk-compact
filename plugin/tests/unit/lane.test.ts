@@ -725,7 +725,7 @@ test('owner 2026-10-27 22:32: the step-5 digest of [idle] carries the Basis line
   expect(block).toContain(STEP5)
   // The model writes the digest; code fills the Basis when the block goes out (a step still todo
   // keeps the lane working, so this is [idle], not [idle-done]).
-  expect(block).toContain('its first line exactly "Basis: 1 of 2 listed steps marked done; 0 units running; git: 2 commits not pushed, 1 file changed"; then lane state and why; Done;')
+  expect(block).toContain('its first line exactly "Basis: 1 of 2 listed steps marked done; 0 units running; git: 2 commits not pushed, 1 file changed"; then the lane state and why; Done;')
   expect(block).not.toContain('@lane_basis@')
   expect(block).not.toContain('code reads the work lane as')
 })
@@ -2193,7 +2193,7 @@ test('D-2: every away-digest text gives the Basis as its first line, exactly; th
   for (const tag of ['idle', 'idle-done'] as const) {
     if (!hasTag('resume-context', tag)) continue
     const text = assemble('p', 'resume-context', ['prod-forbid', tag], rt)
-    expect(text).toContain('print the away digest (step 6 allows it), its first line exactly "Basis: B9"; then ')
+    expect(text).toContain('print the away digest (step 6 allows it), its first line exactly "Basis: B9"; then the lane state and why; Done')
     expect(text).not.toContain('(by code, as is)')
   }
   expect(laneNote('p', r, 'B1', true)).toContain('(Basis: B1)')
@@ -2216,7 +2216,7 @@ test('D-2: a step mark after a dash, a bullet, a colon or in brackets reads as `
 })
 
 // The D-2 review: a note inside a step (`(review: done)`, `, build: done`) never turns the step
-// done, a `·` mark reads as on 0.1.4, and a mark may take a note in brackets. Each failed on 9420a950.
+// done, a `·` mark outside brackets reads as on 0.1.4, and a mark may take a note in brackets. Each failed on 9420a950.
 test('D-2 review: a mark inside a note does not override the step\'s own mark; `— done (commit …)` reads done', () => {
   const sum = (status: string, lines: string[]) =>
     laneFacts(`## Resume here\nStatus: ${status} · State: x (checkpoint: clean)\nStep 1: none\nGate: none\n## Next steps\n` + lines.join('\n') + '\n')
@@ -2236,4 +2236,18 @@ test('D-2 review: a mark inside a note does not override the step\'s own mark; `
   expect([fin.done, fin.todo, fin.unmarked]).toEqual([3, 0, 0])
   expect(laneOf(fin, M).lane).toBe('finished')
   expect(sum('finished', ['1. push — todo (waits on the user)']).onUser).toBe(1)
+})
+
+// Its second review: a `·` mark inside brackets read as the step's own on 9420a950 and ee54fb51
+// (the last `·` mark counted wherever it stood), so a working lane could read finished. This
+// test failed on ee54fb51.
+test('D-2 review 2: a `·` mark inside brackets is a note\'s too: `— todo (review · done)` and `· todo (build · done)` stay todo; a `·` mark outside brackets still counts', () => {
+  const sum = (status: string, lines: string[]) =>
+    laneFacts(`## Resume here\nStatus: ${status} · State: x (checkpoint: clean)\nStep 1: none\nGate: none\n## Next steps\n` + lines.join('\n') + '\n')
+  const f = sum('working', ['1. write the fix — done', '2. merge the MR — todo (review · done)', '3. deploy · todo (build · done)'])
+  expect([f.done, f.todo, f.unmarked]).toEqual([1, 2, 0])
+  expect(laneOf(f, M).lane).toBe('working')
+  const g = sum('finished', ['1. ship · done (see the note · todo)', '2. tag (v1 · done)', '3. push (to origin) · done'])
+  expect([g.done, g.todo, g.unmarked]).toEqual([2, 0, 1])
+  expect(laneOf(g, M).lane).toBe('working')
 })

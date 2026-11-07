@@ -231,17 +231,19 @@ function section(text: string, heading: string): string[] | undefined {
 }
 
 /**
- * The item's step mark, or undefined: with a `·` mark, its last `·` mark, as on 0.1.4. Else the
- * other marks outside brackets, `todo` if any is (0.1.5 D-2 review: a note never turns a step
- * done, so `— todo (review: done)` and `— todo, build: done` stay todo). copies.pm `_last_mark`.
+ * The item's step mark, or undefined; a mark inside brackets is a note's and never counts (0.1.5
+ * D-2 review: `— todo (review: done)` and `2. merge — todo (review · done)` stay todo). Of the
+ * marks outside brackets: the last `·` mark, as on 0.1.4; else the others, `todo` if any is
+ * (`— todo, build: done` stays todo). copies.pm `_last_mark`.
  */
 function lastMark(item: string): 'todo' | 'done' | undefined {
   let dot: 'todo' | 'done' | undefined
   let other: 'todo' | 'done' | undefined
   for (const m of item.matchAll(new RegExp(MARK_SRC, 'gim'))) {
+    if (depthAt(item, m.index ?? 0) > 0) continue
     const mark = m[2]?.toLowerCase() === 'done' ? 'done' : 'todo'
     if (m[1] === '·') dot = mark
-    else if (depthAt(item, m.index ?? 0) === 0 && other !== 'todo') other = mark
+    else if (other !== 'todo') other = mark
   }
   return dot ?? other
 }
