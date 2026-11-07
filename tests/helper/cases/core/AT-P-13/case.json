@@ -722,17 +722,17 @@
    }
   },
   {
-   "name": "a perl that ends on a signal before it reads stdin (ABRT, as a perl that aborts on a missing library, and SEGV) under /bin/sh and dash (when found): exit 0, nothing on stdout, the row with the payload's session id (0.1.4 F-1 follow-up)",
+   "name": "a perl that ends on a signal before it reads stdin (TERM and KILL: an abort on a missing library or a crash, ABRT or SEGV, takes the same exit-above-128 path, but on macOS those make ReportCrash write into the real ~/Library/Logs, outside the test's HOME) under /bin/sh and dash (when found): exit 0, nothing on stdout, the row with the payload's session id (0.1.4 F-1 follow-up)",
    "setup": [
     {
      "stub": "perl",
-     "script": "ulimit -c 0 2>/dev/null; kill -\"$STORE_TEST_SIG\" $$; exit 0"
+     "script": "kill -\"$STORE_TEST_SIG\" $$; exit 0"
     }
    ],
    "exec": [
     "/bin/sh",
     "-c",
-    "for s in /bin/sh dash; do p=$(command -v \"$s\") || continue; for g in ABRT SEGV; do d=\"$1/sig-${s##*/}-$g\"; printf '{\"session_id\":\"%s\",\"hook_event_name\":\"PreCompact\",\"trigger\":\"auto\"}' \"$2\" | STORE_TEST_SIG=$g CLAUDE_PLUGIN_OPTION_LOG_DIR=$d \"$p\" \"$0\" hook PreCompact >\"$1/out\" 2>/dev/null; rc=$?; n=$(grep -c '\"ev\":\"helper_runtime_missing\"' \"$d/$2.classic.jsonl\" 2>/dev/null); echo \"${s##*/} $g rc=$rc rows=${n:-0} out=$(wc -c <\"$1/out\" | tr -d ' ')\"; done; done",
+    "for s in /bin/sh dash; do p=$(command -v \"$s\") || continue; for g in TERM KILL; do d=\"$1/sig-${s##*/}-$g\"; printf '{\"session_id\":\"%s\",\"hook_event_name\":\"PreCompact\",\"trigger\":\"auto\"}' \"$2\" | STORE_TEST_SIG=$g CLAUDE_PLUGIN_OPTION_LOG_DIR=$d \"$p\" \"$0\" hook PreCompact >\"$1/out\" 2>/dev/null; rc=$?; n=$(grep -c '\"ev\":\"helper_runtime_missing\"' \"$d/$2.classic.jsonl\" 2>/dev/null); echo \"${s##*/} $g rc=$rc rows=${n:-0} out=$(wc -c <\"$1/out\" | tr -d ' ')\"; done; done",
     "$STORE",
     "$TMP",
     "$SID"
@@ -740,8 +740,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^sh ABRT rc=0 rows=1 out=0$",
-     "^sh SEGV rc=0 rows=1 out=0$"
+     "^sh TERM rc=0 rows=1 out=0$",
+     "^sh KILL rc=0 rows=1 out=0$"
     ],
     "stdout_lacks": [
      "rc=[1-9]",
@@ -755,7 +755,7 @@
    "setup": [
     {
      "stub": "perl",
-     "script": "cat >/dev/null; ulimit -c 0 2>/dev/null; kill -SEGV $$; exit 0"
+     "script": "cat >/dev/null; kill -KILL $$; exit 0"
     }
    ],
    "env": {
