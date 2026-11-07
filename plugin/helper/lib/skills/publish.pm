@@ -142,8 +142,9 @@ sub run {
     # 0.1.5 (E-3): the mechanical blocking lints are fixed here instead of refusing
     # (skills::lint::fix: an id range written as its ids, Step 1 added as Next steps item 1 when
     # that item is missing); one ADVISORY line per fix says what changed, at the draft's line.
-    # The fixed text is linted again (a rewritten line that was carried stays carried) and goes
-    # on as the draft would; a refused publish keeps body.md as written.
+    # The fixed text is linted again (a rewritten line that was carried, from the own chain or a
+    # foreign base, stays carried; an approval line is never rewritten) and goes on as the draft
+    # would; a refused publish keeps body.md as written.
     my $fx = skills::lint::fix($body, $res->{blocking});
     my %cas = %{ $fx->{was} };
     if (@{ $fx->{fixes} }) {

@@ -214,7 +214,7 @@
    "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry`\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1.do the thing\n- then report the result to the user\n"
   },
   {
-   "name": "HL-08 guard: an item 1 written `1.` counts as present (spec: a line starting `1.` or `1)`): publish adds no item and step1-mismatch blocks",
+   "name": "HL-08 guard: an item 1 written `1.` with no space after it (`1.do the thing`) counts as present (spec: a line starting `1.` or `1)`), though lint() reads no item 1 there: publish adds no item and step1-mismatch blocks",
    "cwd": "$TMP/repo",
    "argv": [
     "publish",
