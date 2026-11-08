@@ -59,6 +59,9 @@ my %RX = (
     # is dropped, never exported
     model   => qr{\A[a-z][a-z0-9._-]{0,63}(?:\[[0-9a-z]{1,8}\])?\z},
     rule    => qr/\A[A-Z]-[0-9]{2}\z/,
+    # D-76: a usage window as a near-limit row names it, `kind:percent` (Claude Code's window kind
+    # or `arm`, a whole percent or `unknown`)
+    window  => qr/\A[a-z][a-z0-9_]{0,31}:(?:[0-9]{1,4}|unknown)\z/,
 );
 
 sub _is_num {

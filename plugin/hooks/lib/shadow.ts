@@ -14,7 +14,7 @@ import type { Deps } from './deps'
 import type { HandoffTurn } from './handoff-turn'
 import { assemble, hasAsset } from './assemble'
 import { call } from './helper'
-import { NEAR_LIMIT_PCT } from './idle'
+import { NEAR_LIMIT_PCT, limitWindows } from './idle'
 import { isoLocal, zoneOf } from './log'
 import { randomHex } from './nonce'
 import { sha256 } from './normalize'
@@ -91,6 +91,8 @@ export type Prepared = {
   sid: string
   spec: FireSpec
   skip?: string
+  /** A `near-limit` skip's windows (idle.ts `limitWindows`), in its record. */
+  windows?: string[]
   m?: Measure
   oldPrompt?: string
   oldStatus?: string
@@ -295,7 +297,7 @@ async function prepare(d: Deps, sid: string, spec: FireSpec, m: Measure | undefi
   }
   const limits = u?.rateLimits ?? []
   if (limits.length === 0) return { ...base, skip: 'no-limits' }
-  if (limits.some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { ...base, skip: 'near-limit' }
+  if (limits.some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { ...base, skip: 'near-limit', windows: limitWindows(limits) }
   // The cold rule (§4.5) on the last main request, mid-turn too: a step's start, else the turn end.
   const last = Math.max(d.state.lastTurnEndAt ?? -Infinity, sh.lastStepAt ?? -Infinity)
   if (!Number.isFinite(last) || now - last > COLD_MS) return { ...base, skip: 'cold' }
@@ -484,6 +486,7 @@ export function momentFields(mo: { p: Prepared; pluginSide: string; htRerun?: st
     ...(p.model !== null ? { model: p.model } : {}),
     ...(p.tokens !== null ? { tokens: p.tokens } : {}),
     ...(p.factsAge !== null ? { facts_age_s: p.factsAge } : {}),
+    ...(p.windows !== undefined ? { windows: p.windows } : {}),
     ...(f ? {
       worktree: f.worktree ?? null, branch: f.branch ?? null, head: f.head ?? null, dirty: f.dirty ?? null,
       old_chain_flagged: f.old_chain_flagged ?? 0,

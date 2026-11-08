@@ -63,8 +63,9 @@
 //   reads in the store still has its fire, and the hand-over a taker.
 // Rows: `keep_warm_start {jobs, gap_s, hours, windows}` (`windows`: the usage windows read; 0 means
 // the near-limit guard is skipped), one `keep_warm_ping {n, result, cache_read, cache_creation,
-// since_s, gap_s, ms, status?}` per ping, one `keep_warm_stop {why, pings, gap_s, handover}` per gap
-// that warmed or that `no-idle-path` refused before warming. The ping state lives in this load;
+// since_s, gap_s, ms, status?}` per ping, one `keep_warm_stop {why, pings, gap_s, handover, windows?}`
+// per gap that warmed or that `no-idle-path` refused before warming (`windows` on a `near-limit`
+// stop: each window as `kind:percent`, idle.ts `limitWindows`). The ping state lives in this load;
 // the idle record it holds stays in the store (idle.ts `holdIdle`), so a load that adopts it after
 // a reload ends the warming (`reload`) and fires it at the next ping's due, while the cache is
 // still warm.
@@ -72,7 +73,7 @@ import type { Deps, RequestUsage } from './deps'
 import type { Due } from './idle'
 import { compactedSince } from './compact'
 import { prefixRead } from './deps'
-import { IDLE_CACHE_MS, IDLE_TICK_MS, NEAR_LIMIT_PCT, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, oneHourCache, releaseHeld, scaleOf } from './idle'
+import { IDLE_CACHE_MS, IDLE_TICK_MS, NEAR_LIMIT_PCT, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, limitWindows, oneHourCache, releaseHeld, scaleOf } from './idle'
 import { notifiedTasks } from './lane'
 import { log } from './log'
 
@@ -284,9 +285,9 @@ async function step(d: Deps, kw: KeepWarm, gen: number): Promise<void> {
 
 /**
  * Why this gap may not warm now, or undefined. `handover`: the cache is still warm, so a deferred
- * idle record goes back to the idle path.
+ * idle record goes back to the idle path; `windows`: a `near-limit` stop's (idle.ts `limitWindows`).
  */
-async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: string; handover: boolean } | undefined> {
+async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: string; handover: boolean; windows?: string[] } | undefined> {
   const s = d.state
   const env = await d.idleEnv()
   const scale = scaleOf(env)
@@ -311,7 +312,8 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: strin
   }
   if (!(await oneHourCache(d, env, u))) return { why: 'ttl-5m', handover: true }
   // A window at the limit share or more; none reported (or no reading): this guard is skipped.
-  if ((u?.rateLimits ?? []).some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { why: 'near-limit', handover: true }
+  const limits = u?.rateLimits ?? []
+  if (limits.some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { why: 'near-limit', handover: true, windows: limitWindows(limits) }
   if (now - kw.start >= d.cfg.keep_warm_hours * IDLE_CACHE_MS * scale) return { why: 'cutoff', handover: true }
   // No idle path would take the gap over after the pings: no idle record armed or held for the
   // session (`incoming`: the one the idle timer's fire is asking about, a tombstone in the store by
@@ -424,7 +426,7 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
  * not of the plugin's own. With no hand-over the record it held is cleared, or with `keep`
  * (SessionEnd `other`) left in the store for the process that resumes the session.
  */
-async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: number, keep = false): Promise<void> {
+async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: number, keep = false, windows?: string[]): Promise<void> {
   const s = d.state
   if (s.keepWarm === kw) cancelKeepWarmTimer(d)
   const was = kw.phase
@@ -435,7 +437,9 @@ async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: 
   const back = handover && rec !== undefined
   // A stop that came while the start row is written (a turn starting then): its row comes after that one.
   if (kw.startRow) await kw.startRow.catch(() => undefined)
-  await log(d, kw.sid, 'keep_warm_stop', { why, pings: kw.pings, gap_s: secs(now - kw.start), handover: back || (keep && rec !== undefined) })
+  await log(d, kw.sid, 'keep_warm_stop', {
+    why, pings: kw.pings, gap_s: secs(now - kw.start), handover: back || (keep && rec !== undefined), ...(windows !== undefined ? { windows } : {}),
+  })
   if (back && rec) {
     s.keepWarmSpent = true
     await handOverIdle(d, rec, kw.warm, now)
@@ -507,7 +511,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     }
     // False when the gap moved meanwhile: nothing more here.
     if (!(await begin(d, kw, now))) return
-  } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now)
+  } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now, false, b.windows)
   if (kw.phase !== 'warming') return
   // The main requests before the fork: one that comes while it runs already changed the history.
   const reqs = s.mainReqs

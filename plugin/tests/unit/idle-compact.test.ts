@@ -2155,3 +2155,67 @@ test('AT-IC-C35 (D12): a cancel (a turn start) while a tick reads the clock: tha
   expect(waits).toEqual([IDLE_TICK_MS, IDLE_TICK_MS, 30000])
   expect(reads).toBe(0)
 })
+
+// ---- D-76 (0.1.6): a near-limit skip row names the windows that were read
+
+const nearRows = (w: World) => w.rowsOf('handoff_skipped').filter(r => r.reason === 'idle').map(r => [r.why, r.kind, r.windows])
+
+test('D76-01 (compact): a seven-day window at 95% at the timer: the near-limit row names every reported window, in order, as kind:percent', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(53 * MIN)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+  await w.advance(MIN)
+  expect(nearRows(w)).toEqual([['near-limit', 'compact', ['five_hour:12', 'seven_day:95']]])
+})
+
+test('D76-02 (turn, skip): a seven-day window at 94.6% before a five-hour one at 40%: the row keeps the reported order, whole percents rounded down', { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip' } }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(48 * MIN)
+  w.rateLimits = [{ kind: 'seven_day', percentUsed: 94.6 }, { kind: 'five_hour', percentUsed: 40.9 }]
+  await w.advance(2 * MIN)
+  expect(nearRows(w)).toEqual([['near-limit', 'turn', ['seven_day:94', 'five_hour:40']]])
+})
+
+test('D76-03 (check): native on, a spend limit at 95% at the 55.5-min check: the compaction\'s near-limit row names both windows', { options: { ...ON, idle_handoff_near_limit: 'skip' } }, async ($, on) => {
+  const w = world(on)
+  w.policy = {}
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(55 * MIN)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: 95 }]
+  await w.advance(MIN)
+  expect(nearRows(w)).toEqual([['near-limit', 'check', ['five_hour:12', 'spend_limit:95']]])
+})
+
+test('D76-04 (compact, arm): an adopted record armed at 95%, no reading yet: the row names the arm-time reading, arm:95', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, {}, adoptedRecord(probe, { pct: 95.5 }))
+  w.rateLimits = []
+  w.tokens = undefined
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(nearRows(w)).toEqual([['near-limit', 'compact', ['arm:95']]])
+})
+
+test('D76-05 (turn, skip-spend, arm): an adopted turn record armed at a 30% top share and a 95% spend share: the spend share decided, arm:95', { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
+  const w = world(on, {}, adoptedTurn('1h', 30, 95))
+  w.rateLimits = []
+  w.tokens = undefined
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(nearRows(w)).toEqual([['near-limit', 'turn', ['arm:95']]])
+})
+
+test('D76-06: a skip row for any other reason has no windows field', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
+  const w = world(on, {}, adoptedTurn(null))
+  w.rateLimits = []
+  w.tokens = undefined
+  await w.start($)
+  await w.advance(10 * MIN)
+  const rows = w.rowsOf('handoff_skipped').filter(r => r.reason === 'idle')
+  expect(rows.map(r => [r.why, 'windows' in r])).toEqual([['ttl-5m', false]])
+})

@@ -175,12 +175,14 @@ export async function handoffPossible(d: Deps, sid: string): Promise<boolean> {
 /**
  * One `handoff_skipped` row; an optional turn's row also names its reason (`precompact`, `idle`).
  * An idle timer's row also names its kind (`turn`, `check`, `compact`) and, when it fired late,
- * by how many seconds (`late_s`).
+ * by how many seconds (`late_s`); a `near-limit` row the windows read (`windows`, D-76: idle.ts
+ * `limitWindows`).
  */
-export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number } = {}): Promise<void> {
+export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number; windows?: string[] } = {}): Promise<void> {
   await log(d, sid, 'handoff_skipped', {
     why, ht, ...(reason !== undefined && !isHalt(reason) ? { reason } : {}),
     ...(extra.kind !== undefined ? { kind: extra.kind } : {}), ...(extra.late_s !== undefined ? { late_s: extra.late_s } : {}),
+    ...(extra.windows !== undefined ? { windows: extra.windows } : {}),
   })
 }
 

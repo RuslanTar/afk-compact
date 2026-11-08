@@ -305,6 +305,20 @@ test('AT-KW-11: a usage window reaches 90% between pings: stop near-limit, the d
   expect(selfCompacts(w)).toBe(0)
 })
 
+test('D76-07 (D-76): the near-limit stop row and the handed-back compaction\'s near-limit skip both name the windows read, kind:percent in the reported order; other stop and skip rows have none', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = [{ kind: 'seven_day', percentUsed: 92.7 }, { kind: 'five_hour', percentUsed: 30 }]
+  await until(w, t0, 100)
+  expect(w.rowsOf('keep_warm_stop').map(r => [r.why, r.windows])).toEqual([['near-limit', ['seven_day:92', 'five_hour:30']]])
+  const rows = w.rowsOf('handoff_skipped').filter(r => r.reason === 'idle')
+  expect(rows.map(r => [r.why, 'windows' in r ? r.windows : 'none'])).toEqual([['keep-warm', 'none'], ['near-limit', ['seven_day:92', 'five_hour:30']]])
+})
+
 test('AT-KW-12: the cache switched to five minutes between pings: stop ttl-5m with the hand-over', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w)

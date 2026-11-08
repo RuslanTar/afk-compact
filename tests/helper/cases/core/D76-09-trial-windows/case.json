@@ -1,0 +1,49 @@
+{
+ "id": "D76-09-trial-windows",
+ "note": "D-76 (0.1.6): the shadow trial's near-limit skip record keeps the usage windows the mod read (`windows`, each `kind:percent`, in the order given, at most 8); an item of another shape (free text, a number) is dropped; a skip record without the field (an older mod) is written as before, with no windows key",
+ "now": "2026-11-08T10:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "a near-limit skip record keeps its windows",
+   "setup": [
+    {
+     "write": "$HOME/.cache/$BRAND-trial/trial.json",
+     "json": {"v": 1, "on": true, "trial_until": "2026-11-24", "handoff_root": "$ROOT", "log_dir": "$WATCH", "cc_versions": ["2.1.311"]}
+    }
+   ],
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_json": {
+    "kind": "skip",
+    "moment_id": "$SID8-0000d076",
+    "moment": {"kind": "m3-idle", "status": "skipped:near-limit", "windows": ["seven_day:94", "free text: 3", 42, "five_hour:40"]}
+   },
+   "expect": {
+    "exit": 0,
+    "json": {"written": true},
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-11/$SID8-0000d076.json",
+      "json": {"status": "skipped:near-limit", "windows": ["seven_day:94", "five_hour:40"]}
+     }
+    ]
+   }
+  },
+  {
+   "name": "a skip record with no windows (an older mod) has no windows key",
+   "argv": ["trial-save", "--sid", "$SID"],
+   "stdin_json": {
+    "kind": "skip",
+    "moment_id": "$SID8-0001d076",
+    "moment": {"kind": "m3-idle", "status": "skipped:near-limit"}
+   },
+   "expect": {
+    "exit": 0,
+    "json": {"written": true},
+    "files": [
+     {"path": "$HOME/.cache/$BRAND-trial/moments/2026-11/$SID8-0001d076.json", "json": {"status": "skipped:near-limit"}, "keys_absent": ["windows"]}
+    ]
+   }
+  }
+ ]
+}

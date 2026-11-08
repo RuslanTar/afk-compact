@@ -228,6 +228,8 @@ test('AT-DH-08: guards cover both forks with one record each: no limits, a windo
   await w.settle()
   expect(forks.length).toBe(0)
   expect(saves(w).map(s => s.moment.status)).toEqual(['skipped:no-limits', 'skipped:near-limit', 'skipped:cold'])
+  // D-76: the near-limit skip record names the windows read; the other two have none.
+  expect(saves(w).map(s => s.moment.windows ?? 'none')).toEqual(['none', ['five_hour:10', 'seven_day:90'], 'none'])
   // No cap: every eligible moment fires.
   for (let i = 0; i < 6; i++) {
     await turn($, w)
