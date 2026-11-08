@@ -1,6 +1,6 @@
 {
  "id": "AT-QK-01 (0.1.6 queue contract: queue check, the example program, the reason cap)",
- "note": "Owner 2026-11-08 (\"the plugin may share its contract and provide instructions how to integrate with its questions path\"): `queue check [<program>]` runs only list --json --session <made-up id> of the contract in assets/queue-contract.md (default: queue_cmd) and prints ok/FAIL per check with the fix, then QUEUE CHECK PASS (exit 0) or QUEUE CHECK FAIL <check> (exit 1); it writes nothing (no caps cache, no queue-state, nothing in the program's store) and never calls add or adopt. The shipped example assets/examples/queue-folder.sh passes it, queues a question end to end through queue-add (QUEUED, then EXISTS from its own store with the ledger gone) and lists it after. A reply without the tag, a reply with keys the schema refuses and a program that is not executable fail with their fix. /status prints the queue check pointer and the user-run line only while queue_cmd is set. queue-add caps recommendation_none_reason at 200 B whenever the draft carries it, also beside a recommended option (before 0.1.6 only when no option was recommended). Review fixes: the chmod fix names the full path, shell-quoted (a path under HOME printed as ~ inside quotes did not expand); a list reply whose session is not the id sent fails; a reply of exactly 256 KiB passes and one byte more fails; queue-add bounds the draft again after redaction, so a label the redaction marks grow past 40 B is refused, not sent; a blank recommendation_none_reason beside a recommended option is dropped and the question queued; a lane id that ends in a newline is no lane (no Queued: line)",
+ "note": "Owner 2026-11-08 (\"the plugin may share its contract and provide instructions how to integrate with its questions path\"): `queue check [<program>]` runs only list --json --session <made-up id> of the contract in assets/queue-contract.md (default: queue_cmd) and prints ok/FAIL per check with the fix, then QUEUE CHECK PASS (exit 0) or QUEUE CHECK FAIL <check> (exit 1); it writes nothing (no caps cache, no queue-state, nothing in the program's store) and never calls add or adopt. The shipped example assets/examples/queue-folder.sh passes it, queues a question end to end through queue-add (QUEUED, then EXISTS from its own store with the ledger gone) and lists it after. A reply without the tag, a reply with keys the schema refuses and a program that is not executable fail with their fix. /status prints the queue check pointer and the user-run line only while queue_cmd is set. queue-add caps recommendation_none_reason at 200 B whenever the draft carries it, also beside a recommended option (before 0.1.6 only when no option was recommended). Review fixes: the chmod fix names the full path, shell-quoted (a path under HOME printed as ~ inside quotes did not expand); a list reply whose session is not the id sent fails; a reply of exactly 256 KiB passes and one byte more fails; queue-add bounds the draft again after redaction, so a label the redaction marks grow past 40 B is refused, not sent; a blank recommendation_none_reason beside a recommended option is dropped and the question queued; a lane id that ends in a newline is no lane (no Queued: line); after redaction only the size caps run again, and a mark that takes the question's closing ? (SECRET=from_vault?) puts it back, so the draft is queued (0.1.6 review: it was refused as `question`)",
  "now": "2026-11-08T12:00:00+01:00",
  "tz": "Etc/GMT-1",
  "steps": [
@@ -498,6 +498,39 @@
      {
       "path": "$TMP/bin/addlog.calls",
       "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "queue-add: a redaction that takes the closing ? is queued with the ? put back",
+   "options": {
+    "queue_cmd": "$TMP/bin/save"
+   },
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "3d4e5f6a"
+   ],
+   "stdin_json": {
+    "question": "Should the deploy read SECRET=from_vault?",
+    "kind": "open",
+    "blocks": "the deploy"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "QUEUED q-2\n",
+    "files": [
+     {
+      "path": "$TMP/bin/save.draft",
+      "has": [
+       "\"question\":\"Should the deploy read \\[redacted:key-value\\]\\?\""
+      ],
+      "lacks": [
+       "from_vault"
+      ]
      }
     ]
    }

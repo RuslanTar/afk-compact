@@ -56,7 +56,7 @@ The draft on stdin is one JSON object, `"schema": "queue-add/v1"` (`queue-add.v1
 | `blocks` | what waits on the answer; at most 200 bytes |
 | `context` | optional: what the person needs to know to answer; at most 400 bytes |
 
-The helper bounds the draft, scans every text for secrets (a hard hit sends nothing; a soft hit is replaced by `[redacted:<rule>]`) and bounds the redacted draft again, since a mark can be longer than what it replaces: a draft over a cap, before or after redaction, is not sent. So the draft the program receives keeps every cap above. Unknown keys may be added in a later version of the same schema; ignore them.
+The helper bounds the draft, scans every text for secrets (a hard hit sends nothing; a soft hit is replaced by `[redacted:<rule>]`) and checks the size caps of the redacted draft again, since a mark can be longer than what it replaces: a draft over a cap, before or after redaction, is not sent. A mark that takes the question's closing `?` gets it back. So the draft the program receives keeps every cap above. Unknown keys may be added in a later version of the same schema; ignore them.
 
 The answer is the exit code, and on exit 0 one JSON line on stdout (at most 64 KiB in all): `{"status": "queued" | "exists", "id": "<queue id>"}`, the id at most 128 characters from `A-Z a-z 0-9 . _ : / -`. You may add `"schema": "queue-add/v1"`, `"lane"` and `"client_id"`; the plugin reads `status` and `id`. A refusal prints one line `REFUSED: <kind>: <reason>` on stdout (exit 2 prints none).
 
