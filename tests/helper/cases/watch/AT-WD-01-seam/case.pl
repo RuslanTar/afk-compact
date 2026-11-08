@@ -62,10 +62,11 @@ my $nested = sub { my ($v) = @_; return { values => $v, source => { map { $_ => 
         my @pre = $E->rows('classic', 'precompact');
         $E->count(\@pre, 2, "settings file: 'OFF' writes no precompact row, 'Shadow2' writes one per hook");
         # CR-F34: the driver's staged plugin holds core's test seam, so the consent folder is
-        # this HOME's .claude and the launcher adds no consent config_note rows.
+        # this HOME's .claude and the launcher adds no consent config_note rows. D-72: 'OFF', a
+        # word from before 0.1.6, gets core's legacy-word row (rc::preamble), once per session.
         my @cn = $E->rows('classic', 'config_note');
-        $E->count(\@cn, 1, "settings file 'Shadow2': one config_note row per session");
-        $E->is(join(',', map { ($_->{key} // '') . ':' . ($_->{note} // '') } @cn), 'watcher:watcher_value_unknown',
-               "settings file 'Shadow2': the config_note row is the watcher's");
+        $E->count(\@cn, 2, "settings file 'OFF' then 'Shadow2': one config_note row each per session");
+        $E->is(join(',', map { ($_->{key} // '') . ':' . ($_->{note} // '') } @cn), 'watcher:legacy-word,watcher:watcher_value_unknown',
+               "settings file 'OFF': core's legacy-word row; 'Shadow2': the watcher's row");
     },
 };
