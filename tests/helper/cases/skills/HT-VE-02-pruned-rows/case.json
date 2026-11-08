@@ -1,0 +1,54 @@
+{
+ "id": "HT-VE-02 (verify and restore-evidence: a MANIFEST row prune marked `pruned` reads pruned, never missing, and is not restored)",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.6 PRUNE: `prune --apply` sets the scan column of every row whose copy it deleted to `pruned`, so resume's verify reports the copy as removed on purpose (`pruned <copy>`), not lost (`missing`); restore-evidence skips such a row. A row whose copy is gone without that mark still reads missing.",
+ "now": "2026-11-08T12:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$ROOT/repo/LAB-2/2026-10-01_10-00-00_11111111_h.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-01T10:00:00+03:00\nsession_id: 11111111-1111-4111-8111-111111111111\nactor: main\n---\n# LAB-2\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-2/evidence/2026-10-01_10-00-00_11111111_h/kept.log",
+     "content": "kept\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-2/evidence/2026-10-01_10-00-00_11111111_h/MANIFEST.tsv",
+     "content": "copy_path\torigin\tbytes\tsha256\tmtime\tcopied_at\tmode\tscan\tregen_cmd\tmeaning\n$ROOT/repo/LAB-2/evidence/2026-10-01_10-00-00_11111111_h/kept.log\t/tmp/kept.log\t5\t78051faade059d70866df6a3fb83ef348721fd74a87e93ef95c493f87d0d236b\t-\t2026-10-01T10:00:00+03:00\t0600\tfull\t-\t-\n$ROOT/repo/LAB-2/evidence/2026-10-01_10-00-00_11111111_h/gone.log\t/tmp/gone.log\t5\t4b9f2c32577beb1ebc8ab2a1e226faaa9176a81cd4eedbaa22f8a0db919972b5\t-\t2026-10-01T10:00:00+03:00\t0600\tpruned\t-\t-\n$DISP/2026-10-01/2026-10-01_10-00-00_11111111_h-evidence/run.log\t/tmp/run.log\t4\tb5004f26a852b0d60ec1237432c1a33c2307ff2458c374d9d99749d045c7feb9\t-\t2026-10-01T10:00:00+03:00\t0600\tpruned\t-\t-\n$ROOT/repo/LAB-2/evidence/2026-10-01_10-00-00_11111111_h/lost.log\t/tmp/lost.log\t5\ted1d1a8db09e369fa33bde54f504d1fda0161a5ccd8a0d5517d92456fec28c41\t-\t2026-10-01T10:00:00+03:00\t0600\tfull\t-\t-\n"
+    }
+   ]
+  },
+  {
+   "argv": [
+    "verify",
+    "$ROOT/repo/LAB-2/2026-10-01_10-00-00_11111111_h.md"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok $ROOT/repo/LAB-2/evidence/2026-10-01_10-00-00_11111111_h/kept.log\npruned $ROOT/repo/LAB-2/evidence/2026-10-01_10-00-00_11111111_h/gone.log\npruned $DISP/2026-10-01/2026-10-01_10-00-00_11111111_h-evidence/run.log\nmissing $ROOT/repo/LAB-2/evidence/2026-10-01_10-00-00_11111111_h/lost.log\n"
+   }
+  },
+  {
+   "argv": [
+    "restore-evidence",
+    "$ROOT/repo/LAB-2/2026-10-01_10-00-00_11111111_h.md",
+    "--to",
+    "$TMP/out"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "$TMP/out/kept.log\n",
+    "files": [
+     {
+      "path": "$TMP/out/*",
+      "count": 1
+     }
+    ]
+   }
+  }
+ ]
+}

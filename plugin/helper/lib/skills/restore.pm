@@ -20,7 +20,8 @@ sub _handoff_arg {
     return $p;
 }
 
-# verify: one row per MANIFEST entry, ok · missing · withheld · redacted. A copy recorded under an
+# verify: one row per MANIFEST entry, ok · missing · withheld · redacted · pruned (a copy `prune
+# --apply` deleted on purpose, 0.1.6 PRUNE). A copy recorded under an
 # old default root (~/.claude/trash-staging, ~/.claude/handoffs) that is gone there is read under the
 # new root, where `migrate --apply` put it (STATE-ROOT; skills::ctx::follow).
 sub verify {
@@ -34,6 +35,7 @@ sub verify {
         my $scan = $r->{scan} // '';
         my $copy = skills::ctx::follow($ctx, $r->{copy_path} // '');
         if ($scan eq 'withheld') { skills::cli::say("withheld $r->{origin}"); next }
+        if ($scan eq 'pruned') { skills::cli::say('pruned ' . ($copy || $r->{origin})); next }
         if ($scan eq 'ref-only') {
             my $sz = -s $r->{origin};
             skills::cli::say((defined $sz && ($r->{bytes} eq '' || $sz == $r->{bytes}) ? 'ok' : 'missing') . " $r->{origin}");
@@ -61,7 +63,7 @@ sub restore {
     skills::util::mkdir_p($to);
     for my $r (@$rows) {
         my $scan = $r->{scan} // '';
-        next if $scan eq 'withheld' || $scan eq 'ref-only';
+        next if $scan eq 'withheld' || $scan eq 'ref-only' || $scan eq 'pruned';
         my $src = skills::ctx::follow($ctx, $r->{copy_path} // '');
         next unless $src ne '' && -f $src;
         my $name = File::Basename::basename($src);

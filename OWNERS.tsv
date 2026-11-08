@@ -67,6 +67,8 @@ plugin/helper/cmd/restart.*	core
 plugin/helper/cmd/settings.*	core
 plugin/helper/cmd/{begin,stamp,evidence,publish,locate,inventory,heal-check,verify,restore-evidence,stash,lane,pin,receipt,risk}.*	skills
 plugin/helper/cmd/{wait,project}.*	skills
+# 0.1.6 PRUNE: the user-run prune of old evidence (lib/skills/prune.pm), beside verify.
+plugin/helper/cmd/prune.*	skills
 plugin/helper/cmd/{watch,report}.*	watch
 tests/helper/run.*	core
 # HOME-GUARD (0.1.2): the one child-environment guard of the core case runner and the watch driver.
