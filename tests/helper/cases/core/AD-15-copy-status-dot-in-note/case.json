@@ -1,6 +1,6 @@
 {
  "id": "AD-15-copy-status-dot-in-note",
- "note": "0.1.5 D-2 second review: a `·` mark inside brackets is a note's too (copies.pm _last_mark and lane.ts lastMark, word for word): `— todo (review · done)` and `· todo (build · done)` stay todo. Status finished, Step 1 none: in-progress (completed on ee54fb51, which took the last `·` mark wherever it stood)",
+ "note": "0.1.5 D-2 second review: a `·` mark inside brackets is a note's too (copies.pm _last_mark and lane.ts lastMark, word for word): `— todo (review · done)` and `· todo (build · done)` stay todo. Status finished, Step 1 none: in-progress (completed on c6e99b3a = 0.1.4 and on ee54fb51, which take the last `·` mark wherever it stands)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -47,7 +47,7 @@
     "cwd": "$TMP/work",
     "hook_event_name": "PostCompact",
     "trigger": "auto",
-    "compact_summary": "<summary>\n⟪$BRAND v1 n=1a2b3c4d s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: finished · State: fix in review (checkpoint: clean)\nStep 1: none\n## User constraints: none stated\n## Next steps\n1. write the fix — done\n2. merge the MR — todo (review · done)\n3. deploy the build · todo (build · done)\n⟪/$BRAND n=1a2b3c4d⟫\n</summary>"
+    "compact_summary": "<summary>\n⟪$BRAND v1 n=1a2b3c4d s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: finished · State: fix in review (checkpoint: clean)\nStep 1: none\n## User constraints: none stated\n## Next steps\n1. write the fix · done\n2. merge the MR — todo (review · done)\n3. deploy the build · todo (build · done)\n⟪/$BRAND n=1a2b3c4d⟫\n</summary>"
    },
    "expect": {
     "exit": 0,

@@ -2250,4 +2250,8 @@ test('D-2 review 2: a `·` mark inside brackets is a note\'s too: `— todo (rev
   const g = sum('finished', ['1. ship · done (see the note · todo)', '2. tag (v1 · done)', '3. push (to origin) · done'])
   expect([g.done, g.todo, g.unmarked]).toEqual([2, 0, 1])
   expect(laneOf(g, M).lane).toBe('working')
+  // Helper case AD-14's steps: colon, comma and dash notes closed by a `·` mark (finished on 0.1.4).
+  const h = sum('finished', ['1. write the fix · done', '2. merge the MR · todo (review: done, CI · done)', '3. run the suite — todo (the earlier run - done; rerun · done)'])
+  expect([h.done, h.todo, h.unmarked]).toEqual([1, 2, 0])
+  expect(laneOf(h, M).lane).toBe('working')
 })
