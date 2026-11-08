@@ -231,7 +231,10 @@ sub _test_corrupt {
 #   finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person, pronoun or person's
 #   say stands anywhere in it. A job hold is not a step that can run: the copy is taken with no
 #   result in, so it stays blocked (only the session's result turn reads it working).
-my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
+# 0.1.5 D-2: the other common marks read too (lane.ts MARK_SRC, word for word): after `—`,
+# `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case, and a mark may take a note in brackets
+# (`— done (commit 1a2b3c)`). _last_mark says which one counts.
+my $MARK_RE = qr/(·|•|—|–|:|\(|\s--?)\s*(todo|done)(?=\s*$|\s*[;,.()]|\s+\d+\.\s)/mi;
 # The hold regexes below read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
 # non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
@@ -297,11 +300,30 @@ sub _section {
     return (1, @out);
 }
 
+# The item's step mark (lane.ts `lastMark`); a mark inside brackets is a note's and never counts.
+# Of the marks outside brackets: the last `·` mark, as on 0.1.4; else the others, `todo` if any is.
 sub _last_mark {
     my ($item) = @_;
-    my $mark;
-    $mark = $1 while $item =~ /$MARK_RE/g;
-    return $mark;
+    my ($dot, $other);
+    while ($item =~ /$MARK_RE/g) {
+        my ($sep, $mark, $at) = ($1, lc $2, $-[0]);
+        next if _depth_at($item, $at) > 0;
+        if ($sep eq '·') { $dot = $mark; next }
+        next if defined $other && $other eq 'todo';
+        $other = $mark;
+    }
+    return $dot // $other;
+}
+
+# How many brackets are open before offset $at (a `)` with none open counts none; lane.ts `depthAt`).
+sub _depth_at {
+    my ($text, $at) = @_;
+    my $depth = 0;
+    for my $c (split //, substr($text, 0, $at)) {
+        if ($c eq '(') { $depth++ }
+        elsif ($c eq ')' && $depth > 0) { $depth-- }
+    }
+    return $depth;
 }
 
 # The items of a Next steps section, split as lane.ts `items` splits them.

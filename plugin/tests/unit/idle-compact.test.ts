@@ -1651,6 +1651,49 @@ test('AT-IC-C44 (D16): idle_digest off (the default of 0.1.1, owner rule (c)): a
   if (DONE) expect(w.rowsOf('digest_submit').map(r => [r.lane, r.result])).toEqual([['finished', 'skipped:off']])
 })
 
+// ---- 0.1.5 D-3 (owner 2026-11-07, "3. yes"; session xxxxxxxx, ~166k tokens, finished its work and
+// logged handoff_skipped why=small at every idle check): a lane that reads finished at the idle
+// check gets the handoff-when-idle turn whatever the context size; every other limit stands.
+
+/** The plugin's idle compaction with an agent running, then that agent's result turn (it takes the block), ending at `tokens`. */
+async function episodeAfterResult($: Engine, w: World, resumeHere: string, tokens: number): Promise<void> {
+  w.resumeHere = resumeHere
+  w.agents = RUNNING
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(54 * MIN)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([1, 1])
+  w.agents = [{ id: 'sub-1', status: 'completed' }]
+  await w.userTurn($, 'Agent sub-1 finished.', 'task-notification')
+  expect(blockOf(w, await $.prompt.context({ blocks: [] })) ?? '').toContain(SID_A)
+  w.tokens = tokens
+  await w.turnEnd($)
+}
+
+test('D-3: a lane that reads finished at the idle check, under idle_handoff_min_tokens (150K < 200K): the 49-min turn runs, no small skip (failed on 0.1.4)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await episodeAfterResult($, w, FINISHED, 150000)
+  const before = w.submits.length
+  await w.advance(49 * MIN)
+  if (IDLE) expect([w.submits.length - before, skips(w)]).toEqual([1, []])
+  else expect(skips(w)).toEqual([['no-asset', 'turn']])
+})
+
+test('D-3: a working lane under the floor still skips small', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await episodeAfterResult($, w, 'Status: working · Acuity: stable · State: x (checkpoint: clean)\nStep 1: `make test` — for "go on"\n', 150000)
+  await w.advance(49 * MIN)
+  expect(skips(w)).toEqual([['small', 'turn']])
+})
+
+test('D-3: a finished lane under the floor still meets the other limits (idle_handoff_near_limit skip at 95%: near-limit)', { options: { ...ON, idle_handoff_near_limit: 'skip' } }, async ($, on) => {
+  const w = world(on)
+  await episodeAfterResult($, w, FINISHED, 150000)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }]
+  await w.advance(49 * MIN)
+  expect(skips(w)).toEqual([['near-limit', 'turn']])
+})
+
 // ---- Lane B: the 55.5-min check's compaction runs behind the guards of the `compact` timer (D4),
 // also with no agent running when Claude Code stayed silent (owner Q2, 18:54); the check is armed
 // for the turn or for that compaction; ticks (D12).

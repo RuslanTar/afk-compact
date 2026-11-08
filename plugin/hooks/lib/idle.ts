@@ -53,6 +53,7 @@ import { compactedSince, dispatchExists } from './compact'
 import { effective } from './config'
 import { cacheTtlOf } from './deps'
 import { keepWarmHolds } from './keepwarm'
+import { laneAtCheck } from './lane'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
 import { log } from './log'
 
@@ -643,7 +644,10 @@ async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Du
   const s = d.state
   if (!s.lastTurnAnswer) return 'aborted'
   const tokens = u?.tokens ?? rec.tokens ?? undefined
-  if (tokens === undefined || tokens < d.cfg.idle_handoff_min_tokens) return 'small'
+  // 0.1.5 D-3 (owner 2026-11-07, "3. yes"; session xxxxxxxx, ~166k tokens, finished and logged
+  // `small` at every check): a lane that reads finished gets the turn below the floor too; every
+  // other limit stands. Unknown tokens still skip: the turn's allowance below needs the size.
+  if (tokens === undefined || (tokens < d.cfg.idle_handoff_min_tokens && (await laneAtCheck(d, sid)) !== 'finished')) return 'small'
   if (await ttl5m(d, await d.idleEnv(), u, rec)) return 'ttl-5m'
   if (turnNearLimit(d, u, rec)) return 'near-limit'
   const ep = s.idleEpisode
