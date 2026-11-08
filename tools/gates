@@ -185,7 +185,9 @@ SKILL_TRIGGERS = {"handoff": "handoff", "resume": "resume", "status": "handoff s
                   # W-BETA C (TXT-10): "Only when the user asks for a ... report"
                   "report": "report",
                   # 0.1.2 onboarding: the settings flow ("only when the user asks")
-                  "settings": "settings"}
+                  "settings": "settings",
+                  # 0.1.6 PRUNE: old evidence, listed then deleted after a yes ("only when the user asks")
+                  "prune": "prune"}
 DESC_MAX = 150
 TRIGGER_WITHIN = 50
 

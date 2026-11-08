@@ -150,7 +150,7 @@ Union by runtime id (agent id, run id, task id, pid); `B-n` is only a handle. Li
 
 `<store> verify <handoff>` checks `MANIFEST.tsv` across `evidence/` and the disposable copies: each copy exists with a matching sha256, and each reference-only origin exists at its recorded size.
 
-- Report `missing`, `withheld` and `redacted` rows. Never reconstruct redacted content; point to where the handoff says credentials live.
+- Report `missing`, `withheld` and `redacted` rows; a `pruned` row was deleted on purpose (`prune`): expected, not lost. Never reconstruct redacted content; point to where the handoff says credentials live.
 - Read evidence by excerpt (`rg -n`, `head`).
 - A recipe or argument pointing at a vanished scratchpad: re-point it to the durable copy, or run `<store> restore-evidence <handoff> --to <this session's scratchpad>`.
 - Use preserved scripts and briefs; never rebuild a tool the manifest lists.
@@ -184,7 +184,7 @@ Handoff: <path> · <age> · <relation> · <integrity> · Location: <worktree> ·
 Goal: <ticket goal>; latest request: <quote or paraphrase>
 Drift: <changed rows only> | no drift (checked <stamp>)
 In flight: <B-n id: status → action> | nothing running (checked <stamp>)
-Evidence: <n ok; n missing/withheld/redacted> | no manifest
+Evidence: <n ok; n missing/withheld/redacted/pruned> | no manifest
 Binding: U-1 …, U-2 … (pointer if >5) · approvals carried: U-n (<action>) | none · settled: D-…, X-… · decided without you (say if any is wrong): D-n <choice> (source agent, the handoff's own session)
 Could not verify: <items> | None
 Next: Starting <Step 1> now | Stopped: <stop rule>
