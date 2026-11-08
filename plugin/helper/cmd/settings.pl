@@ -195,7 +195,7 @@ sub _takes_effect {
 # migrate(--plan, --apply): settings::old_values as set requests (consent keys apart), then write_cmd
 sub migrate {
     my ($given, $apply) = @_;
-    my @old = settings::old_values();
+    my @old = grep { defined $_->{to} } settings::old_values();
     my @consent = map { settings_write::consent_lines({ key => $_->{key}, value => $_->{to} }, settings::options_source()->{key}) }
                   grep { $_->{consent} } @old;
     my @req = map { { key => $_->{key}, kind => 'set', text => $_->{to} } } grep { !$_->{consent} } @old;

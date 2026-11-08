@@ -1149,7 +1149,9 @@ sub value_warnings {
                     : defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
     }
     # D-72: values saved in a form from before 0.1.6, which Claude Code reads as unset
-    my @old = old_values($o);
+    my @all = old_values($o);
+    my @old = grep { defined $_->{to} } @all;
+    my @u = map { $_->{key} } grep { !defined $_->{to} } @all;
     my @w = map { $_->{key} } grep { !$_->{consent} } @old;
     my @c = map { $_->{key} } grep { $_->{consent} } @old;
     push @l, 'warning: ' . join(', ', @w) . ': saved in a form from before 0.1.6; Claude Code reads such a value as unset (the hooks get the '
@@ -1157,14 +1159,17 @@ sub value_warnings {
              . ' saves the new form' if @w;
     push @l, 'warning: ' . join(', ', @c) . ': saved in a form from before 0.1.6; Claude Code reads such a value as unset (the default); '
              . (@c > 1 ? 'consent keys' : 'a consent key') . ': pick the value again in /config' if @c;
+    push @l, 'warning: ' . join(', ', @u) . ': saved as a value not on its list; Claude Code reads it as unset (the hooks get the default) while '
+             . 'the helper reads it by its own rule; pick a value in /config' if @u;
     return @l;
 }
 
 # old_values([options_source]) -> ({key, to, consent}…) in @KEYS order (D-72, read-only): the saved
-# options that Claude Code reads as unset, being none of the key's manifest options as written,
-# while the plugin reads them as one (`to`, the form to save): a %SWITCH key's old word or a JSON
-# true or false, an option in another case or with spaces around it. A key without options, an
-# unset value and a word the plugin does not read (the key's own note) are left out.
+# options that Claude Code reads as unset, being none of the key's manifest options as written. `to`
+# is the form to save when the plugin reads the value as one of them (a %SWITCH key's old word or a
+# JSON true or false, an option in another case or with spaces around it), else undef (a word the
+# plugin reads by the key's own rule, while the hooks get the default). A key without options and
+# an unset value are left out.
 sub old_values {
     my ($o) = @_;
     $o //= options_source();
@@ -1178,7 +1183,7 @@ sub old_values {
         my $v = $o->{options}{$key};
         next if _unset($v) || (!ref $v && grep { $_ eq $v } @$opts);
         my $to = exists $SWITCH{$key} ? switch_form($key, $v) : ref $v ? undef : trim(lc "$v");
-        next unless defined $to && grep { $_ eq $to } @$opts;
+        undef $to unless defined $to && grep { $_ eq $to } @$opts;
         push @out, { key => $key, to => $to, consent => $FILE_ONLY{$key} ? 1 : 0 };
     }
     return @out;
@@ -1242,7 +1247,7 @@ sub view {
         sections => \@sections, settings => jsonc::obj(map { my $s = $_; map { $_ => $rows{$_} } @{ $by{ $s->[0] } || [] } } @SECTIONS, ['other']),
         unsectioned => \@unsectioned, notes => $r->{notes},
         # D-72: the keys saved in a form from before 0.1.6 (old_values), for `settings migrate`
-        old_form => [ map { $_->{key} } old_values() ]);
+        old_form => [ map { $_->{key} } grep { defined $_->{to} } old_values() ]);
 }
 
 # write_refused([config_key_info]) -> why the settings writer (lib/settings_write.pm) refuses the
