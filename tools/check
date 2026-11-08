@@ -59,7 +59,7 @@ pick lists, the BLD-05 content gates
 id without texts, a renumbered template § and a renamed Step, `$ARGUMENTS`, a starred read-back
 line, run-from-text wording, a changed Stalled phrase, a `U-` item rule, a bare launcher call
 and `allowed-tools`, a situational resume trigger, the nudge folder fallback gone, CL-01 work
-said to die on `/clear`), the
+said to die on `/clear`, CL-02 "Move to background and exit" said to keep all of it), the
 end-of-round gates (AT-CAP-02 a ctx.pm/settings.pm/config.ts default off the manifest,
 AT-WB-08 a bad export class, AT-ON-02 a manifest key with no settings section, AT-WB-11 a
 network module on the report path, AT-WB-01 an unlisted `ev`, AT-WB-15 a second helper call,
@@ -728,6 +728,21 @@ def probes(name):
         edit(d, "plugin/skills/handoff/SKILL.md", "stay in this Claude Code process: <ids> stop on exit",
              "stay in this session: <ids> die on /clear or exit")
         edit(d, "plugin/assets/handoff-spec.md", '"dies_on": ["exit",', '"dies_on": ["/clear", "exit",')
+        edit(d, "plugin/skills/handoff/references/handoff-template.md",
+             "| summarise to user | exit (resume needs the original conversation) |", "| summarise to user | /clear, exit |")
+
+    def clear_exit(d):
+        """CL-02: the first 0.1.6 build's words back: "Move to background and exit" keeps every kind."""
+        edit(d, "plugin/assets/handoff-spec.md",
+             'Exit stops them; "Move to background and exit" (when offered) hands only shells, agents and workflows'
+             " to the session's next wake (2.1.319 code, not checked live), and teammates and session-only crons"
+             " stop either way. So the value is",
+             'At exit they stop unless the user picks "Move to background and exit", so their value is')
+        edit(d, "plugin/skills/resume/SKILL.md",
+             'Exit ends it all, teammates and session-only crons too; "Move to background" passes only shells,'
+             " agents and workflows to the next wake.",
+             "Session end ends shells, Monitors, agents, workflows and session-only crons unless the user moved"
+             " them to background.")
 
     def nudge_folder(d):
         edit(d, "plugin/assets/checkpoint-nudge.txt", "(no worktree you can name: the current folder)", "")
@@ -1170,7 +1185,14 @@ def probes(name):
         ("clear-life", "CL-01", gates_only("clear-life"), clear_life,
          [r"^GATE clear-life plugin/skills/handoff/SKILL\.md:\d+: CL-01 forbidden: 'die on /clear'$",
           r"^GATE clear-life plugin/skills/handoff/SKILL\.md: CL-01 needs: no 'stay in this Claude Code process: <ids> stop on exit'$",
-          r"^GATE clear-life plugin/assets/handoff-spec\.md: CL-01 dies_on: names /clear"], None),
+          r"^GATE clear-life plugin/assets/handoff-spec\.md: CL-01 dies_on: names /clear",
+          r"^GATE clear-life plugin/skills/handoff/references/handoff-template\.md:\d+: CL-01 forbidden: '\| B-1"], None),
+        ("clear-exit", "CL-02", gates_only("clear-life"), clear_exit,
+         [r"^GATE clear-life plugin/assets/handoff-spec\.md:\d+: CL-02 forbidden: 'unless the user picks",
+          r"^GATE clear-life plugin/assets/handoff-spec\.md: CL-02 needs: no 'hands only shells, agents and workflows'$",
+          r"^GATE clear-life plugin/skills/resume/SKILL\.md:\d+: CL-02 forbidden: 'unless the user moved",
+          r"^GATE clear-life plugin/skills/resume/SKILL\.md: CL-02 needs: no 'passes only shells, agents and workflows'$"],
+         None),
         ("nudge-folder", "AT-TX-13", gates_only("nudge-folder"), nudge_folder,
          [r"^GATE nudge-folder plugin/assets/checkpoint-nudge\.txt: AT-TX-13 folder"], None),
         ("config-sources", "AT-CAP-02", gates_only("config-defaults"), cap_sources,

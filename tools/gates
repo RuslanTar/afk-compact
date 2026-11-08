@@ -102,7 +102,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   clear-life   CL-01 (0.1.6, live probes on 2.1.319): no text says background work dies or is lost
                on `/clear`; the spec's `dies_on` names no `/clear`; the handoff gate line and
                report item say it stops on exit, and resume R5 that a workflow resume needs the
-               original conversation
+               original conversation; CL-02: no text says "Move to background and exit" keeps
+               all of it (Claude Code's exit handoff takes only shells, agents and workflows)
   nudge-folder AT-TX-13: nudge step 3 current-folder fallback and `Dirty in <folder git ran in>:`
   BLD-05 end-of-round gates over a built plugin folder (build round 9, after the last merge):
   config-defaults (also) AT-CAP-02: settings.pm @KEYS fallbacks, config.ts DEFAULTS,
@@ -1271,33 +1272,44 @@ def ic_desc_hits(target, brand):
 # (shells, agents, workflows, teammates and crons keep running and report to the new
 # conversation); exit stops it, and a workflow resume after `/clear` works only from the
 # original conversation. The old words told users such work is lost on `/clear`.
-CLEAR_FORBIDDEN = re.compile(r"\b(?:die|dies|lost|stops?)\s+on\W{0,6}/clear\b|`/clear` and session end end"
-                             r"|can no longer be resumed|\|\s*/clear\b[^|]*\|", re.I)
-CLEAR_NEEDS = ((HANDOFF_REL, "stay in this Claude Code process: <ids> stop on exit"),
-               (HANDOFF_REL, "Running now, stops if Claude Code exits:"),
-               (TEMPLATE_REL, "stay in this Claude Code process: <ids> stop on exit"),
-               (RESUME_REL, "works only from the original conversation"))
+# An in-flight row (`| B-n ...`) whose dies-on cell starts with /clear is the old vocabulary too.
+CLEAR_FORBIDDEN = re.compile(r"\b(?:die|dies|lost|stops?|killed|ends?|gone)\s+(?:on|by|after)\W{0,6}/clear\b"
+                             r"|`/clear` and session end end|can no longer be resumed"
+                             r"|^\|\s*B-\S.*\|\s*/clear\b[^|]*\|", re.I)
+# CL-02 (Claude Code 2.1.319's exit handoff, read in its code): "Move to background and exit"
+# hands only shells, agents and workflows to the session's next wake (adopt.json, `cron:[]`) and
+# stops every other task, so no text says that choice keeps all background work.
+CLEAR_EXIT_FORBIDDEN = re.compile(r'only "Move to background and exit" keeps'
+                                  r"|unless (?:the user|you) (?:picks?|moves?|moved)\b[^.]*background", re.I)
+CLEAR_NEEDS = ((HANDOFF_REL, "CL-01", "stay in this Claude Code process: <ids> stop on exit"),
+               (HANDOFF_REL, "CL-01", "Running now, stops if Claude Code exits:"),
+               (TEMPLATE_REL, "CL-01", "stay in this Claude Code process: <ids> stop on exit"),
+               (RESUME_REL, "CL-01", "works only from the original conversation"),
+               (SPEC_REL, "CL-02", "hands only shells, agents and workflows"),
+               (RESUME_REL, "CL-02", "passes only shells, agents and workflows"))
 
 
 def clear_life_hits(target, brand):
     """CL-01: no skill, asset or README line says background work dies or is lost on `/clear`
-    (CLEAR_FORBIDDEN); the spec's `dies_on` literal names no `/clear`; the handoff gate line,
-    report item and the resume R5 rule hold CLEAR_NEEDS."""
+    (CLEAR_FORBIDDEN); the spec's `dies_on` literal names no `/clear`. CL-02: none says
+    "Move to background and exit" keeps all of it (CLEAR_EXIT_FORBIDDEN). The handoff gate line,
+    report item, spec and the resume R5 rule hold CLEAR_NEEDS."""
     out = []
     for p in text_docs(target):
         for no, ln in enumerate(shipped_lines(p, brand), 1):
-            m = CLEAR_FORBIDDEN.search(ln)
-            if m:
-                out.append((p, no, "CL-01 forbidden", "CL-01 forbidden: {!r}".format(m.group(0)), ln))
+            for rule, rx in (("CL-01", CLEAR_FORBIDDEN), ("CL-02", CLEAR_EXIT_FORBIDDEN)):
+                m = rx.search(ln)
+                if m:
+                    out.append((p, no, rule + " forbidden", "{} forbidden: {!r}".format(rule, m.group(0)), ln))
     spath, lit = spec_literals(target)
     if lit is not None and any("/clear" in str(v) for v in lit.get("dies_on") or []):
         out.append((spath, None, "CL-01 dies_on", "CL-01 dies_on: names /clear: {}".format(lit["dies_on"]), ""))
-    for rel, phrase in CLEAR_NEEDS:
+    for rel, rule, phrase in CLEAR_NEEDS:
         path, lines = _shipped(target, rel, brand)
         if lines is None:
-            out.append(_missing(path, "CL-01 needs"))
+            out.append(_missing(path, rule + " needs"))
         elif not any(phrase in ln for ln in lines):
-            out.append((path, None, "CL-01 needs", "CL-01 needs: no {!r}".format(phrase), ""))
+            out.append((path, None, rule + " needs", "{} needs: no {!r}".format(rule, phrase), ""))
     return out
 
 
