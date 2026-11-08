@@ -1,0 +1,419 @@
+{
+ "id": "HT-PR-02 (prune: past 40 folders a root's list ends in a count that says those are deleted with the rest; --all lists every folder)",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.6 PRUNE, review of the first build: the 40-line list per root hid folders that --apply deletes too (103 of 143 on a real store at --days 3) while the skill asked about 'the files listed'. The count line now says they are deleted with the rest and that --all lists them; --all prints every folder.",
+ "now": "2026-11-08T12:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$DISP/2026-10-01/f01-evidence/x.log",
+     "bytes": 3073,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f01-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f02-evidence/x.log",
+     "bytes": 4097,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f02-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f03-evidence/x.log",
+     "bytes": 5121,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f03-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f04-evidence/x.log",
+     "bytes": 6145,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f04-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f05-evidence/x.log",
+     "bytes": 7169,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f05-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f06-evidence/x.log",
+     "bytes": 8193,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f06-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f07-evidence/x.log",
+     "bytes": 9217,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f07-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f08-evidence/x.log",
+     "bytes": 10241,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f08-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f09-evidence/x.log",
+     "bytes": 11265,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f09-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f10-evidence/x.log",
+     "bytes": 12289,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f10-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f11-evidence/x.log",
+     "bytes": 13313,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f11-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f12-evidence/x.log",
+     "bytes": 14337,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f12-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f13-evidence/x.log",
+     "bytes": 15361,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f13-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f14-evidence/x.log",
+     "bytes": 16385,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f14-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f15-evidence/x.log",
+     "bytes": 17409,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f15-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f16-evidence/x.log",
+     "bytes": 18433,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f16-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f17-evidence/x.log",
+     "bytes": 19457,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f17-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f18-evidence/x.log",
+     "bytes": 20481,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f18-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f19-evidence/x.log",
+     "bytes": 21505,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f19-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f20-evidence/x.log",
+     "bytes": 22529,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f20-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f21-evidence/x.log",
+     "bytes": 23553,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f21-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f22-evidence/x.log",
+     "bytes": 24577,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f22-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f23-evidence/x.log",
+     "bytes": 25601,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f23-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f24-evidence/x.log",
+     "bytes": 26625,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f24-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f25-evidence/x.log",
+     "bytes": 27649,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f25-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f26-evidence/x.log",
+     "bytes": 28673,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f26-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f27-evidence/x.log",
+     "bytes": 29697,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f27-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f28-evidence/x.log",
+     "bytes": 30721,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f28-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f29-evidence/x.log",
+     "bytes": 31745,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f29-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f30-evidence/x.log",
+     "bytes": 32769,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f30-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f31-evidence/x.log",
+     "bytes": 33793,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f31-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f32-evidence/x.log",
+     "bytes": 34817,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f32-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f33-evidence/x.log",
+     "bytes": 35841,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f33-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f34-evidence/x.log",
+     "bytes": 36865,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f34-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f35-evidence/x.log",
+     "bytes": 37889,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f35-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f36-evidence/x.log",
+     "bytes": 38913,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f36-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f37-evidence/x.log",
+     "bytes": 39937,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f37-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f38-evidence/x.log",
+     "bytes": 40961,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f38-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f39-evidence/x.log",
+     "bytes": 41985,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f39-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f40-evidence/x.log",
+     "bytes": 43009,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f40-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-01/f41-evidence/x.log",
+     "bytes": 44033,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f41-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    }
+   ]
+  },
+  {
+   "name": "the list: 40 folders, then a count of the smallest one",
+   "argv": [
+    "prune"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root .*: 41 folders, ",
+     "^  38d · 44 KB · - · no handoff or summary copy found · 2026-10-01/f41-evidence/$",
+     "^  38d · 5 KB · - · no handoff or summary copy found · 2026-10-01/f02-evidence/$",
+     "^  \\(\\+1 smaller folders, 4 KB, deleted with the rest; --all lists them\\)$",
+     "^total: 41 folders, 41 files, "
+    ],
+    "stdout_lacks": [
+     "f01-evidence"
+    ]
+   }
+  },
+  {
+   "name": "--all lists every folder and no count",
+   "argv": [
+    "prune",
+    "--all"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  38d · 4 KB · - · no handoff or summary copy found · 2026-10-01/f01-evidence/$",
+     "^total: 41 folders, 41 files, "
+    ],
+    "stdout_lacks": [
+     "smaller folders"
+    ]
+   }
+  }
+ ]
+}

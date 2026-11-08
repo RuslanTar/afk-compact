@@ -2,7 +2,7 @@
  "id": "HT-PR-01 (prune: a dry run lists old evidence and deletes nothing; --apply keeps every handoff file, summary copy, MANIFEST, ledger and the evidence a newer handoff cites, marks the rows it removed pruned; read-only folders are never written)",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.6 PRUNE (owner 2026-11-08: a handoff folder should not hold a lot of data, and a later clean-up must not delete the small handoff files). `prune` lists evidence/<stem>/ folders and dated disposable folders older than the age (default disposable_keep_days, else 14 days) and at least --min-mb, with the bucket and the handoff or summary copy each belongs to. --apply deletes only the files listed: never a handoff .md (a .md in a unit with kind handoff included), a summary copy, MANIFEST.tsv, ledger.md, or a file a handoff newer than the age cites (its MANIFEST row, or its path in the text); a young handoff's folder (its restart recipes) is never old enough. Rows of deleted copies become scan `pruned`, which verify reports as `pruned`, not `missing`. The old default folders and --root folders are listed read-only. A stale --plan is refused.",
+ "note": "0.1.6 PRUNE (owner 2026-11-08: a handoff folder should not hold a lot of data, and a later clean-up must not delete the small handoff files). `prune` lists evidence/<stem>/ folders and dated disposable folders older than the age (default disposable_keep_days, else 14 days) and at least --min-mb, with the bucket and the handoff or summary copy each belongs to. --apply deletes only the files listed: never a handoff .md (a .md in a unit with kind handoff included), a summary copy, MANIFEST.tsv, ledger.md, or a file a handoff newer than the age cites (its MANIFEST row, or its path in the text); a young handoff's folder (its restart recipes) is never old enough. Rows of deleted copies become scan `pruned`, which verify reports as `pruned`, not `missing`. The old default folders and --root folders are listed read-only. A stale --plan is refused. Review of the first build: a sweep named at checkpoint time (<stamp>_<sid8>-<id6>-evidence) belongs to the main summary copy with that sid8 and id6, and its age is that copy's; a path cited with a line reference (:120), quoted with a space, or under $HOME/ stays; --apply needs the dry run's --plan, which covers each file's size and mtime; a draft's age is its begin date or its newest file, whichever is later.",
  "now": "2026-11-08T12:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -42,7 +42,12 @@
     },
     {
      "write": "$ROOT/repo/LAB-1/2026-11-05_09-00-00_22222222_new.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0f1011\ndate: 2026-11-05T09:00:00+03:00\nsession_id: 22222222-2222-4222-8222-222222222222\nactor: main\n---\n# LAB-1 — new\nSee $DISP/2026-10-02/x-evidence/cited.txt for the failing case.\n"
+     "mode": "0600",
+     "parts": [
+      "---\nkind: handoff\nwriter: handoff\nnonce: 0e0f1011\ndate: 2026-11-05T09:00:00+03:00\nsession_id: 22222222-2222-4222-8222-222222222222\nactor: main\n---\n# LAB-1 — new\nSee $DISP/2026-10-02/x-evidence/cited.txt for the failing case.\n- Failure at evidence/2026-10-01_10-00-00_11111111_old/lineref.log:120.\n- The log: `$ROOT/repo/LAB-1/evidence/2026-10-01_10-00-00_11111111_old/my file.log`\n- And ",
+      "$",
+      "HOME/.local/state/$BRAND/disposable/2026-10-02/x-evidence/home.log\n"
+     ]
     },
     {
      "write": "$ROOT/repo/LAB-1/evidence/2026-11-05_09-00-00_22222222_new/restart/r.md",
@@ -113,17 +118,89 @@
      "to": "$TMP/outside.txt"
     },
     {
-     "write": "$ROOT/repo/LAB-1/compact/2026-10-01_09-00-00_11111111-abc123.md",
+     "write": "$ROOT/repo/LAB-1/compact/2026-10-01_09-00-00_11111111_c1-0c0c0c.md",
      "content": "---\nkind: compact-summary\nwriter: postcompact\nnonce: 0c0c0c0c\ndate: 2026-10-01T09:00:00+03:00\nsession_id: 11111111-1111-4111-8111-111111111111\nactor: main\n---\n# summary\n",
      "mode": "0400"
     },
     {
-     "write": "$DISP/2026-10-01/2026-10-01_09-00-00_11111111-abc123-evidence/a.output",
+     "write": "$DISP/2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/a.output",
      "content": "shell output\n"
     },
     {
-     "write": "$DISP/2026-10-01/2026-10-01_09-00-00_11111111-abc123-evidence/MANIFEST.tsv",
-     "content": "copy_path\torigin\tbytes\tsha256\tmtime\tcopied_at\tmode\tscan\tregen_cmd\tmeaning\n$DISP/2026-10-01/2026-10-01_09-00-00_11111111-abc123-evidence/a.output\t/tmp/a.output\t13\tf7e14a63d9ccde201f636f80a877aa0c439e46293257b30a97b4532526ffef40\t-\t2026-10-01T10:00:00+03:00\t0600\texcerpt\t-\tautomatic evidence copy\n"
+     "write": "$DISP/2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/MANIFEST.tsv",
+     "content": "copy_path\torigin\tbytes\tsha256\tmtime\tcopied_at\tmode\tscan\tregen_cmd\tmeaning\n$DISP/2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/a.output\t/tmp/a.output\t13\tf7e14a63d9ccde201f636f80a877aa0c439e46293257b30a97b4532526ffef40\t-\t2026-10-01T10:00:00+03:00\t0600\texcerpt\t-\tautomatic evidence copy\n"
+    },
+    {
+     "touch": "$DISP/2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/a.output",
+     "at": "2026-10-20T10:00:00+03:00"
+    },
+    {
+     "touch": "$DISP/2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/MANIFEST.tsv",
+     "at": "2026-10-20T10:00:00+03:00"
+    },
+    {
+     "write": "$ROOT/repo/LAB-1/evidence/2026-10-01_10-00-00_11111111_old/lineref.log",
+     "content": "a line a newer handoff points at\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-1/evidence/2026-10-01_10-00-00_11111111_old/my file.log",
+     "content": "a spaced name\n"
+    },
+    {
+     "write": "$DISP/2026-10-02/x-evidence/home.log",
+     "content": "named under the home folder\n"
+    },
+    {
+     "touch": "$DISP/2026-10-02/x-evidence/home.log",
+     "at": "2026-10-02T10:00:00+03:00"
+    },
+    {
+     "write": "$DISP/2026-10-02/x-evidence/wip.txt",
+     "content": "a draft still being written names this\n"
+    },
+    {
+     "touch": "$DISP/2026-10-02/x-evidence/wip.txt",
+     "at": "2026-10-02T10:00:00+03:00"
+    },
+    {
+     "write": "$ROOT/repo/LAB-1/.staging/33333333-0a0b0c0e/evidence.jsonl",
+     "content": "{\"status\":\"copied\",\"copy\":\"$DISP/2026-10-02/x-evidence/wip.txt\",\"where\":\"dispose\"}\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-1/.staging/33333333-0a0b0c0e/settings.json",
+     "content": "{\"date\":\"2026-10-01T10:00:00+03:00\"}\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-1/.staging/33333333-0a0b0c0e/body.md",
+     "content": "# draft\n"
+    },
+    {
+     "touch": "$ROOT/repo/LAB-1/.staging/33333333-0a0b0c0e/evidence.jsonl",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "touch": "$ROOT/repo/LAB-1/.staging/33333333-0a0b0c0e/settings.json",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "touch": "$ROOT/repo/LAB-1/.staging/33333333-0a0b0c0e/body.md",
+     "at": "2026-11-07T10:00:00+03:00"
+    },
+    {
+     "touch": "$ROOT/repo/LAB-1/.staging/33333333-0a0b0c0e",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "touch": "$ROOT/repo/LAB-1/.staging/11111111-0a0b0c0d/evidence.jsonl",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "touch": "$ROOT/repo/LAB-1/.staging/11111111-0a0b0c0d/settings.json",
+     "at": "2026-10-01T10:00:00+03:00"
+    },
+    {
+     "touch": "$ROOT/repo/LAB-1/.staging/11111111-0a0b0c0d",
+     "at": "2026-10-01T10:00:00+03:00"
     },
     {
      "write": "$LEGACY/repo/LAB-0/2026-09-01_10-00-00_33333333_leg.md",
@@ -203,16 +280,16 @@
      "\\Aprune: dry run, nothing deleted",
      "^age: older than 14 days \\(the default; disposable_keep_days is 0\\) · size: any · never deleted: ",
      "^handoff_root ~/\\.local/state/$BRAND/handoffs: 1 folder, 1\\.5 MB to free$",
-     "^  38d · 1\\.5 MB · repo/LAB-1 · handoff 2026-10-01_10-00-00_11111111_old\\.md · repo/LAB-1/evidence/2026-10-01_10-00-00_11111111_old/ \\(kept: 1 cited file, 1 KB\\)$",
+     "^  38d · 1\\.5 MB · repo/LAB-1 · handoff 2026-10-01_10-00-00_11111111_old\\.md · repo/LAB-1/evidence/2026-10-01_10-00-00_11111111_old/ \\(kept: 3 cited files, 1 KB\\)$",
      "^disposable_root ~/\\.local/state/$BRAND/disposable: 3 folders, ",
      "^  38d · 1 KB · repo/LAB-1 · handoff 2026-10-01_10-00-00_11111111_old\\.md · 2026-10-01/2026-10-01_10-00-00_11111111_old-evidence/$",
-     "^  38d · 1 KB · repo/LAB-1 · summary copy 2026-10-01_09-00-00_11111111-abc123\\.md · 2026-10-01/2026-10-01_09-00-00_11111111-abc123-evidence/$",
-     "^  37d · 1 KB · - · no handoff or summary copy found · 2026-10-02/x-evidence/ \\(kept: 2 cited files, 1 KB\\)$",
+     "^  38d · 1 KB · repo/LAB-1 · summary copy 2026-10-01_09-00-00_11111111_c1-0c0c0c\\.md · 2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/$",
+     "^  37d · 1 KB · - · no handoff or summary copy found · 2026-10-02/x-evidence/ \\(kept: 4 cited files, 1 KB\\)$",
      "^old handoff folder ~/\\.claude/handoffs \\(read-only: listed, never deleted\\): 1 folder, 1 KB$",
      "^  68d · 1 KB · repo/LAB-0 · handoff 2026-09-01_10-00-00_33333333_leg\\.md · repo/LAB-0/evidence/2026-09-01_10-00-00_33333333_leg/$",
      "^old evidence folder ~/\\.claude/trash-staging \\(read-only: listed, never deleted\\): 1 folder, 1 KB$",
      "^folder $TMP/extra \\(read-only: listed, never deleted\\): 1 folder, 1 KB$",
-     "^total: 4 folders, 6 files, 1\\.5 MB to free · kept: 3 files \\(1 KB\\) that a handoff or unpublished draft newer than 14 days cites · 1 KB more in read-only folders, not deleted$",
+     "^total: 4 folders, 6 files, 1\\.5 MB to free · kept: 7 files \\(1 KB\\) that a handoff or unpublished draft newer than 14 days cites · 1 KB more in read-only folders, not deleted$",
      "^handoffs and summary copies newer than 14 days: 1$",
      "^plan: [0-9a-f]{12} \\(apply: prune --apply --plan "
     ],
@@ -325,7 +402,50 @@
    }
   },
   {
-   "name": "--apply with the dry run's plan",
+   "name": "--apply needs the dry run's plan",
+   "argv": [
+    "prune",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 64,
+    "stderr_has": [
+     "^prune: usage: --apply takes --plan H"
+    ],
+    "files": [
+     {
+      "path": "$ROOT",
+      "same_tree_as": "R0"
+     },
+     {
+      "path": "$DISP",
+      "same_tree_as": "D0"
+     },
+     {
+      "path": "$LEGACY",
+      "same_tree_as": "L0"
+     },
+     {
+      "path": "$LEGACY_DISP",
+      "same_tree_as": "LD0"
+     },
+     {
+      "path": "$TMP/extra",
+      "same_tree_as": "X0"
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "touch": "$DISP/2026-10-02/x-evidence/junk.txt",
+     "at": "2026-10-03T10:00:00+03:00"
+    }
+   ]
+  },
+  {
+   "name": "a file touched since the dry run (same size) changes the plan: refused, nothing deleted",
    "argv": [
     "prune",
     "--root",
@@ -333,6 +453,55 @@
     "--apply",
     "--plan",
     "$PLAN"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^REFUSED: plan-changed$"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-10-02/x-evidence/junk.txt",
+      "contains": [
+       "nobody"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-1/evidence/2026-10-01_10-00-00_11111111_old/big.log",
+      "exists": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "a disposable_keep_days under 1 day falls back to 14 days and says so",
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/extra"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_KEEP_DAYS": "0.5"
+   },
+   "capture": {
+    "PLAN2": "re:^plan: ([0-9a-f]{12}) "
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^age: older than 14 days \\(the default; disposable_keep_days is under 1 day\\)"
+    ]
+   }
+  },
+  {
+   "name": "--apply with the dry run's plan",
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/extra",
+    "--apply",
+    "--plan",
+    "$PLAN2"
    ],
    "expect": {
     "exit": 0,
@@ -355,7 +524,7 @@
       ]
      },
      {
-      "path": "$ROOT/repo/LAB-1/compact/2026-10-01_09-00-00_11111111-abc123.md",
+      "path": "$ROOT/repo/LAB-1/compact/2026-10-01_09-00-00_11111111_c1-0c0c0c.md",
       "contains": [
        "# summary"
       ],
@@ -422,13 +591,13 @@
       "exists": false
      },
      {
-      "path": "$DISP/2026-10-01/2026-10-01_09-00-00_11111111-abc123-evidence/a.output",
+      "path": "$DISP/2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/a.output",
       "exists": false
      },
      {
-      "path": "$DISP/2026-10-01/2026-10-01_09-00-00_11111111-abc123-evidence/MANIFEST.tsv",
+      "path": "$DISP/2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/MANIFEST.tsv",
       "has": [
-       "^$DISP/2026-10-01/2026-10-01_09-00-00_11111111-abc123-evidence/a\\.output\t.*\tpruned\t"
+       "^$DISP/2026-10-01/2026-10-01_08-59-10_11111111-0c0c0c-evidence/a\\.output\t.*\tpruned\t"
       ]
      },
      {
@@ -445,6 +614,30 @@
       "path": "$DISP/2026-10-02/x-evidence/draft.txt",
       "contains": [
        "unpublished draft"
+      ]
+     },
+     {
+      "path": "$DISP/2026-10-02/x-evidence/wip.txt",
+      "contains": [
+       "still being written"
+      ]
+     },
+     {
+      "path": "$DISP/2026-10-02/x-evidence/home.log",
+      "contains": [
+       "named under"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-1/evidence/2026-10-01_10-00-00_11111111_old/lineref.log",
+      "contains": [
+       "points at"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/LAB-1/evidence/2026-10-01_10-00-00_11111111_old/my file.log",
+      "contains": [
+       "spaced name"
       ]
      },
      {
