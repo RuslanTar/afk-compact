@@ -14,27 +14,30 @@ package ledger;
 #      literal), decisions (the Decisions literal), approvals (the Approvals literal),
 #      fold_re (the spec's fold_line_re), tag_re (carry.tag_re), none_res ([regex…]: the none-form
 #      of User constraints), end_re (a line before which a missing section goes, e.g. the sentinel)
-#   line_ids(line, \%o) -> {ids, kind, retired, first, defines} (below)
+#   line_ids(line, \%o) -> {ids, kind, retired, to, first, defines} (below)
 #
 # A base line is carried when it is a ledger line of the base's User constraints or Decisions
 # section (an entry `- U-3: …`, `- D-2: …`, `- X-1: …`, a `Superseded:` line, or a §7 fold or
 # ledger.md pointer line) and the draft's User constraints, Approvals and Decisions have none of its
-# ids: not as an entry, in the id list an entry or one of its merged clauses starts with, nor on a
-# `Superseded:`, fold or pointer line (a line elsewhere that starts with the id only cites it; a
-# carry tag's id is the other chain's and counts for nothing); an entry
+# ids: not as an entry, in the id list an entry or one of its merged clauses starts with, before
+# `by` on a `Superseded:` line, nor on a fold or pointer line (the id after `by` names the item
+# that took over, held only by its own entry; a line elsewhere that starts with the id only cites
+# it; a carry tag's id is the other chain's and counts for nothing); an entry
 # whose text the draft holds under another id (renumbered) is not carried either. Approval lines
 # never are: an approval the draft drops stays dropped (the safe direction; the approval rules
 # decide what carries). Lines are copied byte for byte, so the lint treats them as carried lines;
-# each goes after the last entry of its kind in its section (D- before X-).
+# an entry goes after the last entry of its kind in its kind's section (D- before X-), another line
+# to the section it was in.
 #
 # The difference: a draft entry whose id a base entry has with other text is `changed` (an ask whose
 # quoted request is the same, and an approval, only change state: not reported; check stamps are
 # not text), or `reused` when the two name different items (_different_item: two whole entries,
 # never a status line, whose identities share under half of their words, and of one form whose
 # texts do too). Two draft entries with one id and different items are `reused` too, and so is a
-# draft entry for an id the base folded or superseded without defining it: ids stay unique across
-# the chain. Only the defining lines (led by one id: `- D-2: …`) of User constraints, Approvals and
-# Decisions are compared: a line elsewhere, or one led by an id list, names the item.
+# draft entry for an id the base folded, superseded or named after `by` without defining it: ids
+# stay unique across the chain. Only the defining lines (led by one id: `- D-2: …`) of User
+# constraints, Approvals and Decisions are compared: a line elsewhere, or one led by an id list,
+# names the item.
 use strict;
 use warnings;
 use utf8;
@@ -50,11 +53,12 @@ my %STOP = map { $_ => 1 } qw(the and for with not but are was were this that fr
 
 sub _id { return "$_[0]-" . ($_[1] + 0) }
 
-# The ids a line defines or names: {ids => [...], kind, retired => [...]}; also the watcher's reader
-# of a copy's carried lines (watch::shape::uncarried), so the two never differ.
+# The ids a line defines or names: {ids => [...], kind, retired => [...], to => [...]}; also the
+# watcher's reader of a copy's carried lines (watch::shape::uncarried), so the two never differ.
 # kind: entry (an id leads the line), fold (§7 fold or ledger.md pointer line), superseded, or undef.
 # retired: the ids that left the chain on the line (a fold line's, the ids before `by` on a
-# Superseded line). A carry tag is read first and removed: the id it names is the other chain's.
+# Superseded line or mark); to: the ids after `by`, which ids leave out. A carry tag is read first
+# and removed: the id it names is the other chain's.
 # A tagged fold or pointer line keeps the other chain's ids, so they are named `<sid8>:<id>`.
 # An id range is left out as the watcher leaves it out (`..` or `…`; a dash after an id is a
 # separator), except before `by` on a Superseded line, where it names each id (at most 64).
@@ -82,24 +86,23 @@ sub _line_ids {
     # is D-7's entry).
     (my $uq = $l) =~ s/"[^"]*"|\x{201c}[^\x{201d}]*\x{201d}//g;
     (my $rest = $t) =~ s/\A(?:$LIST_SEP*[UDX]-[0-9]+\b(?:\s*(?:\.\.|\x{2026})\s*(?:[UDX]-)?[0-9]+\b)?)+\s*(?:[:.)]|\x{2014}|\x{2013}|-)?\s*//;
-    my $kind = $uq =~ /\bSuperseded:\s*[UDX]-[0-9]+\b/ ? 'superseded'
+    # An entry (`- D-4: …`) that ends in the tag form of the mark stays the entry and retires the ids
+    # before its `by`.
+    my $keyed = $t =~ /\A[UDX]-[0-9]+\s*:/;
+    my $marked = $uq =~ /\bSuperseded:\s*[UDX]-[0-9]+\b/;
+    my $kind = $marked && !$keyed ? 'superseded'
              : (($o->{fold_re} && $l =~ $o->{fold_re}) || $l =~ /\bsettled;\s*full text in\s/
-                || ($l =~ /\bledger\.md\b/ && $t !~ /\A[UDX]-[0-9]+\s*:/ && _form($rest) eq 'status')) ? 'fold' : undef;
+                || ($l =~ /\bledger\.md\b/ && !$keyed && _form($rest) eq 'status')) ? 'fold' : undef;
+    my ($old, $after) = _superseded($marked && ($kind // 'superseded') eq 'superseded' ? $l : '');
     if ($kind) {
-        my $s = $l;
-        my @old;
-        if ($kind eq 'superseded' && $s =~ /\bSuperseded:\s*(.*?)\s+by\s/) {
-            my ($from, $to) = ($-[1], $+[1]);
-            my $head = $1;
-            for my $r ($head =~ /($RANGE)/g) { push @old, _range_list($r) }
-            (my $h = $head) =~ s/$RANGE//g;
-            push @old, _id($1, $2) while $h =~ /$ID/g;
-            substr($s, $from, $to - $from) = '';
-        }
-        $s =~ s/$RANGE//g;
-        my @ids = @old;
+        # A Superseded line holds the ids it retires; the id after `by` is held only by its own entry
+        # or a fold line, so a draft that keeps the line and drops that entry has it carried.
+        return { ids => [ @$old, @{ $after->{pre} } ], kind => $kind, retired => $old, to => $after->{to} }
+            if $kind eq 'superseded' && $after->{by};
+        (my $s = $l) =~ s/$RANGE//g;
+        my @ids;
         push @ids, _id($1, $2) while $s =~ /$ID/g;
-        my @retired = $kind eq 'fold' ? @ids : @old;
+        my @retired = $kind eq 'fold' ? @ids : ();
         if ($kind eq 'fold' && defined $sid) { @ids = map { "$sid:$_" } @ids; @retired = () }
         return { ids => \@ids, kind => $kind, retired => \@retired };
     }
@@ -116,7 +119,27 @@ sub _line_ids {
     return { ids => [], kind => undef } unless @ids;
     # Only a line led by one id (`- D-2: …`, `U-1 "…" — …`) defines an item; a line led by an id
     # list (`- D-7, D-8 kept …`) names them.
-    return { ids => \@ids, kind => 'entry', first => $ids[0], defines => (($lead // 0) == 1 ? 1 : 0) };
+    return { ids => \@ids, kind => 'entry', first => $ids[0], defines => (($lead // 0) == 1 ? 1 : 0),
+             retired => $old, to => $after->{to} };
+}
+
+# The ids a Superseded mark retires (before its `by`; a range names each id) and the rest:
+# {by => 1 when it has a `by`, pre => the ids before the mark, to => the ids after `by`}.
+sub _superseded {
+    my ($l) = @_;
+    my (@old, @pre, @to);
+    return ([], { pre => [], to => [] }) unless $l =~ /\bSuperseded:\s*(.*?)\s+by\s/;
+    my ($mark, $from, $end) = ($-[0], $-[1], $+[0]);
+    my $head = $1;
+    for my $r ($head =~ /($RANGE)/g) { push @old, _range_list($r) }
+    (my $h = $head) =~ s/$RANGE//g;
+    push @old, _id($1, $2) while $h =~ /$ID/g;
+    (my $p = substr($l, 0, $mark)) =~ s/$RANGE//g;
+    push @pre, _id($1, $2) while $p =~ /$ID/g;
+    (my $t = substr($l, $end)) =~ s/$RANGE//g;
+    push @to, _id($1, $2) while $t =~ /$ID/g;
+    my %o = map { $_ => 1 } @old;
+    return (\@old, { by => 1, pre => [ grep { !$o{$_} } @pre ], to => \@to });
 }
 
 # An entry's text without bullet, leading id and its separator, carry tags and check stamps
@@ -228,7 +251,7 @@ sub check {
         # Only the ledger sections hold or define items; a line elsewhere that starts with an id
         # (`- D-3 implemented — commit abc1234` in Work done) cites it.
         next unless $cmp_sec{ $r->{sec} };
-        $present{$_} = 1 for @{ $r->{li}{ids} };
+        $present{$_} = 1 for @{ $r->{li}{ids} }, @{ $r->{li}{retired} || [] };
         next unless ($r->{li}{kind} // '') eq 'entry';
         $dnorm{ _norm($r->{text}, \%o) } = 1;
         next unless $r->{li}{defines};
@@ -242,14 +265,15 @@ sub check {
     }
     return $res unless defined $base && $base =~ /\S/;
     my $bs = _scan($base, \%o);
-    my (%bfirst, %bretired, %carried);
+    my (%bfirst, %btaken, %carried);
     for my $r (@$bs) {
         my $k = $r->{li}{kind} // next;
         if ($k eq 'entry' && $r->{li}{defines} && $cmp_sec{ $r->{sec} } && !$bfirst{ $r->{li}{first} }) {
             $bfirst{ $r->{li}{first} } = $r;
         }
-        # an id the base folds or supersedes has left the chain: it is taken for good
-        if ($cmp_sec{ $r->{sec} }) { $bretired{$_} //= $r for @{ $r->{li}{retired} || [] } }
+        # an id the base folds or supersedes has left the chain, and one a Superseded mark names after
+        # `by` was given to an item: each is taken for good
+        if ($cmp_sec{ $r->{sec} }) { $btaken{$_} //= $r for @{ $r->{li}{retired} || [] }, @{ $r->{li}{to} || [] } }
         # A Superseded line carries as a fold line does (template rule 8): the ids it retires stay
         # taken over the whole chain, not for one hop.
         next unless $ledger_sec{ $r->{sec} };
@@ -257,16 +281,16 @@ sub check {
         my @miss = grep { !$present{$_} } @{ $r->{li}{ids} };
         next unless @miss;
         if ($k eq 'entry' && $dnorm{ _norm($r->{text}, \%o) }) { $res->{renumbered}++; next }
-        my $lead = $k eq 'entry' ? $r->{li}{first} : $k eq 'superseded' ? ($r->{li}{ids}[0] // '') : '';
-        my $to = $lead =~ /\AU-/ ? $o{user} : $o{decisions};
+        # an entry goes to the section of its kind, a Superseded, fold or pointer line to the one it was in
+        my $to = $k ne 'entry' ? $r->{sec} : $r->{li}{first} =~ /\AU-/ ? $o{user} : $o{decisions};
         push @{ $res->{carry} }, [ $r->{text}, $to, [@miss] ];
         $carried{$_} = 1 for @miss;
     }
     $res->{ids} = [ sort { _ord($a) <=> _ord($b) || $a cmp $b } keys %carried ];
     for my $id (sort { _ord($a) <=> _ord($b) || $a cmp $b } keys %dfirst) {
         my $dr = $dfirst{$id};
-        # a new entry for an id the base folded or superseded (and does not define itself)
-        if (!$bfirst{$id} && $bretired{$id}) { push @{ $res->{reused} }, [ $id, $dr->{n} ]; next }
+        # a new entry for an id the base folded, superseded or named after `by` (and does not define)
+        if (!$bfirst{$id} && $btaken{$id}) { push @{ $res->{reused} }, [ $id, $dr->{n} ]; next }
         my $br = $bfirst{$id} or next;
         my ($bt, $dt) = (_text($br->{text}, \%o), _text($dr->{text}, \%o));
         next if lc $bt eq lc $dt;
