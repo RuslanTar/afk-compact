@@ -4,7 +4,7 @@
 # default the queue_cmd setting: `list --json --session <made-up id>` once, through queue::call
 # as the plugin runs it (5 s), and checks the file, the exit code, the time, the JSON, the
 # schema tag, each key against assets/queue-stub.v1.schema.json (check_value: the keywords that
-# file uses) and the commands list. Prints one line per check, `ok|FAIL|skip|note <check>
+# file uses), that `session` is the id it sent, and the commands list. Prints one line per check, `ok|FAIL|skip|note <check>
 # (<what>)`, a FAIL line ending `; fix: <fix>`, then `QUEUE CHECK PASS` (exit 0) or `QUEUE CHECK
 # FAIL <first failed check>` (exit 1). Never calls add or adopt: they write and the contract has
 # no dry run. Writes nothing: no queue-state.json, no caps cache, no row (queue::lane is not used).
@@ -34,6 +34,10 @@ sub _type {
 }
 
 sub _show { my ($v) = @_; return jsonc::encode($v) }
+
+# _shq(text) -> text single-quoted for a POSIX shell, so a printed fix runs as printed (a full
+# path: `~` inside quotes is not expanded)
+sub _shq { my ($t) = @_; $t =~ s/'/'\\''/g; return "'$t'" }
 
 sub _same {
     my ($a, $b) = @_;
@@ -129,6 +133,11 @@ sub run {
         return defined $fail ? 1 : 0;
     };
     my $skip = sub { $say->('skip', 'list', $_[0]); return $done->() };
+    # the setting's own notes, as status prints them (a consent key: `safe value used` when HOME
+    # or CLAUDE_CONFIG_DIR is not the account's, `settings file only`), so an ignored value says why
+    if ($from eq 'queue_cmd') {
+        $say->('note', 'queue_cmd', util::text($_)) for map { /\Aqueue_cmd: (.+)\z/s ? $1 : () } @{ rc::settings()->{notes} || [] };
+    }
 
     # the file
     my $show = defined $cmd ? util::text(util::abbrev($cmd)) : undef;
@@ -143,12 +152,13 @@ sub run {
     }
     if (!-e $cmd) { $say->('FAIL', 'program', "no file at $show", 'check the path'); return $skip->('no program') }
     if (!-f _) { $say->('FAIL', 'program', "$show is not a file", 'name the program file itself'); return $skip->('no program') }
-    if (!-x _) { $say->('FAIL', 'program', "$show is not executable", "chmod +x '$show'"); return $skip->('the program cannot run') }
+    if (!-x _) { $say->('FAIL', 'program', "$show is not executable", 'chmod +x ' . _shq(util::text($cmd))); return $skip->('the program cannot run') }
     $say->('ok', 'program', $show . ($from eq 'queue_cmd' ? ', from queue_cmd' : ''));
 
     # list, as the plugin runs it
     my $t0 = util::clock_ms();
-    my $r = queue::call([$cmd, 'list', '--json', '--session', $SID], $WAIT_MS);
+    # one byte over the plugin's cap, so a reply of exactly 256 KiB passes and a longer one is seen
+    my $r = queue::call([$cmd, 'list', '--json', '--session', $SID], $WAIT_MS, $MAX_OUT + 1);
     my $ms = util::clock_ms() - $t0;
     if ($r->{timed_out}) {
         $say->('FAIL', 'list-time', "no answer in $WAIT_MS ms", 'answer list within 1.5 s: read only your own store, no network call');
@@ -172,8 +182,8 @@ sub run {
     my $out = $r->{out} // '';
     my $j = eval { jsonc::decode(util::text($out)) };
     my $err = $@;
-    if (length($out) >= $MAX_OUT) {
-        $say->('FAIL', 'list-json', 'the reply is 256 KiB or more', 'print one JSON object of less than 256 KiB');
+    if (length($out) > $MAX_OUT) {
+        $say->('FAIL', 'list-json', 'the reply is over 256 KiB', 'print one JSON object of at most 256 KiB');
         return $done->();
     }
     if (ref $j ne 'HASH') {
@@ -216,6 +226,8 @@ sub run {
             next;
         }
         my $w = check_value($j->{$k}, $props->{$k});
+        # the contract's `session`: the --session value (the schema cannot name it)
+        $w = 'is ' . _show($j->{$k}) . ", not the --session value $SID" if !defined $w && $k eq 'session' && $j->{$k} ne $SID;
         if (defined $w) { $say->('FAIL', 'list-keys', "\"$k\" $w", $fix); $bad{$k} = 1; next }
         push @seen, $k;
     }

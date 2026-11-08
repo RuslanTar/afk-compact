@@ -15,19 +15,21 @@ use strict;
 use warnings;
 use utf8;
 
-# call(argv, budget_ms) -> run result (the user's PERL5LIB/PERLLIB restored for the child)
+# call(argv, budget_ms[, max_out]) -> run result (the user's PERL5LIB/PERLLIB restored for the
+# child); max_out (default 256 KiB, the contract's cap) only for `queue check`, which reads one more
 # `out` stays the bytes the tool printed (WP-skills callers decode their own); lane() and
 # add() decode it once where they read it (MOD-SPEC §2.6 text encoding).
 sub call {
-    my ($argv, $budget_ms) = @_;
+    my ($argv, $budget_ms, $max_out) = @_;
     util::trace('queue_cmd');
     my %env;
     $env{PERL5LIB} = $ENV{STORE_ORIG_PERL5LIB} if defined $ENV{STORE_ORIG_PERL5LIB} && $ENV{STORE_ORIG_PERL5LIB} ne '';
     $env{PERLLIB} = $ENV{STORE_ORIG_PERLLIB} if defined $ENV{STORE_ORIG_PERLLIB} && $ENV{STORE_ORIG_PERLLIB} ne '';
-    return util::run($argv, timeout_ms => $budget_ms // 5000, env => \%env, max_out => 256 * 1024);
+    return util::run($argv, timeout_ms => $budget_ms // 5000, env => \%env, max_out => $max_out // 256 * 1024);
 }
 
-my $LANE_RE = qr/^(lane|auto):[A-Za-z0-9._\/-]+$/;
+# \z, not $: a value that ends in a newline is no lane id (and puts none in the Queued: line)
+my $LANE_RE = qr/\A(lane|auto):[A-Za-z0-9._\/-]+\z/;
 
 # lane(sid, queue_cmd, budget_ms[, quiet]) -> {status: ok|off|unknown|timeout, lane, open, ids, label, queued_line}
 # `quiet` (the local shadow trial's facts): the reply is read the same way, but nothing is recorded
@@ -65,19 +67,19 @@ sub lane {
         if (ref $v eq 'ARRAY') {
             for my $it (@$v) {
                 my $id = ref $it eq 'HASH' ? $it->{id} : $it;
-                push @ids, $id if defined $id && !ref $id && $id =~ /^[A-Za-z0-9._:\/-]{1,64}$/;
+                push @ids, $id if defined $id && !ref $id && $id =~ /\A[A-Za-z0-9._:\/-]{1,64}\z/;
             }
             $count = scalar @$v if @$v > $count;
-        } elsif (!ref $v && $v =~ /^\d+$/) {
+        } elsif (!ref $v && $v =~ /\A\d+\z/) {
             $count = 0 + $v if $v > $count;
         }
         last if $count;
     }
     my $named = $lane =~ /^lane:/ ? 1 : 0;
     # "has something pending" (MOD-SPEC §10): v1's `pending` count when given, else the open count
-    my $pending = (defined $j->{pending} && !ref $j->{pending} && $j->{pending} =~ /^\d+$/) ? 0 + $j->{pending} : $count;
+    my $pending = (defined $j->{pending} && !ref $j->{pending} && $j->{pending} =~ /\A\d+\z/) ? 0 + $j->{pending} : $count;
     return { status => 'unknown', why => 'auto-empty', silent => 1 } if !$named && !$pending && !$count;
-    my $label = (defined $j->{label} && !ref $j->{label} && $j->{label} =~ /^[^\n]{1,80}$/) ? $j->{label} : $lane;
+    my $label = (defined $j->{label} && !ref $j->{label} && $j->{label} =~ /\A[^\n]{1,80}\z/) ? $j->{label} : $lane;
     my $line;
     if ($count) {
         my $idl = @ids ? ' (' . join(', ', @ids[0 .. ($#ids > 7 ? 7 : $#ids)]) . (@ids > 8 ? ', …' : '') . ')' : '';
@@ -218,7 +220,7 @@ sub add {
         my $j = defined $line ? eval { jsonc::decode($line) } : undef;
         my $st = ref $j eq 'HASH' ? ($j->{status} // '') : '';
         my $id = ref $j eq 'HASH' ? $j->{id} : undef;
-        return { %res, result => 'error' } unless $st =~ /^(queued|exists)$/ && defined $id && !ref $id && $id =~ /^[A-Za-z0-9._:\/-]{1,128}$/;
+        return { %res, result => 'error' } unless $st =~ /\A(queued|exists)\z/ && defined $id && !ref $id && $id =~ /\A[A-Za-z0-9._:\/-]{1,128}\z/;
         return { %res, result => $st, id => $id };
     }
     return { %res, result => 'unsupported' } if $r->{exit} == 2 && $out !~ /^REFUSED:/m;
