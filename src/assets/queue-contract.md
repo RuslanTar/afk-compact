@@ -14,7 +14,7 @@
 | Subcommand | Arguments | When the plugin calls it | Wait |
 |---|---|---|---|
 | `list` | `--json --session <sid>` | at a checkpoint, at `begin` of a handoff, after a compaction, when `measure --compact` runs, and in the local comparison trial | 5 s at a checkpoint and at `begin` (less when the checkpoint's own budget is short), 3 s after a compaction and in `measure`, 1.5 s in the trial |
-| `add` | `--json --session <sid> --client-id ck-<12 hex> [--lane-name <slug>]`, the draft on stdin | at a checkpoint, once per question that waits on you; not while the last `list` reply had no `commands` or left `add` out | 5 s |
+| `add` | `--json --session <sid> --client-id ck-<12 hex> [--lane-name <slug>]`, the draft on stdin | at a checkpoint, once per question that waits on you; not while the last `list` reply read from the program file as it is now (path, modification time and size) had no `commands` or left `add` out, nor for a day after an `add` exited 2 | 5 s |
 | `adopt` | `--lane <id> [--if-free] [--must-exist]` | only from `/{{plugin}}:resume`, when a new session resumes a handoff that records a `lane:` id | 5 s |
 
 `<sid>` is the Claude Code session id. `--lane-name` is the kebab-case slug of the session's handoff topic, when it has one: a name for the lane if the program makes one. `adopt` gets no session flag; `--must-exist` is passed only while the last `list` reply named `adopt:must-exist` in `commands`. Any other subcommand or flag is a usage error (exit 2).
@@ -26,14 +26,14 @@
 | Key | Required | Value |
 |---|---|---|
 | `schema` | yes | `"queue-stub/v1"`. Without it the reply is not read (`queue: degraded (untagged)`); another value: `degraded (schema)` |
-| `session` | yes | the `--session` value |
+| `session` | yes | the `--session` value, unchanged |
 | `lane` | yes | this session's lane, `lane:<name>` (named; may be adopted) or `auto:<name>` (unnamed), `<name>` from `A-Z a-z 0-9 . _ / -`; or `null` when the session has none |
 | `open` | yes | the open questions of the lane: a count, or a list of their ids (each at most 64 characters from `A-Z a-z 0-9 . _ : / -`) |
 | `pending` | yes | how many of them wait for an answer (a count) |
 | `preview` | yes | `true` when `lane` is only the name the program would give: nothing is used from the reply then |
 | `held_by` | yes | the session id of another live session that holds the lane, or `null` |
 | `label` | no | a short name of the lane for the handoff (one line, at most 80 characters; default: the lane id) |
-| `commands` | no | the subcommands it supports, from `list`, `adopt`, `adopt:must-exist` and `add`; without it the plugin takes `list` and `adopt` only and never calls `add` |
+| `commands` | no | the subcommands it supports, from `list`, `adopt`, `adopt:must-exist` and `add`; a reply without it, or without `add`, stops the `add` calls until the program file changes (the `add` row above) |
 | `lanes` | no | other lanes, as ids or `{id, holder, open, preview}` objects; shown to no one, ignored |
 
 Unknown keys are ignored. With a usable lane and open questions, the handoff gets one line `Queued: <n> open in <label> (<ids>); answered only via the queue; never re-ask.` A reply that is not one JSON object, a non-zero exit or no answer in time puts the queue in `degraded (not-json|exit|timeout)` for the session, and the handoff gets no `Queued:` line.
@@ -52,11 +52,11 @@ The draft on stdin is one JSON object, `"schema": "queue-add/v1"` (`queue-add.v1
 | `question` | the question, ending with `?`; at most 600 bytes |
 | `kind` | `choice`, `approval` or `open` |
 | `options` | for `choice` and `approval` only: 2 to 4 objects `{label, description, recommended, long_term}`: `label` at most 40 bytes, `description` at most 300 bytes, the two flags `true` or `false`; at most one option is recommended |
-| `recommendation_none_reason` | why no option is recommended: required when none is, at most 200 bytes |
+| `recommendation_none_reason` | why no option is recommended: required when none is, at most 200 bytes; a blank one beside a recommended option is left out |
 | `blocks` | what waits on the answer; at most 200 bytes |
 | `context` | optional: what the person needs to know to answer; at most 400 bytes |
 
-The helper refuses a draft over these caps itself and sends nothing. It scans every text for secrets first: a hard hit sends nothing, a soft hit arrives redacted. Unknown keys may be added in a later version of the same schema; ignore them.
+The helper bounds the draft, scans every text for secrets (a hard hit sends nothing; a soft hit is replaced by `[redacted:<rule>]`) and bounds the redacted draft again, since a mark can be longer than what it replaces: a draft over a cap, before or after redaction, is not sent. So the draft the program receives keeps every cap above. Unknown keys may be added in a later version of the same schema; ignore them.
 
 The answer is the exit code, and on exit 0 one JSON line on stdout (at most 64 KiB in all): `{"status": "queued" | "exists", "id": "<queue id>"}`, the id at most 128 characters from `A-Z a-z 0-9 . _ : / -`. You may add `"schema": "queue-add/v1"`, `"lane"` and `"client_id"`; the plugin reads `status` and `id`. A refusal prints one line `REFUSED: <kind>: <reason>` on stdout (exit 2 prints none).
 
@@ -84,7 +84,7 @@ Any other exit, a malformed exit-0 line and no answer within 5 s (`NOT QUEUED (t
 
 ## Testing
 
-`! <store> queue check [<program>]` runs only what reads: `list --json --session 00000000-0000-4000-8000-00000000c0de` once (a made-up session id), and checks that the file is executable, the exit code, the time (1.5 s, the plugin's shortest wait), the JSON, the schema tag, every key of the table above and the `commands` list. It prints `ok` or `FAIL` with the fix per check, then `QUEUE CHECK PASS` (exit 0) or `QUEUE CHECK FAIL <check>` (exit 1). Without `<program>` it checks `queue_cmd`. It never calls `add` or `adopt`: they write, and the contract has no dry run. Test those against a scratch store of your own, for example:
+`! <store> queue check [<program>]` runs only what reads: `list --json --session 00000000-0000-4000-8000-00000000c0de` once (a made-up session id), and checks that the file is executable, the exit code, the time (1.5 s, the plugin's shortest wait), the JSON, the schema tag, every key of the table above (`session` must be the id it sent) and the `commands` list. It prints `ok` or `FAIL` with the fix per check, then `QUEUE CHECK PASS` (exit 0) or `QUEUE CHECK FAIL <check>` (exit 1). Without `<program>` it checks `queue_cmd`. It never calls `add` or `adopt`: they write, and the contract has no dry run. Test those against a scratch store of your own, for example:
 
 ```sh
 printf '%s' '{"schema":"queue-add/v1","client_id":"ck-0123456789ab","session":"test-1","asked_at":"2026-11-08T12:00:00+01:00","source":{"plugin":"{{plugin}}","kind":"checkpoint","nonce":"0123abcd"},"question":"Ship on Friday?","kind":"approval","options":[{"label":"Yes","description":"Ship it","recommended":true,"long_term":true},{"label":"No","description":"Wait a week","recommended":false,"long_term":false}],"blocks":"the release"}' \
