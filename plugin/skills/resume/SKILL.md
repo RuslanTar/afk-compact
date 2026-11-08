@@ -136,7 +136,7 @@ Otherwise skip it and say why. If pin prints `relation: successor (handoff-resum
 
 **Authority.** 5d's second column covers `successor` and `other`. For `unselected`, or a resource with an ownership conflict, take inventory and report only.
 
-Compaction and `/clear` keep background work alive (same process): after `/clear` treat a shell as possibly running and probe it (`<store> wait --for <spec> --max 0`) before any LOST call. Session end ends shells, Monitors, agents, workflows and session-only crons unless the user moved them to background. A `--resume` keeps the session id but starts after the old process ended, so treat that work as gone unless a channel shows it. After `/clear`, `resumeFromRunId` works only from the original conversation (`/resume` it).
+Compaction and `/clear` keep background work alive (same process): after `/clear` treat a shell as possibly running and probe it (`<store> wait --for <spec> --max 0`) before any LOST call. Exit ends it all, teammates and session-only crons too; "Move to background" passes only shells, agents and workflows to the next wake. A `--resume` keeps the session id but starts after the old process ended, so treat that work as gone unless a channel shows it. After `/clear`, `resumeFromRunId` works only from the original conversation (`/resume` it).
 
 **5a Inventory** from runtime channels, never from the handoff alone:
 - `ListAgents`, `CronList`, and the background-task list or `task_status` where available;
