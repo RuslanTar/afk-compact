@@ -967,7 +967,8 @@ our $OPEN_HEADING = '## Open questions';
 # block is raw text, so no item starts there) or a line indented 4 or more columns that is not a
 # list continuation (a list item nested less than 4 columns past its parent's text, or a line with
 # no blank line right above it indented less than 4 columns past the text of the list item it is
-# in; tabs to the next column of 4). A marker followed by 5 or more columns counts as code. No
+# in; tabs to the next column of 4). A line where any of its leading list markers is followed by
+# more than 4 columns counts as code, whether or not that marker starts an item (review 10). No
 # item starts on a thematic break (`* * *`), a lone marker (an empty item, or a setext underline:
 # `-`) or an ordered marker other than `1.` or `1)` in an open paragraph (CommonMark lets none
 # interrupt one; micromark not `01.` either), so a line under them is measured from the item
@@ -989,6 +990,16 @@ sub code_sections {
         next if $bad;
         if ($l !~ /\S/) { ($blank, $pc) = (1, undef); next }
         if ($l =~ /`{3}|~{3}/ || $l =~ m{\A[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)*(?:>|<[A-Za-z/!?])}) { $bad = 1; next }
+        # Any marker of the line's leading markers followed by more than 4 columns, whether or not
+        # it starts an item (review 10: a nested `- 1.      x`, or `2.      x` after a break, a
+        # heading or a lazy line, was read past).
+        my ($p, $s) = ('', $l);
+        while ($s =~ /\A([ \t]*)([-*+]|[0-9]{1,9}[.)])([ \t]+)(?=\S)/) {
+            my $u = "$1$2$3";
+            $bad = 1 if $cols->($p . $u) - $cols->("$p$1$2") > 4;
+            ($p, $s) = ($p . $u, substr($s, length $u));
+        }
+        next if $bad;
         my ($ws, $m, $sp, $rest) = $l =~ /\A([ \t]*)(?:([-*+]|[0-9]{1,9}[.)])([ \t]+|\z))?(.*)\z/s;
         my $w = $cols->($ws);
         my $brk = $l =~ /\A[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*\z|\A {0,3}#{1,6}(?:[ \t]|\z)/;
@@ -1001,7 +1012,6 @@ sub code_sections {
         if ($brk) { $pc = undef; next }
         unless (defined $m) { my $t = @item ? $item[-1] : 0; $pc = $t if !defined $pc || $t < $pc; next }
         my $c = $cols->($ws . $m . $sp);
-        if ($c - $w - length($m) > 4) { $bad = 1; next }
         push @item, $c;
         $pc = $c;
     }
