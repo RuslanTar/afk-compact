@@ -185,10 +185,16 @@ def plan(brand):
     # Assets: rendered files for the helper, and the same text for the mod.
     asset_parts = {}
     spec = None
+    # A file in a subfolder keeps its path (src/assets/examples/x -> plugin/assets/examples/x);
+    # what is under examples/ ships executable: a program a user copies and runs as it is
+    # (the queue_cmd example). The mod's texts are the top-level .txt files only.
     for rel in files_under("src/assets"):
+        sub = os.path.relpath(rel, "src/assets")
         base = os.path.basename(rel)
         text = read(rel)
-        out["plugin/assets/" + base] = (render(text, name), PLAIN)
+        out["plugin/assets/" + sub] = (render(text, name), EXEC if sub.startswith("examples/") else PLAIN)
+        if sub != base:
+            continue
         if base.endswith(".txt"):
             asset_parts[base[:-4]] = strip(text).split("{{plugin}}")
         if base == "handoff-spec.md":
