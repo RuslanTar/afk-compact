@@ -1832,9 +1832,10 @@ test('E-4 wait marks: read before or after the todo mark, in the one-line form t
   const done = laneFacts('## Resume here\nStatus: finished\nStep 1: none\nGate: none\n## Next steps\n1. Read the TB log · waits: job · done\n2. Push · done · waits: you\n')
   expect([done.done, done.todo, done.unmarked]).toEqual([2, 0, 0])
   expect(laneOf(done, M).lane).toBe('finished')
-  // Only a step to do gets a wait mark: with no step mark code can read (a note after `· todo`), it is to do.
+  // Only a step to do gets a wait mark: with no step mark code can read (item 1), it is to do. A
+  // note in brackets after `· todo` keeps the mark (D-2), so items 2 and 3 read todo by their own.
   const note = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps\n1. Read the TB log · waits: job\n2. Ask user: push tag v1.4.0 — waits: you · todo (gated by U-2; no approval yet)\n3. Write notes · todo (after lunch)\n')
-  expect([note.todo, note.unmarked, note.free, note.onJob, note.onUser]).toEqual([2, 1, 0, 1, 1])
+  expect([note.todo, note.unmarked, note.free, note.onJob, note.onUser]).toEqual([3, 0, 1, 1, 1])
   // A one-line section splits before the next number only once the item carries its step mark or
   // ends on a wait mark: a wait mark inside the item's words (`· waits: job, bump to 2. …`) does not split it.
   const split = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps: 1. After CI · waits: job, bump to 2. then push · done 2. Write notes · todo\n')

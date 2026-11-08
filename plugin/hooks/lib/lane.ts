@@ -288,8 +288,8 @@ function depthAt(text: string, at: number): number {
 
 /**
  * The item's step mark (`stepMark`); an item with a wait mark and no step mark code can read
- * (`· waits: you · todo (gated by U-2)`: 3 of 24 probe summaries) is to do: only a step to do is
- * given one.
+ * (`1. Read the log · waits: job`) is to do: only a step to do is given one. (`· waits: you ·
+ * todo (gated by U-2)`, 3 of 24 probe summaries, reads todo by its own mark since D-2.)
  */
 function lastMark(item: string): 'todo' | 'done' | undefined {
   return stepMark(item) ?? (new RegExp(WAITS_SRC, 'i').test(item) ? 'todo' : undefined)
