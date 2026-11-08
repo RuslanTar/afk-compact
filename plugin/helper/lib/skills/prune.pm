@@ -7,7 +7,8 @@ package skills::prune;
 #     <disposable_root>/<YYYY-MM-DD>/ (a handoff's disposable items, a compaction's sweep, stash/),
 #     with the bucket and the handoff or summary copy each belongs to (its stem; `<stem>-evidence`;
 #     a sweep named at checkpoint time, `<stamp>_<sid8>-<id6>-evidence`, the main copy with that
-#     sid8 and id6). The 40 largest per root are listed, the rest counted (--all lists every one).
+#     sid8 and id6, else the unattributed one). The 40 largest per root are listed, the rest
+#     counted (--all lists every one).
 #   - Age: the owning handoff's or copy's date (frontmatter, else mtime), else the newest file in
 #     the folder. A folder is listed when it is older than --days (default disposable_keep_days, or
 #     14 when that is 0), at least --min-mb large, and holds a file to delete.
@@ -15,9 +16,10 @@ package skills::prune;
 #     `kind: handoff` or `kind: compact-summary` is kept too), MANIFEST.tsv, a handoff's ledger.md
 #     and inflight.md (its own text), links and special files, a file a handoff (or summary copy)
 #     newer than the age cites (a MANIFEST.tsv row, or its path or a folder above it named in the
-#     text, with or without a line reference `:120` or `#L12`, quoted with spaces, `~/`, `$HOME/`;
-#     `evidence/…` read against that handoff's bucket), and a file the evidence.jsonl of an
-#     unpublished draft newer than the age names (a draft's age: its begin date or its newest file).
+#     text, with or without a line reference `:120`, `:120-130` or `#L12`, in backticks, double or
+#     single quotes with spaces, `~/`, `$HOME/`; `evidence/…` and `./evidence/…` read against that
+#     handoff's bucket), and a file the evidence.jsonl of an unpublished draft newer than the age
+#     names (a draft's age: its begin date or the newest mtime in its folder, whichever is later).
 #     A young handoff's own folder (its restart recipes) is never old enough.
 #   - --apply first marks every MANIFEST.tsv row (handoff and sweep manifests) whose copy it deletes
 #     `pruned` (scan column), so verify reports `pruned`, not `missing`; then it unlinks the files
@@ -41,9 +43,11 @@ our $TEXT_MAX = 2 * 1024 * 1024;
 my $DAY_RE = qr/\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/;
 my %KEEP_TOP = map { $_ => 1 } qw(ledger.md inflight.md);
 # a checkpoint sweep folder (checkpoint.pm, postcompact.pm without a copy) and a main summary copy
-# (copies.pm: <stamp>_<sid8>_c<seq>-<id6>[-N].md): both carry the session's sid8 and the id6
+# (copies.pm: <stamp>_<sid8>_c<seq>-<id6>[-N].md) or an unattributed one (compact/unattributed/
+# <stamp>_<sid8>_<id6>[-N].md): each carries the session's sid8 and the id6
 my $SWEEP_RE = qr/\A[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_([0-9a-f]{8})-([0-9a-z]{6})-evidence\z/;
 my $MAIN_COPY_RE = qr/\A[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_([0-9a-f]{8})_c[0-9]+-([0-9a-z]{6})(?:-[0-9]+)?\z/;
+my $UNATTR_COPY_RE = qr/\A[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_([0-9a-f]{8})_([0-9a-z]{6})(?:-[0-9]+)?\z/;
 
 sub _size {
     my ($b) = @_;
@@ -71,6 +75,21 @@ sub _real {
 
 sub _forms { my ($p) = @_; my $r = _real($p); return $r eq $p ? ($p) : ($p, $r) }
 
+# _newest(dir) -> the latest mtime of the folder and of everything in it (links not followed).
+sub _newest {
+    my ($dir) = @_;
+    my $ep = (lstat $dir)[9] // 0;
+    my @stack = ($dir);
+    while (defined(my $d = pop @stack)) {
+        for my $e (skills::util::list_dir($d)) {
+            my @st = lstat "$d/$e" or next;
+            $ep = $st[9] if $st[9] > $ep;
+            push @stack, "$d/$e" if -d _;
+        }
+    }
+    return $ep;
+}
+
 # ---------------------------------------------------------------- the store's documents
 
 # _docs(handoff-layout root, acc): handoffs (bucket top level) and summary copies (compact/…), and the
@@ -82,7 +101,7 @@ sub _docs {
             my $bucket = "$root/$repo/$b";
             my @files = map { [ "$bucket/$_", 'handoff' ] } grep { /\.md\z/ && !-l "$bucket/$_" && -f _ } skills::util::list_dir($bucket);
             for my $sub ('compact', 'compact/subagents', 'compact/unattributed') {
-                push @files, map { [ "$bucket/$sub/$_", ($sub eq 'compact' ? 'main' : 'copy') ] }
+                push @files, map { [ "$bucket/$sub/$_", ($sub eq 'compact' ? 'main' : $sub eq 'compact/unattributed' ? 'unattr' : 'copy') ] }
                              grep { /\.md\z/ && !-l "$bucket/$sub/$_" && -f _ } skills::util::list_dir("$bucket/$sub");
             }
             for my $f (@files) {
@@ -92,22 +111,20 @@ sub _docs {
                 my $is = $where eq 'handoff' ? ($kind eq 'handoff' || $kind eq '' ? 'handoff' : undef) : 'copy';
                 next unless $is;
                 push @{ $acc->{docs} }, { path => $path, stem => skills::store::stem_of($path), kind => $is,
-                                          bucket => $bucket, key => "$repo/$b", text => $d->{text}, main => ($where eq 'main' ? 1 : 0),
+                                          bucket => $bucket, key => "$repo/$b", text => $d->{text}, slot => $where,
                                           epoch => $d->{epoch} // (stat $path)[9] // 0 };
             }
             # an unpublished draft's evidence rows (D-15), with the draft's date (the latest of its begin
-            # date in settings.json and its folder's and files' mtimes, so a draft still being worked on
-            # is young): a draft newer than the age keeps them
+            # date in settings.json and the mtimes of its folder and of everything in it, so a draft
+            # still being worked on is young): a draft newer than the age keeps them
             for my $st (skills::util::list_dir("$bucket/.staging")) {
                 my $dir = "$bucket/.staging/$st";
                 next if -l $dir || !-d _ || -e "$dir/published";
                 my $t = skills::util::read_text("$dir/evidence.jsonl", $TEXT_MAX) // next;
                 my $set = eval { skills::util::json_decode(skills::util::read_file("$dir/settings.json", 65536)) };
-                my $ep = 0;
-                for my $e ((ref $set eq 'HASH' && !ref $set->{date} ? skills::util::iso_to_epoch($set->{date}) : undef),
-                           map { (stat $_)[9] } $dir, map { "$dir/$_" } qw(body.md evidence.jsonl settings.json)) {
-                    $ep = $e if defined $e && $e > $ep;
-                }
+                my $ep = _newest($dir);
+                my $be = ref $set eq 'HASH' && !ref $set->{date} ? skills::util::iso_to_epoch($set->{date}) : undef;
+                $ep = $be if defined $be && $be > $ep;
                 my @c;
                 for my $l (split /\n/, $t) {
                     my $j = eval { skills::util::json_decode($l) };
@@ -132,15 +149,16 @@ sub _cite {
     }
     my $t = $d->{text};
     my @p;
-    # a path in the text, ~/, $HOME/ and ${HOME}/ read as the home folder
-    push @p, $1 while $t =~ m{(?<![\w.~/-])((?:~/|\$HOME/|\$\{HOME\}/|/|evidence/)[^\s`'"<>()\[\]{}|,;*]+)}g;
-    # a quoted or backticked path may hold spaces
-    push @p, $2 while $t =~ m{([`"])((?:~/|\$HOME/|\$\{HOME\}/|/|evidence/)[^`"\n]*?)\1}g;
+    # a path in the text, ~/, $HOME/ and ${HOME}/ read as the home folder, ./evidence/ as evidence/
+    push @p, $1 while $t =~ m{(?<![\w.~/-])(?:\./)?((?:~/|\$HOME/|\$\{HOME\}/|/|evidence/)[^\s`'"<>()\[\]{}|,;*]+)}g;
+    # a path in backticks, double or single quotes may hold spaces
+    push @p, $2 while $t =~ m{([`"'])(?:\./)?((?:~/|\$HOME/|\$\{HOME\}/|/|evidence/)(?:(?!\1).)*?)\1}g;
     for my $raw (@p) {
-        # the path as written, and without a line reference (log:120, log:120:5, file.rb#L12-L20)
+        # the path as written, and without a line reference (log:120, log:120-130, log:120:5,
+        # file.rb#L12-L20)
         (my $p = $raw) =~ s{[.:!?]+\z}{};
         _cite_path($acc, $d, $p);
-        next unless $p =~ s{(?::[0-9]+){1,2}\z|#L[0-9]+(?:-L?[0-9]+)?\z}{};
+        next unless $p =~ s{(?::[0-9]+(?:[-–][0-9]+)?){1,2}\z|#L[0-9]+(?:-L?[0-9]+)?\z}{};
         $p =~ s{[.:!?]+\z}{};
         _cite_path($acc, $d, $p);
     }
@@ -247,7 +265,8 @@ sub _units_disposable {
             (my $stem = $name) =~ s/-evidence\z//;
             my $owner = $name eq 'stash' ? undef : $acc->{by_stem}{$stem};
             # a sweep named at checkpoint time (<stamp>_<sid8>-<id6>-evidence) belongs to the main
-            # summary copy of that session and id6, saved later under its own stamp
+            # summary copy of that session and id6 (else its unattributed copy), saved later under
+            # its own stamp
             $owner //= $acc->{by_sweep}{"$1-$2"} if $name =~ $SWEEP_RE;
             push @u, { kind => 'disposable', path => "$root/$day/$name", day => $day, stem => $stem,
                        key => ($owner ? $owner->{key} : undef), owner => $owner, stash => ($name eq 'stash' ? 1 : 0), ro => $ro };
@@ -381,13 +400,16 @@ sub run {
     @roots = grep { defined $_->[1] && -d $_->[1] } @roots;
 
     my %acc = (docs => [], cited => {});
+    my %unattr;
     _docs($_->[1], \%acc) for grep { $_->[2] eq 'handoff' } @roots;
     for my $d (sort { ($a->{kind} eq 'handoff' ? 0 : 1) <=> ($b->{kind} eq 'handoff' ? 0 : 1) } @{ $acc{docs} }) {
         $acc{by_stem}{ $d->{stem} } //= $d;
         $acc{by_path}{ $d->{path} } = $d if $d->{kind} eq 'handoff';
-        $acc{by_sweep}{"$1-$2"} //= $d if $d->{main} && $d->{stem} =~ $MAIN_COPY_RE;
+        $acc{by_sweep}{"$1-$2"} //= $d if $d->{slot} eq 'main' && $d->{stem} =~ $MAIN_COPY_RE;
+        $unattr{"$1-$2"} //= $d if $d->{slot} eq 'unattr' && $d->{stem} =~ $UNATTR_COPY_RE;
         _cite(\%acc, $ctx, $d) if $d->{epoch} > $cut;
     }
+    $acc{by_sweep}{$_} //= $unattr{$_} for keys %unattr;
     $acc{cited}{$_} = 1 for map { @{ $_->{copies} } } grep { $_->{epoch} > $cut } @{ $acc{drafts} || [] };
     my $young = grep { $_->{epoch} > $cut } @{ $acc{docs} };
 
@@ -414,7 +436,7 @@ sub run {
         if (@l > $max) {
             my $rest = 0;
             $rest += $_->{free} for @u[$max .. $#u];
-            push @out, sprintf('  (+%d smaller folders, %s, %s; --all lists them)', @l - $max, _size($rest), $ro ? 'listed only' : 'deleted with the rest');
+            push @out, sprintf('  (+%d smaller %s, %s, %s; --all lists them)', @l - $max, @l - $max == 1 ? 'folder' : 'folders', _size($rest), $ro ? 'listed only' : 'deleted with the rest');
         }
         if ($ro) { $tot{ro_units} += @u; $tot{ro_free} += $free; next }
         $tot{units} += @u;

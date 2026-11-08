@@ -2,7 +2,7 @@
  "id": "HT-PR-02 (prune: past 40 folders a root's list ends in a count that says those are deleted with the rest; --all lists every folder)",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.6 PRUNE, review of the first build: the 40-line list per root hid folders that --apply deletes too (103 of 143 on a real store at --days 3) while the skill asked about 'the files listed'. The count line now says they are deleted with the rest and that --all lists them; --all prints every folder.",
+ "note": "0.1.6 PRUNE, review of the first build: the 40-line list per root hid folders that --apply deletes too (103 of 143 on a real store at --days 3) while the skill asked about 'the files listed'. The count line now says they are deleted with the rest and that --all lists them; --all prints every folder. Review 2: one counted folder reads `+1 smaller folder`, more `+2 smaller folders`.",
  "now": "2026-11-08T12:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -380,7 +380,7 @@
    ]
   },
   {
-   "name": "the list: 40 folders, then a count of the smallest one",
+   "name": "the list: 40 folders, then a count of the smallest one (singular)",
    "argv": [
     "prune"
    ],
@@ -390,7 +390,7 @@
      "^disposable_root .*: 41 folders, ",
      "^  38d · 44 KB · - · no handoff or summary copy found · 2026-10-01/f41-evidence/$",
      "^  38d · 5 KB · - · no handoff or summary copy found · 2026-10-01/f02-evidence/$",
-     "^  \\(\\+1 smaller folders, 4 KB, deleted with the rest; --all lists them\\)$",
+     "^  \\(\\+1 smaller folder, 4 KB, deleted with the rest; --all lists them\\)$",
      "^total: 41 folders, 41 files, "
     ],
     "stdout_lacks": [
@@ -411,7 +411,33 @@
      "^total: 41 folders, 41 files, "
     ],
     "stdout_lacks": [
-     "smaller folders"
+     "smaller folder"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$DISP/2026-10-01/f00-evidence/x.log",
+     "bytes": 2049,
+     "mode": "0600"
+    },
+    {
+     "touch": "$DISP/2026-10-01/f00-evidence/x.log",
+     "at": "2026-10-01T10:00:00+03:00"
+    }
+   ]
+  },
+  {
+   "name": "two counted folders: plural",
+   "argv": [
+    "prune"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  \\(\\+2 smaller folders, 6 KB, deleted with the rest; --all lists them\\)$",
+     "^total: 42 folders, 42 files, "
     ]
    }
   }
