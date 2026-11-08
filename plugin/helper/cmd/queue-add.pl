@@ -3,7 +3,10 @@
 # The main model runs it in the checkpoint's step-3 batch, one call per user-owned
 # question, with one JSON draft on stdin ({question, kind, options, blocks, context?}).
 # Steps: queue_cmd set and executable (else off, no exec) -> parse and bound the draft
-# (invalid) -> secret scan (HARD: secret, nothing sent; WARN: redacted in place) ->
+# (invalid; a blank recommendation_none_reason beside a recommended option is dropped) ->
+# secret scan (HARD: secret, nothing sent; WARN: redacted in place, the question's closing
+# '?' kept, then the size caps again, since a `[redacted:<rule>]` mark can be longer than the
+# text it replaces: invalid) ->
 # ledger <watch>/<sid>/queue-adds.jsonl (a queued or exists row for this client id:
 # EXISTS, no exec) -> caps cache (add unsupported: no exec) -> `queue_cmd add --json
 # --session <sid> --client-id <id> [--lane-name <bucket slug>]` with the queue-add/v1
@@ -27,6 +30,18 @@ sub _bytes { my ($s) = @_; my $c = $s; utf8::encode($c) if utf8::is_utf8($c); re
 sub _str { my ($v) = @_; return defined $v && !ref $v && $v =~ /\S/ ? 1 : 0 }
 sub _bool { my ($v) = @_; return !defined $v || jsonc::is_bool($v) ? 1 : 0 }
 
+# tidy(draft): drops a blank recommendation_none_reason (empty or only spaces) when an option is
+# recommended, where the reason has nothing to say, instead of refusing the question (off-template,
+# but it loses no entry); without a recommended option a blank reason stays and check() refuses it
+sub tidy {
+    my ($d) = @_;
+    return unless ref $d eq 'HASH' && defined $d->{recommendation_none_reason};
+    my $r = $d->{recommendation_none_reason};
+    return if ref $r || $r =~ /\S/;
+    return unless ref $d->{options} eq 'ARRAY' && grep { ref $_ eq 'HASH' && $_->{recommended} } @{ $d->{options} };
+    delete $d->{recommendation_none_reason};
+}
+
 # check(draft) -> undef when it is bounded, else the rule it breaks
 sub check {
     my ($d) = @_;
@@ -37,6 +52,11 @@ sub check {
     return 'blocks' unless _str($d->{blocks});
     return 'blocks-size' if _bytes($d->{blocks}) > $MAX{blocks};
     if (defined $d->{context}) { return 'context' unless _str($d->{context}) && _bytes($d->{context}) <= $MAX{context} }
+    # sent whenever given (model_fields), so its cap holds on every kind, recommended option or not
+    if (defined $d->{recommendation_none_reason}) {
+        return 'recommendation_none_reason' unless _str($d->{recommendation_none_reason})
+            && _bytes($d->{recommendation_none_reason}) <= $MAX{recommendation_none_reason};
+    }
     my $opts = $d->{options};
     if ($d->{kind} eq 'open') {
         return 'options-on-open' if defined $opts && !(ref $opts eq 'ARRAY' && !@$opts);
@@ -54,6 +74,21 @@ sub check {
     if (!$rec) {
         return 'recommendation_none_reason' unless _str($d->{recommendation_none_reason})
             && _bytes($d->{recommendation_none_reason}) <= $MAX{recommendation_none_reason};
+    }
+    return undef;
+}
+
+# caps(draft) -> undef when every text keeps its size cap, else the size rule it breaks; the
+# second pass after redaction runs only these, since a mark changes sizes and nothing else
+sub caps {
+    my ($d) = @_;
+    return 'question-size' if _bytes($d->{question}) > $MAX{question};
+    return 'blocks-size' if _bytes($d->{blocks}) > $MAX{blocks};
+    return 'context' if defined $d->{context} && _bytes($d->{context}) > $MAX{context};
+    return 'recommendation_none_reason'
+        if defined $d->{recommendation_none_reason} && _bytes($d->{recommendation_none_reason}) > $MAX{recommendation_none_reason};
+    for my $o (@{ ref $d->{options} eq 'ARRAY' ? $d->{options} : [] }) {
+        return 'option-size' if _bytes($o->{label}) > $MAX{label} || _bytes($o->{description}) > $MAX{description};
     }
     return undef;
 }
@@ -138,13 +173,19 @@ sub run {
     else { binmode(STDIN, ':raw'); my $n = read(STDIN, $raw, $queue::ADD_MAX + 1); $raw = '' unless $n }
     return _say('invalid', 'draft-size', $t0, undef) if !defined $raw || length($raw) > $queue::ADD_MAX;
     my $d = eval { jsonc::decode($raw) };
+    tidy($d);
     my $bad = check($d);
     return _say('invalid', $bad, $t0, undef) if defined $bad;
-    # HARD: nothing is sent; WARN: redacted in place, then sent
+    # HARD: nothing is sent; WARN: redacted in place, then the size caps again
     my @refs = texts($d);
     my @hard = map { $_->{rule} } grep { $_->{class} eq 'HARD' } map { @{ secrets::scan($$_) } } @refs;
     return _say('secret', $hard[0], $t0, undef) if @hard;
     for my $r (@refs) { ($$r) = secrets::redact($$r, ['WARN']) if @{ secrets::scan($$r) } }
+    # a mark can take the closing '?' (key-value values end in any non-space): it comes back
+    $d->{question} =~ s/\s*\z/?/ unless $d->{question} =~ /\?\s*\z/;
+    # the caps hold for the draft the program receives (assets/queue-contract.md, add)
+    $bad = caps($d);
+    return _say('invalid', $bad, $t0, undef) if defined $bad;
     my $cid = client_id($sid, $d);
     if (defined(my $id = ledger_hit($cid))) { return _say('exists', $id, $t0, undef) }
     return _say('unsupported', undef, $t0, undef) unless queue::add_supported($cmd);

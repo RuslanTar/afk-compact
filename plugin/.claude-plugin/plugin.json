@@ -38,7 +38,7 @@
     "queue_cmd": {
       "type": "file",
       "title": "Question queue program [default: empty = off]",
-      "description": "Optional: the path of a program of your own that collects the questions an unattended session needs to ask you, so they wait in one queue as well as in the handoff (the program must follow the contract in the README, \"Questions for your queue\"). Empty (the default) turns this off and the plugin calls nothing; only your settings file counts for this option, flags and environment variables are ignored.",
+      "description": "Optional: the path of a program of your own that collects the questions an unattended session needs to ask you, so they wait in one queue as well as in the handoff (the program must follow the contract in assets/queue-contract.md in the plugin folder; the README's \"Connect your own question queue\" shows a minimal one and how to test it). Empty (the default) turns this off and the plugin calls nothing; only your settings file counts for this option, flags and environment variables are ignored.",
       "default": ""
     },
     "triggers": {

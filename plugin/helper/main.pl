@@ -53,6 +53,7 @@ my %KNOWN = map { $_ => 1 } qw(
     begin stamp evidence publish locate inventory heal-check verify
     restore-evidence stash lane pin receipt risk wait project
     watch report notice trial-measure trial-save restart settings migrate prune
+    queue
 );
 
 my $sub = shift @ARGV;

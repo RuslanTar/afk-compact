@@ -59,6 +59,8 @@ plugin/helper/lib/{repomode,handoff_turn}.pm	core
 plugin/helper/lib/**	core
 plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,claim,measure,log,reconcile,status,smoke,notice,settings,migrate}.*	core
 plugin/helper/cmd/{handoff-turn,handoff-state,queue-add}.*	core
+# 0.1.6 queue contract: `queue check` runs the read-only part of the queue_cmd contract (assets/queue-contract.md).
+plugin/helper/cmd/queue.*	core
 # The local shadow trial (TRIAL-DUAL-HANDOFF, P-DH-MEAS/P-DH-SAVE): two read/save commands beside lib/trial.pm.
 plugin/helper/cmd/{trial-measure,trial-save}.*	core
 # Restart on update (SESSION-RESTART §8.1, lane RS-A): the helper's restart command.

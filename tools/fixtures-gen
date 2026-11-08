@@ -41,7 +41,11 @@ Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
             `queue-stub/v1` tag required, `lanes` optional in either shape) and gives the mode its
             list.expect names (untagged and v2 replies are degraded on purpose); an adopt answer
             follows the QA-2 exit table and its adopt.expect the plugin's mapping (AT-QA-04); an
-            add.rc follows the D-10 exit table (small-rulings §1.2)
+            add.rc follows the D-10 exit table (small-rulings §1.2); the shipped contract (0.1.6,
+            src/assets/queue-contract.md and its two schema files) agrees with this strict contract
+            and with the helper's caps: the list schema's required and optional keys, commands and
+            lane pattern; the draft schema's byte caps and option count against cmd/queue-add.pl
+            (%MAX, %KIND, 2-4 options) and lib/queue.pm ($ADD_MAX), and each cap in the .md table
   setups    every setups/<id>.json builds in a temp dir with the case runner's step vocabulary
             (repo, git, write, mkdir, symlink, copy, touch), then the result is checked: the D-12
             repos (worktrees, submodule, symlinked root, declarations, exports against
@@ -2110,6 +2114,61 @@ def check_queue():
     return problems, njson
 
 
+def check_queue_contract():
+    """0.1.6 (owner 2026-11-08: the plugin shares its queue contract): the shipped contract text and
+    its schema files say what the strict contract above and the helper enforce. Problems, checks."""
+    problems, n = [], 0
+    src = os.path.join(REPO, "src", "assets")
+    try:
+        stub = json.loads(read(os.path.join(src, "queue-stub.v1.schema.json")))
+        draft = json.loads(read(os.path.join(src, "queue-add.v1.schema.json")))
+        md = read(os.path.join(src, "queue-contract.md"))
+        qadd = read(os.path.join(REPO, "plugin", "helper", "cmd", "queue-add.pl"))
+        qpm = read(os.path.join(REPO, "plugin", "helper", "lib", "queue.pm"))
+    except (OSError, ValueError) as e:
+        return ["queue contract: {}".format(e)], 0
+    where = "src/assets/queue-stub.v1.schema.json"
+    n += 1
+    if stub.get("required") != QUEUE_V1_REQUIRED:
+        problems.append("{}: required {} is not the strict contract's {}".format(where, stub.get("required"), QUEUE_V1_REQUIRED))
+    if sorted(stub.get("properties", {})) != sorted(QUEUE_V1_REQUIRED + QUEUE_V1_OPTIONAL):
+        problems.append("{}: properties {} are not the strict contract's keys".format(where, sorted(stub.get("properties", {}))))
+    if set(stub.get("properties", {}).get("commands", {}).get("items", {}).get("enum", [])) != QUEUE_COMMANDS:
+        problems.append("{}: commands enum is not {}".format(where, sorted(QUEUE_COMMANDS)))
+    if stub.get("properties", {}).get("lane", {}).get("pattern") != LANE_RE.pattern:
+        problems.append("{}: lane pattern is not {}".format(where, LANE_RE.pattern))
+    where = "src/assets/queue-add.v1.schema.json"
+    caps = {k: int(v) for k, v in re.findall(r"\b([a-z_]+) => (\d+)", (re.search(r"our %MAX = \((.*?)\);", qadd, re.S) or [None, ""])[1])}
+    m = re.search(r"our \$ADD_MAX = (\d+);", qpm)
+    if not caps or not m:
+        return problems + ["queue contract: no %MAX in cmd/queue-add.pl or no $ADD_MAX in lib/queue.pm"], n
+    caps_total = int(m.group(1))
+    props = draft.get("properties", {})
+    item = props.get("options", {}).get("items", {}).get("properties", {})
+    n += 1
+    if draft.get("x-max-bytes") != caps_total:
+        problems.append("{}: x-max-bytes {} is not queue.pm's $ADD_MAX {}".format(where, draft.get("x-max-bytes"), caps_total))
+    if not re.search(r"at most {:,} bytes".format(caps_total), md):
+        problems.append("src/assets/queue-contract.md: no 'at most {:,} bytes' for the draft".format(caps_total))
+    for k, cap in sorted(caps.items()):
+        n += 1
+        sch = item.get(k) if k in ("label", "description") else props.get(k)
+        if not isinstance(sch, dict) or sch.get("x-max-bytes") != cap or sch.get("maxLength") != cap:
+            problems.append("{}: {} needs x-max-bytes and maxLength {} (cmd/queue-add.pl %MAX)".format(where, k, cap))
+        if not re.search(r"`{}`[^\n]*?at most {} bytes".format(re.escape(k), cap), md):
+            problems.append("src/assets/queue-contract.md: no `{}` ... at most {} bytes line (cmd/queue-add.pl %MAX)".format(k, cap))
+    kinds = re.search(r"our %KIND = map \{ \$_ => 1 \} qw\(([^)]*)\)", qadd)
+    if not kinds or set(props.get("kind", {}).get("enum", [])) != set(kinds.group(1).split()):
+        problems.append("{}: kind enum is not cmd/queue-add.pl's %KIND".format(where))
+    opts = props.get("options", {})
+    if "@$opts >= 2 && @$opts <= 4" not in qadd or (opts.get("minItems"), opts.get("maxItems")) != (2, 4):
+        problems.append("{}: options must take 2 to 4 items, as cmd/queue-add.pl checks".format(where))
+    for sch, name in ((stub, "queue-stub/v1"), (draft, "queue-add/v1")):
+        if sch.get("$id") != name or name not in md:
+            problems.append("queue contract: {} schema $id or its name in the .md".format(name))
+    return problems, n
+
+
 def check_adopt(case, commands):
     """QA-2 adopt: rc 0 with the bound lane id in the first stdout line; rc 3/4/6 with one stdout
     `REFUSED: <kind>: <reason>` line (<= 200 B, no command text); rc 2 usage. adopt.expect is the
@@ -2436,7 +2495,11 @@ def rename_drill(b):
     tmp = tempfile.mkdtemp(prefix="fixtures-gen-drill-")
     try:
         for rel in (os.path.join("tools", "fixtures-gen"), os.path.join("src", "assets", "handoff-spec.md"),
-                    os.path.join("plugin", "assets", "canary-baseline.json")):
+                    os.path.join("plugin", "assets", "canary-baseline.json"),
+                    # check_queue_contract's inputs
+                    os.path.join("src", "assets", "queue-contract.md"), os.path.join("src", "assets", "queue-stub.v1.schema.json"),
+                    os.path.join("src", "assets", "queue-add.v1.schema.json"),
+                    os.path.join("plugin", "helper", "cmd", "queue-add.pl"), os.path.join("plugin", "helper", "lib", "queue.pm")):
             if os.path.exists(os.path.join(REPO, rel)):
                 os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
                 shutil.copy2(os.path.join(REPO, rel), os.path.join(tmp, rel))
@@ -2565,6 +2628,9 @@ def check(b):
     queue_problems, nqueue = check_queue()
     problems += queue_problems
     print("queue: {} JSON list answers against the strict v1 contract (QA-2), adopt answers per the QA-2 exit table, add answers per D-10".format(nqueue))
+    qc_problems, nqc = check_queue_contract()
+    problems += qc_problems
+    print("queue contract: {} checks of the shipped contract and schemas against the strict contract and the helper's caps".format(nqc))
     # setups, settings
     setup_problems, nsetup = check_setups(b)
     problems += setup_problems

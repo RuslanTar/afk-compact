@@ -1,0 +1,657 @@
+{
+ "id": "AT-QK-01 (0.1.6 queue contract: queue check, the example program, the reason cap)",
+ "note": "Owner 2026-11-08 (\"the plugin may share its contract and provide instructions how to integrate with its questions path\"): `queue check [<program>]` runs only list --json --session <made-up id> of the contract in assets/queue-contract.md (default: queue_cmd) and prints ok/FAIL per check with the fix, then QUEUE CHECK PASS (exit 0) or QUEUE CHECK FAIL <check> (exit 1); it writes nothing (no caps cache, no queue-state, nothing in the program's store) and never calls add or adopt. The shipped example assets/examples/queue-folder.sh passes it, queues a question end to end through queue-add (QUEUED, then EXISTS from its own store with the ledger gone) and lists it after. A reply without the tag, a reply with keys the schema refuses and a program that is not executable fail with their fix. /status prints the queue check pointer and the user-run line only while queue_cmd is set. queue-add caps recommendation_none_reason at 200 B whenever the draft carries it, also beside a recommended option (before 0.1.6 only when no option was recommended). Review fixes: the chmod fix names the full path, shell-quoted (a path under HOME printed as ~ inside quotes did not expand); a list reply whose session is not the id sent fails; a reply of exactly 256 KiB passes and one byte more fails; queue-add bounds the draft again after redaction, so a label the redaction marks grow past 40 B is refused, not sent; a blank recommendation_none_reason beside a recommended option is dropped and the question queued; a lane id that ends in a newline is no lane (no Queued: line); after redaction only the size caps run again, and a mark that takes the question's closing ? (SECRET=from_vault?) puts it back, so the draft is queued (0.1.6 review: it was refused as `question`)",
+ "now": "2026-11-08T12:00:00+01:00",
+ "tz": "Etc/GMT-1",
+ "steps": [
+  {
+   "setup": [
+    {
+     "stub": "untagged",
+     "script": "printf '%s\\n' \"$*\" >> \"$(dirname \"$0\")/untagged.calls\"\necho '{\"lane\":null,\"open\":0}'"
+    },
+    {
+     "stub": "badkeys",
+     "script": "echo '{\"schema\":\"queue-stub/v1\",\"session\":\"s\",\"lane\":\"bogus\",\"open\":\"3\",\"pending\":0,\"preview\":0,\"held_by\":null,\"commands\":[\"list\",\"frob\"]}'"
+    },
+    {
+     "stub": "addlog",
+     "script": "printf '%s\\n' \"$*\" >> \"$(dirname \"$0\")/addlog.calls\"\ncat > /dev/null\necho '{\"status\":\"queued\",\"id\":\"q-1\"}'"
+    },
+    {
+     "write": "$TMP/bin/not-exec",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": "0644"
+    },
+    {
+     "write": "$ROOT/.sessions/$SID.json",
+     "json": {
+      "bucket": "example-repo/LAB-123",
+      "session_id": "$SID"
+     }
+    },
+    {
+     "stub": "big0",
+     "script": "exec perl -e 'my $j = q({\"schema\":\"queue-stub/v1\",\"session\":\"00000000-0000-4000-8000-00000000c0de\",\"lane\":null,\"open\":0,\"pending\":0,\"preview\":false,\"held_by\":null}); print $j, q( ) x (262144 + $ARGV[0] - length($j) - 1), qq(\\n)' 0"
+    },
+    {
+     "stub": "big1",
+     "script": "exec perl -e 'my $j = q({\"schema\":\"queue-stub/v1\",\"session\":\"00000000-0000-4000-8000-00000000c0de\",\"lane\":null,\"open\":0,\"pending\":0,\"preview\":false,\"held_by\":null}); print $j, q( ) x (262144 + $ARGV[0] - length($j) - 1), qq(\\n)' 1"
+    },
+    {
+     "stub": "lanenl",
+     "script": "printf '%s\\n' '{\"schema\":\"queue-stub/v1\",\"session\":\"s\",\"lane\":\"lane:a\\n\",\"open\":[\"q-1\"],\"pending\":1,\"preview\":false,\"held_by\":null}'"
+    },
+    {
+     "stub": "save",
+     "script": "cat > \"$(dirname \"$0\")/save.draft\"\necho '{\"status\":\"queued\",\"id\":\"q-2\"}'"
+    },
+    {
+     "write": "$HOME/bin/my-queue",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": "0644"
+    },
+    {
+     "write": "$TMP/bin/it's q",
+     "text": "#!/bin/sh\nexit 0\n",
+     "mode": "0644"
+    },
+    {
+     "repo_fixture": "main-branch.json",
+     "at": "$TMP/example-repo"
+    }
+   ]
+  },
+  {
+   "name": "the example program passes, and the check writes nothing",
+   "env": {
+    "QUEUE_DIR": "$TMP/qd"
+   },
+   "argv": [
+    "queue",
+    "check",
+    "$PLUGIN/assets/examples/queue-folder.sh"
+   ],
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "queue_cmd"
+    ],
+    "stdout_has": [
+     "^ok program \\(",
+     "^ok list-exit \\(exit 0\\)$",
+     "^ok list-time \\(\\d+ ms, limit 1500 ms\\)$",
+     "^ok list-json \\(one object, \\d+ bytes\\)$",
+     "^ok list-schema \\(queue-stub/v1\\)$",
+     "^ok list-keys \\(schema, session, lane, open, pending, preview, held_by, commands, label\\)$",
+     "^ok commands \\(list, add\\)$",
+     "^note not checked \\(add and adopt: ",
+     "^QUEUE CHECK PASS$"
+    ],
+    "stdout_lacks": [
+     "^FAIL"
+    ],
+    "files": [
+     {
+      "path": "$TMP/qd",
+      "exists": false
+     },
+     {
+      "path": "$WATCH/queue-caps.json",
+      "exists": false
+     },
+     {
+      "path": "$WATCH/*/queue-state.json",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "the example as queue_cmd: queue-add queues the question in its folder",
+   "env": {
+    "QUEUE_DIR": "$TMP/qd"
+   },
+   "options": {
+    "queue_cmd": "$PLUGIN/assets/examples/queue-folder.sh"
+   },
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a2b3c4d"
+   ],
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\AQUEUED ck-[0-9a-f]{12}\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$TMP/qd/$SID/ck-*.json",
+      "count": 1
+     },
+     {
+      "path": "$TMP/qd/$SID/ck-*.json",
+      "has": [
+       "^\\{\"schema\":\"queue-add/v1\",\"client_id\":\"ck-[0-9a-f]{12}\",\"session\":\"$SID\","
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$WATCH/$SID/queue-adds.jsonl",
+     "text": ""
+    }
+   ]
+  },
+  {
+   "name": "ledger gone: the example answers exists from its own folder",
+   "env": {
+    "QUEUE_DIR": "$TMP/qd"
+   },
+   "options": {
+    "queue_cmd": "$PLUGIN/assets/examples/queue-folder.sh"
+   },
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "5e6f7a8b"
+   ],
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\AEXISTS ck-[0-9a-f]{12}\\n\\z"
+    ],
+    "files": [
+     {
+      "path": "$TMP/qd/$SID/ck-*.json",
+      "count": 1
+     }
+    ]
+   }
+  },
+  {
+   "name": "queue check with no argument checks queue_cmd; the example still passes",
+   "env": {
+    "QUEUE_DIR": "$TMP/qd"
+   },
+   "options": {
+    "queue_cmd": "$PLUGIN/assets/examples/queue-folder.sh"
+   },
+   "argv": [
+    "queue",
+    "check"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ok program \\(.*queue-folder\\.sh, from queue_cmd\\)$",
+     "^QUEUE CHECK PASS$"
+    ]
+   }
+  },
+  {
+   "name": "an untagged list reply fails with its fix; no add or adopt call",
+   "argv": [
+    "queue",
+    "check",
+    "$TMP/bin/untagged"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^ok list-json ",
+     "^FAIL list-schema \\(no \"schema\" key: the plugin reads nothing from the reply, queue: degraded \\(untagged\\)\\); fix: add \"schema\": \"queue-stub/v1\"$",
+     "^QUEUE CHECK FAIL list-schema$"
+    ],
+    "stdout_lacks": [
+     "^ok list-keys"
+    ],
+    "files": [
+     {
+      "path": "$TMP/bin/untagged.calls",
+      "lines": 1,
+      "has": [
+       "^list --json --session 00000000-0000-4000-8000-00000000c0de$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "keys the schema refuses: one FAIL line each, with the fix",
+   "argv": [
+    "queue",
+    "check",
+    "$TMP/bin/badkeys"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL list-keys \\(\"session\" is \"s\", not the --session value 00000000-0000-4000-8000-00000000c0de\\); fix: \"session\" must be the --session value$",
+     "^ok list-schema ",
+     "^FAIL list-keys \\(\"lane\" does not match \\^\\(lane\\|auto\\):.*\\); fix: \"lane\" must be lane:<name> or auto:<name>",
+     "^FAIL list-keys \\(\"open\" is string, not integer or array\\); fix: \"open\" must be a count",
+     "^FAIL list-keys \\(\"preview\" is integer, not boolean\\); fix: \"preview\" must be true or false$",
+     "^FAIL list-keys \\(\"commands\" item 1 is \"frob\", not one of ",
+     "^QUEUE CHECK FAIL list-keys$"
+    ],
+    "stdout_lacks": [
+     "^ok list-keys",
+     "^ok commands",
+     "pending"
+    ]
+   }
+  },
+  {
+   "name": "not executable: FAIL program with chmod, list skipped",
+   "argv": [
+    "queue",
+    "check",
+    "$TMP/bin/not-exec"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL program \\(.* is not executable\\); fix: chmod \\+x '",
+     "^skip list ",
+     "^QUEUE CHECK FAIL program$"
+    ]
+   }
+  },
+  {
+   "name": "not executable under HOME: the fix names the full path, not ~ inside quotes",
+   "argv": [
+    "queue",
+    "check",
+    "$HOME/bin/my-queue"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL program \\(~/bin/my-queue is not executable\\); fix: chmod \\+x '$HOME/bin/my-queue'$",
+     "^QUEUE CHECK FAIL program$"
+    ]
+   }
+  },
+  {
+   "name": "not executable, a ' in the path: quoted for sh",
+   "argv": [
+    "queue",
+    "check",
+    "$TMP/bin/it's q"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL program \\(.* is not executable\\); fix: chmod \\+x '$TMP/bin/it'\\\\''s q'$"
+    ]
+   }
+  },
+  {
+   "name": "a reply of exactly 256 KiB passes",
+   "argv": [
+    "queue",
+    "check",
+    "$TMP/bin/big0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ok list-json \\(one object, 262144 bytes\\)$",
+     "^QUEUE CHECK PASS$"
+    ]
+   }
+  },
+  {
+   "name": "one byte more fails",
+   "argv": [
+    "queue",
+    "check",
+    "$TMP/bin/big1"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL list-json \\(the reply is over 256 KiB\\); fix: print one JSON object of at most 256 KiB$",
+     "^QUEUE CHECK FAIL list-json$"
+    ]
+   }
+  },
+  {
+   "name": "a lane id that ends in a newline: queue check refuses it",
+   "argv": [
+    "queue",
+    "check",
+    "$TMP/bin/lanenl"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL list-keys \\(\"lane\" does not match "
+    ]
+   }
+  },
+  {
+   "name": "and the plugin's reader takes no lane from it: no Queued: line",
+   "options": {
+    "queue_cmd": "$TMP/bin/lanenl"
+   },
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/example-repo"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "Queued:"
+    ]
+   }
+  },
+  {
+   "name": "no program and queue_cmd empty",
+   "options": {
+    "queue_cmd": ""
+   },
+   "argv": [
+    "queue",
+    "check"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL program \\(queue_cmd is empty and no program was given\\); fix: ",
+     "^QUEUE CHECK FAIL program$"
+    ]
+   }
+  },
+  {
+   "name": "usage",
+   "argv": [
+    "queue",
+    "frob"
+   ],
+   "expect": {
+    "exit": 64,
+    "stderr_has": [
+     "^usage: queue check \\[<program>\\]$"
+    ]
+   }
+  },
+  {
+   "name": "status with queue_cmd set: the pointer line and the user-run queue check",
+   "env": {
+    "QUEUE_DIR": "$TMP/qd"
+   },
+   "options": {
+    "queue_cmd": "$PLUGIN/assets/examples/queue-folder.sh"
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: on$",
+     "^  queue check \\(user-run, above\\) runs your program's list once and checks the reply against assets/queue-contract\\.md$",
+     "^  ! \"/[^\"]+/scripts/$BRAND-store\" queue check$"
+    ]
+   }
+  },
+  {
+   "name": "status with queue_cmd empty: neither",
+   "options": {
+    "queue_cmd": ""
+   },
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^queue: off$"
+    ],
+    "stdout_lacks": [
+     "queue check"
+    ]
+   }
+  },
+  {
+   "name": "queue-add: a label within 40 B that redaction grows past it is refused, nothing sent",
+   "options": {
+    "queue_cmd": "$TMP/bin/addlog"
+   },
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "0a1b2c3d"
+   ],
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "blocks": "the retry fix",
+    "options": [
+     {
+      "label": "key=abcdef1 key=abcdef2 key=abcdef3",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ]
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (invalid): option-size; keep it in Questions\n",
+    "files": [
+     {
+      "path": "$TMP/bin/addlog.calls",
+      "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "queue-add: a redaction that takes the closing ? is queued with the ? put back",
+   "options": {
+    "queue_cmd": "$TMP/bin/save"
+   },
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "3d4e5f6a"
+   ],
+   "stdin_json": {
+    "question": "Should the deploy read SECRET=from_vault?",
+    "kind": "open",
+    "blocks": "the deploy"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "QUEUED q-2\n",
+    "files": [
+     {
+      "path": "$TMP/bin/save.draft",
+      "has": [
+       "\"question\":\"Should the deploy read \\[redacted:key-value\\]\\?\""
+      ],
+      "lacks": [
+       "from_vault"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "queue-add: a reason over 200 B is refused beside a recommended option too, nothing sent",
+   "options": {
+    "queue_cmd": "$TMP/bin/addlog"
+   },
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "9c0d1e2f"
+   ],
+   "stdin_json": {
+    "question": "Should the retry window be 30 s or 60 s?",
+    "kind": "choice",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ],
+    "blocks": "the retry fix",
+    "recommendation_none_reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (invalid): recommendation_none_reason; keep it in Questions\n",
+    "files": [
+     {
+      "path": "$TMP/bin/addlog.calls",
+      "exists": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "queue-add: a blank reason beside a recommended option is dropped and the question queued",
+   "options": {
+    "queue_cmd": "$TMP/bin/save"
+   },
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1b2c3d4e"
+   ],
+   "stdin_json": {
+    "question": "Should the retry window be 45 s?",
+    "kind": "choice",
+    "blocks": "the retry fix",
+    "recommendation_none_reason": " ",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback",
+      "recommended": true
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ]
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "QUEUED q-2\n",
+    "files": [
+     {
+      "path": "$TMP/bin/save.draft",
+      "has": [
+       "\"blocks\":\"the retry fix\""
+      ],
+      "lacks": [
+       "recommendation_none_reason"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "queue-add: a blank reason with no recommended option is still refused",
+   "options": {
+    "queue_cmd": "$TMP/bin/save"
+   },
+   "argv": [
+    "queue-add",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2c3d4e5f"
+   ],
+   "stdin_json": {
+    "question": "Should the retry window be 50 s?",
+    "kind": "choice",
+    "blocks": "the retry fix",
+    "recommendation_none_reason": "",
+    "options": [
+     {
+      "label": "30 s",
+      "description": "faster feedback"
+     },
+     {
+      "label": "60 s",
+      "description": "fewer false alarms"
+     }
+    ]
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "NOT QUEUED (invalid): recommendation_none_reason; keep it in Questions\n"
+   }
+  }
+ ]
+}

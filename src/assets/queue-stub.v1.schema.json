@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "queue-stub/v1",
+  "title": "queue_cmd list --json --session <sid>: the reply",
+  "description": "One JSON object on stdout, exit 0. See queue-contract.md. Unknown keys are ignored. queue check validates a reply against the type, const, enum, pattern, maxLength, minimum, items, anyOf, required and properties keywords of this file.",
+  "type": "object",
+  "required": ["schema", "session", "lane", "open", "pending", "preview", "held_by"],
+  "properties": {
+    "schema": {
+      "const": "queue-stub/v1",
+      "description": "the version tag \"queue-stub/v1\""
+    },
+    "session": {
+      "type": "string",
+      "description": "the --session value"
+    },
+    "lane": {
+      "type": ["string", "null"],
+      "pattern": "^(lane|auto):[A-Za-z0-9._/-]+$",
+      "description": "lane:<name> or auto:<name> (letters, digits and . _ / -), or null"
+    },
+    "open": {
+      "anyOf": [
+        {"type": "integer", "minimum": 0},
+        {"type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9._:/-]{1,64}$"}}
+      ],
+      "description": "a count, or a list of question ids (each at most 64 characters: letters, digits and . _ : / -)"
+    },
+    "pending": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "a count (a whole number, 0 or more)"
+    },
+    "preview": {
+      "type": "boolean",
+      "description": "true or false"
+    },
+    "held_by": {
+      "type": ["string", "null"],
+      "description": "the session id of another live session that holds the lane, or null"
+    },
+    "label": {
+      "type": "string",
+      "pattern": "^[^\\n]+$",
+      "maxLength": 80,
+      "description": "one line of at most 80 characters"
+    },
+    "commands": {
+      "type": "array",
+      "items": {"enum": ["list", "adopt", "adopt:must-exist", "add"]},
+      "description": "a list of list, adopt, adopt:must-exist and add"
+    },
+    "lanes": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {"type": "string"},
+          {"type": "object", "required": ["id", "holder", "open", "preview"]}
+        ]
+      },
+      "description": "lane ids, or {id, holder, open, preview} objects"
+    }
+  }
+}
