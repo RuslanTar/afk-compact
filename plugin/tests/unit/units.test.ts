@@ -416,7 +416,8 @@ test('AT-P-16: window 700000: soft max 551000 + clamped; handoff_turn off: 56000
 test('handoff_turn / handoff_turn_max_tokens / queue_cmd options: validation, clamp, notes', () => {
   const a = parseOptions({ handoff_turn: ' OFF ', handoff_turn_max_tokens: 5000, queue_cmd: '/q/bin/queue' })
   expect([a.handoff_turn, a.handoff_turn_max_tokens, a.queue_cmd]).toEqual(['off', 20000, '/q/bin/queue'])
-  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'handoff_turn_max_tokens', configured: 5000, effective: 20000 }] })
+  // D-72: ' OFF ' is a word from before 0.1.6 (false), read with its note
+  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'handoff_turn_max_tokens', configured: 5000, effective: 20000 }], noted: [{ key: 'handoff_turn', note: 'legacy-word' }] })
   const b = parseOptions({ handoff_turn: 'fork', handoff_turn_max_tokens: '900000' })
   expect([b.handoff_turn, b.handoff_turn_max_tokens]).toEqual(['halt', 150000])
   expect(b.notes.invalid).toEqual(['handoff_turn'])

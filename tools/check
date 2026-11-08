@@ -1171,7 +1171,7 @@ def probes(name):
           r"^GATE config-defaults " + re.escape(launcher_rel(name)) + r": AT-CAP-02 differs: launcher hroot ~/\.claude/x/",
           r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-IA-01 idle words: settings\.pm \$IDLE_INVALID off != config\.ts IDLE_INVALID_READS_AS auto$",
           r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-IA-01 idle words: settings\.pm @IDLE_OFF_WORDS off false no disabled 0 != config\.ts IDLE_OFF_WORDS off false no none disabled 0$",
-          r"^GATE config-defaults plugin/helper/lib/settings\.pm: D-72 switch words: settings\.pm %SWITCH watcher shadow off != config\.ts SWITCH watcher off shadow$"], None),
+          r"^GATE config-defaults plugin/helper/lib/settings\.pm: D-72 switch words: settings\.pm %SWITCH watcher shadow off != config\.ts SWITCH off shadow$"], None),
         ("export-classes", "AT-WB-08", gates_only("export-classes"), export_classes,
          [r"^GATE export-classes plugin/helper/lib/settings\.pm: AT-WB-08 class: cache_ttl_s exports 'raw'",
           r"^GATE export-classes plugin/helper/lib/settings\.pm: AT-WB-08 path: otel_log_path is a file key exported as list$"], None),
