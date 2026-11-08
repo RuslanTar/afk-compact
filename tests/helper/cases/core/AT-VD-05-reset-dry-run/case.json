@@ -7,7 +7,7 @@
  "steps": [
   {"setup": [
     {"write": "$HOME/.claude/settings.json", "mode": "0644", "mtime_ago_s": 3600,
-     "text": "{\n  \"model\": \"opus\",\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"compact_target_tokens\": 350000,\n        \"ticket_pattern\": \"ZZTICKET-[0-9]+\",\n        \"secret_extra_rules\": \"HARD:zzsecret1\",\n        \"relaunch_auto\": \"off\",\n        \"resume_proceed\": \"confirm\",\n        \"watcher\": \"off\"\n      }\n    }\n  }\n}\n"}
+     "text": "{\n  \"model\": \"opus\",\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"compact_target_tokens\": 350000,\n        \"ticket_pattern\": \"ZZTICKET-[0-9]+\",\n        \"secret_extra_rules\": \"HARD:zzsecret1\",\n        \"relaunch_auto\": \"off\",\n        \"resume_proceed\": \"confirm\",\n        \"watcher\": \"false\"\n      }\n    }\n  }\n}\n"}
   ]},
   {"name": "snapshot", "argv": ["settings", "show"],
    "expect": {"exit": 0, "files": [{"path": "$HOME/.claude/settings.json", "snapshot": "orig"}]}},
@@ -27,8 +27,8 @@
    "expect": {"exit": 0,
      "stdout_has": ["^  would change compact_target_tokens: 350000 -> default 400000 \\(removed\\)$",
                     "^  would change ticket_pattern: custom -> default built-in \\(removed\\)$",
-                    "^  would change watcher: off -> default shadow \\(removed\\)$",
-                    "^  kept by --all \\(consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to auto; change those in /config or the file by hand\\): relaunch_auto, secret_extra_rules, resume_proceed$",
+                    "^  would change watcher: false -> default true \\(removed\\)$",
+                    "^  kept by --all \\(consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to true; change those in /config or the file by hand\\): relaunch_auto, secret_extra_rules, resume_proceed$",
                     "^to apply it: \"/[^\"]+/scripts/$BRAND-store\" settings reset --all --plan [0-9a-f]{12} --apply$"],
      "stdout_lacks": ["ZZTICKET", "zzsecret", "relaunch_auto: ", "resume_proceed: ", "secret_extra_rules: "],
      "files": [{"path": "$HOME/.claude/settings.json", "same_bytes_as": "orig", "same_mtime_as": "orig"}],
@@ -44,7 +44,7 @@
    "argv": ["settings", "reset", "secret_extra_rules", "resume_proceed"],
    "expect": {"exit": 3,
      "stdout_has": ["^  secret_extra_rules: looser, refused: a protective list only gains entries here; 1 of its saved entries would go$",
-                    "^  resume_proceed: looser, refused: it only goes towards confirm here \\(saved confirm\\)$"],
+                    "^  resume_proceed: looser, refused: it only goes towards false here \\(saved false\\)$"],
      "stdout_lacks": ["zzsecret"],
      "files": [{"path": "$HOME/.claude/settings.json", "same_bytes_as": "orig", "same_mtime_as": "orig"}]}},
   {"name": "usage: an unknown key", "argv": ["settings", "reset", "no_such_key"],
@@ -54,7 +54,7 @@
   {"name": "usage: keys and --all", "argv": ["settings", "reset", "watcher", "--all"],
    "expect": {"exit": 64, "stderr_has": ["^usage: settings reset <key>\\.\\.\\.\\|--all \\[--apply\\]$"]}},
   {"name": "usage: no subcommand", "argv": ["settings"],
-   "expect": {"exit": 64, "stderr_has": ["^usage: settings show \\| settings set <key>=<value>\\.\\.\\. \\[--apply\\] \\| settings reset <key>\\.\\.\\.\\|--all \\[--apply\\]$"]}},
+   "expect": {"exit": 64, "stderr_has": ["^usage: settings show \\| settings set <key>=<value>\\.\\.\\. \\[--apply\\] \\| settings reset <key>\\.\\.\\.\\|--all \\[--apply\\] \\| settings migrate \\[--apply\\]$"]}},
   {"name": "nothing saved for the plugin: nothing to remove",
    "setup": [{"write": "$HOME/.claude/settings.json", "json": {"model": "opus"}}],
    "argv": ["settings", "reset", "--all"],

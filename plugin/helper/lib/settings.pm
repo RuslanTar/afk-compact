@@ -38,13 +38,13 @@ our @KEYS = (
     [measured_block              => 'bool', 0,                         'bool'],
     [auto_evidence               => 'bool', 1,                         'bool'],
     [warn_ui                     => 'bool', 1,                         'bool'],
-    [watcher                     => 'str',  'shadow',                  'enum'],
+    [watcher                     => 'str',  'true',                    'enum'],
     [stall_min                   => 'num',  60,                        'num'],
     [cache_ttl_s                 => 'num',  300,                       'num'],
     [otel_log_path               => 'file', '',                        'path'],
     [deny_class_patterns         => 'str',  '',                        'list'],
     # design pass of 2026-10-21: D-18 (mod keys), D-12 and Dev-1 (helper keys)
-    [handoff_turn                => 'str',  'halt',                    'enum'],
+    [handoff_turn                => 'str',  'true',                    'enum'],
     [handoff_turn_max_tokens     => 'num',  64000,                     'num'],
     [repo_roots                  => 'str',  '',                        'list'],
     [relaunch_auto               => 'str',  'on',                      'enum'],
@@ -52,12 +52,12 @@ our @KEYS = (
     [relaunch_quiet_s            => 'num',  120,                       'num'],
     # 2026-10-22: S-SETTINGS B (helper), D (mod; the default `model` is the owner's xxxxxxxx-18,
     # 2026-10-23 01:48, E-1 checks it; PT-1), IC-1 (mod)
-    [unattended_prod_reads       => 'str',  'forbid',                  'enum'],
+    [unattended_prod_reads       => 'str',  'false',                   'enum'],
     [prod_patterns               => 'str',  '',                        'list'],
-    [precompact_turn             => 'str',  'model',                   'enum'],
+    [precompact_turn             => 'str',  'true',                    'enum'],
     # idle D3 (owner 2026-10-23 02:4x, IA-1): `auto` = the plugin's pre-idle turn only while
     # Claude Code's own idle compaction is off; `off` = never (the old `on` reads as auto)
-    [idle_handoff_turn           => 'str',  'auto',                    'enum'],
+    [idle_handoff_turn           => 'str',  'true',                    'enum'],
     [idle_handoff_min_tokens     => 'num',  200000,                    'num'],
     # owner 2026-10-30 (xxxxxxxx, "I want the handoff anyway"): `run` = the pre-idle handoff turn
     # also runs with a rate-limit window at 90% or more; `skip` = it skips there (near-limit);
@@ -65,7 +65,7 @@ our @KEYS = (
     [idle_handoff_near_limit     => 'str',  'run',                     'enum'],
     # IDLE-COMPACT-SPEC (D9): `auto` = the plugin compacts an idle session itself while Claude
     # Code's own idle compaction is off (`"idleCompaction": false`); `off` = never
-    [idle_compact                => 'str',  'auto',                    'enum'],
+    [idle_compact                => 'str',  'true',                    'enum'],
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): the digest turn right after an
     # idle compaction of a finished or blocked lane (`submit`), or none until the next turn
     # (`return`); `off` (owner rule (c), 2026-10-28: on only after a live PASS) asks for no digest
@@ -76,7 +76,7 @@ our @KEYS = (
     # SK-7 (owner 2026-10-23 xxxxxxxx-12/-13/-14, "Add both keys"; S-SETTINGS E1-E6)
     [ticket_pattern              => 'str',  '[A-Z][A-Z0-9]+-[0-9]+',   'drop'],
     [secret_extra_rules          => 'str',  '',                        'list'],
-    [resume_proceed              => 'str',  'auto',                    'enum'],
+    [resume_proceed              => 'str',  'true',                    'enum'],
     [handoff_reuse_window_min    => 'num',  15,                        'num'],
     [evidence_total_max_mb       => 'num',  50,                        'num'],
     [watch_quota_mb              => 'num',  50,                        'num'],
@@ -139,14 +139,12 @@ our %SECTION = (
     measured_block              => [qw(logs common)],
     auto_evidence               => [qw(logs common)],
     watch_quota_mb              => [qw(logs advanced)],
-    otel_log_path               => [qw(logs advanced)],
     relaunch_quiet_s            => [qw(jobs common)],
     relaunch_auto               => [qw(jobs common)],
     relaunch_allow              => [qw(jobs common)],
     queue_cmd                   => [qw(jobs common)],
     repo_roots                  => [qw(safety common)],
     unattended_prod_reads       => [qw(safety common)],
-    restart_on_update           => [qw(safety common)],
     prod_patterns               => [qw(safety common)],
     secret_extra_rules          => [qw(safety common)],
     protected_branches          => [qw(safety common)],
@@ -154,12 +152,29 @@ our %SECTION = (
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
-# The values an enum key exports as is (W-BETA D); any other value exports as `other`.
-our %ENUM = (watcher => [qw(shadow off)], handoff_turn => [qw(halt off)], relaunch_auto => [qw(on shadow off)],
-             unattended_prod_reads => [qw(forbid allow)], precompact_turn => [qw(model code)], idle_handoff_turn => [qw(auto off)], idle_compact => [qw(auto off)],
+# D-72 (0.1.6): keys left out of the manifest's userConfig, so the configure dialog and /config
+# do not offer them, because they do nothing yet: otel_log_path has no reader, restart_on_update
+# no restart route that ships (lib/restart.pm). The helper still reads them from the settings
+# file; the onboarding view skips them, and the status values list them only once set.
+our %HIDDEN = map { $_ => 1 } qw(otel_log_path restart_on_update);
+# The values an enum key takes, its manifest `options` (the configure dialog's picker), and
+# exports as is (W-BETA D); any other value exports as `other`.
+our %ENUM = (watcher => [qw(true false)], handoff_turn => [qw(true false)], relaunch_auto => [qw(on shadow off)],
+             unattended_prod_reads => [qw(true false)], precompact_turn => [qw(true false)], idle_handoff_turn => [qw(true false)], idle_compact => [qw(true false)],
              idle_handoff_near_limit => [qw(run skip-spend skip)],
              idle_digest => [qw(submit return off)],
-             resume_proceed => [qw(auto confirm)], restart_on_update => [qw(off shadow on)]);
+             resume_proceed => [qw(true false)], restart_on_update => [qw(off shadow on)]);
+# D-72 (0.1.6; owner 2026-11-08: "may be replaced with true/false", with a screen that shows the
+# description): the seven on/off keys take "true" or "false", a userConfig string with those two
+# options, so /config opens a picker with the description (a boolean flips in place there). In the
+# plugin each still runs as its word before 0.1.6: %SWITCH gives [the word true reads as, the word
+# false reads as]. The words a release before 0.1.6 stored keep their meaning: either word (and
+# the idle keys' @IDLE_*_WORDS; never the opposite, never an unknown word as true or false). Claude
+# Code reads a stored value outside the options as unset (its default applies), so the helper
+# notes such a value and `settings migrate` rewrites it. config.ts SWITCH holds the same table.
+our %SWITCH = (handoff_turn => [qw(halt off)], precompact_turn => [qw(model code)], watcher => [qw(shadow off)],
+               unattended_prod_reads => [qw(allow forbid)], idle_handoff_turn => [qw(auto off)], idle_compact => [qw(auto off)],
+               resume_proceed => [qw(auto confirm)]);
 
 # DP-3: keys that let the plugin act without asking. Read from the settings file only, and
 # given their %SAFE value when the settings folder is not the account's ~/.claude (CR-F34).
@@ -185,6 +200,35 @@ our %TIGHTEN = (resume_proceed => [qw(auto confirm)]);
 our @IDLE_OFF_WORDS = qw(off false no none disabled 0);
 our @IDLE_AUTO_WORDS = qw(auto true yes 1 on);
 our $IDLE_INVALID = 'off';
+
+# switch_read(key, value) -> (word, old): the %SWITCH word a value of that key reads as, trimmed
+# and case-folded (a JSON true or false as that word): true or false, either of the key's own
+# words, and for the two idle keys @IDLE_AUTO_WORDS and @IDLE_OFF_WORDS; old 1 when the value is
+# not exactly "true" or "false", the form Claude Code checks against the options. (undef, 0) for
+# an unset value or any other word, which the key's own rule reads (never as true or false).
+sub switch_read {
+    my ($key, $v) = @_;
+    my $w = $SWITCH{$key};
+    return (undef, 0) unless $w && !_unset($v);
+    my $bool = ref $v eq 'jsonc::Bool';
+    return (undef, 0) if ref $v && !$bool;
+    my $x = $bool ? ($$v ? 'true' : 'false') : trim(lc "$v");
+    my $r = $x eq 'true' ? $w->[0] : $x eq 'false' ? $w->[1] : (grep { $_ eq $x } @$w) ? $x : undef;
+    if (!defined $r && ($key eq 'idle_handoff_turn' || $key eq 'idle_compact')) {
+        $r = (grep { $_ eq $x } @IDLE_AUTO_WORDS) ? $w->[0] : (grep { $_ eq $x } @IDLE_OFF_WORDS) ? $w->[1] : undef;
+    }
+    return (undef, 0) unless defined $r;
+    return ($r, (!$bool && ("$v" eq 'true' || "$v" eq 'false')) ? 0 : 1);
+}
+
+# switch_form(key, value) -> "true" or "false" for a value of a %SWITCH key that reads as one
+# (its word too), else undef: the form /config, `settings` and /status show.
+sub switch_form {
+    my ($key, $v) = @_;
+    my ($r) = switch_read($key, $v);
+    return undef unless defined $r;
+    return $r eq $SWITCH{$key}[0] ? 'true' : 'false';
+}
 
 # Flag spellings: --<key with dashes>, plus the short forms the skills pass.
 our %FLAG_ALIAS = (
@@ -235,7 +279,7 @@ sub config_dir { return $ENV{CLAUDE_CONFIG_DIR} && $ENV{CLAUDE_CONFIG_DIR} ne ''
 # is the account's ~/.claude/settings.json (a symlink to it, or a hard link: the same file
 # by its real path or its device and inode) counts as that folder for every consent key: it is
 # the same bytes, so no new trust. Another file there still gives the safe values.
-our %SAFE = (repo_roots => '', relaunch_auto => 'off', relaunch_allow => '', unattended_prod_reads => 'forbid', queue_cmd => '',
+our %SAFE = (repo_roots => '', relaunch_auto => 'off', relaunch_allow => '', unattended_prod_reads => 'false', queue_cmd => '',
              restart_on_update => 'off');
 our $TEST_CONSENT_MARK = '.test-consent-home';
 sub account_home { my $h = (getpwuid($<))[7]; return defined $h && $h ne '' ? $h : undef }
@@ -398,7 +442,7 @@ sub config_key_info {
 }
 
 # resolve(\%flags) -> {values => {key => v}, source => {key => flag|env|settings|default},
-#   notes => [..], ambiguous => 0|1, config_key => key-or-undef,
+#   notes => [..], ambiguous => 0|1, config_key => key-or-undef, legacy => {key => note} (D-72),
 #   defaults => {key => the default used: the manifest's, else the @KEYS fallback, as written}}
 sub resolve {
     my ($flags) = @_;
@@ -448,59 +492,75 @@ sub resolve {
         $src{$key} = $s;
         $def{$key} = $default;
     }
+    # D-72 (0.1.6): a %SWITCH key's value as the plugin runs it, its word (switch_read). An old
+    # form from a flag or the environment gets a note here; one saved in the settings file gets
+    # the migrate warning (value_warnings) instead. An unknown word stays for the key's own rule.
+    # %legacy: the keys with an old form in a source read for them (the settings file, and a flag
+    # or the environment unless the key is file-only or protective), for rc::preamble's
+    # `config_note` (legacy-word; legacy-on for idle_handoff_turn "on", as config.ts notes it).
+    my %legacy;
+    for my $key (grep { exists $SWITCH{$_} } map { $_->[0] } @KEYS) {
+        my @from = ((!$ambiguous && ref $opts eq 'HASH') ? $opts->{$key} : undef,
+                    ($FILE_ONLY{$key} || $NO_FLAG{$key}) ? () : ($flags->{$key}, $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key }));
+        for my $v (@from) {
+            my ($w, $old) = switch_read($key, $v);
+            next unless defined $w && $old;
+            $legacy{$key} = ($key eq 'idle_handoff_turn' && !ref $v && trim(lc "$v") eq 'on') ? 'legacy-on' : ($legacy{$key} // 'legacy-word');
+        }
+    }
+    for my $key (grep { exists $SWITCH{$_} && $_ ne 'resume_proceed' } map { $_->[0] } @KEYS) {
+        my ($w, $old) = switch_read($key, $val{$key});
+        next unless defined $w;
+        push @notes, "$key: the old value " . trim(lc "$val{$key}") . ' reads as ' . switch_form($key, $w)
+            if $old && ($src{$key} eq 'flag' || $src{$key} eq 'env');
+        $val{$key} = $w;
+    }
     # Tighten-only keys (S-SETTINGS E3): the strictest valid value of flag, env, settings file
-    # and default wins; an invalid value counts as unset (with a note).
+    # and default wins; an invalid value counts as unset (with a note). A %SWITCH key's values
+    # read as switch_read reads them, and its notes name them true or false.
     for my $key (sort keys %TIGHTEN) {
         my @order = @{ $TIGHTEN{$key} };
         my %rank = map { $order[$_] => $_ } 0 .. $#order;
+        my $sw = exists $SWITCH{$key};
+        my $say = sub { return $sw ? switch_form($key, $_[0]) : $_[0] };
         my $env = $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key };
         my $uck = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : undef;
         my ($best, $bsrc);
         for my $cand (['settings', (!$ambiguous && ref $opts eq 'HASH') ? $opts->{$key} : undef], ['flag', $flags->{$key}],
                       ['env', $env], ['default', $uck // (grep { $_->[0] eq $key } @KEYS)[0]->[2]]) {
             my ($s, $v) = @$cand;
-            next if _unset($v) || ref $v;
-            my $x = trim(lc $v);
-            if (!exists $rank{$x}) { push @notes, "$key: '$s' value is not " . join(' or ', @order) . ', ignored' if $s ne 'default'; next }
+            next if _unset($v) || (ref $v && !($sw && ref $v eq 'jsonc::Bool'));
+            my ($x, $old) = $sw ? switch_read($key, $v) : (trim(lc $v), 0);
+            push @notes, "$key: the old value " . trim(lc "$v") . ' reads as ' . switch_form($key, $x) if $old && ($s eq 'flag' || $s eq 'env');
+            if (!defined $x || !exists $rank{$x}) {
+                push @notes, "$key: '$s' value is not " . join(' or ', $sw ? qw(true false) : @order) . ', ignored' if $s ne 'default';
+                next;
+            }
             ($best, $bsrc) = ($x, $s) if !defined $best || $rank{$x} > $rank{$best};
         }
         $best //= $order[0];
-        push @notes, "$key: the stricter $best ($bsrc) is used" if defined $bsrc && $bsrc ne ($src{$key} // '') && $src{$key} ne 'default';
+        push @notes, "$key: the stricter " . $say->($best) . " ($bsrc) is used" if defined $bsrc && $bsrc ne ($src{$key} // '') && $src{$key} ne 'default';
         ($val{$key}, $src{$key}) = ($best, $bsrc // 'default');
     }
-    # idle D3 (IA-1, as config.ts reads it): trimmed and case-folded; the old value `on` reads as
-    # `auto` with a note; the common words read as off or auto (@IDLE_OFF_WORDS, @IDLE_AUTO_WORDS,
-    # owner xxxxxxxx-13); any other value is $IDLE_INVALID with a note.
-    {
-        my $x = trim(lc($val{idle_handoff_turn} // 'auto'));
+    # idle D3 (IA-1, as config.ts reads it): trimmed and case-folded; true, false, the old auto and
+    # off, and the common words (@IDLE_OFF_WORDS, @IDLE_AUTO_WORDS, owner xxxxxxxx-13) read as off or
+    # auto (switch_read, above); any other value is $IDLE_INVALID with a note. idle_compact
+    # (IDLE-COMPACT-SPEC §5) reads the same way.
+    for my $key (qw(idle_handoff_turn idle_compact)) {
+        my $x = trim(lc($val{$key} // 'auto'));
         if ($x eq '') {
             # Blank once trimmed (spaces, a tab) is unset, as config.ts unset() reads it: the
             # default, no note (review r2: /status said off while the hooks ran auto).
-            my $d = ref $uc->{idle_handoff_turn} eq 'HASH' && exists $uc->{idle_handoff_turn}{default}
-                ? $uc->{idle_handoff_turn}{default} : (grep { $_->[0] eq 'idle_handoff_turn' } @KEYS)[0]->[2];
-            $x = trim(lc($d // 'auto'));
-            $src{idle_handoff_turn} = 'default';
+            my $d = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : (grep { $_->[0] eq $key } @KEYS)[0]->[2];
+            ($x) = switch_read($key, $d // 'true');
+            $x //= 'auto';
+            $src{$key} = 'default';
         }
-        if ($x eq 'on') { push @notes, 'idle_handoff_turn: on reads as auto'; $x = 'auto' }
-        elsif (grep { $_ eq $x } @IDLE_OFF_WORDS) { $x = 'off' }
-        elsif (grep { $_ eq $x } @IDLE_AUTO_WORDS) { $x = 'auto' }
-        else { push @notes, "idle_handoff_turn: not auto, off or a yes/no word, $IDLE_INVALID used"; $x = $IDLE_INVALID }
-        $val{idle_handoff_turn} = $x;
-    }
-    # idle_compact (IDLE-COMPACT-SPEC §5, as config.ts reads it): the same word lists and invalid
-    # value as idle_handoff_turn; a new key, so no legacy `on` note (`on` is an auto word).
-    {
-        my $x = trim(lc($val{idle_compact} // 'auto'));
-        if ($x eq '') {
-            my $d = ref $uc->{idle_compact} eq 'HASH' && exists $uc->{idle_compact}{default}
-                ? $uc->{idle_compact}{default} : (grep { $_->[0] eq 'idle_compact' } @KEYS)[0]->[2];
-            $x = trim(lc($d // 'auto'));
-            $src{idle_compact} = 'default';
+        if ($x ne 'auto' && $x ne 'off') {
+            push @notes, "$key: not true, false or a yes/no word, " . switch_form($key, $IDLE_INVALID) . ' used';
+            $x = $IDLE_INVALID;
         }
-        if (grep { $_ eq $x } @IDLE_OFF_WORDS) { $x = 'off' }
-        elsif (grep { $_ eq $x } @IDLE_AUTO_WORDS) { $x = 'auto' }
-        else { push @notes, "idle_compact: not auto, off or a yes/no word, $IDLE_INVALID used"; $x = $IDLE_INVALID }
-        $val{idle_compact} = $x;
+        $val{$key} = $x;
     }
     # idle_handoff_near_limit (owner 2026-10-30, as config.ts reads it): trimmed and case-folded;
     # run, skip-spend or skip, else the default run with a note. A blank value is unset: the default.
@@ -524,7 +584,7 @@ sub resolve {
     my $sx = secret_extra({ values => \%val });
     push @notes, "secret_extra_rules: entry $_ dropped (invalid)" for @{ $sx->{invalid} };
     return { values => \%val, source => \%src, notes => \@notes, ambiguous => $ambiguous,
-             config_key => ($ambiguous ? undef : $ckey), defaults => \%def };
+             config_key => ($ambiguous ? undef : $ckey), defaults => \%def, legacy => \%legacy };
 }
 
 # ---------------------------------------------------------------- SK-7 helpers (2026-10-23)
@@ -801,8 +861,8 @@ sub relaunch_allowed {
 
 # ---------------------------------------------------------------- production (S-SETTINGS B)
 # prod(resolved) -> {reads => forbid|allow, classes => [{id, re}], user => n, invalid => [{key, index?, value}]}
-# `unattended_prod_reads` (consent key, file only): trimmed and case-folded, `forbid` or `allow`,
-# anything else `forbid` plus an invalid entry. The production classes are the shipped ones
+# `unattended_prod_reads` (consent key, file only): trimmed and case-folded, `false` (`forbid`) or
+# `true` (`allow`), anything else `forbid` plus an invalid entry. The production classes are the shipped ones
 # (handoff-spec `prod_classes`, id `prod-token`), then `prod_patterns` (protective, file only)
 # as `user-prod-<n>` (n = 1-based position in the setting): at most 32, each at most 200 chars,
 # compiling, within the Dev-7 limits (no `(?{`, `(??{`, `(*`); no `^` is required. A dropped
@@ -833,9 +893,9 @@ sub prod {
     my ($r) = @_;
     my $v = $r->{values} || {};
     my (@invalid, @classes);
-    my $reads = lc($v->{unattended_prod_reads} // 'forbid');
-    $reads = trim($reads);
-    if ($reads !~ /^(forbid|allow)$/) { push @invalid, { key => 'unattended_prod_reads', value => $v->{unattended_prod_reads} }; $reads = 'forbid' }
+    # D-72: true or false, or a word before 0.1.6 (switch_read); anything else forbid
+    my ($reads) = switch_read('unattended_prod_reads', $v->{unattended_prod_reads} // 'false');
+    if (!defined $reads) { push @invalid, { key => 'unattended_prod_reads', value => $v->{unattended_prod_reads} }; $reads = 'forbid' }
     my @shipped = spec::has('prod_classes') ? spec::list('prod_classes') : @PROD_FALLBACK;
     for my $c (@shipped) {
         next unless ref $c eq 'HASH' && defined $c->{id} && defined $c->{re};
@@ -964,8 +1024,7 @@ sub export_view {
         if ($class eq 'num') { $out = defined $x ? 0 + $x : undef }
         elsif ($class eq 'bool') { $out = jsonc::bool($x) }
         elsif ($class eq 'enum') {
-            my $c = lc($x // '');
-            $c = trim($c);
+            my $c = exists $SWITCH{$key} ? switch_form($key, $x) // '' : trim(lc($x // ''));
             $out = (grep { $_ eq $c } @{ $ENUM{$key} || [] }) ? $c : 'other';
         }
         elsif ($class eq 'list') { $out = scalar(my @e = list($x)) }
@@ -993,12 +1052,12 @@ sub export_view {
 our %RESET_KEEP = map { $_ => 1 } (keys %FILE_ONLY, keys %NO_FLAG, 'resume_proceed');
 our %RESET_EFFECT = (
     repo_roots => 'its default accepts no repository for exports', relaunch_auto => 'its default on lets a lost background job start again by itself (looser than now)',
-    relaunch_allow => 'its default allows no command to start again by itself', unattended_prod_reads => 'its default forbid asks before production reads',
+    relaunch_allow => 'its default allows no command to start again by itself', unattended_prod_reads => 'its default false asks before production reads',
     queue_cmd => 'its default runs no queue program', restart_on_update => 'its default off restarts nothing on an update',
     prod_patterns => 'its default leaves only the built-in production rule (looser than now)',
     secret_extra_rules => 'its default leaves only the built-in secret rules (looser than now)',
     protected_branches => 'its default leaves only the built-in protected branches (looser than now)',
-    resume_proceed => 'its default auto lets a resume you start go on after its report (looser than now)',
+    resume_proceed => 'its default true lets a resume you start go on after its report (looser than now)',
 );
 # Source labels (spec Behaviour 1).
 our %SOURCE_LABEL = (settings => 'your settings.json', default => 'default', env => 'plugin option', flag => 'flag', safe => 'safe value');
@@ -1035,6 +1094,7 @@ sub show_value {
         return $p;
     }
     if ($t eq 'num') { return "$v" =~ /\A-?[0-9]+(\.[0-9]+)?\z/ ? whole($key, 0 + $v) : 'not a number' }
+    if (exists $SWITCH{$key}) { my $f = switch_form($key, $v); return $f if defined $f }
     my $s = trim(util::text("$v"));
     $s =~ s/[\x00-\x1f\x7f]/ /g;
     return length($s) > 40 ? substr($s, 0, 39) . '…' : $s;
@@ -1055,6 +1115,8 @@ sub effective_rows {
     for my $k (@KEYS) {
         my $key = $k->[0];
         my $s = $src->{$key} // 'default';
+        # a %HIDDEN key (not in /config) only once a value is saved or given for it
+        next if $HIDDEN{$key} && ($s eq 'default' || $s eq 'safe') && !exists $saved->{$key};
         my $val = $v->{$key};
         my ($shown, $from);
         if ($TYPE{$key} eq 'num' && defined $val) {
@@ -1096,18 +1158,59 @@ sub value_warnings {
     }
     for my $w (grep { $_->{saved_empty} } @$rows) {
         # a consent key is never written by the plugin (lib/settings_write.pm), a reset included
-        push @l, "warning: $w->{key}: saved empty, the plugin uses the default; Claude Code passes \"\" to the hooks; clear it with "
-                 . ($FILE_ONLY{ $w->{key} } ? "/config or by hand (a consent key: the plugin never writes it)"
+        # a %HIDDEN key is not in the manifest (D-72): no /config row, nothing passed to the hooks
+        my $h = $HIDDEN{ $w->{key} };
+        push @l, "warning: $w->{key}: saved empty, the plugin uses the default; " . ($h ? '' : 'Claude Code passes "" to the hooks; ') . 'clear it with '
+                 . ($FILE_ONLY{ $w->{key} } ? ($h ? 'your settings.json by hand' : '/config or by hand') . ' (a consent key: the plugin never writes it)'
                     : defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
     }
+    # D-72: values saved in a form from before 0.1.6, which Claude Code reads as unset
+    my @all = old_values($o);
+    my @old = grep { defined $_->{to} } @all;
+    my @u = map { $_->{key} } grep { !defined $_->{to} } @all;
+    my @w = map { $_->{key} } grep { !$_->{consent} } @old;
+    my @c = map { $_->{key} } grep { $_->{consent} } @old;
+    push @l, 'warning: ' . join(', ', @w) . ': saved in a form from before 0.1.6; Claude Code reads such a value as unset, so the hooks run the '
+             . 'default (only /status and the skills read it as before); ' . (defined $store ? '! ' . util::text($store) . ' settings migrate --apply' : 'a settings migrate --apply')
+             . ' saves the new form' if @w;
+    push @l, 'warning: ' . join(', ', @c) . ': saved in a form from before 0.1.6; Claude Code reads such a value as unset (the default); '
+             . (@c > 1 ? 'consent keys' : 'a consent key') . ': pick the value again in /config' if @c;
+    push @l, 'warning: ' . join(', ', @u) . ': saved as a value not on its list; Claude Code reads it as unset, so the hooks run the default '
+             . '(/status reads it by its own rule); pick a value in /config' if @u;
     return @l;
+}
+
+# old_values([options_source]) -> ({key, to, consent}…) in @KEYS order (D-72, read-only): the saved
+# options that Claude Code reads as unset, being none of the key's manifest options as written. `to`
+# is the form to save when the plugin reads the value as one of them (a %SWITCH key's old word or a
+# JSON true or false, an option in another case or with spaces around it), else undef (a word the
+# plugin reads by the key's own rule, while the hooks get the default). A key without options and
+# an unset value are left out.
+sub old_values {
+    my ($o) = @_;
+    $o //= options_source();
+    return () if $o->{ambiguous} || ref $o->{options} ne 'HASH';
+    my $uc = ctx::user_config();
+    my @out;
+    for my $key (map { $_->[0] } @KEYS) {
+        next unless exists $o->{options}{$key};
+        next unless ref $uc->{$key} eq 'HASH' && ref $uc->{$key}{options} eq 'ARRAY';
+        my $opts = $uc->{$key}{options};
+        my $v = $o->{options}{$key};
+        next if _unset($v) || (!ref $v && grep { $_ eq $v } @$opts);
+        my $to = exists $SWITCH{$key} ? switch_form($key, $v) : ref $v ? undef : trim(lc "$v");
+        undef $to unless defined $to && grep { $_ eq $to } @$opts;
+        push @out, { key => $key, to => $to, consent => $FILE_ONLY{$key} ? 1 : 0 };
+    }
+    return @out;
 }
 
 # ---------------------------------------------------------------- view (0.1.2 onboarding)
 # view(\%flags[, tier]) -> ordered object: one row per key (key, title, section, tier, kind,
 # default, min, max, values, value, source, clamped, class) in @SECTIONS order (@KEYS order inside a
-# section), with the pluginConfigs key in use (config_key_info) and why a write there would be
-# refused. Min and max are the manifest's; default, value and source are resolve()'s (one place
+# section; no %HIDDEN key; a %SWITCH key's default and value as true or false), with the
+# pluginConfigs key in use (config_key_info), why a write there would be refused and the keys
+# saved in a form from before 0.1.6 (old_form). Min and max are the manifest's; default, value and source are resolve()'s (one place
 # works the default out). tier: common, advanced or all (default). A key with no %SECTION row
 # goes to section `other`, tier advanced, and is listed in `unsectioned` (the settings-sections
 # gate fails on it). `clamped`: true for a key the clamp moves (a number outside its min/max, a
@@ -1125,6 +1228,7 @@ sub view {
     my $cl = eval { require watch::export; watch::export::clamped_keys($r, scalar eval { spec::load() }) };
     for my $k (@KEYS) {
         my ($key, $type, undef, $class) = @$k;
+        next if $HIDDEN{$key};    # not in /config: the settings flow does not offer it either
         my ($sec, $t) = @{ $SECTION{$key} || [] };
         if (!defined $sec) { push @unsectioned, $key; ($sec, $t) = ('other', 'advanced') }
         next unless $tier eq 'all' || $tier eq $t;
@@ -1133,6 +1237,7 @@ sub view {
         my $v = $r->{values}{$key};
         my ($lo, $hi) = limits($key);
         if ($type eq 'bool') { ($default, $v) = (jsonc::bool(_coerce($key, $default)), jsonc::bool($v)) }
+        elsif (exists $SWITCH{$key}) { ($default, $v) = (switch_form($key, $default) // $default, switch_form($key, $v) // $v) }
         elsif ($type eq 'num') { $default = 0 + $default if defined $default && "$default" =~ /\A-?[0-9]+(\.[0-9]+)?\z/; $v = whole($key, 0 + $v) if defined $v }
         $rows{$key} = jsonc::obj(
             key => $key, title => $u->{title}, section => $sec, tier => $t, kind => $KIND{$class // ''} // 'text',
@@ -1156,7 +1261,9 @@ sub view {
         config_file => config_dir() . '/settings.json', config_key => $ci->{key}, config_key_state => $state,
         inline => jsonc::bool(defined $inline), config_dir_foreign => jsonc::bool($foreign), write_refused => $refused,
         sections => \@sections, settings => jsonc::obj(map { my $s = $_; map { $_ => $rows{$_} } @{ $by{ $s->[0] } || [] } } @SECTIONS, ['other']),
-        unsectioned => \@unsectioned, notes => $r->{notes});
+        unsectioned => \@unsectioned, notes => $r->{notes},
+        # D-72: the keys saved in a form from before 0.1.6 (old_values), for `settings migrate`
+        old_form => [ map { $_->{key} } grep { defined $_->{to} } old_values() ]);
 }
 
 # write_refused([config_key_info]) -> why the settings writer (lib/settings_write.pm) refuses the

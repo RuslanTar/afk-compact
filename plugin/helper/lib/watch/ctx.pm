@@ -175,10 +175,10 @@ sub _settings {
     my $t = $s{triggers};
     $t = UNIVERSAL::isa($t, 'SCALAR') ? ($$t ? 1 : 0) : undef if ref $t;
     $s{triggers} = (defined $t && !ref $t && $t =~ /\A\s*(?:1|true|yes|on)\s*\z/i) ? 'true' : 'false';
-    # `handoff_turn` as the mod parses it (config.ts handoffTurn): trimmed and case-folded;
-    # anything but `halt` or `off` is the default. It sets the clamp's reserve (rules::thresholds).
-    my $ht = _trim(lc(ref $s{handoff_turn} ? '' : $s{handoff_turn}));
-    $s{handoff_turn} = ($ht eq 'halt' || $ht eq 'off') ? $ht : $DEFAULTS{handoff_turn};
+    # `handoff_turn` as the mod parses it (config.ts handoffTurn): trimmed and case-folded; true
+    # or false, or a word from before 0.1.6 (_switch); anything else is the default. It sets the
+    # clamp's reserve (rules::thresholds).
+    $s{handoff_turn} = _switch('handoff_turn', ref $s{handoff_turn} ? '' : $s{handoff_turn}) // $DEFAULTS{handoff_turn};
     ($s{watcher}, $s{watcher_unknown}) = _watcher_value($given);
     return \%s;
 }
@@ -194,9 +194,19 @@ sub _watcher_value {
     $raw = $given->{watcher} if $given && exists $given->{watcher} && defined $given->{watcher} && !ref $given->{watcher};
     $raw = $ENV{CLAUDE_PLUGIN_OPTION_WATCHER} unless defined $raw;
     return ('shadow', 0) if !defined $raw || index($raw, '${user_config.') == 0;
-    my $v = _trim(lc $raw);
-    return ($v, 0) if $v eq 'shadow' || $v eq 'off';
+    my $v = _switch('watcher', $raw);
+    return ($v, 0) if defined $v;
     return ('shadow', 1);
+}
+
+# _switch(key, value) -> the word an on/off key's value reads as (D-72: true or false, or a word
+# from before 0.1.6), as core's settings::switch_read reads it (one table, settings.pm %SWITCH),
+# else undef (and undef when that module cannot load).
+sub _switch {
+    my ($key, $raw) = @_;
+    return undef unless defined $raw && !ref $raw;
+    eval { require "settings.pm"; 1 } unless defined &settings::switch_read;
+    return defined &settings::switch_read ? (settings::switch_read($key, $raw))[0] : undef;
 }
 
 # _trim(text) -> text without leading and trailing white space, in linear time (U-06 review:
@@ -209,7 +219,7 @@ sub _trim {
     return $s;
 }
 
-# One `config_note` row per session when the `watcher` value was not `shadow`/`off`
+# One `config_note` row per session when the `watcher` value was not true or false (or a word before 0.1.6)
 # (marker file, exclusive create). Content-free: the value itself is never logged.
 sub note_watcher_value {
     my ($ctx) = @_;

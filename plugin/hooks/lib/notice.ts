@@ -15,7 +15,7 @@ export const NOTICE_MAX = 200
 
 /** The fixed text for a plugin name (the spec asset's wording, W-BETA A). */
 export function noticeFallback(name: string): string {
-  return `${name}: local compaction logs are on (content-free; nothing is sent). To share them: /${name}:report. To turn them off: set watcher to off in /config.`
+  return `${name}: local compaction logs are on (content-free; nothing is sent). To share them: /${name}:report. To turn them off: set watcher to false in /config.`
 }
 
 /**
@@ -34,11 +34,6 @@ export function noticeSpec(name: string, v: unknown): { id: string; text: string
 /** The pair this build shows: from the shipped spec-literals `notice` object, else the built-in one. */
 export function shippedNotice(name: string): { id: string; text: string } {
   return noticeSpec(name, specValue('notice'))
-}
-
-/** `watcher` as the helper reads it (trimmed, case-folded); only `off` turns the logs off. */
-export function watcherOff(v: unknown): boolean {
-  return typeof v === 'string' && v.trim().toLowerCase() === 'off'
 }
 
 /** Main `session.start`: claims the notice and shows it the first time; nothing with `watcher` off. */

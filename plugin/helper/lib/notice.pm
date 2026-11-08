@@ -16,7 +16,7 @@ our $PH = ('{' x 2) . 'plugin' . ('}' x 2);
 our %FALLBACK = (id => 'watcher-1', version => 1);
 sub _fallback_text {
     my $b = ctx::brand();
-    return "$b: local compaction logs are on (content-free; nothing is sent). To share them: /$b:report. To turn them off: set watcher to off in /config.";
+    return "$b: local compaction logs are on (content-free; nothing is sent). To share them: /$b:report. To turn them off: set watcher to false in /config.";
 }
 
 sub valid_id { return defined $_[0] && !ref $_[0] && $_[0] =~ /\A[a-z0-9][a-z0-9-]{0,40}\z/ ? 1 : 0 }

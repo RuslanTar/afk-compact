@@ -210,7 +210,7 @@ sub mode {
 }
 
 # Rows every subcommand writes once per session: test mode, unsafe roots, ambiguity,
-# and the settings notes (consent keys given as a flag or env: `config_note`).
+# and the settings notes (consent keys given as a flag or env, an old on/off word: `config_note`).
 sub preamble {
     return unless defined $R{watch} && defined $R{sid};
     emit('test_mode', []) if util::test_mode() && once('test_mode');
@@ -223,6 +223,9 @@ sub preamble {
         }
     }
     emit('config_ambiguous', [candidates => 'several']) if $R{settings}{ambiguous} && once('config_ambiguous');
+    # D-72: an on/off key given in a form from before 0.1.6 (settings::resolve's legacy), once per key
+    my $lg = $R{settings}{legacy} || {};
+    for my $k (sort keys %$lg) { emit('config_note', [key => $k, note => $lg->{$k}]) if once("config_note.$k.legacy") }
     for my $n (@{ $R{settings}{notes} || [] }) {
         if ($n =~ /^([a-z_]+): settings file only$/) {
             emit('config_note', [key => $1, note => 'settings-file-only']) if once("config_note.$1");

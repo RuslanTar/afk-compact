@@ -20,7 +20,7 @@ import { SID_A, SID_B, T0, WATCH, World, raiseCompact } from './harness.test'
 const IDLE = hasTag('handoff-turn', 'submit-idle')
 // `idle_digest: submit` pins the away digest as built (owner xxxxxxxx-09); owner rule (c)
 // (2026-10-28) makes `off` the default of 0.1.1, which its own D16 case names.
-const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code', idle_digest: 'submit' }
+const ON = { idle_handoff_turn: 'true', precompact_turn: 'false', idle_digest: 'submit' }
 const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
 const MIN = 60000
 const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
@@ -158,7 +158,7 @@ test('AT-IC-C05: CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS 50000: the floor is 100,000
   expect(w.rowsOf('idle_mode')[0]?.compact_min).toBe(100000)
 })
 
-test('AT-IC-C06: idle_compact off: the 49-min turn as before; idle_mode vetoed/on/off; no compaction', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C06: idle_compact off: the 49-min turn as before; idle_mode vetoed/on/off; no compaction', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on)
   await w.start($)
   await humanTurn($, w)
@@ -217,7 +217,7 @@ test('AT-IC-C08 (lane B, owner Q2): native on and silent, no agents: nothing at 
   expect(w.rowsOf('idle_mode')[0]?.compact_min).toBe(200000)
 })
 
-test('AT-IC-C08 (lane B): native on with idle_compact off: the 55.5-min check runs the turn (or no-asset), no compaction; idle_mode on/check/off', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C08 (lane B): native on with idle_compact off: the 55.5-min check runs the turn (or no-asset), no compaction; idle_mode on/check/off', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on)
   w.policy = {}
   await w.start($)
@@ -235,7 +235,7 @@ test('AT-IC-C08 (lane B): native on with idle_compact off: the 55.5-min check ru
 // gate as the 49-min one; only idle_handoff_near_limit `skip` skips it at a window of 90% or more
 // (`skip-spend`, 0.1.2: a plan window is not a spend limit, so the turn runs as under `run`).
 for (const mode of ['run', 'skip-spend', 'skip'] as const) {
-  test(`AT-IC-C08 (lane B, near-limit): native on, idle_compact off, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode !== 'skip' ? 'the turn runs (or no-asset)' : '[near-limit, check], no turn'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: mode } }, async ($, on) => {
+  test(`AT-IC-C08 (lane B, near-limit): native on, idle_compact off, a window at 95% at the check, idle_handoff_near_limit ${mode}: ${mode !== 'skip' ? 'the turn runs (or no-asset)' : '[near-limit, check], no turn'}`, { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: mode } }, async ($, on) => {
     const w = world(on)
     w.policy = {}
     await w.start($)
@@ -424,7 +424,7 @@ test('AT-IC-C11 (G11): prompt caching off wins over a one-hour switch: DISABLE_P
   expect(skips(w)).toEqual([['ttl-5m', 'compact']])
 })
 
-test('AT-IC-C11 (G11, the 49-min turn): CLAUDE_CODE_PROMPT_CACHE_TTL=5m with plan windows: [ttl-5m, turn], no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C11 (G11, the 49-min turn): CLAUDE_CODE_PROMPT_CACHE_TTL=5m with plan windows: [ttl-5m, turn], no submit', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on)
   w.env = { CLAUDE_CODE_PROMPT_CACHE_TTL: '5m' }
   await w.start($)
@@ -434,7 +434,7 @@ test('AT-IC-C11 (G11, the 49-min turn): CLAUDE_CODE_PROMPT_CACHE_TTL=5m with pla
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-IC-C11 (G11, the 49-min turn): the promptCacheTtl setting 1h with no plan window: the turn runs (or no-asset), not ttl-5m', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C11 (G11, the 49-min turn): the promptCacheTtl setting 1h with no plan window: the turn runs (or no-asset), not ttl-5m', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on)
   w.policy = { ...NATIVE_OFF, promptCacheTtl: '1h' }
   w.rateLimits = []
@@ -906,7 +906,7 @@ test('AT-IC-C25 (§2.3): G1\'s own store read throws at the fire: one [error, co
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
-test('AT-IC-C25 (§2.3, the 49-min turn): a read that throws in the turn\'s checks is one [error, turn] row; no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C25 (§2.3, the 49-min turn): a read that throws in the turn\'s checks is one [error, turn] row; no submit', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   let boom = false
   on('store.get', { key: 'ht:' + SID_A }, (_$, e, next) => {
     if (boom) throw new Error('store unreadable')
@@ -1076,7 +1076,7 @@ const adoptedTurn = (ttl: string | null, pct = 30, spct?: number) => ({
   },
 })
 
-test('AT-IC-C30 (turn; §9.2, G11/D15): a 49-min turn record adopted by a fresh process with no rate-limit or token reading yet: the record\'s ttl, tokens and pct decide, so the turn runs (or no-asset), not ttl-5m or small', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C30 (turn; §9.2, G11/D15): a 49-min turn record adopted by a fresh process with no rate-limit or token reading yet: the record\'s ttl, tokens and pct decide, so the turn runs (or no-asset), not ttl-5m or small', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {}, adoptedTurn('1h'))
   w.rateLimits = []
   w.tokens = undefined
@@ -1086,7 +1086,7 @@ test('AT-IC-C30 (turn; §9.2, G11/D15): a 49-min turn record adopted by a fresh 
   else expect(skips(w)).toEqual([['no-asset', 'turn']])
 })
 
-test('AT-IC-C30 (turn; §9.2): the same record with no ttl recorded (an older build armed it): [ttl-5m, turn], no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C30 (turn; §9.2): the same record with no ttl recorded (an older build armed it): [ttl-5m, turn], no submit', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {}, adoptedTurn(null))
   w.rateLimits = []
   w.tokens = undefined
@@ -1099,7 +1099,7 @@ test('AT-IC-C30 (turn; §9.2): the same record with no ttl recorded (an older bu
 // Owner xxxxxxxx (2026-10-30): with no rate-limit reading the record's share decides, and only
 // idle_handoff_near_limit `skip` skips the turn at 90% or more.
 for (const mode of ['run', 'skip'] as const) {
-  test(`AT-IC-C30 (turn, G12): the adopted 49-min turn record armed at a 95% window, no reading yet, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'the turn runs (or no-asset)' : '[near-limit, turn]'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: mode } }, async ($, on) => {
+  test(`AT-IC-C30 (turn, G12): the adopted 49-min turn record armed at a 95% window, no reading yet, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'the turn runs (or no-asset)' : '[near-limit, turn]'}`, { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: mode } }, async ($, on) => {
     const w = world(on, {}, adoptedTurn('1h', 95))
     w.rateLimits = []
     w.tokens = undefined
@@ -1115,7 +1115,7 @@ for (const mode of ['run', 'skip'] as const) {
 // record armed at a 95% plan window runs the turn; one armed at a 95% spend limit skips it; one an
 // older build armed (no `spct`) reads as no spend limit, so the turn runs.
 for (const c of [{ name: 'a 95% plan window, no spend limit', spct: null, skip: false }, { name: 'a 95% spend limit', spct: 95, skip: true }, { name: 'no spct (an older build)', spct: undefined, skip: false }]) {
-  test(`AT-IC-C30 (turn, G12, skip-spend): the adopted 49-min turn record armed at ${c.name}, no reading yet: ${c.skip ? '[near-limit, turn]' : 'the turn runs (or no-asset)'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
+  test(`AT-IC-C30 (turn, G12, skip-spend): the adopted 49-min turn record armed at ${c.name}, no reading yet: ${c.skip ? '[near-limit, turn]' : 'the turn runs (or no-asset)'}`, { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
     const rec = adoptedTurn('1h', 95, c.spct ?? undefined)
     if (c.spct === null) (rec[KEY] as Record<string, unknown>).spct = null
     const w = world(on, {}, rec)
@@ -1174,7 +1174,7 @@ test('AT-IC-C32 (§3.4): a due 90 s past at load: [lapsed, compact] with late_s 
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
-test('AT-IC-C32 (§3.4): the load\'s own lapse bound decides before the policy now in force: a due 90 s past with idle_compact off since is [lapsed, compact], not disabled', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C32 (§3.4): the load\'s own lapse bound decides before the policy now in force: a due 90 s past with idle_compact off since is [lapsed, compact], not disabled', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const probe = new World()
   const w = world(on, {}, adoptedRecord(probe, { due: T0 - 90 * 1000, end: T0 - 55.5 * MIN, anchor: T0 - 55.5 * MIN }))
   await w.start($)
@@ -1183,7 +1183,7 @@ test('AT-IC-C32 (§3.4): the load\'s own lapse bound decides before the policy n
   expect([ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0])
 })
 
-test('AT-IC-C32 (§3.4, the second bound): a due only 30 s past at load whose last request is 58.5 min old (a turn that ended 57 min after it) is [lapsed, compact] at load, not adopted (idle_compact off since, so only the load\'s bound gives lapsed)', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C32 (§3.4, the second bound): a due only 30 s past at load whose last request is 58.5 min old (a turn that ended 57 min after it) is [lapsed, compact] at load, not adopted (idle_compact off since, so only the load\'s bound gives lapsed)', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const probe = new World()
   const w = world(on, { tokens: 260000 }, adoptedRecord(probe, { due: T0 - 30 * 1000, end: T0 - 1.5 * MIN, anchor: T0 - 58.5 * MIN }))
   await $.prompt.context({ blocks: [] })
@@ -1247,7 +1247,7 @@ const turnRec = (endMin: number | null) => ({
   },
 })
 
-test('AT-IC-C33 (§3.4): a 49-min turn record 3 min past at load, armed 52 min ago: the turn runs (or no-asset)', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C33 (§3.4): a 49-min turn record 3 min past at load, armed 52 min ago: the turn runs (or no-asset)', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, { tokens: 260000 }, turnRec(52))
   await $.prompt.context({ blocks: [] })
   await w.settle()
@@ -1255,7 +1255,7 @@ test('AT-IC-C33 (§3.4): a 49-min turn record 3 min past at load, armed 52 min a
   else expect(skips(w)).toEqual([['no-asset', 'turn']])
 })
 
-test('AT-IC-C33 (§3.4, G7): the same record when a person resumes the session (interactive session.start): [present, turn], no submit in front of them', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C33 (§3.4, G7): the same record when a person resumes the session (interactive session.start): [present, turn], no submit in front of them', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, { tokens: 260000 }, turnRec(52))
   await w.start($)
   await w.settle()
@@ -1263,7 +1263,7 @@ test('AT-IC-C33 (§3.4, G7): the same record when a person resumes the session (
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-IC-C33 (§3.4, G7): the same, with a prompt a hook drops before that late fire runs: the timer runs again as armed (at load), so still [present, turn]', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C33 (§3.4, G7): the same, with a prompt a hook drops before that late fire runs: the timer runs again as armed (at load), so still [present, turn]', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, { tokens: 260000 }, turnRec(52))
   await w.start($)
   expect(w.rowsOf('handoff_skipped').length).toBe(0)
@@ -1289,7 +1289,7 @@ test('AT-IC-C31 (§3.4, check): a 55.5-min check record 30 s past at load, with 
   expect([ic(w).map(r => [r.at, r.late_s, r.adopted]), selfCompacts(w), w.submits.length, skips(w)]).toEqual([[['check', 30, true]], 1, 0, []])
 })
 
-test('AT-IC-C31 (§3.4, check, idle_compact off): the same record runs the turn (or no-asset)', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C31 (§3.4, check, idle_compact off): the same record runs the turn (or no-asset)', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, { tokens: 260000 }, checkRec())
   w.policy = {}
   await $.prompt.context({ blocks: [] })
@@ -1308,7 +1308,7 @@ test('AT-IC-C31 (§3.4, G7, check): the same check record when a person resumes 
   expect([w.rowsOf('idle_silent').length, w.submits.length]).toEqual([0, 0])
 })
 
-test('AT-IC-C33 (§3.4): the same record armed 57 min ago (past minute 55.5): [lapsed, turn] with late_s 180, no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C33 (§3.4): the same record armed 57 min ago (past minute 55.5): [lapsed, turn] with late_s 180, no submit', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, { tokens: 260000 }, turnRec(57))
   await $.prompt.context({ blocks: [] })
   await w.settle()
@@ -1316,7 +1316,7 @@ test('AT-IC-C33 (§3.4): the same record armed 57 min ago (past minute 55.5): [l
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-IC-C33 (§3.4): a legacy record past its due (no turn end): nothing (AT-IC-14 unchanged)', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C33 (§3.4): a legacy record past its due (no turn end): nothing (AT-IC-14 unchanged)', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, { tokens: 260000 }, turnRec(null))
   await $.prompt.context({ blocks: [] })
   await w.advance(60 * MIN)
@@ -1397,7 +1397,7 @@ test('AT-IC-C34 (G3, the second bound): a turn that ends 57.5 min after its last
   expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
-test('AT-IC-C34 (turn, §3.4): the computer sleeps through the 49-min due past minute 55.5 (the last tick comes 10 min late): [lapsed, turn] with late_s 600, no submit', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C34 (turn, §3.4): the computer sleeps through the 49-min due past minute 55.5 (the last tick comes 10 min late): [lapsed, turn] with late_s 600, no submit', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   let w: World | undefined
   const slept = sleepAt(on, () => w?.clock.now(), T0 + 48 * MIN, 10 * MIN)
   w = world(on)
@@ -1422,7 +1422,7 @@ test('AT-IC-C36 (D10): STORE_TEST_IDLE_CACHE_S=600: the compaction at 540 s; idl
   expect(w.rowsOf('idle_mode')[0]?.cache_s).toBe(600)
 })
 
-test('AT-IC-C36 (D10): STORE_TEST_IDLE_CACHE_S=600 with idle_compact off: the 49-min turn path at 490 s', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C36 (D10): STORE_TEST_IDLE_CACHE_S=600 with idle_compact off: the 49-min turn path at 490 s', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on)
   w.env = { STORE_TEST_IDLE_CACHE_S: '600' }
   await w.start($)
@@ -1639,7 +1639,7 @@ test('AT-IC-C44 (D16): idle_digest return: no turn (digest_submit skipped:return
   if (DONE) expect(w.rowsOf('digest_submit').map(r => r.result)).toEqual(['skipped:return'])
 })
 
-test('AT-IC-C44 (D16): idle_digest off (the default of 0.1.1, owner rule (c)): a finished lane, nothing running: no turn (digest_submit skipped:off)', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code' } }, async ($, on) => {
+test('AT-IC-C44 (D16): idle_digest off (the default of 0.1.1, owner rule (c)): a finished lane, nothing running: no turn (digest_submit skipped:off)', { options: { idle_handoff_turn: 'true', precompact_turn: 'false' } }, async ($, on) => {
   const w = world(on)
   w.resumeHere = FINISHED
   await w.start($)
@@ -1793,7 +1793,7 @@ test('AT-IC-C45 (G0b, owner Q2): automatic compaction switched off during the wa
   else expect(skips(w)).toEqual([['no-asset', 'check']])
 })
 
-test('AT-IC-C45 (G0b): automatic compaction switched off during the wait, the turn off: [compaction-off, check], nothing runs', { options: { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+test('AT-IC-C45 (G0b): automatic compaction switched off during the wait, the turn off: [compaction-off, check], nothing runs', { options: { ...ON, idle_handoff_turn: 'false' } }, async ($, on) => {
   const w = world(on)
   w.policy = NATIVE_ON
   await w.start($)
@@ -1850,7 +1850,7 @@ test('AT-IC-C45 (owner Q2, root call): no agents, halt for two bad summaries in 
 // 0.1.2: the check's turn under `skip-spend` with a spend limit at 95%: [near-limit, check], no turn;
 // a plan window at 95% beside a spend limit at 50%: the turn runs (or no-asset).
 for (const c of [{ spend: 95, plan: 12, skip: true }, { spend: 50, plan: 95, skip: false }]) {
-  test(`AT-IC-C08 (lane B, near-limit, skip-spend): native on, idle_compact off, a spend limit at ${c.spend}% and a plan window at ${c.plan}% at the check: ${c.skip ? '[near-limit, check], no turn' : 'the turn runs (or no-asset)'}`, { options: { ...ON, idle_compact: 'off', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
+  test(`AT-IC-C08 (lane B, near-limit, skip-spend): native on, idle_compact off, a spend limit at ${c.spend}% and a plan window at ${c.plan}% at the check: ${c.skip ? '[near-limit, check], no turn' : 'the turn runs (or no-asset)'}`, { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
     const w = world(on)
     w.policy = {}
     await w.start($)
@@ -1957,7 +1957,7 @@ test('AT-IC-C45 (NL-2): no halt, no agents, a window at 95% at the check, idle_h
 })
 
 for (const c of [{ turn: true, why: 'episode' }, { turn: false, why: 'halted' }]) {
-  test(`AT-IC-C45 (owner Q2, root call): no agents, halt for a thrash, the last turn a background result's${c.turn ? '' : ', the turn off'}: no compaction; [${c.why}, check]${c.turn ? ' (the turn\'s own rule: a background result opens no episode)' : ''}`, { options: c.turn ? ON : { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+  test(`AT-IC-C45 (owner Q2, root call): no agents, halt for a thrash, the last turn a background result's${c.turn ? '' : ', the turn off'}: no compaction; [${c.why}, check]${c.turn ? ' (the turn\'s own rule: a background result opens no episode)' : ''}`, { options: c.turn ? ON : { ...ON, idle_handoff_turn: 'false' } }, async ($, on) => {
     const w = world(on)
     w.policy = NATIVE_ON
     w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' }))
@@ -2034,7 +2034,7 @@ test('AT-IC-C45 (D7): the timer\'s and the check\'s failures count together: one
   expect(w.rowsOf('idle_compact_off').map(r => [r.why, r.fails])).toEqual([['failed', 2]])
 })
 
-test('AT-IC-C45 (owner Q2): idle_compact off with agents running: [agents-running, check] (the skip of before 2026-10-27), no compaction; idle_mode on/check/off', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C45 (owner Q2): idle_compact off with agents running: [agents-running, check] (the skip of before 2026-10-27), no compaction; idle_mode on/check/off', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on)
   w.policy = NATIVE_ON
   w.agents = RUNNING
@@ -2069,7 +2069,7 @@ test('AT-IC-C45 (owner Q2): below the minimum with agents running: [small, check
   expect([skips(w), selfCompacts(w), w.submits.length]).toEqual([[['small', 'check']], 0, 0])
 })
 
-test('AT-IC-C46 (lane B arming): native on, idle_handoff_turn off, idle_compact auto: the check is armed for the compaction (on/off/check) and compacts at 55.5 min, with or without agents; lane A armed nothing', { options: { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+test('AT-IC-C46 (lane B arming): native on, idle_handoff_turn off, idle_compact auto: the check is armed for the compaction (on/off/check) and compacts at 55.5 min, with or without agents; lane A armed nothing', { options: { ...ON, idle_handoff_turn: 'false' } }, async ($, on) => {
   const w = world(on)
   w.policy = NATIVE_ON
   await w.start($)
@@ -2083,7 +2083,7 @@ test('AT-IC-C46 (lane B arming): native on, idle_handoff_turn off, idle_compact 
   expect([ic(w).map(r => r.agents), selfCompacts(w), w.submits.length]).toEqual([[0, 1], 2, 0])
 })
 
-test('AT-IC-C46 (lane B arming): native on, idle_handoff_turn off, below the minimum (150K): nothing armed (the check could only skip small); both off: nothing armed, on/off/off', { options: { ...ON, idle_handoff_turn: 'off' } }, async ($, on) => {
+test('AT-IC-C46 (lane B arming): native on, idle_handoff_turn off, below the minimum (150K): nothing armed (the check could only skip small); both off: nothing armed, on/off/off', { options: { ...ON, idle_handoff_turn: 'false' } }, async ($, on) => {
   const w = world(on)
   w.policy = NATIVE_ON
   await w.start($)
@@ -2093,7 +2093,7 @@ test('AT-IC-C46 (lane B arming): native on, idle_handoff_turn off, below the min
   expect(modes(w)).toEqual(['on/off/check'])
 })
 
-test('AT-IC-C46 (lane B arming): native on with idle_handoff_turn and idle_compact off: nothing armed; idle_mode on/off/off', { options: { ...ON, idle_handoff_turn: 'off', idle_compact: 'off' } }, async ($, on) => {
+test('AT-IC-C46 (lane B arming): native on with idle_handoff_turn and idle_compact off: nothing armed; idle_mode on/off/off', { options: { ...ON, idle_handoff_turn: 'false', idle_compact: 'false' } }, async ($, on) => {
   const w = world(on)
   w.policy = NATIVE_ON
   w.agents = RUNNING

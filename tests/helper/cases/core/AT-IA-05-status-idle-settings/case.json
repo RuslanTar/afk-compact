@@ -23,7 +23,7 @@
     "exit": 0,
     "stdout_has": [
      "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
-     "^settings: resume_proceed auto \\(default\\) · handoff_reuse_window_min 15 · ticket_pattern default · secret_extra_rules 0 · evidence_total_max_mb 50 · watch_quota_mb 50$"
+     "^settings: resume_proceed true \\(default\\) · handoff_reuse_window_min 15 · ticket_pattern default · secret_extra_rules 0 · evidence_total_max_mb 50 · watch_quota_mb 50$"
     ]
    }
   },
@@ -161,7 +161,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -178,7 +178,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -204,7 +204,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, none \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, none \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -230,8 +230,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_compact: not auto, off or a yes/no word, off used$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: idle_compact: not true, false or a yes/no word, false used$"
     ]
    }
   },
@@ -264,8 +264,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, none \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$",
-     "^settings: resume_proceed confirm \\(settings\\) · handoff_reuse_window_min 60 · ticket_pattern custom · secret_extra_rules 2 · evidence_total_max_mb 10 · watch_quota_mb 0$"
+     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, none \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$",
+     "^settings: resume_proceed false \\(settings\\) · handoff_reuse_window_min 60 · ticket_pattern custom · secret_extra_rules 2 · evidence_total_max_mb 10 · watch_quota_mb 0$"
     ],
     "stdout_lacks": [
      "ACME",
@@ -296,7 +296,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\) → the plugin checks at 55\\.5 min only to compact itself at 200,000 tokens or more if Claude Code did not \\(no handoff turn: idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\) → the plugin checks at 55\\.5 min only to compact itself at 200,000 tokens or more if Claude Code did not \\(no handoff turn: idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -313,7 +313,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\); the plugin does not check and does not compact \\(idle_handoff_turn and idle_compact: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\); the plugin does not check and does not compact \\(idle_handoff_turn and idle_compact: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   }

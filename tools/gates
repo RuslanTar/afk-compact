@@ -62,7 +62,7 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                and every resume-context.txt line "3." holds RESUME_STEP3_NEEDS (CR-F36, CR-F27;
                SR-3/SR-9 of 2026-10-23)
   config-defaults AT-WD-02 (D-9, D-8): .claude-plugin/plugin.json userConfig `watcher` defaults
-               to `shadow`, `disposable_keep_days` to 0, and no other key is named like
+               to `true` (shadow, D-72), `disposable_keep_days` to 0, and no other key is named like
                `*keep_days*` (no automatic pruning of `.watch` by default); RULED_DEFAULTS (the
                owner-ruled defaults of 2026-10-23) are in the manifest with those values
   launcher     AT-PK-01 (PKG-RUNTIME A.1, Q-R1) over a built plugin folder: no top-level `bin/`;
@@ -105,8 +105,11 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                watch/ctx.pm %DEFAULTS, paths.pm $DEFAULT_ROOT and $DEFAULT_DISPOSABLE and the launcher's
                hroot equal the manifest defaults (handoff_root ~/.local/state/<name>/handoffs and
                disposable_root ~/.local/state/<name>/disposable, STATE-ROOT); manifest and @KEYS list the
-               same keys; AT-IA-01: settings.pm and config.ts hold the same idle off/auto words
-               and the same value for any other word
+               same keys (but settings.pm %HIDDEN, D-72: not in the manifest); AT-IA-01: settings.pm and
+               config.ts hold the same idle off/auto words and the same value for any other word;
+               D-72: settings.pm %SWITCH equals config.ts SWITCH, and each of its keys has the
+               manifest options ["true", "false"] (an on/off key's word stands for its default in
+               config.ts DEFAULTS and watch/ctx.pm %DEFAULTS)
   config-defaults (also) VD-01 (0.1.2 visible defaults): every non-boolean userConfig title ends
                with `[default <manifest default>]` (`[default: empty = <meaning>]` for an empty
                one); a key with `options` lists exactly settings.pm %ENUM's values, default in it
@@ -562,9 +565,11 @@ def self_heal_hits(target, brand):
 # live PASS, else `off`, and the live AD2 probe failed the digest's text format), idle_handoff_near_limit
 # `run` (owner 2026-10-30, xxxxxxxx: "I want the handoff anyway"), and the six keys of
 # xxxxxxxx-12/-13/-14 (S-SETTINGS E1-E6, SK-7) at today's behaviour.
-RULED_DEFAULTS = {"precompact_turn": "model", "idle_handoff_turn": "auto", "idle_digest": "off",
+# D-72 (0.1.6): the on/off keys hold "true" or "false" (precompact_turn true = model, idle_handoff_turn and
+# resume_proceed true = auto).
+RULED_DEFAULTS = {"precompact_turn": "true", "idle_handoff_turn": "true", "idle_digest": "off",
                   "idle_handoff_near_limit": "run",
-                  "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+", "secret_extra_rules": "", "resume_proceed": "auto",
+                  "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+", "secret_extra_rules": "", "resume_proceed": "true",
                   "handoff_reuse_window_min": 15, "evidence_total_max_mb": 50, "watch_quota_mb": 50}
 # STATE-ROOT (0.1.2): the handoff_root and disposable_root defaults, outside ~/.claude (whose writes get
 # Claude Code's protected-path prompt, which no allow rule lifts); {} is the plugin name.
@@ -573,14 +578,14 @@ STATE_DISPOSABLE = "~/.local/state/{}/disposable"
 
 
 def config_defaults_hits(target, brand):
-    """AT-WD-02 over the built manifest: watcher shadow, disposable_keep_days 0, no other *keep_days*;
+    """AT-WD-02 over the built manifest: watcher true (shadow), disposable_keep_days 0, no other *keep_days*;
     AT-CAP-02 / AT-IA-01 / SK-7: every RULED_DEFAULTS key is in the manifest with that default."""
     path = os.path.join(target, ".claude-plugin", "plugin.json")
     if not os.path.isfile(path):
         return []
     with open(path, encoding="utf-8") as f:
         uc = json.load(f).get("userConfig") or {}
-    want = {"watcher": "shadow", "disposable_keep_days": 0}
+    want = {"watcher": "true", "disposable_keep_days": 0}
     out = []
     for key, val in sorted(want.items()):
         got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
@@ -1355,22 +1360,74 @@ def _same(manifest, got, perl_bool=False):
     return got == manifest
 
 
+def _settings_hidden(spath):
+    """settings.pm %HIDDEN's keys (D-72: kept out of the manifest), or an empty set."""
+    m = re.search(r"^our %HIDDEN = map \{ \$_ => 1 \} qw\(([^)]*)\);", _read(spath), re.M) if os.path.isfile(spath) else None
+    return set(m.group(1).split()) if m else set()
+
+
+def _settings_switch(spath):
+    """settings.pm %SWITCH as {key: [true word, false word]}, or None."""
+    if not os.path.isfile(spath):
+        return None
+    m = re.search(r"^our %SWITCH = \((.*?)\);", _read(spath), re.S | re.M)
+    return {k: v.split() for k, v in re.findall(r"(\w+) => \[qw\(([^)]*)\)\]", m.group(1))} if m else None
+
+
+def _switch_default(sw, key, manifest):
+    """D-72: the word an on/off key's manifest default ("true"/"false") stands for in the code's own
+    defaults (config.ts DEFAULTS, watch/ctx.pm %DEFAULTS), else the manifest default itself."""
+    if sw and key in sw and manifest in ("true", "false") and len(sw[key]) == 2:
+        return sw[key][0 if manifest == "true" else 1]
+    return manifest
+
+
+def _switch_words_hits(spath, cpath, defaults, uc_options):
+    """D-72 (one table): settings.pm %SWITCH and config.ts SWITCH give every on/off key the same two
+    words, and each such key's manifest options are exactly ["true", "false"]."""
+    sw = _settings_switch(spath)
+    out = []
+    if sw is None or not os.path.isfile(cpath):
+        text = "D-72 switch words: no settings.pm %SWITCH or no config.ts"
+        return [(spath, None, "D-72 switch words", text, text)]
+    m = re.search(r"^export const SWITCH = \{(.*?)^\} as const", _read(cpath), re.S | re.M)
+    ts = {k: re.findall(r"'([^']*)'", v) for k, v in re.findall(r"(\w+): \[([^\]]*)\]", m.group(1))} if m else {}
+    for key in sorted(set(sw) | set(ts)):
+        if sw.get(key) != ts.get(key):
+            text = "D-72 switch words: settings.pm %SWITCH {} {} != config.ts SWITCH {}".format(
+                key, " ".join(sw[key]) if key in sw else "missing", " ".join(ts[key]) if key in ts else "missing")
+            out.append((spath, None, "D-72 switch words", text, text))
+        if key in sw and key in defaults and uc_options.get(key) != ["true", "false"]:
+            text = "D-72 switch words: manifest {} options {!r}, want ['true', 'false']".format(key, uc_options.get(key))
+            out.append((spath, None, "D-72 switch words", text, text))
+    return out
+
+
 def config_sources_hits(target, brand):
     """AT-CAP-02 (S-SETTINGS A, one source for defaults): every key's fallback in settings.pm
-    @KEYS (column 3), config.ts DEFAULTS and watch/ctx.pm %DEFAULTS equals the manifest default;
-    every manifest key has a settings.pm row and every row a manifest key."""
+    @KEYS (column 3), config.ts DEFAULTS and watch/ctx.pm %DEFAULTS equals the manifest default (an
+    on/off key's word, D-72, for the code's DEFAULTS); every manifest key has a settings.pm row and
+    every row a manifest key, but the %HIDDEN keys, which the manifest must not hold; D-72: one
+    switch table (_switch_words_hits)."""
     if not _is_plugin(target):
         return []
     mpath, defaults = _manifest_defaults(target)
+    with open(mpath, encoding="utf-8") as f:
+        uc_options = {k: (v or {}).get("options") for k, v in (json.load(f).get("userConfig") or {}).items()}
     out = []
     spath, rows = _settings_rows(target)
     if rows is None:
         return [_missing(spath, "AT-CAP-02 settings")]
+    hidden = _settings_hidden(spath)
+    sw = _settings_switch(spath)
     seen = set()
+    for key in sorted(hidden & set(defaults)):
+        out.append((mpath, None, "AT-CAP-02 hidden", "AT-CAP-02 hidden: settings.pm %HIDDEN key {} is in the manifest".format(key), ""))
     for key, typ, fb, _exp in rows:
         seen.add(key)
         if key not in defaults:
-            out.append((spath, None, "AT-CAP-02 extra", "AT-CAP-02 extra: settings.pm key {} is not in the manifest".format(key), ""))
+            if key not in hidden:
+                out.append((spath, None, "AT-CAP-02 extra", "AT-CAP-02 extra: settings.pm key {} is not in the manifest".format(key), ""))
         elif not _same(defaults[key], _named(_lit(fb), brand), perl_bool=(typ == "bool")):
             out.append((spath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: settings.pm {} fallback {} != manifest {!r}".format(
                 key, fb, defaults[key]), ""))
@@ -1385,10 +1442,11 @@ def config_sources_hits(target, brand):
             out.append((cpath, None, "AT-CAP-02 config.ts", "AT-CAP-02 config.ts: no DEFAULTS block", ""))
         for ln in (m.group(1).split("\n") if m else []):
             r = re.match(r"^\s*(\w+):\s*(.+?),?\s*$", ln)
-            if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _named(_lit(r.group(2)), brand)):
+            if r and r.group(1) in defaults and not _same(_switch_default(sw, r.group(1), defaults[r.group(1)]), _named(_lit(r.group(2)), brand)):
                 out.append((cpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: config.ts DEFAULTS {} {} != manifest {!r}".format(
                     r.group(1), r.group(2), defaults[r.group(1)]), ""))
     out.extend(_idle_words_hits(spath, cpath))
+    out.extend(_switch_words_hits(spath, cpath, defaults, uc_options))
     wpath = os.path.join(target, *WATCH_CTX_REL.split("/"))
     if not os.path.isfile(wpath):
         out.append(_missing(wpath, "AT-CAP-02 ctx.pm"))
@@ -1398,7 +1456,7 @@ def config_sources_hits(target, brand):
             out.append((wpath, None, "AT-CAP-02 ctx.pm", "AT-CAP-02 ctx.pm: no %DEFAULTS block", ""))
         for ln in (m.group(1).split("\n") if m else []):
             r = re.match(r"^\s*(\w+)\s*=>\s*(.+?),?\s*$", ln)
-            if r and r.group(1) in defaults and not _same(defaults[r.group(1)], _named(_lit(r.group(2)), brand), perl_bool=True):
+            if r and r.group(1) in defaults and not _same(_switch_default(sw, r.group(1), defaults[r.group(1)]), _named(_lit(r.group(2)), brand), perl_bool=True):
                 out.append((wpath, None, "AT-CAP-02 differs", "AT-CAP-02 differs: watch/ctx.pm {} {} != manifest {!r}".format(
                     r.group(1), r.group(2), defaults[r.group(1)]), ""))
     out.extend(_root_fallback_hits(target, brand, defaults.get("handoff_root"), defaults.get("disposable_root")))

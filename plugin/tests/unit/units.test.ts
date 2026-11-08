@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
 import type { Tag } from '../../hooks/lib/assemble'
 import { assembleText, hasTag, leftovers } from '../../hooks/lib/assemble'
-import { CLAMP_DEFAULTS, DEFAULTS, IDLE_INVALID_READS_AS, NAME_TOKEN, clamp, clampConstants, minWindow, parseOptions, paths, softCap, stateRoot, targetOf } from '../../hooks/lib/config'
+import { CLAMP_DEFAULTS, DEFAULTS, IDLE_INVALID_READS_AS, NAME_TOKEN, SWITCH, clamp, clampConstants, minWindow, parseOptions, paths, softCap, stateRoot, targetOf } from '../../hooks/lib/config'
 import { CLOSE, OPEN, detectSummary, grammar, lastInstrMarker, markerText, sentinelText, specValue } from '../../hooks/lib/detect'
 import { drawNonce, randomHex } from '../../hooks/lib/nonce'
 import { byteLength, sha256, strip } from '../../hooks/lib/normalize'
@@ -416,7 +416,8 @@ test('AT-P-16: window 700000: soft max 551000 + clamped; handoff_turn off: 56000
 test('handoff_turn / handoff_turn_max_tokens / queue_cmd options: validation, clamp, notes', () => {
   const a = parseOptions({ handoff_turn: ' OFF ', handoff_turn_max_tokens: 5000, queue_cmd: '/q/bin/queue' })
   expect([a.handoff_turn, a.handoff_turn_max_tokens, a.queue_cmd]).toEqual(['off', 20000, '/q/bin/queue'])
-  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'handoff_turn_max_tokens', configured: 5000, effective: 20000 }] })
+  // D-72: ' OFF ' is a word from before 0.1.6 (false), read with its note
+  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'handoff_turn_max_tokens', configured: 5000, effective: 20000 }], noted: [{ key: 'handoff_turn', note: 'legacy-word' }] })
   const b = parseOptions({ handoff_turn: 'fork', handoff_turn_max_tokens: '900000' })
   expect([b.handoff_turn, b.handoff_turn_max_tokens]).toEqual(['halt', 150000])
   expect(b.notes.invalid).toEqual(['handoff_turn'])
@@ -540,7 +541,9 @@ test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idl
   expect(DEFAULTS.idle_handoff_turn).toBe('auto')
   const a = parseOptions({ precompact_turn: ' Model ', unattended_prod_reads: 'ALLOW', idle_handoff_turn: ' on', idle_handoff_min_tokens: 50000 })
   expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'auto', 100000])
-  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }], noted: [{ key: 'idle_handoff_turn', note: 'legacy-on' }] })
+  // D-72: the words before 0.1.6 (and another case or spaces) read the same, each with a note
+  expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }],
+    noted: [{ key: 'precompact_turn', note: 'legacy-word' }, { key: 'unattended_prod_reads', note: 'legacy-word' }, { key: 'idle_handoff_turn', note: 'legacy-on' }] })
   // AT-PC-04: any other value is `code` (the no-extra-cost path), whatever the default.
   const b = parseOptions({ precompact_turn: 'sometimes', unattended_prod_reads: 'yes', idle_handoff_turn: 'maybe', idle_handoff_min_tokens: '2000000' })
   expect([b.precompact_turn, b.unattended_prod_reads, b.idle_handoff_turn, b.idle_handoff_min_tokens]).toEqual(['code', 'forbid', 'off', 1000000])
@@ -588,13 +591,47 @@ test('AT-IC-C00 idle_compact: default auto; common words; any other value reads 
   }
   for (const w of ['auto', 'true', 'Yes', ' 1 ', 'on', true, 1]) {
     const r = parseOptions({ idle_compact: w } as never)
-    expect([w, r.idle_compact, r.notes.invalid, r.notes.noted]).toEqual([w, 'auto', [], undefined])
+    // D-72: only the stored form `true` reads with no note (every other word is from before 0.1.6)
+    expect([w, r.idle_compact, r.notes.invalid, r.notes.noted]).toEqual([w, 'auto', [], w === 'true' ? undefined : [{ key: 'idle_compact', note: 'legacy-word' }]])
   }
   for (const w of ['  ', '\t', '${user_config.idle_compact}']) expect(parseOptions({ idle_compact: w } as never).idle_compact).toBe('auto')
   for (const w of ['maybe', 'enabled', '2']) {
     const r = parseOptions({ idle_compact: w } as never)
     expect([w, r.idle_compact, r.notes.invalid]).toEqual([w, IDLE_INVALID_READS_AS, ['idle_compact']])
   }
+})
+
+// D-72 (0.1.6; owner 2026-11-08): the seven on/off options take `true` or `false`; a word saved by a
+// release before 0.1.6 keeps its meaning (either word, another case, spaces, a JSON boolean) with a
+// `legacy-word` note, never the opposite; an unknown word reads by the key's own rule, never as the
+// other word but where that rule's value is it. One table with settings.pm %SWITCH (the
+// config-defaults gate compares them).
+test('D-72 options: true and false, and the words before 0.1.6, read as the helper reads them', () => {
+  expect(SWITCH).toEqual({ handoff_turn: ['halt', 'off'], precompact_turn: ['model', 'code'], watcher: ['shadow', 'off'],
+    unattended_prod_reads: ['allow', 'forbid'], idle_handoff_turn: ['auto', 'off'], idle_compact: ['auto', 'off'], resume_proceed: ['auto', 'confirm'] })
+  const read = (k: string, v: unknown) => {
+    const c = parseOptions({ [k]: v } as never)
+    const got = k === 'watcher' ? (c.watcher_off ? 'off' : 'shadow') : (c as unknown as Record<string, string>)[k]
+    return [got, c.notes.invalid, (c.notes.noted ?? []).map(n => n.note)]
+  }
+  // the value each key's own rule gives an unknown word (config.ts; settings.pm and watch/ctx.pm agree)
+  const unknown: Record<string, string> = { handoff_turn: 'halt', precompact_turn: 'code', watcher: 'shadow', unattended_prod_reads: 'forbid', idle_handoff_turn: 'off', idle_compact: 'off' }
+  for (const [k, [on, off]] of Object.entries(SWITCH)) {
+    if (k === 'resume_proceed') continue    // the helper's alone (settings.pm, tighten-only)
+    expect([k, ...read(k, 'true')]).toEqual([k, on, [], []])
+    expect([k, ...read(k, 'false')]).toEqual([k, off, [], []])
+    for (const w of [on, ` ${on.toUpperCase()} `, true]) expect([k, w, ...read(k, w)]).toEqual([k, w, on, [], ['legacy-word']])
+    for (const w of [off, ` ${off.toUpperCase()}\t`, false]) expect([k, w, ...read(k, w)]).toEqual([k, w, off, [], ['legacy-word']])
+    for (const w of ['  ', '${user_config.' + k + '}']) expect([k, w, ...read(k, w)]).toEqual([k, w, (DEFAULTS as unknown as Record<string, unknown>)[k] ?? 'shadow', [], []])
+    const bad = read(k, 'sometimes')
+    expect([k, bad[0], bad[2]]).toEqual([k, unknown[k], []])
+  }
+  // the old idle `on` keeps its own note; a yes/no word is from before 0.1.6 too
+  expect(read('idle_handoff_turn', 'on')).toEqual(['auto', [], ['legacy-on']])
+  expect(read('idle_compact', 'No')).toEqual(['off', [], ['legacy-word']])
+  // the defaults are the words `true` stands for (src/plugin.json defaults true, but false for unattended_prod_reads)
+  expect([DEFAULTS.handoff_turn, DEFAULTS.precompact_turn, DEFAULTS.unattended_prod_reads, DEFAULTS.idle_handoff_turn, DEFAULTS.idle_compact, DEFAULTS.watcher_off])
+    .toEqual(['halt', 'model', 'forbid', 'auto', 'auto', false])
 })
 
 // Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): `idle_handoff_near_limit` `run` (the

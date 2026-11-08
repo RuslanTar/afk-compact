@@ -508,10 +508,10 @@ sub plugin_lines {
 sub watcher_lines {
     my $w = settings::trim(lc(rc::val('watcher') // 'shadow'));
     my $brand = ctx::brand();
-    return ('watcher: off · existing logs kept (nothing deleted) · core files still written: copies check, '
+    return ('watcher: false · existing logs kept (nothing deleted) · core files still written: copies check, '
             . 'background list, heal counters, rollups, liveness') if $w eq 'off';
     my ($bytes, $sids) = _watch_size(rc::watch());
-    my @l = ("watcher: shadow · logs " . _size($bytes) . " in $sids sessions · share: /$brand:report · off: watcher = off in /config");
+    my @l = ("watcher: true · logs " . _size($bytes) . " in $sids sessions · share: /$brand:report · off: watcher = false in /config");
     my $n = notice::spec();
     push @l, "notice: $n->{text}" unless notice::shown(rc::watch(), $n->{id});
     return @l;
@@ -707,11 +707,13 @@ sub prod_lines {
     my $p = eval { settings::prod($r) } || { reads => 'forbid', user => 0, invalid => [] };
     my $src = $SRC{ $r->{source}{unattended_prod_reads} // 'default' } // 'default';
     my $shipped = scalar(@{ $p->{classes} || [] }) - ($p->{user} // 0);
-    my @l = ("unattended_prod_reads: $p->{reads} ($src) · production patterns: "
+    # D-72: the setting as /config shows it (false = forbid, true = allow)
+    my $reads = settings::switch_form('unattended_prod_reads', $p->{reads}) // 'false';
+    my @l = ("unattended_prod_reads: $reads ($src) · production patterns: "
              . ($shipped > 0 ? 'prod-token' : 'none') . ' + ' . ($p->{user} // 0) . ' yours');
     for my $i (@{ $p->{invalid} || [] }) {
         push @l, $i->{key} eq 'prod_patterns' ? "  config: prod_patterns #$i->{index} invalid, dropped"
-                                               : "  config: $i->{key} invalid, forbid used";
+                                               : "  config: $i->{key} invalid, false used";
     }
     return @l;
 }
@@ -820,19 +822,19 @@ sub idle_line {
     my $turn49 = 'the pre-idle handoff turn at 49 min';
     if ($native eq 'vetoed') {
         return $p . "by the plugin, about 54 min after the last request at $m tokens or more ($OWN_OFF); below that, "
-               . ($pt eq 'on' ? $turn49 : 'none (idle_handoff_turn: off)') if $pc eq 'on';
+               . ($pt eq 'on' ? $turn49 : 'none (idle_handoff_turn: false)') if $pc eq 'on';
         return $p . "none for now ($FAILED) → " . ($pt eq 'on' ? $turn49 : 'no pre-idle handoff turn') if $pc eq 'failed';
         return $p . "none for now (the plugin's /compact waited in the queue and did not start in time; it is back once the plugin reloads)"
                . ' → no pre-idle handoff turn (headless session)' if $pc eq 'queued';
         return $p . "none ($OWN_OFF; the plugin's does not run in a headless session yet); no pre-idle handoff turn (headless session)"
             if $headless;
-        return $p . "none ($OWN_OFF; the plugin's: idle_compact: off) → $turn49" if $pt eq 'on';
-        return $p . "none ($OWN_OFF; the plugin's: idle_compact: off); no pre-idle handoff turn (idle_handoff_turn: off)";
+        return $p . "none ($OWN_OFF; the plugin's: idle_compact: false) → $turn49" if $pt eq 'on';
+        return $p . "none ($OWN_OFF; the plugin's: idle_compact: false); no pre-idle handoff turn (idle_handoff_turn: false)";
     }
     if ($native eq 'compaction-off') {
         return $p . 'none (automatic compaction is off: "autoCompactEnabled": false or DISABLE_AUTO_COMPACT)'
                . ($pt eq 'on' ? " → $turn49" : $headless ? '; no pre-idle handoff turn (headless session)'
-                  : '; no pre-idle handoff turn (idle_handoff_turn: off)');
+                  : '; no pre-idle handoff turn (idle_handoff_turn: false)');
     }
     my $who = $native eq 'unknown' ? 'unknown (the settings could not be read)' : $OWN_ON;
     my $check = ' → the plugin checks at 55.5 min and, if Claude Code did not compact, ';
@@ -841,13 +843,13 @@ sub idle_line {
         # a row of a build before lane B: the compaction while agents run only
         return $p . $who . $check . 'runs its handoff turn, or compacts itself while agents run' if $pc eq 'agents';
         return $p . $who . $check . "runs its handoff turn; it does not compact itself for now ($FAILED)" if $pc eq 'failed';
-        return $p . $who . $check . 'runs its handoff turn; it does not compact itself (idle_compact: off)';
+        return $p . $who . $check . 'runs its handoff turn; it does not compact itself (idle_compact: false)';
     }
     return $p . $who . " → the plugin checks at 55.5 min only to compact itself at $m tokens or more if Claude Code did not"
-           . ' (no handoff turn: idle_handoff_turn: off)' if $pc eq 'check';
+           . ' (no handoff turn: idle_handoff_turn: false)' if $pc eq 'check';
     my $why = $headless ? 'headless session'
-            : $pc eq 'failed' ? "idle_handoff_turn: off; $FAILED"
-            : $compact_opt eq 'off' ? 'idle_handoff_turn and idle_compact: off' : 'idle_handoff_turn: off';
+            : $pc eq 'failed' ? "idle_handoff_turn: false; $FAILED"
+            : $compact_opt eq 'off' ? 'idle_handoff_turn and idle_compact: false' : 'idle_handoff_turn: false';
     return $p . $who . "; the plugin does not check and does not compact ($why)";
 }
 sub idle_lines {
@@ -925,7 +927,7 @@ sub keep_warm_lines {
 sub settings_keys_line {
     my $r = rc::settings();
     my $v = $r->{values} || {};
-    my $rp = ($v->{resume_proceed} // '') eq 'confirm' ? 'confirm' : 'auto';
+    my $rp = ($v->{resume_proceed} // '') eq 'confirm' ? 'false' : 'true';
     my $tr = eval { settings::ticket_re($r) } || {};
     my $tk = $tr->{invalid} ? 'invalid (default used)' : $tr->{custom} ? 'custom' : 'default';
     my $sx = eval { settings::secret_extra($r) } || {};

@@ -300,7 +300,8 @@ sub check_value {
         return ({ data => $n, json => "$n" });
     }
     if ($class eq 'enum') {
-        my $x = lc settings::trim($t);
+        # D-72: a %SWITCH key takes true or false and its words from before 0.1.6, written as true or false
+        my $x = exists $settings::SWITCH{$key} ? settings::switch_form($key, $t) // lc settings::trim($t) : lc settings::trim($t);
         my @v = @{ $settings::ENUM{$key} || [] };
         return grep({ $_ eq $x } @v) ? $str->($x) : (undef, 'not ' . join(', ', @v[0 .. $#v - 1]) . " or $v[-1]");
     }
@@ -362,12 +363,25 @@ sub loosens {
     }
     if (my $order = $settings::TIGHTEN{$key}) {
         my %rank = map { $order->[$_] => $_ } 0 .. $#$order;
-        my $s = ref $saved ? undef : lc settings::trim($saved // '');
+        # a %SWITCH key's values (true, false, a word from before 0.1.6) rank as the word they read as
+        my $sw = exists $settings::SWITCH{$key};
+        my $word = sub { my ($v) = @_; return $sw ? (settings::switch_read($key, $v))[0] : ref $v ? undef : lc settings::trim($v // '') };
+        my $say = sub { return $sw ? settings::switch_form($key, $_[0]) : $_[0] };
+        my $s = $word->($saved);
         return undef unless defined $s && exists $rank{$s};
-        my $n = defined $new ? $new : lc settings::trim(settings::manifest_default($key) // $order->[0]);
-        return (exists $rank{$n} && $rank{$n} < $rank{$s}) ? "it only goes towards $order->[-1] here (saved $s)" : undef;
+        my $n = $word->(defined $new ? $new : settings::manifest_default($key) // $order->[0]);
+        return (defined $n && exists $rank{$n} && $rank{$n} < $rank{$s}) ? 'it only goes towards ' . $say->($order->[-1]) . ' here (saved ' . $say->($s) . ')' : undef;
     }
     return undef;
+}
+
+# old_form(key, saved value) -> 1 for a saved value of an enum key that is not one of its %ENUM
+# values as written (D-72: a word from before 0.1.6, another case, a JSON true or false)
+sub old_form {
+    my ($key, $v) = @_;
+    my $e = $settings::ENUM{$key} or return 0;
+    return 0 if !defined $v || (!ref $v && grep { $_ eq $v } @$e);
+    return (!ref $v || ref $v eq 'jsonc::Bool') ? 1 : 0;
 }
 
 # shown(key, value or undef) -> the value as /status prints it (never a pattern's or a list's text)
@@ -446,15 +460,19 @@ sub _sq { my ($s) = @_; $s =~ s/'/'\\''/g; return "'$s'" }
 
 # consent_lines(refusal, plugin key or undef) -> the lines that tell the user how to change a
 # consent key themselves (the plugin never writes these keys): /config or the file by hand, and
-# for a valid new value Claude Code's own `plugin configure`, a line the user types.
+# for a valid new value Claude Code's own `plugin configure`, a line the user types. A %HIDDEN key
+# (D-72: not in the manifest, so neither /config nor `plugin configure` has it) gets the file only.
 sub consent_lines {
     my ($r, $pk) = @_;
     my $brand = ctx::brand();
     my $key = $r->{key};
-    my @l = ("  $key: a consent key; the plugin never writes it, whoever runs this. Change it yourself in /config (the row $brand.$key)"
-             . ' or in your settings.json by hand');
+    my $hidden = $settings::HIDDEN{$key};
+    my @l = ("  $key: a consent key; the plugin never writes it, whoever runs this. Change it yourself "
+             . ($hidden ? 'in your settings.json by hand (it is not in /config in this version), under pluginConfigs["'
+                          . ($pk // "$brand\@<marketplace>") . '"].options'
+                        : "in /config (the row $brand.$key) or in your settings.json by hand"));
     push @l, "  $key: the value given: $r->{detail}" if defined $r->{detail};
-    if (defined $r->{value}) {
+    if (defined $r->{value} && !$hidden) {
         my $json = jsonc::encode_bytes(jsonc::obj($key => $r->{value}));
         push @l, "  $key: or type: ! printf '%s' " . _sq($json) . ' | claude plugin configure ' . _sq($pk // "$brand\@<marketplace>") . ' --values-stdin';
     }
@@ -529,12 +547,12 @@ sub plan {
         }
         if ($to_default) {
             if (!$saved) { push @{ $p{same} }, { key => $k, why => 'not-saved' }; next }
-            push @{ $p{changes} }, { key => $k, kind => 'remove', old => shown($k, $opts->{$k}),
+            push @{ $p{changes} }, { key => $k, kind => 'remove', old => shown($k, $opts->{$k}), raw => $opts->{$k},
                                      new => 'default ' . settings::show_value($k, settings::manifest_default($k)) };
             next;
         }
         if ($saved && jsonc::encode($opts->{$k}) eq jsonc::encode($v->{data})) { push @{ $p{same} }, { key => $k, why => 'unchanged' }; next }
-        push @{ $p{changes} }, { key => $k, kind => 'set', json => $v->{json}, data => $v->{data},
+        push @{ $p{changes} }, { key => $k, kind => 'set', json => $v->{json}, data => $v->{data}, ($saved ? (raw => $opts->{$k}) : ()),
                                  old => $saved ? shown($k, $opts->{$k}) : 'default ' . settings::show_value($k, settings::manifest_default($k)),
                                  new => shown($k, $v->{data}) };
     }

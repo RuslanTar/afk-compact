@@ -14,6 +14,7 @@
 #       one `  <key> = <value> (<source>)` line per key.
 #   settings set <key>=<value>... [--plan P] [--apply]
 #   settings reset <key>...|--all [--plan P] [--apply]
+#   settings migrate [--plan P] [--apply]
 #       the settings writer (lib/settings_write.pm; owner 2026-10-30, "helper writer, safe keys"):
 #       a dry run unless --apply (as `project copy`), which lists each change as old -> new
 #       (never a pattern's or a list's text) and the way to apply it with --plan (the file's
@@ -22,6 +23,10 @@
 #       user's `!` line from a model's call); for those it prints the user-run ways. A value set
 #       to its default (or empty) removes the member. --apply prints each change, the backup next
 #       to the file and when it takes effect.
+#       migrate (D-72, 0.1.6): the values saved in a form from before 0.1.6 (settings::old_values:
+#       an on/off key's old word, an option in another case), which Claude Code reads as unset,
+#       set to their new form through the same writer; a consent key among them is listed with
+#       the user-run ways, never written.
 # Exit codes: 0, 3 (refused: nothing written), 64 (usage), 70.
 use strict;
 use warnings;
@@ -33,11 +38,12 @@ package cmd_settings;
 
 my $USAGE_RESET = 'usage: settings reset <key>...|--all [--apply]';
 my $USAGE_SET = 'usage: settings set <key>=<value>... [--apply]';
+my $USAGE_MIGRATE = 'usage: settings migrate [--apply]';
 
 sub run {
     my $sub = shift @_;
-    die "usage: settings show | settings set <key>=<value>... [--apply] | settings reset <key>...|--all [--apply]\n"
-        unless defined $sub && ($sub eq 'show' || $sub eq 'reset' || $sub eq 'set');
+    die "usage: settings show | settings set <key>=<value>... [--apply] | settings reset <key>...|--all [--apply] | settings migrate [--apply]\n"
+        unless defined $sub && ($sub eq 'show' || $sub eq 'reset' || $sub eq 'set' || $sub eq 'migrate');
     my ($opt, $rest) = args::parse(\@_, bools => [qw(apply all json)], known => [qw(plan root log-dir tier)]);
     if ($sub eq 'show') {
         die "usage: settings show takes no argument ($rest->[0])\n" if @$rest;
@@ -56,6 +62,10 @@ sub run {
             push @req, { key => $k, kind => 'set', text => $v };
         }
         return write_cmd('set', \@req, $opt->{plan}, $opt->{apply});
+    }
+    if ($sub eq 'migrate') {
+        die "$USAGE_MIGRATE\n" if $opt->{all} || @$rest;
+        return migrate($opt->{plan}, $opt->{apply});
     }
     die "$USAGE_RESET\n" if ($opt->{all} && @$rest) || (!$opt->{all} && !@$rest);
     my %seen;
@@ -182,9 +192,26 @@ sub _takes_effect {
            . 'reads its settings again (whether a running session does that by itself is not checked yet: run /reload-plugins or restart Claude Code to be sure)';
 }
 
-# write_cmd(set|reset, requests | keys | 'all', --plan, --apply)
+# migrate(--plan, --apply): settings::old_values as set requests (consent keys apart), then write_cmd
+sub migrate {
+    my ($given, $apply) = @_;
+    # two option keys for the plugin: old_values reads neither, so say why rather than "nothing"
+    return _refused('migrate', { refusals => [{ why => 'ambiguous' }] }) if settings::options_source()->{ambiguous};
+    my @old = grep { defined $_->{to} } settings::old_values();
+    my @consent = map { settings_write::consent_lines({ key => $_->{key}, value => $_->{to} }, settings::options_source()->{key}) }
+                  grep { $_->{consent} } @old;
+    my @req = map { { key => $_->{key}, kind => 'set', text => $_->{to} } } grep { !$_->{consent} } @old;
+    if (!@req) {
+        args::out('settings migrate: nothing to change' . (@consent ? ' but the consent keys below' : ': no saved value is in a form from before 0.1.6'), @consent);
+        return 0;
+    }
+    return write_cmd('migrate', \@req, $given, $apply, \@consent);
+}
+
+# write_cmd(set|reset|migrate, requests | keys | 'all', --plan, --apply[, extra lines])
 sub write_cmd {
-    my ($sub, $want, $given, $apply) = @_;
+    my ($sub, $want, $given, $apply, $extra) = @_;
+    my @extra = @{ $extra || [] };
     my $kept = [];
     my $reqs = $want;
     if ($sub eq 'reset') {
@@ -195,29 +222,33 @@ sub write_cmd {
     return _refused($sub, $p) if $p->{state} eq 'refused';
     my $ft = _file_text();
     my $where = _where($p);
-    my @kept = @$kept ? ('  kept by --all (consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to auto; change those in /config or the file by hand): ' . join(', ', @$kept)) : ();
+    my @kept = @$kept ? ('  kept by --all (consent or protective: the writer never writes a consent key, never takes an entry from a protective list and never moves resume_proceed back to true; change those in /config or the file by hand): ' . join(', ', @$kept)) : ();
     my @ns = map { $_->{why} eq 'not-saved' ? "  not saved, nothing to remove: $_->{key}" : "  unchanged: $_->{key}" } @{ $p->{same} };
     if ($p->{state} eq 'nothing') {
         my $why = !defined $p->{raw} ? " (no $ft)" : !%{ $p->{options} || {} } ? " (no plugin options in $ft)" : '';
-        args::out("settings $sub: nothing to " . ($sub eq 'reset' ? 'remove' : 'change') . $why, @ns, @kept);
+        args::out("settings $sub: nothing to " . ($sub eq 'reset' ? 'remove' : 'change') . $why, @ns, @kept, @extra);
         return 0;
     }
     return _refused($sub, $p, { why => 'changed' }) if defined $given && $given ne $p->{sha};
-    my @ch = map { "  $_->{key}: $_->{old} -> $_->{new}" . ($_->{kind} eq 'remove' ? ' (removed)' : '') } @{ $p->{changes} };
+    # D-72: a value saved in a form from before 0.1.6 shows as saved (it reads as its new form), and
+    # migrate shows the new form as written
+    my $old = sub { return exists $_[0]{raw} && settings_write::old_form($_[0]{key}, $_[0]{raw}) ? jsonc::encode_bytes($_[0]{raw}) : $_[0]{old} };
+    my $new = sub { return $sub eq 'migrate' && $_[0]{kind} eq 'set' ? $_[0]{json} : $_[0]{new} };
+    my @ch = map { "  $_->{key}: " . $old->($_) . ' -> ' . $new->($_) . ($_->{kind} eq 'remove' ? ' (removed)' : '') } @{ $p->{changes} };
     my @notes = (settings_reset::notes($p), settings_write::clamp_notes($p));
     if (!$apply) {
         my $store = ctx::store_cmd();
-        my $line = $sub eq 'set' ? "to apply it: the same command with --plan $p->{sha} --apply"
+        my $line = $sub ne 'reset' ? "to apply it: the same command with --plan $p->{sha} --apply"
             : 'to apply it: ' . (defined $store ? util::text($store) . ' ' : '') . 'settings reset '
               . (ref $want ? join(' ', map { $_->{key} } @{ $p->{changes} }) : '--all') . " --plan $p->{sha} --apply";
-        args::out("settings $sub: dry run, nothing written · $ft · $where", map({ s/\A  /  would change /r } @ch), @ns, @kept, @notes, $line);
+        args::out("settings $sub: dry run, nothing written · $ft · $where", map({ s/\A  /  would change /r } @ch), @ns, @kept, @notes, @extra, $line);
         return 0;
     }
     my $r = settings_write::apply($p);
     return _refused($sub, $p, $r) if $r->{state} ne 'done';
     my $head = $sub eq 'reset' ? 'removed ' . join(', ', map { $_->{key} } @{ $p->{changes} }) . " from $ft ($where)" : "changed $ft ($where)";
     args::out("settings $sub: $head", @ch, '  backup: ' . util::text(util::abbrev($r->{backup})) . ' (the file as it was)',
-              @ns, @kept, @notes, _takes_effect());
+              @ns, @kept, @notes, @extra, _takes_effect());
     return 0;
 }
 

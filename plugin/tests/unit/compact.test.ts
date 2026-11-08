@@ -632,7 +632,7 @@ test('compaction line: a native compaction logs it after the hook has returned, 
 
 // Review of the second build, finding 4: the plugin's own compaction (boundary.ts settleSelf)
 // gets the step-failed line too, once, right after `$.session.compact` resolved.
-test('compaction line: a plugin compaction whose after-step failed says so, once', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('compaction line: a plugin compaction whose after-step failed says so, once', { options: { precompact_turn: 'false' } }, async ($, on) => {
   let down = false
   on('store.set', { key: 'idle_seen:' + SID_A }, (_$, e, next) => {
     if (down) throw new TypeError('store down')

@@ -14,7 +14,7 @@ import { HOME, SID_A, SID_B, T0, WATCH, World, markerNonce, raiseCompact } from 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
 // IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` arms the pre-idle turn only while Claude
 // Code's own idle compaction is off, read from the settings (`idleCompaction`, `autoCompactEnabled`).
-const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code' }
+const ON = { idle_handoff_turn: 'true', precompact_turn: 'false' }
 
 /**
  * A kit test with `idle_digest: submit` unless its options name a value: the `[idle]` cases here
@@ -27,7 +27,7 @@ function test(name: string, ...rest: readonly [TestBody] | readonly [TestOptions
 }
 // IDLE-COMPACT D2: with `"idleCompaction": false` at 200K and more the plugin's own idle
 // compaction replaces the 49-min turn; the turn's own cases switch it off (`idle_compact: off`).
-const TURN = { ...ON, idle_compact: 'off' }
+const TURN = { ...ON, idle_compact: 'false' }
 // Lane B (owner Q2): with native idle on and silent, the 55.5-min check compacts at 200K and more
 // instead of running the turn; the check's turn cases switch the plugin's compaction off the same way.
 const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
@@ -548,7 +548,7 @@ test('AT-IC-05: a main turn.start before the due cancels the timer', { options: 
   expect(w.submits.length + w.rowsOf('handoff_skipped').length).toBe(0)
 })
 
-test('AT-IC-06: off arms no timer: no submit and no row (native idle on as well)', { options: { idle_handoff_turn: 'off' } }, async ($, on) => {
+test('AT-IC-06: off arms no timer: no submit and no row (native idle on as well)', { options: { idle_handoff_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   w.rateLimits = LIMITS
   await w.start($)
@@ -745,7 +745,7 @@ test('AT-IC-08: composer and bridge prompts clear halt too', async ($, on) => {
 
 const CLEAR = { reason: 'clear', sessionId: SID_A, resume: { id: SID_A } }
 
-test('AT-IC-09: session.end {clear} during boundary_delay_ms of a last cycle: no submit, no compaction', { options: { max_auto_continues_per_hour: 0, precompact_turn: 'code' } }, async ($, on) => {
+test('AT-IC-09: session.end {clear} during boundary_delay_ms of a last cycle: no submit, no compaction', { options: { max_auto_continues_per_hour: 0, precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.userTurn($)
@@ -760,7 +760,7 @@ test('AT-IC-09: session.end {clear} during boundary_delay_ms of a last cycle: no
   expect([w.submits.length, w.compacts.length]).toEqual([0, 0])
 })
 
-test('AT-IC-09: session.end {clear} between a plugin compaction and its continue: no continue; the pending block is dropped (mod_outcome dropped:session-end)', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-IC-09: session.end {clear} between a plugin compaction and its continue: no continue; the pending block is dropped (mod_outcome dropped:session-end)', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.userTurn($)
@@ -783,7 +783,7 @@ test('AT-IC-09: session.end {clear} between a plugin compaction and its continue
   expect(ctx.blocks.length).toBe(0)
 })
 
-test('AT-IC-09: the session id changed with no session.end seen: the continue is not submitted (submit_dropped session-changed)', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-IC-09: the session id changed with no session.end seen: the continue is not submitted (submit_dropped session-changed)', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.userTurn($)
@@ -1162,7 +1162,7 @@ test('AT-IA-04: idle_mode is written once per change, not per turn; off reads na
   expect(w.submits.length + idleSkips(w).length).toBe(1)
 })
 
-test('AT-IC-06 / IA-1: off arms nothing even with native idle off', { options: { ...TURN, idle_handoff_turn: 'off' } }, async ($, on) => {
+test('AT-IC-06 / IA-1: off arms nothing even with native idle off', { options: { ...TURN, idle_handoff_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -1336,7 +1336,7 @@ const AGENT_SKIPS: { name: string; why: string | null; tokens?: number; origin?:
   { name: 'triggers off', why: 'triggers-off', options: { triggers: false }, silent: 1 },
   // A person's turn clears halt: here a background result's turn ends the last one.
   { name: 'halt', why: 'halted', origin: 'task-notification', setup: w => { w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' })) }, silent: 1 },
-  { name: 'native off', why: null, options: { idle_compact: 'off' }, setup: w => { w.policy = NATIVE_OFF }, silent: 0 },
+  { name: 'native off', why: null, options: { idle_compact: 'false' }, setup: w => { w.policy = NATIVE_OFF }, silent: 0 },
 ]
 for (const c of AGENT_SKIPS) {
   test(`AT-IS-10 (${c.name}): agents running, ${c.why === null ? 'the 49-min turn path' : `handoff_skipped {why: ${c.why}, reason: idle}`}: no idle_compact row, no compaction`, { options: { ...ON, ...(c.options ?? {}) } }, async ($, on) => {

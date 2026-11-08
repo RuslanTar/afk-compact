@@ -26,7 +26,7 @@ async function nudgedTurn($: Engine, w: World, answer = 'Checkpoint: clean · St
   await w.advance(500)
 }
 
-test('AT-M2-01: boundary at 410K after a clean answer: one $.session.compact with the mod-self nonce', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-M2-01: boundary at 410K after a clean answer: one $.session.compact with the mod-self nonce', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   let dispatchedBefore = false
   w.atCompact = () => {
@@ -50,7 +50,7 @@ test('AT-M2-01: boundary at 410K after a clean answer: one $.session.compact wit
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-B-01: timer at 2000 ms; a turn.start 1 s later cancels it', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-B-01: timer at 2000 ms; a turn.start 1 s later cancels it', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -88,7 +88,7 @@ test('AT-B-02: a turn ending while an AskUserQuestion call is open: skip why=ask
   await open
 })
 
-test('AT-B-03: an eligible turn end 10 s after a plugin compaction: skip why=cooldown', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-B-03: an eligible turn end 10 s after a plugin compaction: skip why=cooldown', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -451,7 +451,7 @@ test('AT-CAP-01: default config, 7 nudge-driven cycles within 55 min: 6 continue
   expect(w.rowsOf('halt')[0]?.reason).toBe('cap')
 })
 
-test('AT-B-07: two plugin compactions, each re-reaching target within 2 main turns: thrash + halt', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-B-07: two plugin compactions, each re-reaching target within 2 main turns: thrash + halt', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   w.tokens = 410000
@@ -485,7 +485,7 @@ test('AT-B-08: halt, then a user-typed turn: halt cleared; the next nudge-driven
   expect(w.submits.length).toBe(1)
 })
 
-test('AT-B-09: a nudged turn that ends aborted: no continue', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-B-09: a nudged turn that ends aborted: no continue', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -723,7 +723,7 @@ test('AF-B5: a queued prompt is kept for MAX_ENTERING later turns, then dropped;
   expect(s.enteringKinds).toEqual([])
 })
 
-test('AT-M2-03: $.session.compact rejects: compact_rejected, busy released, no timer; the next turn end schedules again', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-M2-03: $.session.compact rejects: compact_rejected, busy released, no timer; the next turn end schedules again', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -940,7 +940,7 @@ test('NW-BD (0.1.4 T-11): the breakdown is read once per load, not again at late
 
 // DP-30 (4): `compacted.ms` has one definition on every path: from the dispatch record written
 // (or reused) to the compaction's answer, as on the mod-hook path.
-test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   w.atHelper = async (sub) => {
     if (sub === 'dispatch') await w.clock.set(w.clock.now() + 250)

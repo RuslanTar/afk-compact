@@ -548,6 +548,8 @@ def probes(name):
         uc["cooldown_ms"]["title"] = "Minimum gap between compactions (ms) [default 15,000]"
         uc["stall_min"]["title"] = "Stalled job alert (minutes)"
         uc["handoff_turn"]["options"] = ["halt", "off", "on"]
+        # D-72: a key settings.pm keeps out of the manifest (%HIDDEN) is back in it
+        uc["otel_log_path"] = {"type": "file", "title": "x [default: empty = unused]", "description": "x", "default": ""}
         write_text(p, json.dumps(doc, indent=2) + "\n")
 
     def launcher_move(d):
@@ -735,6 +737,8 @@ def probes(name):
         edit(d, "plugin/helper/lib/settings.pm", "[stall_min                   => 'num',  60,",
              "[stall_min                   => 'num',  90,")
         edit(d, "plugin/hooks/lib/config.ts", "  cooldown_ms: 30000,", "  cooldown_ms: 15000,")
+        # D-72: the hooks' switch table no longer matches the helper's
+        edit(d, "plugin/hooks/lib/config.ts", "watcher: ['shadow', 'off']", "watcher: ['off', 'shadow']")
         # STATE-ROOT: the root fallbacks outside the key tables
         edit(d, "plugin/helper/lib/paths.pm", "our $DEFAULT_ROOT = '~/.local/state/<plugin>/", "our $DEFAULT_ROOT = '~/.claude/x/")
         edit(d, "plugin/helper/lib/paths.pm", "our $DEFAULT_DISPOSABLE = '~/.local/state/<plugin>/", "our $DEFAULT_DISPOSABLE = '~/.claude/y/")
@@ -1054,7 +1058,9 @@ def probes(name):
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: cooldown_ms says \[default 15,000\], the manifest default is 30000$",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: stall_min has no \[default 60\] suffix$",
-          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: watcher says \[default shadow\], the manifest default is 'off'$",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: watcher says \[default true\], the manifest default is 'off'$",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-CAP-02 hidden: settings\.pm %HIDDEN key otel_log_path is in the manifest$",
+          r"^GATE config-defaults plugin/helper/lib/settings\.pm: D-72 switch words: manifest handoff_turn options \['halt', 'off', 'on'\], want \['true', 'false'\]$",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: idle_handoff_near_limit says \[default run\], the manifest default is 'skip'$",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 options: handoff_turn lists \['halt', 'off', 'on'\]"], None),
         ("launcher", "AT-PK-01", gates_only("launcher"), launcher_move,
@@ -1164,7 +1170,8 @@ def probes(name):
           r"^GATE config-defaults plugin/helper/lib/paths\.pm: AT-CAP-02 differs: paths\.pm \$DEFAULT_DISPOSABLE ~/\.claude/y/",
           r"^GATE config-defaults " + re.escape(launcher_rel(name)) + r": AT-CAP-02 differs: launcher hroot ~/\.claude/x/",
           r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-IA-01 idle words: settings\.pm \$IDLE_INVALID off != config\.ts IDLE_INVALID_READS_AS auto$",
-          r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-IA-01 idle words: settings\.pm @IDLE_OFF_WORDS off false no disabled 0 != config\.ts IDLE_OFF_WORDS off false no none disabled 0$"], None),
+          r"^GATE config-defaults plugin/helper/lib/settings\.pm: AT-IA-01 idle words: settings\.pm @IDLE_OFF_WORDS off false no disabled 0 != config\.ts IDLE_OFF_WORDS off false no none disabled 0$",
+          r"^GATE config-defaults plugin/helper/lib/settings\.pm: D-72 switch words: settings\.pm %SWITCH watcher shadow off != config\.ts SWITCH off shadow$"], None),
         ("export-classes", "AT-WB-08", gates_only("export-classes"), export_classes,
          [r"^GATE export-classes plugin/helper/lib/settings\.pm: AT-WB-08 class: cache_ttl_s exports 'raw'",
           r"^GATE export-classes plugin/helper/lib/settings\.pm: AT-WB-08 path: otel_log_path is a file key exported as list$"], None),

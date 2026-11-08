@@ -116,7 +116,7 @@
      "^  relaunch_allow: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_allow\\) or in your settings\\.json by hand$",
      "^  unattended_prod_reads: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.unattended_prod_reads\\) or in your settings\\.json by hand$",
      "^  queue_cmd: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.queue_cmd\\) or in your settings\\.json by hand$",
-     "^  restart_on_update: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.restart_on_update\\) or in your settings\\.json by hand$"
+     "^  restart_on_update: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in your settings\\.json by hand \\(it is not in /config in this version\\), under pluginConfigs\\[\"$BRAND@m\"\\]\\.options$"
     ],
     "files": [
      {
@@ -138,14 +138,14 @@
    "argv": [
     "settings",
     "set",
-    "restart_on_update=always",
+    "relaunch_auto=always",
     "--apply"
    ],
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^  restart_on_update: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.restart_on_update\\) or in your settings\\.json by hand$",
-     "^  restart_on_update: the value given: not off, shadow or on$"
+     "^  relaunch_auto: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_auto\\) or in your settings\\.json by hand$",
+     "^  relaunch_auto: the value given: [^\\n]+$"
     ],
     "files": [
      {
@@ -219,7 +219,7 @@
      "^  max_auto_continues_per_hour: not valid: above its maximum 10$",
      "^  compact_target_tokens: not valid: not a number of 0 or more$",
      "^  handoff_turn_max_tokens: not valid: not a whole number \\(the plugin rounds it down\\)$",
-     "^  watcher: not valid: not shadow or off$",
+     "^  watcher: not valid: not true or false$",
      "^  triggers: not valid: not true or false$",
      "^  log_dir: not valid: not an absolute path",
      "^  native_window_tokens: not valid: 0 \\(the window Claude Code reports\\) or at least 100000$",
@@ -376,7 +376,7 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^  resume_proceed: looser, refused: it only goes towards confirm here \\(saved confirm\\)$"
+     "^  resume_proceed: looser, refused: it only goes towards false here \\(saved false\\)$"
     ],
     "files": [
      {
@@ -401,7 +401,7 @@
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^  resume_proceed: looser, refused: it only goes towards confirm here \\(saved confirm\\)$"
+     "^  resume_proceed: looser, refused: it only goes towards false here \\(saved false\\)$"
     ],
     "files": [
      {
@@ -472,7 +472,7 @@
     "settings",
     "set",
     "watcher=off",
-    "watcher=shadow"
+    "watcher=true"
    ],
    "expect": {
     "exit": 64,

@@ -10,7 +10,7 @@
    "setup": [{"mkdir": "$TMP/work"}],
    "argv": ["status", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
-    "stdout_has": ["\\Aok: no compactions in the last 7 days, no open alerts\\nwatcher: shadow · "]}},
+    "stdout_has": ["\\Aok: no compactions in the last 7 days, no open alerts\\nwatcher: true · "]}},
   {"name": "every compaction saved, one info alert",
    "setup": [
     {"write": "$WATCH/$SID/compactions.jsonl", "jsonl": [
@@ -30,7 +30,7 @@
    ],
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
-    "stdout_has": ["\\Aok: 2/2 compactions saved this session, no open alerts\\nwatcher: shadow · ",
+    "stdout_has": ["\\Aok: 2/2 compactions saved this session, no open alerts\\nwatcher: true · ",
                    "^Alerts this session: 1 \\(critical 0, warn 0, info 1\\)$"]}},
   {"name": "an unattributed compaction counts (the compactions block lists it in this session); a subagent one does not",
    "setup": [
@@ -42,7 +42,7 @@
    ],
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
-    "stdout_has": ["\\Aok: 1/1 compactions saved this session, no open alerts\\nwatcher: shadow · ",
+    "stdout_has": ["\\Aok: 1/1 compactions saved this session, no open alerts\\nwatcher: true · ",
                    "^  2026-10-21T13:00:00\\+03:00 · unattributed · "]}},
   {"name": "a compaction without its copy and no open alert",
    "setup": [
@@ -56,7 +56,7 @@
    ],
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
-    "stdout_has": ["\\Aattention: 2/3 compactions saved this session, no open alerts\\nwatcher: shadow · "]}},
+    "stdout_has": ["\\Aattention: 2/3 compactions saved this session, no open alerts\\nwatcher: true · "]}},
   {"name": "open alerts: the count and the rules",
    "setup": [
     {"write": "$WATCH/$SID.alerts.jsonl", "jsonl": [
@@ -71,7 +71,7 @@
    ],
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
-    "stdout_has": ["\\Aattention: 3 open alerts \\(A-01, A-05\\); 2/3 compactions saved this session\\nwatcher: shadow · "]}},
+    "stdout_has": ["\\Aattention: 3 open alerts \\(A-01, A-05\\); 2/3 compactions saved this session\\nwatcher: true · "]}},
   {"name": "without a session id: every session's last 7 days",
    "setup": [
     {"write": "$WATCH/5e55a0ff-0000-4000-8000-0000000000a1/compactions.jsonl", "jsonl": [
@@ -87,6 +87,6 @@
    ],
    "argv": ["status", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
-    "stdout_has": ["\\Aattention: 4 open alerts \\(A-01, A-05, A-11\\); 3/4 compactions saved in the last 7 days\\nwatcher: shadow · "]}}
+    "stdout_has": ["\\Aattention: 4 open alerts \\(A-01, A-05, A-11\\); 3/4 compactions saved in the last 7 days\\nwatcher: true · "]}}
  ]
 }

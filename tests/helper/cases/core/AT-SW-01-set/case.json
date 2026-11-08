@@ -19,11 +19,11 @@
     },
     {
      "write": "$TMP/expect/a1.json",
-     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"env\": {\"ZZ_UNRELATED\": \"keep me\"},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"watcher\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2.50, {\"b\": null}],\n  \"note\": \"naïve \\u00e9\"\n}\n"
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"env\": {\"ZZ_UNRELATED\": \"keep me\"},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"watcher\": \"false\"\n      }\n    }\n  },\n  \"alpha\": [1, 2.50, {\"b\": null}],\n  \"note\": \"naïve \\u00e9\"\n}\n"
     },
     {
      "write": "$TMP/expect/a2.json",
-     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"env\": {\"ZZ_UNRELATED\": \"keep me\"},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"watcher\": \"off\",\n        \"triggers\": false,\n        \"log_dir\": \"~/afk logs\"\n      }\n    }\n  },\n  \"alpha\": [1, 2.50, {\"b\": null}],\n  \"note\": \"naïve \\u00e9\"\n}\n"
+     "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"env\": {\"ZZ_UNRELATED\": \"keep me\"},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"watcher\": \"false\",\n        \"triggers\": false,\n        \"log_dir\": \"~/afk logs\"\n      }\n    }\n  },\n  \"alpha\": [1, 2.50, {\"b\": null}],\n  \"note\": \"naïve \\u00e9\"\n}\n"
     }
    ]
   },
@@ -73,7 +73,7 @@
     "stdout_has": [
      "\\Asettings set: dry run, nothing written · ~/\\.claude/settings\\.json · plugin options under \"$BRAND@m\"$",
      "^  would change compact_target_tokens: 300000 -> 350000$",
-     "^  would change watcher: default shadow -> off$",
+     "^  would change watcher: default true -> false$",
      "^  would change cooldown_ms: 20000 -> default 30000 \\(removed\\)$",
      "^  not saved, nothing to remove: stall_min$",
      "^to apply it: the same command with --plan [0-9a-f]{12} --apply$"
@@ -137,7 +137,7 @@
     "stdout_has": [
      "\\Asettings set: changed ~/\\.claude/settings\\.json \\(plugin options under \"$BRAND@m\"\\)$",
      "^  compact_target_tokens: 300000 -> 350000$",
-     "^  watcher: default shadow -> off$",
+     "^  watcher: default true -> false$",
      "^  cooldown_ms: 20000 -> default 30000 \\(removed\\)$",
      "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-2026-10-30_09-00-00\\.bak \\(the file as it was\\)$",
      "^  takes effect: "
@@ -235,7 +235,7 @@
     "exit": 0,
     "stdout_has": [
      "^compact_target_tokens 350000 \\(your settings\\.json; default 400000\\)$",
-     "^watcher off \\(your settings\\.json; default shadow\\)$",
+     "^watcher false \\(your settings\\.json; default true\\)$",
      "^triggers false \\(your settings\\.json; default true\\)$",
      "^cooldown_ms 30000 \\(default\\)$"
     ]
@@ -427,7 +427,7 @@
     },
     {
      "write": "$TMP/expect/c1",
-     "text": "{\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"stall_min\": 60,\r\n        \"watcher\": \"off\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+     "text": "{\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"stall_min\": 60,\r\n        \"watcher\": \"false\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
     },
     {
      "write": "$TMP/expect/e0",
@@ -435,7 +435,7 @@
     },
     {
      "write": "$TMP/expect/e1",
-     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"watcher\": \"off\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
+     "text": "{\r\n  \"model\": \"opus\",\r\n  \"pluginConfigs\": {\r\n    \"$BRAND@m\": {\r\n      \"options\": {\r\n        \"watcher\": \"false\"\r\n      }\r\n    }\r\n  }\r\n}\r\n"
     }
    ]
   },
@@ -621,7 +621,7 @@
     {
      "write": "$HOME/.claude/settings.json",
      "mode": "0644",
-     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"watcher\": \"off\",\n        \"native_window_tokens\": 700000,\n        \"compact_target_tokens\": 200000\n      }\n    }\n  }\n}\n"
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"watcher\": \"false\",\n        \"native_window_tokens\": 700000,\n        \"compact_target_tokens\": 200000\n      }\n    }\n  }\n}\n"
     }
    ]
   },
@@ -687,7 +687,7 @@
     {
      "write": "$HOME/.claude/settings.json",
      "mode": "0644",
-     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"watcher\": \"off\",\n        \"native_window_tokens\": 700000,\n        \"compact_target_tokens\": 450000\n      }\n    }\n  }\n}\n"
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"watcher\": \"false\",\n        \"native_window_tokens\": 700000,\n        \"compact_target_tokens\": 450000\n      }\n    }\n  }\n}\n"
     }
    ]
   },

@@ -68,12 +68,12 @@ export type Config = {
    * `0`: off.
    */
   keep_warm_hours: number
-  /** `watcher` is `off` (trimmed, case-folded; the helper owns the key and its notes): no first-run notice. */
+  /** `watcher` reads as `off` (false, or the old `off`; SWITCH): no first-run notice. */
   watcher_off: boolean
   /**
    * Values replaced while parsing: `config_invalid` keys and `config_clamped` rows (logged once per
    * load); `noted` (present only when not empty): `config_note` rows for a value read another way
-   * (IA-1: the old `idle_handoff_turn: on` reads as `auto`).
+   * (IA-1: the old `idle_handoff_turn: on` reads as `auto`; D-72: a SWITCH key's word before 0.1.6).
    */
   notes: { invalid: string[]; clamped: { key: string; configured: number; effective: number }[]; noted?: { key: string; note: string }[] }
 }
@@ -148,14 +148,58 @@ function bool(o: PluginOptions, k: keyof Config, d: boolean): boolean {
   return d
 }
 
-/** `halt` or `off` (trimmed, case-folded); anything else is the default plus a `config_invalid` note. */
+/**
+ * D-72 (0.1.6; owner 2026-11-08): the seven on/off options take `true` or `false` (userConfig
+ * `options`, so /config opens a picker that shows the description; a boolean flips in place there).
+ * In the plugin each still runs as its word before 0.1.6: SWITCH gives [the word `true` reads as,
+ * the word `false` reads as]. A stored word of a release before 0.1.6 keeps its meaning: either word,
+ * and for the two idle keys IDLE_AUTO_WORDS and IDLE_OFF_WORDS, with a `config_note` (`legacy-word`;
+ * Claude Code reads such a value as unset, so this is for a value passed as it is stored). Never the
+ * opposite, never an unknown word as true or false. settings.pm %SWITCH holds the same table.
+ */
+export const SWITCH = {
+  handoff_turn: ['halt', 'off'], precompact_turn: ['model', 'code'], watcher: ['shadow', 'off'],
+  unattended_prod_reads: ['allow', 'forbid'], idle_handoff_turn: ['auto', 'off'], idle_compact: ['auto', 'off'],
+  resume_proceed: ['auto', 'confirm'],
+} as const
+type SwitchKey = keyof typeof SWITCH
+
+/**
+ * The SWITCH word a value reads as (trimmed, case-folded; a JSON boolean or number as its text), with
+ * a `config_note` when it is not exactly `true` or `false`; undefined when unset; null for any other
+ * value, which the key's own rule reads.
+ */
+function switchWord<K extends SwitchKey>(o: PluginOptions, k: K, notes: Config['notes']): (typeof SWITCH)[K][number] | null | undefined {
+  const v = o[k]
+  if (unset(v)) return undefined
+  const t = typeof v === 'string' ? v.trim().toLowerCase() : typeof v === 'boolean' || typeof v === 'number' ? String(v) : ''
+  const [on, off] = SWITCH[k]
+  const idle = k === 'idle_handoff_turn' || k === 'idle_compact'
+  const w = t === 'true' ? on : t === 'false' ? off : t === on || t === off ? t
+    : idle && IDLE_AUTO_WORDS.includes(t) ? on : idle && IDLE_OFF_WORDS.includes(t) ? off : null
+  if (w !== null && v !== 'true' && v !== 'false') {
+    const note = k === 'idle_handoff_turn' && t === 'on' ? 'legacy-on' : 'legacy-word'
+    notes.noted = [...(notes.noted ?? []), { key: k, note }]
+  }
+  return w as (typeof SWITCH)[K][number] | null
+}
+
+/** true or false (or a word before 0.1.6, SWITCH); anything else is the default plus a `config_invalid` note. */
 function handoffTurn(o: PluginOptions, notes: Config['notes']): Config['handoff_turn'] {
-  const v = o['handoff_turn']
-  if (unset(v)) return DEFAULTS.handoff_turn
-  const t = typeof v === 'string' ? v.trim().toLowerCase() : ''
-  if (t === 'halt' || t === 'off') return t
+  const w = switchWord(o, 'handoff_turn', notes)
+  if (w === undefined) return DEFAULTS.handoff_turn
+  if (w !== null) return w
   notes.invalid.push('handoff_turn')
   return DEFAULTS.handoff_turn
+}
+
+/** A SWITCH option: its word; unset gives the default; any other value gives `invalid` plus a `config_invalid` note. */
+function switched<K extends 'precompact_turn' | 'unattended_prod_reads'>(o: PluginOptions, k: K, dflt: Config[K], invalid: Config[K], notes: Config['notes']): Config[K] {
+  const w = switchWord(o, k, notes)
+  if (w === undefined) return dflt
+  if (w !== null) return w as Config[K]
+  notes.invalid.push(k)
+  return invalid
 }
 
 /**
@@ -208,37 +252,16 @@ export const IDLE_AUTO_WORDS: readonly string[] = ['auto', 'true', 'yes', '1', '
 export const IDLE_INVALID_READS_AS: Config['idle_handoff_turn'] = 'off'
 
 /**
- * `idle_handoff_turn` (IA-1): trimmed and case-folded (a JSON boolean or number as its text); the old
- * value `on` reads as `auto` with a `config_note`; the common words read as `off` or `auto`; any other
- * value is IDLE_INVALID_READS_AS plus `config_invalid` (the owner's words switch the plugin turn off
- * only when native idle is on, which idle.ts checks; there is no forced on).
+ * `idle_handoff_turn` (IA-1) and `idle_compact`: true or false, and the words before 0.1.6
+ * (switchWord: the old `on` notes `legacy-on`); any other value is IDLE_INVALID_READS_AS plus
+ * `config_invalid` (the owner's words switch the plugin turn off only when native idle is on, which
+ * idle.ts checks; there is no forced on). settings.pm reads both the same way.
  */
-function idleTurn(o: PluginOptions, notes: Config['notes']): Config['idle_handoff_turn'] {
-  const v = o['idle_handoff_turn']
-  if (unset(v)) return DEFAULTS.idle_handoff_turn
-  const t = typeof v === 'string' ? v.trim().toLowerCase() : typeof v === 'boolean' || typeof v === 'number' ? String(v) : ''
-  if (t === 'on') {
-    notes.noted = [...(notes.noted ?? []), { key: 'idle_handoff_turn', note: 'legacy-on' }]
-    return 'auto'
-  }
-  if (IDLE_OFF_WORDS.includes(t)) return 'off'
-  if (IDLE_AUTO_WORDS.includes(t)) return 'auto'
-  notes.invalid.push('idle_handoff_turn')
-  return IDLE_INVALID_READS_AS
-}
-
-/**
- * `idle_compact`, read like `idle_handoff_turn` (trimmed, case-folded, the same word lists): the
- * common words read as `off` or `auto`; any other value is IDLE_INVALID_READS_AS plus
- * `config_invalid`. settings.pm reads it the same way.
- */
-function idleCompact(o: PluginOptions, notes: Config['notes']): Config['idle_compact'] {
-  const v = o['idle_compact']
-  if (unset(v)) return DEFAULTS.idle_compact
-  const t = typeof v === 'string' ? v.trim().toLowerCase() : typeof v === 'boolean' || typeof v === 'number' ? String(v) : ''
-  if (IDLE_OFF_WORDS.includes(t)) return 'off'
-  if (IDLE_AUTO_WORDS.includes(t)) return 'auto'
-  notes.invalid.push('idle_compact')
+function idleSwitch(o: PluginOptions, k: 'idle_handoff_turn' | 'idle_compact', notes: Config['notes']): Config['idle_handoff_turn'] {
+  const w = switchWord(o, k, notes)
+  if (w === undefined) return DEFAULTS[k]
+  if (w !== null) return w
+  notes.invalid.push(k)
   return IDLE_INVALID_READS_AS
 }
 
@@ -279,18 +302,18 @@ export function parseOptions(o: PluginOptions, name?: string): Config {
     handoff_turn_max_tokens: handoffTokens(o, notes),
     queue_cmd: str(o, 'queue_cmd', DEFAULTS.queue_cmd).trim(),
     // Any other value is `code`, the as-built path with no extra turn (S-SETTINGS D).
-    precompact_turn: choice(o, 'precompact_turn', ['model', 'code'] as const, DEFAULTS.precompact_turn, 'code', notes),
-    unattended_prod_reads: choice(o, 'unattended_prod_reads', ['forbid', 'allow'] as const, 'forbid', 'forbid', notes),
-    idle_handoff_turn: idleTurn(o, notes),
+    precompact_turn: switched(o, 'precompact_turn', DEFAULTS.precompact_turn, 'code', notes),
+    unattended_prod_reads: switched(o, 'unattended_prod_reads', 'forbid', 'forbid', notes),
+    idle_handoff_turn: idleSwitch(o, 'idle_handoff_turn', notes),
     idle_handoff_min_tokens: bounded(o, 'idle_handoff_min_tokens', DEFAULTS.idle_handoff_min_tokens, IDLE_TOKENS_MIN, IDLE_TOKENS_MAX, notes),
     // Any other value is the default `run` (no legacy words); settings.pm reads it the same way.
     idle_handoff_near_limit: choice(o, 'idle_handoff_near_limit', ['run', 'skip-spend', 'skip'] as const, DEFAULTS.idle_handoff_near_limit, DEFAULTS.idle_handoff_near_limit, notes),
-    idle_compact: idleCompact(o, notes),
+    idle_compact: idleSwitch(o, 'idle_compact', notes),
     // Any other value is `off`, the value with no extra plugin turn and no digest (rule (c)).
     idle_digest: choice(o, 'idle_digest', ['submit', 'return', 'off'] as const, DEFAULTS.idle_digest, 'off', notes),
     // Hours, fractions as given (1.5 is an hour and a half; /status reads the same value).
     keep_warm_hours: bounded(o, 'keep_warm_hours', DEFAULTS.keep_warm_hours, KEEP_WARM_HOURS_MIN, KEEP_WARM_HOURS_MAX, notes, false),
-    watcher_off: typeof o['watcher'] === 'string' && o['watcher'].trim().toLowerCase() === 'off',
+    watcher_off: switchWord(o, 'watcher', notes) === 'off',
     notes,
   }
 }

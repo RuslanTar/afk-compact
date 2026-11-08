@@ -877,7 +877,7 @@ test('AT-RS-19 (D10, mod part): no mode read in this load: no --seen-mode (the h
   expect([gate?.args.includes('--seen-mode'), gate?.args.includes('--turn-at')]).toEqual([false, true])
 })
 
-test('AT-RS-19 (D10, mod part): no main turn in this load (the plugin\'s idle compaction of a record an earlier process armed): --turn-at is the load\'s start, so that process\'s Stop counts as older than the last turn and the launch mode narrows it', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code' } }, async ($, on) => {
+test('AT-RS-19 (D10, mod part): no main turn in this load (the plugin\'s idle compaction of a record an earlier process armed): --turn-at is the load\'s start, so that process\'s Stop counts as older than the last turn and the launch mode narrows it', { options: { idle_handoff_turn: 'true', precompact_turn: 'false' } }, async ($, on) => {
   const MIN = 60000
   const w = new World({ version: { version: '2.1.311' } }).install(on, {
     [`idle_due:${SID_A}`]: {

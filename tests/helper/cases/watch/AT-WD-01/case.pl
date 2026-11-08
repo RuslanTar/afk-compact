@@ -44,7 +44,7 @@ push @steps, { call => 'status', at => 12, ctx => { sid => 'aaaa0009', settings 
             }
         }
         my ($of_lines, $ok_lines) = $E->outputs;
-        $E->ok((grep { /watcher setting is not "shadow" or "off"; it counts as shadow/ } @$of_lines) == 1, 'status notes the unknown value');
+        $E->ok((grep { /watcher setting is not true or false; it counts as true/ } @$of_lines) == 1, 'status notes the unknown value');
         $E->ok(!(grep { /watcher setting is not/ } @$ok_lines), 'no note for shadow');
     },
 };
