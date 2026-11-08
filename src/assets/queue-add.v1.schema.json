@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "queue-add/v1",
+  "title": "queue_cmd add --json --session <sid> --client-id <id>: the draft on stdin",
+  "description": "One JSON object of at most 4,096 bytes (x-max-bytes). See queue-contract.md. Each text's cap is in UTF-8 bytes (x-max-bytes); maxLength repeats it as a character count, which a text within its byte cap always meets. Ignore unknown keys: a later version of this schema may add some.",
+  "x-max-bytes": 4096,
+  "type": "object",
+  "required": ["schema", "client_id", "session", "asked_at", "source", "question", "kind", "blocks"],
+  "properties": {
+    "schema": {"const": "queue-add/v1"},
+    "client_id": {
+      "type": "string",
+      "pattern": "^ck-[0-9a-f]{12}$",
+      "description": "equals --client-id; the same question in the same session gets the same id"
+    },
+    "session": {"type": "string", "description": "equals --session"},
+    "asked_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}$",
+      "description": "local time with its offset, when the plugin built the draft"
+    },
+    "source": {
+      "type": "object",
+      "required": ["plugin", "kind", "nonce"],
+      "properties": {
+        "plugin": {"type": "string", "description": "the plugin's name"},
+        "kind": {"const": "checkpoint"},
+        "nonce": {"type": "string", "pattern": "^[0-9a-f]{8}$", "description": "the checkpoint's nonce"}
+      }
+    },
+    "question": {"type": "string", "pattern": "\\?\\s*$", "maxLength": 600, "x-max-bytes": 600},
+    "kind": {"enum": ["choice", "approval", "open"]},
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["label", "description", "recommended", "long_term"],
+        "properties": {
+          "label": {"type": "string", "minLength": 1, "maxLength": 40, "x-max-bytes": 40},
+          "description": {"type": "string", "minLength": 1, "maxLength": 300, "x-max-bytes": 300},
+          "recommended": {"type": "boolean"},
+          "long_term": {"type": "boolean"}
+        }
+      },
+      "contains": {"type": "object", "required": ["recommended"], "properties": {"recommended": {"const": true}}},
+      "minContains": 0,
+      "maxContains": 1,
+      "description": "for choice and approval; never for open"
+    },
+    "recommendation_none_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "x-max-bytes": 200,
+      "description": "why no option is recommended"
+    },
+    "blocks": {"type": "string", "minLength": 1, "maxLength": 200, "x-max-bytes": 200, "description": "what waits on the answer"},
+    "context": {"type": "string", "minLength": 1, "maxLength": 400, "x-max-bytes": 400, "description": "optional background for the person who answers"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "open"}}},
+      "then": {"not": {"required": ["options"]}},
+      "else": {"required": ["options"]}
+    },
+    {
+      "if": {
+        "required": ["options"],
+        "properties": {"options": {"not": {"contains": {"type": "object", "required": ["recommended"], "properties": {"recommended": {"const": true}}}}}}
+      },
+      "then": {"required": ["recommendation_none_reason"]}
+    }
+  ]
+}
