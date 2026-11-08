@@ -960,41 +960,41 @@ sub lint {
 # a shape fault of a handoff the user asked for and approval-denied still refuse.
 our %MOVE_RULES = map { $_ => 1 } qw(approval-quote approval-plugin-turn);
 our $OPEN_HEADING = '## Open questions';
-# fence_lines(\@lines): the fenced code blocks as CommonMark reads them, for move_lines (a reference
-# inside one is left alone, 0.1.4 A-3) and skills::lint::fix, so the two never differ. A fence opens
-# on a line of 3 or more backticks or tildes (a backtick fence's info text holds no backtick) and
-# closes only on a line of the same character, at least as long, with nothing after it but white
-# space; one left open runs to the end (0.1.5 E-3 review 4: any fence line toggled, so a ``` line
-# inside a ~~~ block ended it). A fence may open at any indent (one in a list item is one too, and
-# one CommonMark reads as indented code only keeps more lines as code); the closing line may be
-# indented at most 3 columns, or as far as the opening line when that is more (review 5: a
-# "    ```" line inside a ``` block closed it, so the code after it was rewritten; tabs to the
-# next column of 4). Fences are read after blockquote markers (`>`, one space after each; review 5:
-# a range inside "> ```" was rewritten); a block in a quote ends on a line with fewer markers.
-# Returns {code => {index => 1: a fence line or a line inside}, open => {index => 1: open after it}}.
-sub fence_lines {
+# code_sections(\@lines) -> {index => 1} for every line (its `## ` heading too) of a section, a
+# `## ` heading to the next (or the text before the first), that holds a line with a run of 3 or
+# more backticks or tildes anywhere in it, a blockquote line (`>` first, after any indent and list
+# markers) or a line indented 4 or more columns that is not a list continuation (a list item
+# nested less than 4 columns past its parent's text, or a line right under a list item's line,
+# with no blank line between, indented less than 4 columns past the item's text; tabs to the
+# next column of 4). move_lines and skills::lint::fix rewrite nothing there (0.1.6, D-71: six
+# reviews of 0.1.5 E-3 each found a CommonMark shape that fence_lines misread, and a wrong
+# rewrite inside a code block is worse than a refusal, so no block is guessed at).
+sub code_sections {
     my ($lines) = @_;
-    my (%code, %open, $f);
     my $cols = sub { my $w = 0; $w += $_ eq "\t" ? 4 - $w % 4 : 1 for split //, $_[0]; $w };
+    my (%out, @sec, $bad, @item, $blank);
+    my $end = sub { if ($bad) { $out{$_} = 1 for @sec } (@sec, $bad, @item, $blank) = () };
     for my $i (0 .. $#$lines) {
-        my ($l, $d) = ($lines->[$i] // '', 0);
-        if ($f) {
-            $d++ while $d < $f->{d} && $l =~ s/\A {0,3}>[ ]?//;
-            undef $f if $d < $f->{d};
-        }
-        if ($f) {
-            $code{$i} = 1;
-            undef $f if $l =~ /\A([ \t]*)(`+|~+)[ \t]*\r?\z/ && substr($2, 0, 1) eq $f->{c}
-                && length $2 >= $f->{n} && $cols->($1) <= ($f->{w} > 3 ? $f->{w} : 3);
-        } else {
-            $d++ while $l =~ s/\A {0,3}>[ ]?//;
-            if ($l =~ /\A([ \t]*)(`{3,}|~{3,})(.*)\z/ && !(substr($2, 0, 1) eq '`' && index($3, '`') >= 0)) {
-                ($code{$i}, $f) = (1, { c => substr($2, 0, 1), n => length $2, w => $cols->($1), d => $d });
-            }
-        }
-        $open{$i} = 1 if $f;
+        my $l = $lines->[$i] // '';
+        $end->() if $l =~ /\A##\s/;
+        push @sec, $i;
+        next if $bad;
+        if ($l !~ /\S/) { $blank = 1; next }
+        if ($l =~ /`{3}|~{3}/ || $l =~ /\A[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)*>/) { $bad = 1; next }
+        my ($ws, $m, $sp) = $l =~ /\A([ \t]*)(?:([-*+]|[0-9]{1,9}[.)])([ \t]+|\z))?/;
+        my $w = $cols->($ws);
+        # A list item's text starts after its marker and 1 to 4 spaces (a lone marker: after one).
+        pop @item while @item && $item[-1] > $w;
+        my $rel = $w - (@item ? $item[-1] : 0);
+        if ($rel >= 4 || (!defined $m && $w >= 4 && ($blank || !@item))) { $bad = 1; next }
+        $blank = 0;
+        next unless defined $m;
+        my $c = $cols->($ws . $m . $sp);
+        if ($c - $w - length($m) > 4) { $bad = 1; next }
+        push @item, length $sp ? $c : $w + length($m) + 1;
     }
-    return { code => \%code, open => \%open };
+    $end->();
+    return \%out;
 }
 # The rule each moved line broke, in plain words (the Open questions item and the ADVISORY line).
 our %MOVE_WHY = (
@@ -1041,7 +1041,7 @@ sub move_why {
 # table with a blank line between. A section left with no line is dropped. Any other item is
 # kept (it still refuses); without an Open questions section nothing moves.
 # References (review round 2): elsewhere in the file (not in `## Approvals`, not on a tagged line
-# or a re-ask item, not in a fenced code block) an exact `U-<k>` token of a moved id, outside
+# or a re-ask item, not in a code_sections section) an exact `U-<k>` token of a moved id, outside
 # double quotes and backticks, not an end of an id range, not a file name (`U-7.txt`) and not the
 # second id of a word range (`U-6 to U-7`), now reads its `Q-<m>` (refs: the draft's line
 # numbers), unless the id is moved twice or a kept line still holds it (`- U-<k>:`). A "see
@@ -1108,10 +1108,11 @@ sub move_lines {
     for my $i (grep { $in->{$_} && !$mv{$_} } 0 .. $#lines) { $kept_id{$1} = 1 if $lines[$i] =~ /\b(U-[0-9]+):\s*approval\b/ }
     my $drop = !grep { $lines[$_] =~ /\S/ && !$mv{$_} } keys %$in;
     my (@see, @see2, %was);
-    my $fenced = fence_lines(\@lines)->{code};
+    my $codesec = code_sections(\@lines);
     for my $i (0 .. $#lines) {
-        # 0.1.4 A-3: a fenced code block is left alone, its fence lines too.
-        next if $fenced->{$i};
+        # 0.1.4 A-3: a fenced code block is left alone, its fence lines too (0.1.6 D-71: its whole
+        # section, and one with a quote or an indented code line).
+        next if $codesec->{$i};
         next if $in->{$i} || $mv{$i} || ($tag_re && $lines[$i] =~ $tag_re) || $lines[$i] =~ /\(was U-[0-9]+; not carried:/;
         my @seg = split /("[^"]*"|“[^”]*”|`[^`]*`)/, $lines[$i], -1;
         my @even = grep { $_ % 2 == 0 } 0 .. $#seg;

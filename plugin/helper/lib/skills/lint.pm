@@ -515,20 +515,21 @@ our $FIX_RANGE_MAX = 50;
 # - id-range: on a flagged line every range is written as its ids (`U-1..U-3` as `U-1, U-2, U-3`;
 #   a zero-padded start keeps its width), when each range there is one _range_ids reads, it
 #   covers at most $FIX_RANGE_MAX ids and none is in quotes (double, or single ones that open
-#   and close outside a word), a code span, a fenced or indented code block, an argument after
-#   `=` or a file name or path (_list_ranges; review: a rewritten quote lost a real approval,
-#   and a rewritten command changed its arguments); otherwise the line stays as written (and
-#   blocks). An approval line (in `## Approvals`, or any `U-<n>: approval` line) is never
-#   rewritten (review: its action and targets are compared with the own chain's file, so a
-#   carried approval stopped being carried); a range there that still blocks once the other
-#   lines are listed stays a LINT line.
+#   and close outside a word), a code span, an argument after `=` or a file name or path
+#   (_list_ranges; review: a rewritten quote lost a real approval, and a rewritten command
+#   changed its arguments); otherwise the line stays as written (and blocks). Nothing is
+#   rewritten in a section skills::approvals::code_sections names (one holding a fence, a quote
+#   or an indented code line: 0.1.6 D-71, no block is guessed at). An approval line (in
+#   `## Approvals`, or any `U-<n>: approval` line) is never rewritten (review: its action and
+#   targets are compared with the own chain's file, so a carried approval stopped being
+#   carried); a range there that still blocks once the other lines are listed stays a LINT line.
 #   Step 1 and Next steps item 1 that matched still match: when one of them is rewritten the
 #   other is rewritten the same way, or, when that cannot be done, neither is.
 # - step1-mismatch: when Next steps has no item 1 (no line starting `1.` or `1)`), Step 1's text
 #   (the first `Step 1:` line, as lint() reads it; an empty one adds nothing) goes in as item 1,
-#   before the section's first list line outside a code block (after its text when it has none;
-#   none when that place is inside a fence left open); an item 1 that differs stays. The added
-#   line counts as carried when Step 1 does.
+#   before the section's first list line (after its text when it has none; none when Next steps
+#   or Step 1 is in a code_sections section); an item 1 that differs stays. The added line
+#   counts as carried when Step 1 does.
 # Returns {body, fixes => [{rule, line, text}…] (line: the body line it changed, Step 1's for an
 # added item), map => {fixed body line => body line; the added item reads as the Next steps
 # heading's line, so a finding on it is told apart from one on Step 1},
@@ -542,17 +543,10 @@ sub fix {
         push @{ $at{ $e->[0] } }, $1 if ($e->[1] // '') =~ /\Aline ([0-9]+)\z/;
     }
     my $idr = $at{'id-range'} ? skills::spec::id_range_re() : undef;
-    # Lines left as written: a fenced or an indented code block (4 spaces or a tab, not a list
-    # item) and an approval line.
-    # %code: the code lines alone; %open: a fence is open after that line. Fences as move_lines
-    # reads them (skills::approvals::fence_lines, CommonMark's closing rule).
-    my $fl = skills::approvals::fence_lines(\@lines);
-    my %code = %{ $fl->{code} };
-    my %open = %{ $fl->{open} };
-    for my $i (0 .. $#lines) {
-        $code{$i} = 1 if $lines[$i] =~ /\A(?: {4}|\t)/ && $lines[$i] !~ /\A\s*(?:[-*+]|[0-9]+[.)])\s/;
-    }
-    my %keep = (%{ skills::approvals::section_lines(\@lines) }, %code);
+    # Lines left as written: a section with a fence, a quote or an indented code line (as
+    # move_lines leaves them) and an approval line.
+    my $code = skills::approvals::code_sections(\@lines);
+    my %keep = (%{ skills::approvals::section_lines(\@lines) }, %$code);
     $keep{$_} = 1 for grep { skills::approvals::is_approval_line($lines[$_]) } 0 .. $#lines;
     my $add = sub {
         my ($new, @o) = @_;
@@ -602,22 +596,19 @@ sub fix {
         push @fixes, { rule => 'id-range', line => $i + 1, text => 'publish lists each id: ' . join('; ', @$r) };
     }
     my @org = map { $_ + 1 } 0 .. $#lines;
-    if ($at{'step1-mismatch'} && defined $si && $ns && !grep { $lines[$_] =~ /\A\s*1[.)]/ } @{ $ns->{body} }) {
+    if ($at{'step1-mismatch'} && defined $si && $ns && !$code->{ $ns->{h} } && !$code->{$si} && !grep { $lines[$_] =~ /\A\s*1[.)]/ } @{ $ns->{body} }) {
         my ($s1) = $lines[$si] =~ /\A\s*Step 1:\s*(.*?)\s*\z/;
         if ($s1 =~ tr/`//dr =~ /\S/) {
-            # Before the first list line, so a lead-in (`In this order:`) stays above the list; a line
-            # of a code block is no list line, and an item that would land in an open fence is not
-            # added (review: `- old` of a diff block took the item inside the block).
-            my ($li) = grep { !$code{$_} && $lines[$_] =~ /\A {0,3}(?:[-*+]|[0-9]+[.)])\s/ } @{ $ns->{body} };
+            # Before the first list line, so a lead-in (`In this order:`) stays above the list (a
+            # Next steps with a code block gets no item: review, `- old` of a diff block took it).
+            my ($li) = grep { $lines[$_] =~ /\A {0,3}(?:[-*+]|[0-9]+[.)])\s/ } @{ $ns->{body} };
             my @c = grep { $lines[$_] =~ /\S/ } @{ $ns->{body} };
             my $i = $li // (@c ? $c[-1] + 1 : $ns->{h} + 1);
-            if (!$open{ $i - 1 }) {
-                my @d = _draft_texts(\%was, $lines[$si]);
-                $add->("1. $s1", @d ? @d : $lines[$si]);
-                splice @lines, $i, 0, "1. $s1";
-                splice @org, $i, 0, $ns->{h} + 1;
-                push @fixes, { rule => 'step1-mismatch', line => $si + 1, text => 'Next steps has no item 1; publish adds Step 1 there as item 1' };
-            }
+            my @d = _draft_texts(\%was, $lines[$si]);
+            $add->("1. $s1", @d ? @d : $lines[$si]);
+            splice @lines, $i, 0, "1. $s1";
+            splice @org, $i, 0, $ns->{h} + 1;
+            push @fixes, { rule => 'step1-mismatch', line => $si + 1, text => 'Next steps has no item 1; publish adds Step 1 there as item 1' };
         }
     }
     return { body => $body, fixes => [], map => {}, was => {} } unless @fixes;

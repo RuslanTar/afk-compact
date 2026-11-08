@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-27 (moved approvals: a fence closes only on its own character, at least as long, 0.1.5 E-3 review round 5)",
+ "id": "AT-AP-27 (moved approvals: a section holding a fence is left as written, 0.1.5 E-3 review round 5; 0.1.6 D-71)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.5 E-3 review round 5. move_lines read any ``` or ~~~ line as a fence that opens or closes a block (0.1.4 A-3), so a ``` line inside a ~~~ block ended it and the block's own closing line opened one: a reference to a moved id inside the block was rewritten, and the references after it were not. Fences are now read as CommonMark reads them (skills::approvals::fence_lines, shared with publish's fixes): a block closes only on a line of its own character, at least as long, with nothing after it.",
+ "note": "0.1.5 E-3 review round 5. move_lines read any ``` or ~~~ line as a fence that opens or closes a block (0.1.4 A-3), so a ``` line inside a ~~~ block ended it and the block's own closing line opened one: a reference to a moved id inside the block was rewritten, and the references after it were not. Fences are now read as CommonMark reads them (skills::approvals::fence_lines, shared with publish's fixes): a block closes only on a line of its own character, at least as long, with nothing after it. 0.1.6 D-71: fix() and move_lines rewrite nothing in a section (a ## heading to the next) that holds a line with a run of 3 or more backticks or tildes, a blockquote line or a line indented 4 or more columns that is not a list continuation; such a section keeps 0.1.4 behaviour (the lint blocks, the draft is kept), so no code block is guessed at. The references in Work done, which holds the two blocks, now stay U-7; the one in Next steps cites Q-1.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -77,11 +77,11 @@
     "--status",
     "in-progress"
    ],
-   "name": "U-7 moves for its quote; the references outside the two blocks cite its Q, the ones inside stay",
+   "name": "U-7 moves for its quote; the references in Work done, which holds two blocks, stay; the one in Next steps cites its Q (D-71)",
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^ADVISORY approval-quote line 10: U-7 goes to Open questions as Q-1, a re-ask; .*; lines 29, 35, 38 cite Q-1 instead$",
+     "^ADVISORY approval-quote line 10: U-7 goes to Open questions as Q-1, a re-ask; .*; line 38 cites Q-1 instead$",
      "^Wrote handoff to: "
     ],
     "stdout_lacks": [
@@ -94,7 +94,7 @@
    }
   },
   {
-   "name": "the blocks keep U-7 as written",
+   "name": "Work done keeps U-7 as written, its blocks too; Next steps cites Q-1",
    "cwd": "$TMP/repo",
    "argv": [
     "handoff-state",
@@ -106,14 +106,14 @@
      {
       "path": "$PUB",
       "has": [
-       "^~~~text\\n```\\nstore gc --keep U-7\\n~~~\\n- review: Q-1 waits on CI\\n````\\n```\\nstore gc --drop U-7\\n```\\n````\\n- after: ask before Q-1 runs$",
+       "^~~~text\\n```\\nstore gc --keep U-7\\n~~~\\n- review: U-7 waits on CI\\n````\\n```\\nstore gc --drop U-7\\n```\\n````\\n- after: ask before U-7 runs$",
        "^2\\. ask user: delete branch old/x \\(re-ask Q-1\\)$"
       ],
       "lacks": [
        "store gc --keep Q-",
        "store gc --drop Q-",
-       "U-7 waits",
-       "before U-7 runs",
+       "Q-1 waits",
+       "before Q-1 runs",
        "re-ask U-7"
       ]
      }

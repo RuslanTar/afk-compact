@@ -1,9 +1,9 @@
 {
- "id": "HL-07, HL-08 a fence closes only on its own character, at least as long (0.1.5 E-3 review round 5)",
+ "id": "HL-07, HL-08 a section holding a fence is left as written, whatever closes the fence (0.1.5 E-3 review round 5; 0.1.6 D-71)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.5 E-3 review round 5. fix() read any ``` or ~~~ line as a fence that opens or closes a block, so a ``` line inside a ~~~ block ended it: an added item 1 went inside the block (HL-08), and a range inside it was listed and published (HL-07). Fences are now read as CommonMark reads them, as move_lines reads them (skills::approvals::fence_lines): a block closes only on a line of its own character, at least as long, with nothing after it.",
+ "note": "0.1.5 E-3 review round 5. fix() read any ``` or ~~~ line as a fence that opens or closes a block, so a ``` line inside a ~~~ block ended it: an added item 1 went inside the block (HL-08), and a range inside it was listed and published (HL-07). Fences are now read as CommonMark reads them, as move_lines reads them (skills::approvals::fence_lines): a block closes only on a line of its own character, at least as long, with nothing after it. 0.1.6 D-71: fix() and move_lines rewrite nothing in a section (a ## heading to the next) that holds a line with a run of 3 or more backticks or tildes, a blockquote line or a line indented 4 or more columns that is not a list continuation; such a section keeps 0.1.4 behaviour (the lint blocks, the draft is kept), so no code block is guessed at. The plain range in the same section as the blocks now stays and blocks too.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -79,25 +79,24 @@
     "--status",
     "in-progress"
    ],
-   "name": "HL-07: a range inside a ~~~ block after a ``` line, and inside a ```` block between ``` lines, is left as written and blocks; the plain range above them would be listed (the foreign base defines X-2 to X-4; the plain line lists only X-2 and X-3, so X-4 is still hidden in the blocks)",
+   "name": "HL-07: Work done holds a ~~~ block with a ``` line and a ```` block between ``` lines: nothing in the section is rewritten, so the ranges inside the blocks and the plain one above them all block (D-71)",
    "expect": {
     "exit": 3,
     "stdout_has": [
+     "^LINT id-range line 23$",
      "^LINT id-range line 26$",
      "^LINT id-range line 30$",
-     "^ADVISORY id-range line 23: publish lists each id: X-2\\.\\.X-3 as X-2, X-3$",
-     "^REFUSED: lint \\(2 blocking\\); draft kept at $STAGE/body\\.md$"
+     "^REFUSED: lint \\(3 blocking\\); draft kept at $STAGE/body\\.md$"
     ],
     "stdout_lacks": [
-     "^LINT id-range line 23$",
-     "^ADVISORY id-range line 26:",
-     "^ADVISORY id-range line 30:",
+     "^ADVISORY id-range",
      "^Wrote handoff"
     ],
     "files": [
      {
       "path": "$STAGE/body.md",
       "has": [
+       "^- recheck X-2\\.\\.X-3 later$",
        "^- settle X-2\\.\\.X-4 first$",
        "^- settle X-2\\.\\.X-4 again$"
       ]
@@ -120,26 +119,17 @@
     "--status",
     "in-progress"
    ],
-   "name": "HL-08: a ~~~ block holding a ``` line and `- old`, with no item 1: item 1 goes after the block (same stage, the refused draft rewritten)",
+   "name": "HL-08: Next steps holds a ~~~ block with a ``` line and `- old`, and no item 1: no item is added and step1-mismatch blocks (same stage, the refused draft rewritten; D-71)",
    "expect": {
-    "exit": 0,
+    "exit": 3,
     "stdout_has": [
-     "^ADVISORY step1-mismatch line 4: Next steps has no item 1; publish adds Step 1 there as item 1$",
-     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$"
+     "^LINT step1-mismatch line 2$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
     ],
     "stdout_lacks": [
-     "^LINT "
-    ],
-    "files": [
-     {
-      "path": "$ROOT/repo/LAB-7/$STEM.md",
-      "has": [
-       "^Apply this:\\n~~~markdown\\n```\\n- old\\n~~~\\n1\\. `bin/test retry` — for \"fix the retry window\"$"
-      ],
-      "lacks": [
-       "^1\\. .*\\n- old$"
-      ]
-     }
+     "^ADVISORY step1-mismatch",
+     "^ADVISORY id-range",
+     "^Wrote handoff"
     ]
    }
   }
