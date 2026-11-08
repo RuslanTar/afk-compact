@@ -218,7 +218,7 @@ Every ephemeral path cited anywhere in the body has a durable copy here or sits 
 - pending answer: <the unsent table, number or draft, in full> — send if not already sent
 ```
 
-A todo step held on a running job's result ends `· waits: job · todo`, one held on the user `· waits: you · todo`: code reads the lane from the mark.
+A todo step held on a running job's result ends `· waits: job · todo`, one held on the user `· waits: you · todo`, as in the compaction summary, whose marks code reads.
 
 An explicit gate (§4.2: always, approval or not), or an outward, destructive, production or self-modifying step no approval in `## Approvals` covers, reads `ask user: <action> (user-run: ! <cmd>)`, never an order. A step an approval covers names it: `<command>` — under U-2.
 
