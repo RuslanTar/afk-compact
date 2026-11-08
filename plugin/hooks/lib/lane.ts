@@ -272,8 +272,9 @@ function lastMark(item: string): 'todo' | 'done' | undefined {
 /**
  * The items of a Next steps section: one per line that starts with `N. `; a line holding several
  * (the one-line form, `1. a · done 2. b · todo`) is split before the next number in sequence, and
- * only once the item before it carries its step mark or ends on a wait mark, so `bump to 2. then
- * ship` stays one item (`· waits: job, bump to 2. then ship` too).
+ * only once the item before it carries its step mark or ends on a wait mark (a `;`, `,`, `.` or
+ * `)` after it too, as after a step mark: `· waits: job; 2. …`), so `bump to 2. then ship` stays
+ * one item (`· waits: job, bump to 2. then ship` too).
  * Continuation lines (`if … → …`, `- pending answer: …`) belong to no item.
  */
 function items(lines: string[]): string[] {
@@ -287,7 +288,7 @@ function items(lines: string[]): string[] {
     for (const m of line.matchAll(/\s(\d+)\.\s/g)) {
       if (Number(m[1]) !== next || m.index === undefined) continue
       const cur = line.slice(start, m.index)
-      if (stepMark(cur) === undefined && !new RegExp(WAITS_SRC + '\\s*$', 'i').test(cur)) continue
+      if (stepMark(cur) === undefined && !new RegExp(WAITS_SRC + '\\s*[;,.)]?\\s*$', 'i').test(cur)) continue
       out.push(cur.trim())
       start = m.index + 1
       next++
@@ -310,12 +311,14 @@ export function laneFacts(text: string): LaneFacts {
   const next = found ?? []
   const list = items(next)
   // A Step 1 that itself asks the user or waits is behind a gate, whatever the Gate line says (its
-  // `— for "<the user's request>"` tail is the user's words, not the step's). Step 1 is Next steps
-  // item 1, so that item's wait mark, while it is to do, is Step 1's; a Gate line that names a
-  // blocker stays one, whatever the mark, and so does a Step 1 that is gated (`GATED_RE`) or
-  // marked `waits: you` itself, as in `waitsOf`: then item 1's `waits: job` is the user's too, so
-  // its result does not unblock it.
-  const first = list[0]
+  // `— for "<the user's request>"` tail is the user's words, not the step's). Step 1 is the first
+  // Next steps item not done (item 1, or the first after the done ones before it), so that item's
+  // wait mark, while it is to do, is Step 1's; a Gate line that names a blocker stays one,
+  // whatever the mark, and so does a Step 1 that is gated (`GATED_RE`) or marked `waits: you`
+  // itself, as in `waitsOf`: then that item's `waits: job` is the user's too, so its result does
+  // not unblock it.
+  const at1 = list.findIndex(x => lastMark(x) !== 'done')
+  const first = at1 < 0 ? undefined : list[at1]
   const own = step.replace(FOR_TAIL, '')
   const w1 = first !== undefined && lastMark(first) === 'todo' ? waitsOf(first) : undefined
   const mark1 = w1 === 'job' && (GATED_RE.test(own) || waitsOf(own) === 'user') ? 'user' : w1
@@ -332,7 +335,7 @@ export function laneFacts(text: string): LaneFacts {
     if (m === 'done') done++
     else if (m === 'todo') {
       todo++
-      const h = i === 0 && mark1 !== w1 ? mark1 : holdOf(item)
+      const h = i === at1 && mark1 !== w1 ? mark1 : holdOf(item)
       if (h === 'job') onJob++
       else if (h === 'user') onUser++
       else free++

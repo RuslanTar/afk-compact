@@ -234,9 +234,9 @@ sub _test_corrupt {
 #   it working). A wait mark (`· waits: job` or `· waits: you`, a dash for the `·` too; lane.ts
 #   `WAITS_SRC`) leads the wording: either holds the step (a mark never makes one free; `waits:
 #   job` holds a step whose words wait on a person on the job, unless it is gated), an item with
-#   one and no step mark read is to do, and Next steps item 1's mark, while it is to do, holds
-#   Step 1 under `Gate: none`. The form's placeholder copied as it stands (`waits: job|you`) is
-#   no mark.
+#   one and no step mark read is to do, and the mark of the first Next steps item not done
+#   (Step 1's item), while it is to do, holds Step 1 under `Gate: none`. The form's placeholder
+#   copied as it stands (`waits: job|you`) is no mark.
 my $MARK_RE = qr/·\s*(todo|done)(?=\s*$|\s*[;,.)]|\s+\d+\.\s)/m;
 # JS `\s`: wider than /aa's ASCII `\s` (a no-break or thin space is one), so a regex lane.ts
 # applies to raw text reads its spaces as this class; `holdOf` reads them as a plain space for
@@ -347,7 +347,7 @@ sub _items {
             my ($n, $at) = ($1, $-[0]);
             next unless $n == $next;
             my $cur = substr($line, $start, $at - $start);
-            next unless defined _step_mark($cur) || $cur =~ /$WAITS_RE$JS_SPACE*\z/;
+            next unless defined _step_mark($cur) || $cur =~ /$WAITS_RE$JS_SPACE*[;,.)]?$JS_SPACE*\z/;
             push @out, _trim($cur);
             $start = $at + 1;
             $next++;
@@ -374,7 +374,8 @@ sub copy_status {
     (my $cmd = $step) =~ s/\s+—\s+for\s+".*\z//;
     my ($listed, @next) = _section($t, 'next steps');
     my @list = _items(@next);
-    my $mark1 = @list && (_last_mark($list[0]) // '') eq 'todo' ? _waits_of($list[0]) : undef;
+    my ($first) = grep { (_last_mark($_) // '') ne 'done' } @list;
+    my $mark1 = defined $first && (_last_mark($first) // '') eq 'todo' ? _waits_of($first) : undef;
     my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && !defined($mark1 // _hold_of($cmd))) ? 'none' : 'set';
     my ($todo, $unmarked, $free) = (0, 0, 0);
     for my $item (@list) {

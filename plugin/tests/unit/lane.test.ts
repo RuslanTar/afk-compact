@@ -1841,6 +1841,12 @@ test('E-4 wait marks: read before or after the todo mark, in the one-line form t
   expect([split.done, split.todo, split.free, split.onJob]).toEqual([1, 1, 1, 0])
   const ends = laneFacts('## Resume here\nStatus: soft-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read the TB log · waits: job 2. Write notes · todo\n')
   expect([ends.todo, ends.unmarked, ends.free, ends.onJob]).toEqual([2, 0, 1, 1])
+  // A `;`, `,`, `.` or `)` after the ending wait mark splits too, as after a step mark (5 of 6 saved
+  // one-line summaries part items with `; `): the free step 2 keeps a hard-blocked lane working.
+  for (const p of [';', ',', '.', ')']) {
+    const f = laneFacts(`## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read log · waits: job${p} 2. Write notes · todo\n`)
+    expect([p, f.todo, f.free, f.onJob, laneOf(f, M).lane]).toEqual([p, 2, 1, 1, 'working'])
+  }
 })
 
 test('E-4 wait marks: Next steps item 1 to do holds Step 1 under `Gate: none`; a Gate line naming a blocker stays one', () => {
@@ -1855,6 +1861,14 @@ test('E-4 wait marks: Next steps item 1 to do holds Step 1 under `Gate: none`; a
   expect(s1('protected-branch push', '`make docs` · waits: job · todo').gate).toBe('set')
   // Item 1 done: its mark is not Step 1's.
   expect(s1('none', '`make docs` · waits: you · done').gate).toBe('none')
+  // Step 1 is the first item not done: with item 1 done, item 2's mark is Step 1's (and only its own).
+  const later = (item: string): LaneFacts =>
+    laneFacts(`## Resume here\nStatus: soft-blocked\nStep 1: Write the suite result in NOTES.md — for "ship"\nGate: none · Don't: x\n## Next steps\n1. Write CHANGELOG · done\n2. ${item}\n3. Push · todo; gated: ask user: push\n`)
+  const lj = later('Write the suite result in NOTES.md — done when written · waits: job · todo')
+  expect([lj.gate, lj.onJob, lj.onUser, laneOf(lj, { ...M, running: 1 }).lane, laneOf(lj, { ...M, result: true }).lane]).toEqual(['job', 1, 1, 'soft-blocked', 'working'])
+  const lu = later('Write the suite result in NOTES.md · waits: you · todo')
+  expect([lu.gate, lu.onUser, laneOf(lu, { ...M, running: 1 }).lane, laneOf(lu, { ...M, result: true }).lane]).toEqual(['set', 2, 'soft-blocked', 'hard-blocked'])
+  expect([later('Write the suite result in NOTES.md · todo').gate, laneOf(later('Write the suite result in NOTES.md · todo'), M).lane]).toEqual(['none', 'working'])
   // A `waits: job` mark on item 1 never lifts a gated Step 1 (`ask user: …`): both stay the user's.
   const gated = laneFacts('## Resume here\nStatus: hard-blocked\nStep 1: ask user: push (! git push)\nGate: none · Don\'t: x\n## Next steps\n1. Push the branch · waits: job · todo\n')
   expect([gated.gate, gated.onJob, gated.onUser, laneOf(gated, M).lane, laneOf(gated, { ...M, result: true }).lane]).toEqual(['set', 0, 1, 'hard-blocked', 'hard-blocked'])

@@ -1,0 +1,50 @@
+{
+ "id": "AD-13-copy-status-waits-split-step1",
+ "note": "0.1.5 (E-4), as lane.test.ts reads the same summaries with lane.ts: a one-line Next steps section splits after a wait mark that ends an item with a `;`, `,`, `.` or `)` after it too (`1. Read log · waits: job; 2. Write notes · todo` is two items, so the free step 2 keeps a hard-blocked copy in-progress), and a wait mark inside an item's words does not split it; Step 1 is the first Next steps item not done, so with item 1 done item 2's `waits: job` or `waits: you` holds Step 1 under `Gate: none` (blocked) and an unmarked item 2 leaves Step 1 to its own words (in-progress)",
+ "steps": [
+  {
+   "name": "copies::copy_status of fixed summaries with wait marks",
+   "lib": "copy_status",
+   "args": {
+    "rows": [
+     {
+      "summary": "## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read log · waits: job; 2. Write notes · todo\n",
+      "want": "in-progress"
+     },
+     {
+      "summary": "## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read log · waits: job, 2. Write notes · todo\n",
+      "want": "in-progress"
+     },
+     {
+      "summary": "## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read log · waits: job. 2. Write notes · todo\n",
+      "want": "in-progress"
+     },
+     {
+      "summary": "## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read log · waits: job) 2. Write notes · todo\n",
+      "want": "in-progress"
+     },
+     {
+      "summary": "## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps: 1. After CI · waits: job, bump to 2. then push · todo 2. Ask user: tag · todo\n",
+      "want": "blocked"
+     },
+     {
+      "summary": "## Resume here\nStatus: soft-blocked\nStep 1: Write the suite result in NOTES.md — for \"ship\"\nGate: none · Don't: x\n## Next steps\n1. Write CHANGELOG · done\n2. Write the suite result in NOTES.md — done when written · waits: job · todo\n3. Push · todo; gated: ask user: push\n",
+      "want": "blocked"
+     },
+     {
+      "summary": "## Resume here\nStatus: soft-blocked\nStep 1: Write the suite result in NOTES.md — for \"ship\"\nGate: none · Don't: x\n## Next steps\n1. Write CHANGELOG · done\n2. Write the suite result in NOTES.md · waits: you · todo\n3. Push · todo; gated: ask user: push\n",
+      "want": "blocked"
+     },
+     {
+      "summary": "## Resume here\nStatus: soft-blocked\nStep 1: Write the suite result in NOTES.md — for \"ship\"\nGate: none · Don't: x\n## Next steps\n1. Write CHANGELOG · done\n2. Push · todo; gated: ask user: push\n",
+      "want": "in-progress"
+     },
+     {
+      "summary": "## Resume here\nStatus: soft-blocked\nStep 1: make docs — for \"ship\"\nGate: none · Don't: x\n## Next steps\n1. make docs\n2. Push · waits: job · todo\n",
+      "want": "in-progress"
+     }
+    ]
+   }
+  }
+ ]
+}
