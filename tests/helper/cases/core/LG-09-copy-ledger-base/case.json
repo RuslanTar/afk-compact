@@ -1,0 +1,169 @@
+{
+ "id": "LG-09 (0.1.5 E-1, stable ledger: a summary copy's carry base)",
+ "note": "a main copy's carry base is the session's newest earlier copy whose own verdict was ok: an unshaped copy between (no ledger sections) is passed over, so U-2, which the third summary dropped, is carried from the first copy; a Superseded line naming a range (D-1..D-3, which the instructions forbid but a summary may write) supersedes each id in it, so none of the three is carried back",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "dispatch": {
+      "nonce": "1a1a1a1a",
+      "actor": "main",
+      "channel": "classic",
+      "trigger": "auto",
+      "age_s": 300,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "2b2b2b2b",
+      "actor": "main",
+      "channel": "classic",
+      "trigger": "auto",
+      "age_s": 200,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "3c3c3c3c",
+      "actor": "main",
+      "channel": "classic",
+      "trigger": "auto",
+      "age_s": 20,
+      "midturn": false
+     }
+    },
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$TMP/s1.md",
+     "content": "⟪$BRAND v1 n=1a1a1a1a s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-2: ask \"fix the retry window\" — status open\n## Decisions and do-not-re-raise\n- D-1: retry budget 3 — because the gateway caps at 3 (user)\n- D-2: no jitter — because the tests pin the delays (agent)\n- D-3: log each retry — because support asked (external)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=1a1a1a1a⟫\n"
+    },
+    {
+     "write": "$TMP/s2.mod.md",
+     "text": "This session is being continued from a previous conversation.\n\nSummary:\n<summary>\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n</summary>"
+    },
+    {
+     "write": "$TMP/s3.md",
+     "content": "⟪$BRAND v1 n=3c3c3c3c s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1..D-3 by D-4 (2026-10-21 14:00 +0300)\n- D-4: one retry policy module — because the three rules moved there (agent)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=3c3c3c3c⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "first copy (ok)",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a1a1a1a",
+    "--from",
+    "$TMP/s1.md",
+    "--writer",
+    "postcompact",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^VERDICT ok ",
+     "^Saved copy: "
+    ]
+   }
+  },
+  {
+   "name": "second copy: unshaped (the mod's after-step)",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2b2b2b2b",
+    "--from",
+    "$TMP/s2.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^VERDICT unshaped ",
+     "^Saved copy: "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c2-2b2b2b.md",
+      "lacks": [
+       "^ledger_carried:"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "third copy: U-2 carried from the first copy, past the unshaped one; the range-superseded D-1..D-3 not",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "3c3c3c3c",
+    "--from",
+    "$TMP/s3.md",
+    "--writer",
+    "postcompact",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^VERDICT ok ",
+     "^Saved copy: "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c3-3c3c3c.md",
+      "has": [
+       "^ledger_carried: \"1 line \\(U-2\\); sha256 [0-9a-f]{64}\"$",
+       "^\\-\\ U\\-1:\\ \"keep\\ the\\ 45\\ s\\ window\"\\ —\\ scope\\ retry\\ window;\\ user,\\ 11111111\n\\-\\ U\\-2:\\ ask\\ \"fix\\ the\\ retry\\ window\"\\ —\\ status\\ open\n\\#\\#\\ Decisions\\ and\\ do\\-not\\-re\\-raise\n\\-\\ Superseded:\\ D\\-1\\.\\.D\\-3\\ by\\ D\\-4\\ \\(2026\\-10\\-21\\ 14:00\\ \\+0300\\)\n\\-\\ D\\-4:\\ one\\ retry\\ policy\\ module\\ —\\ because\\ the\\ three\\ rules\\ moved\\ there\\ \\(agent\\)\n## In flight\n"
+      ],
+      "lacks": [
+       "^\\-\\ D\\-1:\\ retry\\ budget\\ 3\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)$",
+       "^\\-\\ D\\-2:\\ no\\ jitter\\ —\\ because\\ the\\ tests\\ pin\\ the\\ delays\\ \\(agent\\)$",
+       "^\\-\\ D\\-3:\\ log\\ each\\ retry\\ —\\ because\\ support\\ asked\\ \\(external\\)$"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "fields": {
+       "nonce": "3c3c3c3c",
+       "result": "saved",
+       "ledger": {
+        "carried": 1,
+        "changed": 0,
+        "reused": 0
+       }
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

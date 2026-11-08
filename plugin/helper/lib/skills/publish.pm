@@ -23,6 +23,11 @@ package skills::publish;
 # 0.1.3 APPROVALS: an own approval line of `## Approvals` failing approval-quote or
 # approval-plugin-turn moves to `## Open questions` as a re-ask instead of refusing (one ADVISORY
 # line each; skills::approvals::move_lines); a written row gains `approvals_moved` (a count).
+# 0.1.5 (E-1, stable ledger): the lint compares the draft's ledger with the own chain's previous
+# file (an id reused for another item blocks; a changed line is advisory) and names the ledger
+# lines the draft dropped without a Superseded line; publish copies those back, unchanged, into
+# their sections of the written file (skills::core::ledger_carry), and the row gains
+# `ledger {carried, changed, reused}` (counts).
 use strict;
 use warnings;
 use utf8;
@@ -119,6 +124,10 @@ sub run {
     # outside the store).
     my @achain = grep { defined } skills::approvals::chain_doc($own_path, $ctx, $s->{session_id});
     my $transcript = skills::approvals::transcript_path($ctx, $s->{session_id}, $s->{cwd}, $s->{worktree});
+    # 0.1.5 (E-1): the ledger's base is the own chain's previous file: the carry base when it is
+    # own or chain, own_previous_handoff when the base is foreign (foreign lines are renumbered and
+    # capped by the template, so they are never copied by code).
+    my $ledger_base = ($pk eq 'own' || $pk eq 'chain') ? $prev_text : $pk eq 'foreign' ? $own_text : undef;
     my $times = skills::stage::printed_times($dir, $s);
     my $floor = [ skills::approvals::quote_floor($ctx, $s->{session_id}) ];
     my $lint = sub {
@@ -131,7 +140,8 @@ sub run {
             brand => $ctx->{brand}, acuity_floor => ($row->{acuity_floor} eq '-' ? undef : $row->{acuity_floor}),
             queue_mode => $s->{queue_mode}, approval_chain => \@achain, transcript => $transcript, session_id => $s->{session_id},
             quote_floor => $floor, carried_as => $carried_as,
-            approval_context_only => (defined $ht ? 1 : 0),
+            approval_context_only => (defined $ht ? 1 : 0), ledger_base => $ledger_base,
+            export_fn => ($repo ? sub { skills::export::body($_[0], $m, $xplan) } : undef),
         }) };
         if (!$r) { my $e = $@; _refuse($ctx, $row, $e =~ s/\s+\z//r) if $e =~ /\Aspec-missing /; die $e }
         return $r;
@@ -173,6 +183,10 @@ sub run {
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
     $row->{acuity} = $res->{acuity} // '-';
+    # 0.1.5 (E-1): counts only, on a refused row too.
+    my $lg = $res->{ledger} || {};
+    my %ln = (carried => scalar(@{ $lg->{ids} || [] }), changed => scalar(@{ $lg->{changed} || [] }), reused => scalar(@{ $lg->{reused} || [] }));
+    $row->{ledger} = \%ln if grep { $_ } values %ln;
     # AP-4: counts and outward class ids only, never a quote, action or target.
     my $ap = $res->{approvals} || {};
     # A plugin handoff turn (0.1.2 D-8): nothing in this file is listed as checked or hashed.
@@ -217,6 +231,13 @@ sub run {
     }
     # Only a written file holds moved lines (a refused draft is kept as written).
     $row->{approvals_moved} = scalar @$moved if @$moved;
+    # 0.1.5 (E-1): the ledger lines the draft dropped go back into the written text (never into
+    # body.md), after every lint pass, so the line numbers printed above are the draft's.
+    if (@{ $lg->{carry} || [] }) {
+        $body = skills::core::ledger_carry($body, $lg);
+        $row->{bytes} = skills::util::blen($body);
+        $row->{size_band} = _band($row->{bytes});
+    }
 
     # ---- file the stage into evidence/<stem>/
     my $now = skills::util::now();

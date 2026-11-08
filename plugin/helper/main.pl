@@ -72,7 +72,7 @@ if ($IS_HOOK) {
 # Core libraries every subcommand may use (BUILD-PLAN §3.6 seams), in load order.
 our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock nonce
                git gsd queue bucket frontmatter detect assemble secrets evidence
-               dispatch transcript scope sessions sidecar copies measure checkpoint
+               dispatch transcript scope sessions sidecar ledger copies measure checkpoint
                sweep reconcile orphans keyset resumeblock args rollup postcompact repomode jobrec handoff_turn notice userre
                restart plugver);
 # 0.1.4 (T-12): `hook <Event>` loads the base set and its event's table, not all of @CORE
@@ -89,18 +89,18 @@ our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock
 # libraries loaded by the end (HOOK-LAZY-01).
 our @HOOK_BASE = qw(util jsonc sha ctx spec settings paths roots log rc identity git detect secrets transcript args repomode userre);
 our %HOOK_EVENT = (
-    PreCompact       => [qw(lock nonce bucket frontmatter assemble dispatch sessions copies keyset)],
-    PostCompact      => [qw(lock nonce queue bucket frontmatter evidence dispatch scope sessions sidecar copies sweep orphans keyset
+    PreCompact       => [qw(lock nonce bucket frontmatter assemble dispatch sessions ledger copies keyset)],
+    PostCompact      => [qw(lock nonce queue bucket frontmatter evidence dispatch scope sessions sidecar ledger copies sweep orphans keyset
                             rollup postcompact jobrec restart)],
     SessionStart     => [qw(lock nonce gsd queue assemble evidence dispatch sessions sidecar measure sweep orphans keyset resumeblock
                             rollup jobrec restart plugver)],
-    SessionEnd       => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar copies measure
+    SessionEnd       => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar ledger copies measure
                             sweep reconcile orphans resumeblock rollup postcompact jobrec restart plugver)],
-    Stop             => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar copies measure
+    Stop             => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar ledger copies measure
                             sweep reconcile orphans resumeblock rollup postcompact jobrec restart plugver)],
     SubagentStop     => [qw(sessions sidecar jobrec)],
     StopFailure      => [],
-    PermissionDenied => [qw(dispatch rollup reconcile copies)],
+    PermissionDenied => [qw(dispatch rollup reconcile ledger copies)],
 );
 my $TEST = ($ENV{STORE_TEST_MODE} || '') eq '1';
 my %load = map { ($_ => 1) } @CORE;

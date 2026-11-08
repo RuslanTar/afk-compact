@@ -1,0 +1,116 @@
+{
+ "id": "LG-13 (0.1.5 E-1, stable ledger: ids after `by` and tagged entries stay taken)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "the base names D-4 only after `by` (its entry was lost before 0.1.5) and defines D-6 on an entry that ends in the mark `Superseded: D-2 by D-6 (…)`; a draft that gives D-4 and D-6 to new items is refused for both, and the same items under the next free ids publish with nothing carried: the tagged D-6 entry still holds D-2",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1 by D-4 (2026-10-21 08:00 +0300)\n- D-6: retry budget 5 — because the gateway allows 5 (external) Superseded: D-2 by D-6 (2026-10-21 08:00 +0300)\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "own"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "name": "own base"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1 by D-4 (2026-10-21 08:00 +0300)\n- Superseded: D-2 by D-6 (2026-10-21 08:00 +0300)\n- D-4: log to stderr — because CI reads it (agent)\n- D-6: window 30 s — because the vendor asked (agent)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT ledger-id-reuse line 12 D-4$",
+     "^LINT ledger-id-reuse line 13 D-6$"
+    ],
+    "stdout_lacks": [
+     "^Wrote handoff to: "
+    ]
+   },
+   "name": "D-4 and D-6 given to new items: blocks"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1 by D-4 (2026-10-21 08:00 +0300)\n- D-6: retry budget 5 — because the gateway allows 5 (external) Superseded: D-2 by D-6 (2026-10-21 08:00 +0300)\n- D-7: log to stderr — because CI reads it (agent)\n- D-8: window 30 s — because the vendor asked (agent)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY ledger-"
+    ]
+   },
+   "name": "the new items under the next free ids: publishes"
+  }
+ ]
+}

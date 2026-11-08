@@ -1,0 +1,131 @@
+{
+ "id": "LG-01 (0.1.5 E-1, stable ledger: carry and supersede)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "publish copies the own chain's ledger lines that the draft dropped without a Superseded line back into the written file, unchanged and in their sections (U-1 into User constraints; X-1 and the fold line naming D-4 and X-2 into Decisions), never into body.md; a line the draft supersedes (D-2) and an approval the draft drops (U-3) are not copied; an ask whose status changed is not reported; a reworded decision is ADVISORY ledger-changed; the row counts carried and changed",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-2: ask \"fix the retry window\" — status open\n## Approvals\n- U-3: approval \"push it\" — action push · targets feat/x @ abc1234 · once · not yet used · given 11111111 2026-10-21 08:50 +0300\n## Decisions and do-not-re-raise\n- D-1: retry budget 3 — because the gateway caps at 3 (user)\n- D-2: no jitter — because the tests pin the delays (agent)\n- X-1: rejected exponential backoff — because the gateway times out at 10 s\n- D-4, X-2 settled; full text in evidence/2026-10-20_10-00-00_11111111_retry/ledger.md\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "own"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "name": "own base"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-2: ask \"fix the retry window\" — status partly 1 of 2, left the suite\n## Decisions and do-not-re-raise\n- D-1: retry budget of 3 calls — because the gateway caps at 3 (user)\n- Superseded: D-2 by D-5 (2026-10-21 14:05 +0300)\n- D-5: jitter of 50 ms — because the new tests allow it (agent)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY ledger-carried U-1, D-4, X-1, X-2$",
+     "^ADVISORY ledger-changed line 10 D-1$",
+     "^  why: a ledger line leaves the chain only through a Superseded line",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY ledger-changed line [0-9]+ U-2"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^\\-\\ U\\-2:\\ ask\\ \"fix\\ the\\ retry\\ window\"\\ —\\ status\\ partly\\ 1\\ of\\ 2,\\ left\\ the\\ suite\n\\-\\ U\\-1:\\ \"keep\\ the\\ 45\\ s\\ window\"\\ —\\ scope\\ retry\\ window;\\ user,\\ 11111111\n## Decisions and do-not-re-raise\n",
+       "^\\-\\ X\\-1:\\ rejected\\ exponential\\ backoff\\ —\\ because\\ the\\ gateway\\ times\\ out\\ at\\ 10\\ s\n\\-\\ Superseded:\\ D\\-2\\ by\\ D\\-5\\ \\(2026\\-10\\-21\\ 14:05\\ \\+0300\\)\n\\-\\ D\\-5:\\ jitter\\ of\\ 50\\ ms\\ —\\ because\\ the\\ new\\ tests\\ allow\\ it\\ \\(agent\\)\n\\-\\ D\\-4,\\ X\\-2\\ settled;\\ full\\ text\\ in\\ evidence/2026\\-10\\-20_10\\-00\\-00_11111111_retry/ledger\\.md\n## In flight\n",
+       "^\\-\\ D\\-1:\\ retry\\ budget\\ of\\ 3\\ calls\\ —\\ because\\ the\\ gateway\\ caps\\ at\\ 3\\ \\(user\\)$",
+       "^\\-\\ Superseded:\\ D\\-2\\ by\\ D\\-5\\ \\(2026\\-10\\-21\\ 14:05\\ \\+0300\\)$"
+      ],
+      "lacks": [
+       "^- D-2: no jitter",
+       "U-3: approval",
+       "^- U-2: ask .* status open$",
+       "^- D-1: retry budget 3 "
+      ]
+     },
+     {
+      "path": "$STAGE/body.md",
+      "lacks": [
+       "^- U-1:",
+       "^- X-1:",
+       "settled; full text in"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "ledger": {
+        "carried": 4,
+        "changed": 1,
+        "reused": 0
+       }
+      }
+     }
+    ]
+   },
+   "name": "dropped lines carried back, superseded and approval lines not"
+  }
+ ]
+}

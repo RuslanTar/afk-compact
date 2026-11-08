@@ -25,7 +25,12 @@ package skills::lint;
 #        approval must be the context-only form (approval-plugin-turn).
 #      0.1.3: carried_as {line => draft line} (publish's re-lint after moving approvals: a line
 #        whose draft text was carried stays carried).
-# The result also carries `acuity`: the rating found in Resume here, or undef; and
+#      0.1.5 (E-1, stable ledger): ledger_base (the own chain's previous file: the carry base when
+#        it is own or chain, own_previous with a foreign base; undef without one) for
+#        ledger-id-reuse, ledger-changed and ledger-carried (lib/ledger.pm); export_fn (repo
+#        mode: text -> its export) for the private-path check of the carried lines.
+# The result also carries `acuity`: the rating found in Resume here, or undef; `ledger`: the
+# ledger::check result publish carries the dropped lines with; and
 # `approvals`: {checked => [U-n…], lines, unchecked, classes, origins} for the frontmatter, the row
 # and the line-hash record.
 # Every id it prints is one of the spec's lint_ids; time_re, the carry tag and the
@@ -267,6 +272,22 @@ sub lint {
     push @block, @{ $approvals->{blocking} };
     push @adv, @{ $approvals->{advisory} };
 
+    # ---- the stable ledger (0.1.5 E-1, spec §7): against the own chain's previous file, an id the
+    # draft gives to another item blocks (ids stay unique across a chain); a ledger line whose text
+    # changed is advisory; the ledger lines the draft dropped without a Superseded line are named,
+    # and publish copies them back when it writes the file.
+    my $ledger = skills::core::ledger_check($in->{ledger_base}, $body);
+    push @block, [ 'ledger-id-reuse', "line $_->[1] $_->[0]" ] for @{ $ledger->{reused} };
+    push @adv, [ 'ledger-changed', "line $_->[1] $_->[0]" ] for @{ $ledger->{changed} };
+    push @adv, [ 'ledger-carried', join(', ', @{ $ledger->{ids} }) ] if @{ $ledger->{ids} };
+    # The carried lines reach the written file and its export, so they pass the private-path and
+    # secret checks too (a file published before repo mode was on may hold a private path); a hit
+    # names the line `carried <id>` by the first id it carries, as ledger-carried names it (a foreign
+    # pointer line's `<sid8>:D-1`): writing the line, fixed, into the draft keeps it from carrying.
+    my @carried = map { $_->[0] } @{ $ledger->{carry} || [] };
+    my %cid = map { ($_->[0] => ($_->[2] || [])->[0]) } @{ $ledger->{carry} || [] };
+    my $cname = sub { 'carried ' . ($cid{ $_[0] } // 'line') };
+
     # ---- private-path (D-12 Block F; repo mode only): a machine-private path left in the
     # text the export would write after its rewrite (own home already ~/). A durable copy
     # or a Volatile: line does not excuse it: the path would reach git.
@@ -276,6 +297,11 @@ sub lint {
         for my $i (0 .. $#x) {
             my @ids = map { $_->{id} } grep { $x[$i] =~ $_->{re} } @$classes;
             push @block, [ 'private-path', 'line ' . ($i + 1) . ' ' . join(',', @ids) ] if @ids;
+        }
+        for my $l (@carried) {
+            my $x = $in->{export_fn} ? $in->{export_fn}->($l) : $l;
+            my @ids = map { $_->{id} } grep { $x =~ $_->{re} } @$classes;
+            push @block, [ 'private-path', $cname->($l) . ' ' . join(',', @ids) ] if @ids;
         }
     }
 
@@ -366,11 +392,13 @@ sub lint {
     # 0.1.3: a WARN hit names its line numbers too (body.md's bare, another file's as <file>:<n>)
     my (%warn, @warn_at);
     my @texts = ([ 'body.md', $body ], (map { [ "restart/$_", $in->{recipes}{$_} ] } sort keys %{ $in->{recipes} || {} }),
-                 (map { [ $_, $in->{extra}{$_} ] } sort keys %{ $in->{extra} || {} }));
+                 (map { [ $_, $in->{extra}{$_} ] } sort keys %{ $in->{extra} || {} }),
+                 (map { [ $cname->($_), $_ ] } @carried));
     for my $t (@texts) {
         my $hits = skills::core::secrets_scan($t->[1], lines => 1);
         my %hard = map { $_->{rule} => 1 } grep { $_->{class} eq 'HARD' } @$hits;
         my @w = grep { $_->{class} ne 'HARD' } @$hits;
+        @w = () if $t->[0] =~ /\Acarried /;   # a carried line warned when it was published
         $warn{ $_->{rule} } = 1 for @w;
         my %ln = map { $_ => 1 } map { @{ $_->{lines} || [] } } @w;
         push @warn_at, map { $t->[0] eq 'body.md' ? $_ : "$t->[0]:$_" } _by_number(keys %ln);
@@ -470,7 +498,7 @@ sub lint {
     my $ids = skills::spec::lint_ids();
     for my $r (@block) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{blocking}{ $r->[0] } }
     for my $r (@adv) { die "lint id $r->[0] not in the spec's lint_ids\n" unless $ids->{advisory}{ $r->[0] } }
-    return { blocking => \@block, advisory => \@adv, acuity => $acuity, approvals => $approvals };
+    return { blocking => \@block, advisory => \@adv, acuity => $acuity, approvals => $approvals, ledger => $ledger };
 }
 
 # A U-, D- or X- ledger line's content with its bullet, id and carry tags removed and

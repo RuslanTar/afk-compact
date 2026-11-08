@@ -7,6 +7,12 @@ package copies;
 # an existing file is verified by sha (EXISTS sha-match / sha-differs), never
 # replaced; a true h-id collision with other content gets -2. seq under seq.lock.
 # Mode 0400; frontmatter from the dispatch record and the boundary row only.
+# 0.1.5 (E-1, stable ledger): a main copy of a shaped summary (an ok verdict) also holds the
+# ledger lines of the session's newest earlier ok copy (ledger_base) that the summary dropped
+# without a Superseded line (lib/ledger.pm), copied unchanged into their sections; frontmatter
+# `ledger_carried` names them with the summary's own sha256, which copy_sha returns, so a second
+# save of the same summary still matches; a late save from a stash carries nothing (a newer copy may exist by then). The
+# `copy` row gains `ledger {carried, changed, reused}` (counts).
 use strict;
 use warnings;
 use utf8;
@@ -44,6 +50,8 @@ sub copy_sha {
     my ($fm, $body) = frontmatter::read($raw);
     return (undef, {}) unless $fm;
     if (defined $fm->{redacted} && $fm->{redacted} =~ /sha256 ([0-9a-f]{64})/) { return ($1, $fm) }
+    # 0.1.5 (E-1): a copy with carried ledger lines records the summary's own sha256 too
+    if (defined $fm->{ledger_carried} && !ref $fm->{ledger_carried} && $fm->{ledger_carried} =~ /sha256 ([0-9a-f]{64})/) { return ($1, $fm) }
     # The copy holds the normalized body (final \n); an empty body is written as one \n.
     $body = '' if $body eq "\n";
     return (sha::hex256($body), $fm);
@@ -456,6 +464,59 @@ sub session_copies {
     return [sort { $a->{epoch} <=> $b->{epoch} || $a->{path} cmp $b->{path} } @out];
 }
 
+# The carry base of a main copy (0.1.5 E-1): the newest earlier main copy of the session whose own
+# verdict was ok. An unshaped copy has no ledger sections, so the chain carries past it; a copy of
+# this summary (its nonce or sha256) ends the search: nothing is carried then.
+sub ledger_base {
+    my ($sid, $bucket, $nonce, $sha) = @_;
+    my %ok = map { $_ => 1 } spec::list('ok_verdicts');
+    for my $c (reverse @{ session_copies($sid, 'main', $bucket) }) {
+        my $fm = $c->{fm} || {};
+        return undef if defined $nonce && ($fm->{nonce} // '') eq $nonce;
+        my ($psha) = copy_sha($c->{path});
+        return undef if defined $psha && defined $sha && $psha eq $sha;
+        return $c->{path} if !defined $fm->{verdict} || $ok{ $fm->{verdict} };
+    }
+    return undef;
+}
+
+# _ledger(scope, verdict, carry base path, nonce, summary sha, body) -> undef (no carry base, not a
+# main copy of a shaped summary, the base is this summary's) or {text, note, counts}:
+# ledger::check of the body against the previous copy (0.1.5 E-1). A summary is already written,
+# so nothing refuses: the copy gets the dropped lines, and the counts say what differed.
+sub _ledger {
+    my ($scope, $verdict, $prev, $nonce, $sha, $body) = @_;
+    return undef unless $scope eq 'main' && defined $prev && defined $verdict && grep { $_ eq $verdict } spec::list('ok_verdicts');
+    my ($psha, $pfm) = copy_sha($prev);
+    return undef unless $pfm && %$pfm && !(defined $psha && $psha eq $sha) && !(defined $nonce && ($pfm->{nonce} // '') eq $nonce);
+    my (undef, $pbody) = frontmatter::read(util::read_file($prev) // '');
+    return undef unless defined $pbody;
+    my %o = ledger_opts();
+    my $r = eval { ledger::check($pbody, $body, %o) } or return undef;
+    my %c = (carried => scalar @{ $r->{ids} }, changed => scalar @{ $r->{changed} }, reused => scalar @{ $r->{reused} });
+    my $out = { counts => ((grep { $_ } values %c) ? \%c : undef) };
+    if (@{ $r->{carry} }) {
+        $out->{text} = ledger::carry($body, $r, %o, end_re => (eval { spec::re('sentinel_re') } || undef));
+        $out->{note} = ledger::copy_note($r, $sha);
+    }
+    return $out;
+}
+
+# The spec literals lib/ledger.pm reads (as skills::core::ledger_opts does for publish), with the
+# summary's none-form of User constraints.
+sub ledger_opts {
+    my @secs = spec::list('sections_main');
+    my $ids = spec::has('section_ids') ? spec::get('section_ids') : {};
+    my %lit = ref $ids eq 'HASH' ? reverse %$ids : ();
+    my $user = $lit{'main:user-constraints'};
+    my $nf = spec::has('none_forms_compaction') ? spec::get('none_forms_compaction') : {};
+    my @none = map { my $f = $_; eval { qr/$f/ } || () } grep { defined && !ref } @{ (ref $nf eq 'HASH' && defined $user && ref $nf->{$user} eq 'ARRAY') ? $nf->{$user} : [] };
+    my $tag = spec::has('carry') ? spec::get('carry') : {};
+    my $tre = ref $tag eq 'HASH' && defined $tag->{tag_re} ? eval { my $x = $tag->{tag_re}; qr/$x/ } : undef;
+    return (sections => \@secs, user => $user, approvals => $lit{'main:approvals'}, decisions => $lit{'main:decisions'},
+            fold_re => (eval { spec::re('fold_line_re') } || undef), tag_re => $tre, none_res => \@none);
+}
+
 sub prev_copy {
     my ($sid, $bucket) = @_;
     my $c = session_copies($sid, 'main', $bucket);
@@ -542,6 +603,11 @@ sub save {
                 return { kind => 'exists', path => $existing, match => 0, fm => $efm };
             }
             my $seq = $scope eq 'unknown' ? undef : _seq($dir, $sid8, $actor_tag);
+            # a late save (reconcile, from a stash) may come after a newer copy: no carry then
+            my $lg = $a{late} || $scope ne 'main' ? undef
+                   : _ledger($scope, $verdict, ledger_base($sid, $bk->{path}, $nonce, $s->{sha256}), $nonce, $s->{sha256}, $body);
+            $body = $lg->{text} if $lg && defined $lg->{text};
+            $ret{ledger} = $lg->{counts} if $lg && $lg->{counts};
             my $stamp = util::file_stamp(util::now());
             my $name = $scope eq 'unknown' ? "${stamp}_${sid8}_$cur.md" : "${stamp}_${sid8}${actor_tag}_c${seq}-$cur.md";
             my $path = "$dir/$name";
@@ -577,6 +643,7 @@ sub save {
                 seat_state          => $a{seat_state},
                 evidence            => $a{evidence},
                 redacted            => $redacted,
+                ledger_carried      => ($lg && $lg->{note}),
                 finished_by         => rc::finished_by(),
             ]);
             util::mkdir_p($dir);
@@ -609,7 +676,8 @@ sub save {
     return $refuse->($out->{why} // 'race') unless $out->{kind} eq 'saved';
     my $result = $a{late} ? 'late' : $scope eq 'unknown' ? 'unattributed' : 'saved';
     rc::emit('copy', [nonce => $nonce, id6 => $out->{id6}, result => $result, slot => $slot, rel_path => $rel, writer => $a{writer},
-                      seq => $out->{seq}, redacted => (defined $redacted ? jsonc::true() : jsonc::false()), (defined $a{proof} ? (proof => $a{proof}) : ())]);
+                      seq => $out->{seq}, redacted => (defined $redacted ? jsonc::true() : jsonc::false()), (defined $a{proof} ? (proof => $a{proof}) : ()),
+                      ($ret{ledger} ? (ledger => jsonc::obj(map { ($_ => $ret{ledger}{$_}) } qw(carried changed reused))) : ())]);
     rc::emit('verdict', [nonce => $nonce, verdict => $verdict, verdict_source => (($a{writer} // '') eq 'mod' ? 'after-step' : 'postcompact'),
                          marker_line => $s->{marker_line}, sentinel_from_end => $s->{sentinel_from_end}]);
     return { %ret, exit => 0, result => $result, path => $out->{path}, rel => $rel, seq => $out->{seq}, id6 => $out->{id6},

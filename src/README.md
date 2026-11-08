@@ -121,6 +121,8 @@ Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evid
 
 The handoff and the compaction instructions share one format, so `/{{plugin}}:resume` reads both. A published handoff's frontmatter names the plugin version and folder that wrote it, as a summary copy's does (from 0.1.4).
 
+**The ledger stays (from 0.1.5).** The `U-`, `D-` and `X-` lines (your constraints and asks, the decisions, the rejected options) carry from one handoff to the next, and so do the lines that mark one superseded or moved to `ledger.md`. When a draft drops one without marking it superseded, publish copies it back unchanged and says so. A draft that gives an existing id, or one already superseded or moved to `ledger.md`, to a different item is refused until that item takes a new id; a reworded line or a new status is only reported. A carried line with a private path or a secret is refused too. A saved compaction copy of the main conversation gets the same carry from the session's newest earlier copy that had the expected shape (not when a copy is saved late from a stash), and its frontmatter lists the added lines under `ledger_carried`.
+
 **The helper.** The skills and the plugin call one helper, `scripts/{{plugin}}-store` in the plugin folder, always by its full path; nothing is added to your `PATH`. Where this page shows a command for you to run, it is written `! "<plugin folder>/scripts/{{plugin}}-store" …`, and `/{{plugin}}:status` prints it with the real folder.
 
 **After `/clear`.** After `/clear` the plugin delivers no resume block, submits no prompt and runs no skill on its own; work resumes only when you ask for it. A continue or handoff turn that was about to start when you cleared is dropped.

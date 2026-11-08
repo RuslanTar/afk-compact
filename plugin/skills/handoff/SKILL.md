@@ -60,7 +60,7 @@ Run together:
 Run together:
 - `<store> stamp --stage <stage>`: its time is the as-of for this batch.
 - Read the template (once per invocation).
-- Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry. If `previous_kind` is `foreign`, also read `own_previous_handoff` up to its `## In flight` line, carry its ledger lines the base lacks, and follow template rule 8 for the foreign lines. One extra read.
+- Read `previous_handoff` in full: its `U-`, `D-`, `X-` lines and asks are the ledger you carry. If `previous_kind` is `foreign`, also read `own_previous_handoff` up to its `## In flight` line and follow template rule 8 for the foreign lines. One extra read.
 - Read each `newer_foreign` handoff (≤3; ≤2 with a foreign base) up to its `## In flight` line, whose number `newer_foreign` prints; record overlap under Ownership and never overwrite their decisions. With `trimmed.cut.newer_foreign`, also record under Ownership how many more there are and the `trimmed.all` file that lists them.
 - Any other `trimmed.cut` key (`inflight_measured`, `gsd`, `tmp_candidates`, `porcelain`): Read `<store_root>/<trimmed.all>` once (one entry a line; `gitignored` `unmeasured`: not checked) and use its full list for In flight, GSD, Step 3 and Live state; out of budget, write `<n> more in <store_root>/<trimmed.all>` where that list goes.
 - `ps -o pid=,lstart=,comm= -p <pid>,<pid>` for pids recorded this session.

@@ -181,6 +181,8 @@ sub superseded {
 # of the same slot (the pairing PostCompact's previous_summary made: the newest copy saved before
 # the compaction's PostCompact row, another nonce). Closed when no U/D/X id is lost under the rule
 # now; open when the row compared against the transcript, or either copy cannot be found or read.
+# Each copy is read as its summary had it (0.1.5: without the ledger lines the helper carried in,
+# watch::hooks::copy_text), so a carried line never closes the alert for a line the summary lost.
 sub _a09 {
     my ($K, $r) = @_;
     my $sc = $K->{sc};
@@ -206,7 +208,7 @@ sub _a09 {
         return 0 unless defined $rel && !ref $rel && $rel !~ m{(?:\A|/)\.\.(?:/|\z)} && defined $sc->{root};
         my $body = watch::io::slurp($rel =~ m{\A/} ? $rel : "$sc->{root}/$rel", 1 << 20);
         return 0 unless defined $body;
-        push @text, watch::hooks::_strip_frontmatter($body);
+        push @text, watch::hooks::copy_text($body, $sc->{spec});
     }
     my $l = watch::shape::ledger_diff($text[0], $text[1], 'copy', $sc->{spec});
     return (($l->{lost_U} // 1) + ($l->{lost_D} // 1) + ($l->{lost_X} // 1)) == 0 ? 1 : 0;

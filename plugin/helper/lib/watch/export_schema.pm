@@ -135,7 +135,9 @@ our %SCHEMA = (
         secret_hits => [list => 'word'], keyset_hash => 'hex8', mod_alive_this_turn => 'bool',
     },
     copy => { nonce => 'nonce', id6 => 'id6', result => [pre => [qw(saved exists late unattributed mismatch)], [qw(failed)]],
-              slot => [enum => qw(main subagents unattributed)], rel_path => 'slot' },
+              slot => [enum => qw(main subagents unattributed)], rel_path => 'slot',
+              # 0.1.5 (E-1): counts of the ledger lines carried from the previous copy, changed or reused
+              ledger => [obj => { carried => 'int', changed => 'int', reused => 'int' }] },
     copy_attributed => { id6 => 'id6', nonce => 'nonce', from_rel => 'slot', rel_path => 'slot', actor => 'actor',
                          proof => [enum => qw(a b c slot)], seq => 'int', pre_tokens => 'num', post_tokens => 'num' },
     copy_attribution_ambiguous => { id6 => 'id6', candidates => 'int' },
@@ -185,6 +187,8 @@ our %SCHEMA = (
     permission_denied => { tool_name => 'tool', reason_class => 'word', guard_class => 'word',
                            turn_kind => [enum => qw(post-compaction resume nudge other)], caused_by => [enum => qw(plugin session)] },
     handoff_publish => { result => [pre => [qw(wrote)], [qw(REFUSED)]], bytes => 'int', lint_rules => [list => 'word'], size_band => 'word',
+                         # 0.1.5 (E-1): counts of the ledger lines carried, changed and reused (stable ledger)
+                         ledger => [obj => { carried => 'int', changed => 'int', reused => 'int' }],
                          kind => 'word', writer => 'word', ht => 'hash',
                          attempt => 'int', template_rev => 'hex8', acuity => [enum => @ACUITY], acuity_floor => [enum => @ACUITY],
                          # AP-4 (2026-10-23): counts and outward class ids of the checked approvals, never a quote
