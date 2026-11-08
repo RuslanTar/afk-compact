@@ -865,17 +865,20 @@ sub idle_line {
     my $at = 'idle at 55.5 min';
     return "$p$at: $m+ → $who, else plugin idle compaction" . ($pt eq 'check' ? $under->('')
            : " · below → nothing (no $TURN: idle_handoff_turn: false)") if $pc eq 'check';
+    # The plugin does not compact: native's band first (the minimum is native's, not the turn's),
+    # then the turn, which runs at any size from idle_handoff_min_tokens when native did not run.
     if ($pt eq 'check') {
-        my $c = "$p$at, if $who did not run";
         # a row of a build before lane B: the compaction while agents run only
-        return "$c: " . $alone->('', ' (plugin idle compaction only while agents run)') if $pc eq 'agents';
-        return "$c: " . $alone->('', " (plugin idle compaction: none for now; $FAILED)") if $pc eq 'failed';
-        return "$c: " . $alone->('', ' (plugin idle compaction is off: idle_compact: false)');
+        my $why = $pc eq 'agents' ? ' (plugin idle compaction only while agents run)'
+                : $pc eq 'failed' ? " (plugin idle compaction: none for now; $FAILED)"
+                : ' (plugin idle compaction is off: idle_compact: false)';
+        return "$p$at: $m+ → $who, else $TURN" . ($hmin > $min ? " from $h up" : '') . $why
+               . ($hmin < $min ? " · $h–$m → $TURN" : '') . ' · below → nothing';
     }
     my $why = $headless ? 'headless session'
             : $pc eq 'failed' ? "idle_handoff_turn: false; plugin idle compaction: $FAILED"
             : $compact_opt eq 'off' ? 'idle_handoff_turn and idle_compact: false' : 'idle_handoff_turn: false';
-    return "$p$who only; the plugin does not check: no plugin idle compaction, no $TURN ($why)";
+    return "${p}idle at about 54 min: $m+ → $who · below → nothing; the plugin does not check: no plugin idle compaction, no $TURN ($why)";
 }
 sub idle_lines {
     my ($headless, $mod) = @_;

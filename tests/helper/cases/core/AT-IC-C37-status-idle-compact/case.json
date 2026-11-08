@@ -562,7 +562,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: idle at 55\\.5 min, if native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) did not run: 200,000\\+ → idle handoff turn \\(plugin idle compaction is off: idle_compact: false\\) · below → nothing$"
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else idle handoff turn \\(plugin idle compaction is off: idle_compact: false\\) · below → nothing$"
     ]
    }
   },
@@ -604,7 +604,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: idle at 55\\.5 min, if native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) did not run: 200,000\\+ → idle handoff turn \\(plugin idle compaction: none for now; it failed twice in this session; it is back once the plugin reloads\\) · below → nothing$"
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else idle handoff turn \\(plugin idle compaction: none for now; it failed twice in this session; it is back once the plugin reloads\\) · below → nothing$"
     ]
    }
   },
@@ -647,7 +647,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: idle at 55\\.5 min, if native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) did not run: 200,000\\+ → idle handoff turn \\(plugin idle compaction only while agents run\\) · below → nothing$"
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else idle handoff turn \\(plugin idle compaction only while agents run\\) · below → nothing$"
     ]
    }
   },
@@ -732,7 +732,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) only; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(idle_handoff_turn and idle_compact: false\\)$"
+     "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(idle_handoff_turn and idle_compact: false\\)$"
     ]
    },
    "options": {
@@ -787,7 +787,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) only; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\)$"
+     "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\)$"
     ]
    },
    "options": {

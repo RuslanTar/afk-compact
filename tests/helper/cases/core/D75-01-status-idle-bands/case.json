@@ -122,6 +122,56 @@
    }
   },
   {
+   "name": "native on (a default install), idle_compact false, idle_handoff_min_tokens 100000: native's 200,000 band first, the turn's band apart (review: 100,000 read as where native may run)",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {"pluginConfigs": {"$BRAND@m": {"options": {"idle_handoff_min_tokens": 100000, "idle_compact": "false"}}}}
+    }
+   ],
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else idle handoff turn \\(plugin idle compaction is off: idle_compact: false\\) · 100,000–200,000 → idle handoff turn · below → nothing \\(from your user settings; the session decides at its next turn end\\)$"
+    ],
+    "stdout_lacks": ["did not run: 100,000"]
+   }
+  },
+  {
+   "name": "native on, idle_compact false, idle_handoff_min_tokens 300000 above the minimum: the turn from 300,000 up when native did not run, no turn band",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {"pluginConfigs": {"$BRAND@m": {"options": {"idle_handoff_min_tokens": 300000, "idle_compact": "false"}}}}
+    }
+   ],
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\([^)]*\\), else idle handoff turn from 300,000 up \\(plugin idle compaction is off: idle_compact: false\\) · below → nothing \\("
+    ]
+   }
+  },
+  {
+   "name": "native on, idle_handoff_turn and idle_compact false, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS 350000: the plugin does not check, native's band still printed",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {"pluginConfigs": {"$BRAND@m": {"options": {"idle_handoff_turn": "false", "idle_compact": "false"}}}}
+    }
+   ],
+   "env": {"CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS": "350000"},
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^idle compaction: idle at about 54 min: 350,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(idle_handoff_turn and idle_compact: false\\) \\("
+    ]
+   }
+  },
+  {
    "name": "the mod's idle_mode row gives the minimum (250000) over the helper's environment (300000)",
    "setup": [
     {

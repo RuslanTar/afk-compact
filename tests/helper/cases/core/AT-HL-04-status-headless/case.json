@@ -8,7 +8,7 @@
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "session", "sid": "$SID", "actor": "main", "writer": "mod", "phase": "start", "mod_loaded": true}]}],
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_has": ["^idle compaction: idle at 55\\.5 min"], "stdout_lacks": ["^automatic compaction: ", "headless session"]}},
+   "expect": {"exit": 0, "stdout_has": ["^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else plugin idle compaction · "], "stdout_lacks": ["^automatic compaction: ", "headless session"]}},
   {"name": "a headless row after the session start: the line, pre-idle off",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "session", "sid": "$SID", "actor": "main", "writer": "mod", "phase": "start", "mod_loaded": true},
@@ -16,7 +16,7 @@
    "argv": ["status", "--sid", "$SID"],
    "expect": {"exit": 0,
     "stdout_has": ["^automatic compaction: not available here; Claude Code runs this session headless \\(claude -p, the Agent SDK, or an app or editor built on it\\), where it rejects a plugin's compaction call and its /compact did not work for the plugin, so the plugin does not nudge or start compactions; Claude Code's own automatic compaction is not affected$",
-                   "^idle compaction: native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) only; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"],
+                   "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"],
     "stdout_lacks": ["^idle compaction: idle at 55\\.5 min", "55\\.5 min"]}},
   {"name": "compact: command: the /compact line, pre-idle off",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
@@ -25,7 +25,7 @@
    "argv": ["status", "--sid", "$SID"],
    "expect": {"exit": 0,
     "stdout_has": ["^automatic compaction: by /compact; Claude Code runs this session headless \\(claude -p, the Agent SDK, or an app or editor built on it\\), where it rejects a plugin's compaction call, so the plugin runs /compact at a turn end at or above the target and shapes it as usual, with no nudge, handoff turn or continue; Claude Code's own automatic compaction is not affected$",
-                   "^idle compaction: native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) only; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"],
+                   "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"],
     "stdout_lacks": ["not available here"]}},
   {"name": "the /compact path went off later (command-failed, none): not available here",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
@@ -34,26 +34,26 @@
      {"v": 1, "ts": "2026-10-27T10:02:00+03:00", "ev": "compact_command", "sid": "$SID", "actor": "main", "writer": "mod", "nonce": "1a2b3c4d", "result": "rejected", "error_class": "no-command", "error": "$.command.run: no command named compact"},
      {"v": 1, "ts": "2026-10-27T10:02:00+03:00", "ev": "headless", "sid": "$SID", "actor": "main", "writer": "mod", "via": "command-failed", "compact": "none"}]}],
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: not available here; ", "^idle compaction: native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) only; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"],
+   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: not available here; ", "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"],
     "stdout_lacks": ["^automatic compaction: by /compact"]}},
   {"name": "found by a rejection, no session row: the line",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:01:00+03:00", "ev": "compact_rejected", "sid": "$SID", "actor": "main", "writer": "mod", "nonce": "1a2b3c4d", "attempt": 1, "error_class": "headless", "error": "not available in a headless (-p / SDK) session yet"},
      {"v": 1, "ts": "2026-10-27T10:01:00+03:00", "ev": "headless", "sid": "$SID", "actor": "main", "writer": "mod", "via": "compact-rejected"}]}],
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: not available here; ", "^idle compaction: native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) only; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"]}},
+   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: not available here; ", "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"]}},
   {"name": "a later interactive start of the same session: no line",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "session", "sid": "$SID", "actor": "main", "writer": "mod", "phase": "start", "mod_loaded": true},
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "headless", "sid": "$SID", "actor": "main", "writer": "mod", "via": "session-start"},
      {"v": 1, "ts": "2026-10-27T10:04:00+03:00", "ev": "session", "sid": "$SID", "actor": "main", "writer": "mod", "phase": "start", "mod_loaded": true}]}],
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_has": ["^idle compaction: idle at 55\\.5 min"], "stdout_lacks": ["^automatic compaction: ", "headless session"]}},
+   "expect": {"exit": 0, "stdout_has": ["^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else plugin idle compaction · "], "stdout_lacks": ["^automatic compaction: ", "headless session"]}},
   {"name": "headless after a /clear (same-load), idle_handoff_turn off: headless decides the idle line",
    "setup": [{"write": "$WATCH/$SID.jsonl", "jsonl": [
      {"v": 1, "ts": "2026-10-27T10:00:00+03:00", "ev": "headless", "sid": "$SID", "actor": "main", "writer": "mod", "via": "same-load"}]}],
    "options": {"idle_handoff_turn": "off"},
    "argv": ["status", "--sid", "$SID"],
-   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: not available here; ", "^idle compaction: native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) only; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"]}}
+   "expect": {"exit": 0, "stdout_has": ["^automatic compaction: not available here; ", "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(headless session\\) \\(from your user settings; the session decides at its next turn end\\)$"]}}
  ]
 }

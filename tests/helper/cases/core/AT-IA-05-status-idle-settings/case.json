@@ -313,7 +313,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) only; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(idle_handoff_turn and idle_compact: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(idle_handoff_turn and idle_compact: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   }
