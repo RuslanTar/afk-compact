@@ -460,15 +460,19 @@ sub _sq { my ($s) = @_; $s =~ s/'/'\\''/g; return "'$s'" }
 
 # consent_lines(refusal, plugin key or undef) -> the lines that tell the user how to change a
 # consent key themselves (the plugin never writes these keys): /config or the file by hand, and
-# for a valid new value Claude Code's own `plugin configure`, a line the user types.
+# for a valid new value Claude Code's own `plugin configure`, a line the user types. A %HIDDEN key
+# (D-72: not in the manifest, so neither /config nor `plugin configure` has it) gets the file only.
 sub consent_lines {
     my ($r, $pk) = @_;
     my $brand = ctx::brand();
     my $key = $r->{key};
-    my @l = ("  $key: a consent key; the plugin never writes it, whoever runs this. Change it yourself in /config (the row $brand.$key)"
-             . ' or in your settings.json by hand');
+    my $hidden = $settings::HIDDEN{$key};
+    my @l = ("  $key: a consent key; the plugin never writes it, whoever runs this. Change it yourself "
+             . ($hidden ? 'in your settings.json by hand (it is not in /config in this version), under pluginConfigs["'
+                          . ($pk // "$brand\@<marketplace>") . '"].options'
+                        : "in /config (the row $brand.$key) or in your settings.json by hand"));
     push @l, "  $key: the value given: $r->{detail}" if defined $r->{detail};
-    if (defined $r->{value}) {
+    if (defined $r->{value} && !$hidden) {
         my $json = jsonc::encode_bytes(jsonc::obj($key => $r->{value}));
         push @l, "  $key: or type: ! printf '%s' " . _sq($json) . ' | claude plugin configure ' . _sq($pk // "$brand\@<marketplace>") . ' --values-stdin';
     }

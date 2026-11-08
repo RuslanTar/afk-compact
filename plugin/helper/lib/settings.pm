@@ -442,7 +442,7 @@ sub config_key_info {
 }
 
 # resolve(\%flags) -> {values => {key => v}, source => {key => flag|env|settings|default},
-#   notes => [..], ambiguous => 0|1, config_key => key-or-undef,
+#   notes => [..], ambiguous => 0|1, config_key => key-or-undef, legacy => {key => note} (D-72),
 #   defaults => {key => the default used: the manifest's, else the @KEYS fallback, as written}}
 sub resolve {
     my ($flags) = @_;
@@ -495,6 +495,19 @@ sub resolve {
     # D-72 (0.1.6): a %SWITCH key's value as the plugin runs it, its word (switch_read). An old
     # form from a flag or the environment gets a note here; one saved in the settings file gets
     # the migrate warning (value_warnings) instead. An unknown word stays for the key's own rule.
+    # %legacy: the keys with an old form in a source read for them (the settings file, and a flag
+    # or the environment unless the key is file-only or protective), for rc::preamble's
+    # `config_note` (legacy-word; legacy-on for idle_handoff_turn "on", as config.ts notes it).
+    my %legacy;
+    for my $key (grep { exists $SWITCH{$_} } map { $_->[0] } @KEYS) {
+        my @from = ((!$ambiguous && ref $opts eq 'HASH') ? $opts->{$key} : undef,
+                    ($FILE_ONLY{$key} || $NO_FLAG{$key}) ? () : ($flags->{$key}, $ENV{ 'CLAUDE_PLUGIN_OPTION_' . uc $key }));
+        for my $v (@from) {
+            my ($w, $old) = switch_read($key, $v);
+            next unless defined $w && $old;
+            $legacy{$key} = ($key eq 'idle_handoff_turn' && !ref $v && trim(lc "$v") eq 'on') ? 'legacy-on' : ($legacy{$key} // 'legacy-word');
+        }
+    }
     for my $key (grep { exists $SWITCH{$_} && $_ ne 'resume_proceed' } map { $_->[0] } @KEYS) {
         my ($w, $old) = switch_read($key, $val{$key});
         next unless defined $w;
@@ -517,7 +530,8 @@ sub resolve {
                       ['env', $env], ['default', $uck // (grep { $_->[0] eq $key } @KEYS)[0]->[2]]) {
             my ($s, $v) = @$cand;
             next if _unset($v) || (ref $v && !($sw && ref $v eq 'jsonc::Bool'));
-            my ($x) = $sw ? switch_read($key, $v) : (trim(lc $v));
+            my ($x, $old) = $sw ? switch_read($key, $v) : (trim(lc $v), 0);
+            push @notes, "$key: the old value " . trim(lc "$v") . ' reads as ' . switch_form($key, $x) if $old && ($s eq 'flag' || $s eq 'env');
             if (!defined $x || !exists $rank{$x}) {
                 push @notes, "$key: '$s' value is not " . join(' or ', $sw ? qw(true false) : @order) . ', ignored' if $s ne 'default';
                 next;
@@ -570,7 +584,7 @@ sub resolve {
     my $sx = secret_extra({ values => \%val });
     push @notes, "secret_extra_rules: entry $_ dropped (invalid)" for @{ $sx->{invalid} };
     return { values => \%val, source => \%src, notes => \@notes, ambiguous => $ambiguous,
-             config_key => ($ambiguous ? undef : $ckey), defaults => \%def };
+             config_key => ($ambiguous ? undef : $ckey), defaults => \%def, legacy => \%legacy };
 }
 
 # ---------------------------------------------------------------- SK-7 helpers (2026-10-23)
@@ -1144,8 +1158,10 @@ sub value_warnings {
     }
     for my $w (grep { $_->{saved_empty} } @$rows) {
         # a consent key is never written by the plugin (lib/settings_write.pm), a reset included
-        push @l, "warning: $w->{key}: saved empty, the plugin uses the default; Claude Code passes \"\" to the hooks; clear it with "
-                 . ($FILE_ONLY{ $w->{key} } ? "/config or by hand (a consent key: the plugin never writes it)"
+        # a %HIDDEN key is not in the manifest (D-72): no /config row, nothing passed to the hooks
+        my $h = $HIDDEN{ $w->{key} };
+        push @l, "warning: $w->{key}: saved empty, the plugin uses the default; " . ($h ? '' : 'Claude Code passes "" to the hooks; ') . 'clear it with '
+                 . ($FILE_ONLY{ $w->{key} } ? ($h ? 'your settings.json by hand' : '/config or by hand') . ' (a consent key: the plugin never writes it)'
                     : defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
     }
     # D-72: values saved in a form from before 0.1.6, which Claude Code reads as unset
@@ -1154,13 +1170,13 @@ sub value_warnings {
     my @u = map { $_->{key} } grep { !defined $_->{to} } @all;
     my @w = map { $_->{key} } grep { !$_->{consent} } @old;
     my @c = map { $_->{key} } grep { $_->{consent} } @old;
-    push @l, 'warning: ' . join(', ', @w) . ': saved in a form from before 0.1.6; Claude Code reads such a value as unset (the hooks get the '
-             . 'default) while the helper reads it as before; ' . (defined $store ? '! ' . util::text($store) . ' settings migrate --apply' : 'a settings migrate --apply')
+    push @l, 'warning: ' . join(', ', @w) . ': saved in a form from before 0.1.6; Claude Code reads such a value as unset, so the hooks run the '
+             . 'default (only /status and the skills read it as before); ' . (defined $store ? '! ' . util::text($store) . ' settings migrate --apply' : 'a settings migrate --apply')
              . ' saves the new form' if @w;
     push @l, 'warning: ' . join(', ', @c) . ': saved in a form from before 0.1.6; Claude Code reads such a value as unset (the default); '
              . (@c > 1 ? 'consent keys' : 'a consent key') . ': pick the value again in /config' if @c;
-    push @l, 'warning: ' . join(', ', @u) . ': saved as a value not on its list; Claude Code reads it as unset (the hooks get the default) while '
-             . 'the helper reads it by its own rule; pick a value in /config' if @u;
+    push @l, 'warning: ' . join(', ', @u) . ': saved as a value not on its list; Claude Code reads it as unset, so the hooks run the default '
+             . '(/status reads it by its own rule); pick a value in /config' if @u;
     return @l;
 }
 

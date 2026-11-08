@@ -36,11 +36,6 @@ export function shippedNotice(name: string): { id: string; text: string } {
   return noticeSpec(name, specValue('notice'))
 }
 
-/** `watcher` as the helper reads it (trimmed, case-folded); only `off` turns the logs off. */
-export function watcherOff(v: unknown): boolean {
-  return typeof v === 'string' && v.trim().toLowerCase() === 'off'
-}
-
 /** Main `session.start`: claims the notice and shows it the first time; nothing with `watcher` off. */
 export async function showNotice(d: Deps, sid: string): Promise<void> {
   if (d.cfg.watcher_off) return

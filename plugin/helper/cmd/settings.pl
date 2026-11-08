@@ -195,6 +195,8 @@ sub _takes_effect {
 # migrate(--plan, --apply): settings::old_values as set requests (consent keys apart), then write_cmd
 sub migrate {
     my ($given, $apply) = @_;
+    # two option keys for the plugin: old_values reads neither, so say why rather than "nothing"
+    return _refused('migrate', { refusals => [{ why => 'ambiguous' }] }) if settings::options_source()->{ambiguous};
     my @old = grep { defined $_->{to} } settings::old_values();
     my @consent = map { settings_write::consent_lines({ key => $_->{key}, value => $_->{to} }, settings::options_source()->{key}) }
                   grep { $_->{consent} } @old;

@@ -219,7 +219,7 @@ sub _trim {
     return $s;
 }
 
-# One `config_note` row per session when the `watcher` value was not `shadow`/`off`
+# One `config_note` row per session when the `watcher` value was not true or false (or a word before 0.1.6)
 # (marker file, exclusive create). Content-free: the value itself is never logged.
 sub note_watcher_value {
     my ($ctx) = @_;

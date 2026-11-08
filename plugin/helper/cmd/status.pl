@@ -508,10 +508,10 @@ sub plugin_lines {
 sub watcher_lines {
     my $w = settings::trim(lc(rc::val('watcher') // 'shadow'));
     my $brand = ctx::brand();
-    return ('watcher: off · existing logs kept (nothing deleted) · core files still written: copies check, '
+    return ('watcher: false · existing logs kept (nothing deleted) · core files still written: copies check, '
             . 'background list, heal counters, rollups, liveness') if $w eq 'off';
     my ($bytes, $sids) = _watch_size(rc::watch());
-    my @l = ("watcher: shadow · logs " . _size($bytes) . " in $sids sessions · share: /$brand:report · off: watcher = false in /config");
+    my @l = ("watcher: true · logs " . _size($bytes) . " in $sids sessions · share: /$brand:report · off: watcher = false in /config");
     my $n = notice::spec();
     push @l, "notice: $n->{text}" unless notice::shown(rc::watch(), $n->{id});
     return @l;
