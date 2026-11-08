@@ -960,8 +960,42 @@ sub lint {
 # a shape fault of a handoff the user asked for and approval-denied still refuse.
 our %MOVE_RULES = map { $_ => 1 } qw(approval-quote approval-plugin-turn);
 our $OPEN_HEADING = '## Open questions';
-# A fence line of a code block (a reference inside one is left alone, 0.1.4 A-3).
-my $FENCE_RE = qr/\A[ \t]*(?:```|~~~)/;
+# fence_lines(\@lines): the fenced code blocks as CommonMark reads them, for move_lines (a reference
+# inside one is left alone, 0.1.4 A-3) and skills::lint::fix, so the two never differ. A fence opens
+# on a line of 3 or more backticks or tildes (a backtick fence's info text holds no backtick) and
+# closes only on a line of the same character, at least as long, with nothing after it but white
+# space; one left open runs to the end (0.1.5 E-3 review 4: any fence line toggled, so a ``` line
+# inside a ~~~ block ended it). A fence may open at any indent (one in a list item is one too, and
+# one CommonMark reads as indented code only keeps more lines as code); the closing line may be
+# indented at most 3 columns, or as far as the opening line when that is more (review 5: a
+# "    ```" line inside a ``` block closed it, so the code after it was rewritten; tabs to the
+# next column of 4). Fences are read after blockquote markers (`>`, one space after each; review 5:
+# a range inside "> ```" was rewritten); a block in a quote ends on a line with fewer markers.
+# Returns {code => {index => 1: a fence line or a line inside}, open => {index => 1: open after it}}.
+sub fence_lines {
+    my ($lines) = @_;
+    my (%code, %open, $f);
+    my $cols = sub { my $w = 0; $w += $_ eq "\t" ? 4 - $w % 4 : 1 for split //, $_[0]; $w };
+    for my $i (0 .. $#$lines) {
+        my ($l, $d) = ($lines->[$i] // '', 0);
+        if ($f) {
+            $d++ while $d < $f->{d} && $l =~ s/\A {0,3}>[ ]?//;
+            undef $f if $d < $f->{d};
+        }
+        if ($f) {
+            $code{$i} = 1;
+            undef $f if $l =~ /\A([ \t]*)(`+|~+)[ \t]*\r?\z/ && substr($2, 0, 1) eq $f->{c}
+                && length $2 >= $f->{n} && $cols->($1) <= ($f->{w} > 3 ? $f->{w} : 3);
+        } else {
+            $d++ while $l =~ s/\A {0,3}>[ ]?//;
+            if ($l =~ /\A([ \t]*)(`{3,}|~{3,})(.*)\z/ && !(substr($2, 0, 1) eq '`' && index($3, '`') >= 0)) {
+                ($code{$i}, $f) = (1, { c => substr($2, 0, 1), n => length $2, w => $cols->($1), d => $d });
+            }
+        }
+        $open{$i} = 1 if $f;
+    }
+    return { code => \%code, open => \%open };
+}
 # The rule each moved line broke, in plain words (the Open questions item and the ADVISORY line).
 our %MOVE_WHY = (
     short => 'a quote under 4 words counts only as the user\'s whole message, or one line of a numbered reply, answering your message that names its target',
@@ -1074,11 +1108,10 @@ sub move_lines {
     for my $i (grep { $in->{$_} && !$mv{$_} } 0 .. $#lines) { $kept_id{$1} = 1 if $lines[$i] =~ /\b(U-[0-9]+):\s*approval\b/ }
     my $drop = !grep { $lines[$_] =~ /\S/ && !$mv{$_} } keys %$in;
     my (@see, @see2, %was);
-    my $fence = 0;
+    my $fenced = fence_lines(\@lines)->{code};
     for my $i (0 .. $#lines) {
         # 0.1.4 A-3: a fenced code block is left alone, its fence lines too.
-        if ($lines[$i] =~ $FENCE_RE) { $fence = !$fence; next }
-        next if $fence;
+        next if $fenced->{$i};
         next if $in->{$i} || $mv{$i} || ($tag_re && $lines[$i] =~ $tag_re) || $lines[$i] =~ /\(was U-[0-9]+; not carried:/;
         my @seg = split /("[^"]*"|“[^”]*”|`[^`]*`)/, $lines[$i], -1;
         my @even = grep { $_ % 2 == 0 } 0 .. $#seg;

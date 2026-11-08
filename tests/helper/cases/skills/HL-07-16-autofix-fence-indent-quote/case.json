@@ -1,0 +1,145 @@
+{
+ "id": "HL-07 a closing fence is indented at most 3 columns, and a fence in a blockquote is one (0.1.5 E-3 review round 6)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.5 E-3 review round 6. fence_lines closed a block on a closing line at any indent, so a \"    ```\" line inside a ``` block (content, as CommonMark reads it) ended it, and it did not see a fence after a blockquote marker; in both a range inside the block was listed and published, where 0.1.4 refused it. A closing line is now indented at most 3 columns (or as far as the opening line, for a fence in a list item), and fences are read after `>` markers; a block in a quote ends with the quote.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_ab12cd34_other.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T12:00:00+03:00\nsession_id: ab12cd34-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\ngit_commit: 1234567890abcdef1234567890abcdef12345678\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-7 — other session\n## Decisions and do-not-re-raise\n- D-7: settle X-2..X-4 first\n- X-2: refuted \"r\"\n- X-3: refuted \"q\"\n- X-4: refuted \"s\"\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "name": "foreign base",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "foreign",
+     "previous_sid8": "ab12cd34"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- recheck X-2..X-3 later\n```text\n    ```\n- settle X-2..X-4 first\n```\n> ```\n> - settle X-2..X-4 again\n> ```\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "a range after a \"    ```\" line inside a ``` block, and one inside a ``` block in a blockquote, are left as written and block; the plain range above them is listed (it names X-2 and X-3 only, so X-4 is still hidden in the blocks)",
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 26$",
+     "^LINT id-range line 29$",
+     "^ADVISORY id-range line 23: publish lists each id: X-2\\.\\.X-3 as X-2, X-3$",
+     "^REFUSED: lint \\(2 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT id-range line 23$",
+     "^ADVISORY id-range line 26:",
+     "^ADVISORY id-range line 29:",
+     "^Wrote handoff"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^- settle X-2\\.\\.X-4 first$",
+       "^> - settle X-2\\.\\.X-4 again$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- rebuild:\n   ```\n   make\n   ```\n- settle X-2..X-4 first\n> ```\n> make\n- then X-2..X-4 again\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "a fence in a list item closes on its own indent, and a fence in a blockquote ends with the quote: the ranges after them are listed and the handoff is written (same stage, the refused draft rewritten)",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY id-range line 27: publish lists each id: X-2\\.\\.X-4 as X-2, X-3, X-4$",
+     "^ADVISORY id-range line 30: publish lists each id: X-2\\.\\.X-4 as X-2, X-3, X-4$",
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^   ```\\n   make\\n   ```\\n- settle X-2, X-3, X-4 first\\n> ```\\n> make\\n- then X-2, X-3, X-4 again$"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

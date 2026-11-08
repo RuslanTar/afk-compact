@@ -1,0 +1,334 @@
+{
+ "id": "HL-07, HL-08, HL-09 guards (0.1.5 E-3 review: what publish leaves as written)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.5 E-3 review findings. HL-07: a range in double quotes (an approval's words), a code span (a command's argument), a fenced code block or a file name is left as written and still blocks, as move_lines leaves quotes, code and file names; Step 1 and Next steps item 1 that match stay matched: when one is rewritten the other is too, or neither is. HL-08: an item 1 written `1)` or `1.do` counts as present (no item added, step1-mismatch blocks); an added item counts as carried when Step 1 is, and goes before the first list line (below a lead-in). HL-09: a `<n>` ending a path in spawns: still counts.",
+ "needs": [
+  "nonroot"
+ ],
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"let's finish the release prep\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Two questions:\\n1. Run the tests?\\n2. Push feat/x to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. yes\\n2. no\"}}\n{\"type\": \"assistant\", \"uuid\": \"a3\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Shall I merge MR !12 now?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes, but wait for CI first\"}}\n{\"type\": \"assistant\", \"uuid\": \"a5\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"The release notes are ready.\"}]}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"ok\"}}\n{\"type\": \"assistant\", \"uuid\": \"a7\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"May I push feat/z to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/z to origin now please\"}}\n{\"type\": \"user\", \"uuid\": \"u9\", \"timestamp\": \"2026-10-21T13:09:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge MR !12 once D-2..D-4 land\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "autofix"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/ledger.md",
+   "content": "- D-2: b\n- D-3: c\n- D-4: d\n"
+  },
+  {
+   "write": "$STAGE/restart/B-1.md",
+   "content": "item: B-1 · runtime id a1b2c3 · class ask\nscript: none (agent spawns, one per round)\ncommand: Workflow(script=\"round.js\") — same session only\ncwd: $TMP/repo\nspawns: agent: model opus, effort high (fix-<n>)\nexpected outputs: workflow return {clean}\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"merge MR !12 once D-2..D-4 land\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n"
+  },
+  {
+   "name": "HL-07 guard: a range inside an approval's quoted words is left as written and still blocks (publish never edits the user's words, so the quote still passes and the approval is not moved)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 10$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY id-range",
+     "^ADVISORY approval-quote",
+     "Q-2",
+     "^Wrote handoff"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry --only D-2..D-4`\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n```\ntools/run D-2..D-4\n```\n- notes: docs/D-2..D-4.md\n## Next steps\n1. `bin/test retry --only D-2..D-4`\n- then report the result to the user\n"
+  },
+  {
+   "write": "$STAGE/restart/B-1.md",
+   "content": "item: B-1 · runtime id a1b2c3 · class ask\nscript: none (agent spawns, one per round)\ncommand: Workflow(script=\"round.js\") — same session only\ncwd: $TMP/repo\nspawns: agent: model opus, effort high (out in $TMP/run-<n>)\nexpected outputs: workflow return {clean}\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "name": "HL-07 guard: a range in a code span (one argument of a command), a fenced code block or a file name is left as written and blocks; HL-09: a path ending in -<n> in spawns: is still a placeholder",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 4$",
+     "^LINT id-range line 30$",
+     "^LINT id-range line 26$",
+     "^LINT id-range line 28$",
+     "^LINT recipe-placeholder restart/B-1\\.md:5$",
+     "^REFUSED: lint \\(5 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY id-range",
+     "step1-mismatch"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^Step 1: `bin/test retry \\-\\-only D\\-2\\.\\.D\\-4`$",
+       "^1\\. `bin/test retry \\-\\-only D\\-2\\.\\.D\\-4`$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/restart/B-1.md",
+   "content": "item: B-1 · runtime id a1b2c3 · class ask\nscript: none (agent spawns, one per round)\ncommand: Workflow(script=\"round.js\") — same session only\ncwd: $TMP/repo\nspawns: agent: model opus, effort high (fix-<n>)\nexpected outputs: workflow return {clean}\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `X-2..X-4`: settle them\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. X-2..X-4: settle them\n- then report the result to the user\n"
+  },
+  {
+   "name": "HL-07 guard: when item 1 is flagged and Step 1, which matches it, cannot be rewritten the same way (its range is in a code span), neither is rewritten: the range blocks and no step1-mismatch is made",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 26$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY id-range",
+     "step1-mismatch"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry`\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1) settle the window\n- then report the result to the user\n"
+  },
+  {
+   "name": "HL-08 guard: an item 1 written `1)` counts as present (spec: a line starting `1.` or `1)`): publish adds no item and step1-mismatch blocks",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT step1-mismatch line 2$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY step1-mismatch",
+     "^ADVISORY id-range"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry`\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1.do the thing\n- then report the result to the user\n"
+  },
+  {
+   "name": "HL-08 guard: an item 1 written `1.` with no space after it (`1.do the thing`) counts as present (spec: a line starting `1.` or `1)`), though lint() reads no item 1 there: publish adds no item and step1-mismatch blocks",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT step1-mismatch line 2$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY step1-mismatch",
+     "^ADVISORY id-range"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: X-2..X-4: settle them (checked 2026-10-21 14:05 +0300)\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. X-2..X-4: settle them (checked 2026-10-21 14:05 +0300)\n- then report the result to the user\n"
+  },
+  {
+   "name": "HL-07: Step 1 and item 1 that match, with only item 1 flagged: publish lists the ids in both, so they still match (one ADVISORY line each) and the handoff is written",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY id-range line 4: publish lists each id: X-2\\.\\.X-4 as X-2, X-3, X-4$",
+     "^ADVISORY id-range line 26: publish lists each id: X-2\\.\\.X-4 as X-2, X-3, X-4$",
+     "^Wrote handoff to: $ROOT/repo/autofix/$STEM\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/autofix/$STEM.md",
+      "has": [
+       "^Step 1: X\\-2, X\\-3, X\\-4: settle them \\(checked 2026\\-10\\-21 14:05 \\+0300\\)$",
+       "^1\\. X\\-2, X\\-3, X\\-4: settle them \\(checked 2026\\-10\\-21 14:05 \\+0300\\)$"
+      ],
+      "lacks": [
+       "\\.\\.X-"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "own previous file now the written handoff (its Step 1 holds the stamp)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "autofix"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: X-2, X-3, X-4: settle them (checked 2026-10-21 14:05 +0300)\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\nIn this order:\n- then report the result to the user\n"
+  },
+  {
+   "name": "HL-08: Step 1 carried from the own previous file (stamp not printed here) and no item 1: the added item counts as carried too (no unprinted-time) and goes below the lead-in, before the first list line",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY step1-mismatch line 4: Next steps has no item 1; publish adds Step 1 there as item 1$",
+     "^Wrote handoff to: $ROOT/repo/autofix/$STEM-2\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/autofix/$STEM-2.md",
+      "has": [
+       "^## Next steps\\nIn this order:\\n1\\. X\\-2, X\\-3, X\\-4: settle them \\(checked 2026\\-10\\-21 14:05 \\+0300\\)\\n- then report the result to the user$"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

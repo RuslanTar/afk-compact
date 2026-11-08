@@ -1,5 +1,6 @@
 package skills::lint;
-# lib/skills/lint.pm: the publish lint of TPL §7. It flags and never edits.
+# lib/skills/lint.pm: the publish lint of TPL §7. lint() flags and never edits; fix() (0.1.5, E-3)
+# writes the mechanical blocking ones into a copy of the body for publish (see there).
 # Headings, the marker grammar, id_range_re, time_re, claim_tags.verified_re
 # and the clutter classes come from assets/handoff-spec.json (BUILD-PLAN §3.4);
 # the secret rules from the core secrets seam.
@@ -24,7 +25,9 @@ package skills::lint;
 #      0.1.2 (D-8): approval_context_only (a stage bound to a plugin handoff turn): every own
 #        approval must be the context-only form (approval-plugin-turn).
 #      0.1.3: carried_as {line => draft line} (publish's re-lint after moving approvals: a line
-#        whose draft text was carried stays carried).
+#        whose draft text was carried stays carried; 0.1.5: after skills::lint::fix too, from the
+#        base and from a foreign base alike; a text two draft lines became, [draft lines]: carried
+#        only when each is).
 #      0.1.5 (E-1, stable ledger): ledger_base (the own chain's previous file: the carry base when
 #        it is own or chain, own_previous with a foreign base; undef without one) for
 #        ledger-id-reuse, ledger-changed and ledger-carried (lib/ledger.pm); export_fn (repo
@@ -64,10 +67,10 @@ sub lint {
     # carried_as {line => draft line}: publish rewrote a moved approval's id in these lines
     # (skills::approvals::move_lines); one whose draft text was carried is still carried.
     my $cas = ref $in->{carried_as} eq 'HASH' ? $in->{carried_as} : {};
-    $prev_lines{$_} = 1 for grep { $prev_lines{ $cas->{$_} } } keys %$cas;
+    $prev_lines{$_} = 1 for grep { my @d = _draft_texts($cas, $_); @d && !grep { !$prev_lines{$_} } @d } keys %$cas;
     # CR-F29 (DP-27): tagged ledger lines carried from a foreign base keep the base's
-    # checked/verified stamps verbatim; their times are not checked.
-    my $carried = _foreign_carried($in, \@lines);
+    # checked/verified stamps verbatim; their times are not checked (a fixed line: its draft's).
+    my $carried = _foreign_carried($in, \@lines, $cas);
     my $mains = skills::spec::sections_main();
     my $locs = skills::spec::sections_location();
     my $nf = skills::spec::none_forms();
@@ -241,15 +244,17 @@ sub lint {
     # ---- carry provenance (small-rulings §2.4): with a foreign base, a U-/D-/X- line whose
     # content is the foreign base's and not the own chain's needs a `[from …]` tag; a
     # tagged approval is context only. Reworded lines are not detected (stated limit).
+    # A line publish rewrote (carried_as) is read as its draft text(s) too (0.1.5 review: a copied
+    # line whose range fix() listed no longer equalled the base's and went out untagged).
     my $tag_re = skills::spec::regex_at('carry.tag_re');
     my $note = skills::spec::get('carry.foreign_approval_note');
     if (($in->{previous_kind} // '') eq 'foreign' && defined $in->{previous}) {
         my %foreign = map { my $n = _ledger_norm($_, $tag_re); defined $n ? ($n => 1) : () } split /\n/, $in->{previous};
         my %own = map { my $n = _ledger_norm($_, $tag_re); defined $n ? ($n => 1) : () } split /\n/, ($in->{own_previous} // '');
         for my $i (0 .. $#lines) {
-            my $n = _ledger_norm($lines[$i], $tag_re) // next;
             next if $tag_re && $lines[$i] =~ $tag_re;
-            push @block, [ 'carry-provenance', 'line ' . ($i + 1) ] if $foreign{$n} && !$own{$n};
+            my @n = grep { defined } map { _ledger_norm($_, $tag_re) } $lines[$i], _draft_texts($cas, $lines[$i]);
+            push @block, [ 'carry-provenance', 'line ' . ($i + 1) ] if grep { $foreign{$_} && !$own{$_} } @n;
         }
     }
     if ($tag_re) {
@@ -501,6 +506,163 @@ sub lint {
     return { blocking => \@block, advisory => \@adv, acuity => $acuity, approvals => $approvals, ledger => $ledger };
 }
 
+# The most ids fix() writes for one id range; a longer range is left as written (and blocks).
+our $FIX_RANGE_MAX = 50;
+
+# fix($body, $blocking) (0.1.5, E-3: the usage review counted 14 drafts refused for id ranges,
+# each round a Write and a publish): the blocking entries of lint() that are mechanical, written
+# into a copy of the body.
+# - id-range: on a flagged line every range is written as its ids (`U-1..U-3` as `U-1, U-2, U-3`;
+#   a zero-padded start keeps its width), when each range there is one _range_ids reads, it
+#   covers at most $FIX_RANGE_MAX ids and none is in quotes (double, or single ones that open
+#   and close outside a word), a code span, a fenced or indented code block, an argument after
+#   `=` or a file name or path (_list_ranges; review: a rewritten quote lost a real approval,
+#   and a rewritten command changed its arguments); otherwise the line stays as written (and
+#   blocks). An approval line (in `## Approvals`, or any `U-<n>: approval` line) is never
+#   rewritten (review: its action and targets are compared with the own chain's file, so a
+#   carried approval stopped being carried); a range there that still blocks once the other
+#   lines are listed stays a LINT line.
+#   Step 1 and Next steps item 1 that matched still match: when one of them is rewritten the
+#   other is rewritten the same way, or, when that cannot be done, neither is.
+# - step1-mismatch: when Next steps has no item 1 (no line starting `1.` or `1)`), Step 1's text
+#   (the first `Step 1:` line, as lint() reads it; an empty one adds nothing) goes in as item 1,
+#   before the section's first list line outside a code block (after its text when it has none;
+#   none when that place is inside a fence left open); an item 1 that differs stays. The added
+#   line counts as carried when Step 1 does.
+# Returns {body, fixes => [{rule, line, text}…] (line: the body line it changed, Step 1's for an
+# added item), map => {fixed body line => body line; the added item reads as the Next steps
+# heading's line, so a finding on it is told apart from one on Step 1},
+# was => {fixed line text => line text, or [line texts] when more than one line has that text
+# now (lint carried_as: carried only when each is)}}.
+sub fix {
+    my ($body, $blocking) = @_;
+    my @lines = split /\n/, $body // '', -1;
+    my (%at, @fixes, %was, %fx);
+    for my $e (@{ $blocking || [] }) {
+        push @{ $at{ $e->[0] } }, $1 if ($e->[1] // '') =~ /\Aline ([0-9]+)\z/;
+    }
+    my $idr = $at{'id-range'} ? skills::spec::id_range_re() : undef;
+    # Lines left as written: a fenced or an indented code block (4 spaces or a tab, not a list
+    # item) and an approval line.
+    # %code: the code lines alone; %open: a fence is open after that line. Fences as move_lines
+    # reads them (skills::approvals::fence_lines, CommonMark's closing rule).
+    my $fl = skills::approvals::fence_lines(\@lines);
+    my %code = %{ $fl->{code} };
+    my %open = %{ $fl->{open} };
+    for my $i (0 .. $#lines) {
+        $code{$i} = 1 if $lines[$i] =~ /\A(?: {4}|\t)/ && $lines[$i] !~ /\A\s*(?:[-*+]|[0-9]+[.)])\s/;
+    }
+    my %keep = (%{ skills::approvals::section_lines(\@lines) }, %code);
+    $keep{$_} = 1 for grep { skills::approvals::is_approval_line($lines[$_]) } 0 .. $#lines;
+    my $add = sub {
+        my ($new, @o) = @_;
+        my %u = map { $_ => 1 } _draft_texts(\%was, $new), @o;
+        my @u = sort keys %u;
+        $was{$new} = @u == 1 ? $u[0] : \@u;
+    };
+    my $list = sub { my ($i) = @_; return $idr && defined $lines[$i] && !$keep{$i} ? _list_ranges($lines[$i], $idr) : () };
+    my %seen;
+    for my $n (grep { $idr && !$seen{$_}++ } @{ $at{'id-range'} || [] }) {
+        my ($new, $r) = $list->($n - 1) or next;
+        $fx{ $n - 1 } = [ $new, $r ];
+    }
+    my $mains = skills::spec::sections_main();
+    my $sec = sub {
+        my ($lit) = @_;
+        my ($h) = grep { $lines[$_] =~ /\A##\s/ && $lines[$_] !~ /\A###/ && index($lines[$_], $lit) == 0 } 0 .. $#lines;
+        return undef unless defined $h;
+        my $e = $h + 1;
+        $e++ while $e <= $#lines && !($lines[$e] =~ /\A##\s/ && $lines[$e] !~ /\A###/);
+        return { h => $h, body => [ $h + 1 .. $e - 1 ] };
+    };
+    my ($rh, $ns) = @$mains ? ($sec->($mains->[0]{literal}), $sec->($mains->[-1]{literal})) : ();
+    my ($si) = $rh ? grep { $lines[$_] =~ /\A\s*Step 1:/ } @{ $rh->{body} } : ();
+    # Step 1 and item 1 as lint() reads them: a pair that matched keeps matching (review: only
+    # item 1 led its line, so only it was flagged and rewritten, and step1-mismatch blocked).
+    my ($ni) = $ns ? grep { $lines[$_] =~ /\A\s*1\.\s+/ } @{ $ns->{body} } : ();
+    if (defined $si && defined $ni && ($fx{$si} || $fx{$ni})) {
+        my $pair = sub {
+            my ($s, $n) = @_;
+            my ($s1) = $s =~ /\A\s*Step 1:\s*(.*)\z/;
+            my ($n1) = $n =~ /\A\s*1\.\s+(.*)\z/;
+            return _step1_same($s1, $n1);
+        };
+        if ($pair->($lines[$si], $lines[$ni])) {
+            for my $i (grep { !$fx{$_} } $si, $ni) { my ($new, $r) = $list->($i); $fx{$i} = [ $new, $r ] if defined $new }
+            my ($s, $n) = map { $fx{$_} ? $fx{$_}[0] : $lines[$_] } $si, $ni;
+            delete @fx{ $si, $ni } unless $pair->($s, $n);
+        }
+    }
+    # A text a fixed line now shares with a line left as is reads as that line's too.
+    my %plain = map { ($lines[$_] => 1) } grep { !$fx{$_} } 0 .. $#lines;
+    for my $i (sort { $a <=> $b } keys %fx) {
+        my ($new, $r) = @{ $fx{$i} };
+        $add->($new, $lines[$i]);
+        $lines[$i] = $new;
+        push @fixes, { rule => 'id-range', line => $i + 1, text => 'publish lists each id: ' . join('; ', @$r) };
+    }
+    my @org = map { $_ + 1 } 0 .. $#lines;
+    if ($at{'step1-mismatch'} && defined $si && $ns && !grep { $lines[$_] =~ /\A\s*1[.)]/ } @{ $ns->{body} }) {
+        my ($s1) = $lines[$si] =~ /\A\s*Step 1:\s*(.*?)\s*\z/;
+        if ($s1 =~ tr/`//dr =~ /\S/) {
+            # Before the first list line, so a lead-in (`In this order:`) stays above the list; a line
+            # of a code block is no list line, and an item that would land in an open fence is not
+            # added (review: `- old` of a diff block took the item inside the block).
+            my ($li) = grep { !$code{$_} && $lines[$_] =~ /\A {0,3}(?:[-*+]|[0-9]+[.)])\s/ } @{ $ns->{body} };
+            my @c = grep { $lines[$_] =~ /\S/ } @{ $ns->{body} };
+            my $i = $li // (@c ? $c[-1] + 1 : $ns->{h} + 1);
+            if (!$open{ $i - 1 }) {
+                my @d = _draft_texts(\%was, $lines[$si]);
+                $add->("1. $s1", @d ? @d : $lines[$si]);
+                splice @lines, $i, 0, "1. $s1";
+                splice @org, $i, 0, $ns->{h} + 1;
+                push @fixes, { rule => 'step1-mismatch', line => $si + 1, text => 'Next steps has no item 1; publish adds Step 1 there as item 1' };
+            }
+        }
+    }
+    return { body => $body, fixes => [], map => {}, was => {} } unless @fixes;
+    $add->($_, $_) for grep { $plain{$_} } keys %was;
+    return { body => join("\n", @lines), fixes => [ sort { $a->{line} <=> $b->{line} } @fixes ],
+             map => { map { ($_ + 1 => $org[$_]) } 0 .. $#org }, was => \%was };
+}
+
+# _list_ranges($line, $id_range_re) -> ($new line, ["<range> as <ids>"…]): every range on the
+# line written as its ids, or () when a range there is not listable (_range_list), sits in
+# quotes or a code span (the user's words, a command: the segments move_lines leaves alone, and
+# single quotes that open and close outside a word, so `don't` opens none), is a command's
+# argument after `=` (`--only=D-2..D-4`) or is part of a file name, a path or a longer word
+# (`/` or `-` before it; `/`, `-`, or `.` and a word character after it).
+sub _list_ranges {
+    my ($l, $idr) = @_;
+    my (@r, $bad);
+    my @seg = split /("[^"]*"|\x{201c}[^\x{201d}]*\x{201d}|`[^`]*`|(?<![\w'])'[^']*'(?![\w'])|\x{2018}[^\x{2019}]*\x{2019}(?!\w))/, $l, -1;
+    for my $k (0 .. $#seg) {
+        if ($k % 2) { $bad = 1 if $seg[$k] =~ $idr; next }
+        my $orig = $seg[$k];
+        $seg[$k] =~ s{($idr)}{
+            my ($r, $x0, $x1) = ($1, $-[0], $+[0]);
+            my $x = _range_list($r);
+            $bad = 1 if !defined $x || substr($orig, 0, $x0) =~ m{[/=-]\z} || substr($orig, $x1) =~ m{\A(?:[/-]|\.\w)};
+            push @r, "$r as $x" if defined $x;
+            $x // $r;
+        }ge;
+    }
+    return () if $bad || !@r;
+    my $new = join '', @seg;
+    return $new eq $l ? () : ($new, \@r);
+}
+
+# The ids an id range covers as fix() writes them (`D-1, D-2, D-3`; a zero-padded start keeps its
+# width: `D-01, D-02`), or undef when _range_ids reads none or they are over $FIX_RANGE_MAX.
+sub _range_list {
+    my ($r) = @_;
+    my $ids = _range_ids($r);
+    return undef unless $ids && @$ids <= $FIX_RANGE_MAX;
+    my ($k, $x, $y) = $r =~ /\A([UDXQB])-([0-9]+)\D+?(?:[UDXQB]-)?([0-9]+)\z/;
+    my $w = $x =~ /\A0/ ? length $x : 1;
+    return join ', ', map { sprintf '%s-%0*d', $k, $w, $_ } ($x + 0) .. ($y + 0);
+}
+
 # A U-, D- or X- ledger line's content with its bullet, id and carry tags removed and
 # white space collapsed; undef for any other line.
 sub _ledger_norm {
@@ -517,18 +679,31 @@ sub _ledger_norm {
 # with a `[from …]` tag whose _ledger_norm (no leading id, no tags, spacing folded) equals
 # a base line's. Its stamps are then the base's own; any tag counts, since a base line
 # that already had a tag keeps that tag (template rule 8).
+# A line publish rewrote (carried_as, $cas) is read as its draft text (0.1.5 review: a carried line
+# whose range fix() listed no longer equalled the base's, so its stamp blocked as unprinted-time);
+# a text two draft lines became is carried only when each is.
 sub _foreign_carried {
-    my ($in, $lines) = @_;
+    my ($in, $lines, $cas) = @_;
     my %c;
     return \%c unless ($in->{previous_kind} // '') eq 'foreign' && defined $in->{previous};
     my $tag_re = skills::spec::regex_at('carry.tag_re') or return \%c;
     my %base = map { my $n = _ledger_norm($_, $tag_re); defined $n ? ($n => 1) : () } split /\n/, $in->{previous};
+    my $on = sub { my ($l) = @_; return 0 unless $l =~ $tag_re; my $n = _ledger_norm($l, $tag_re); return defined $n && $base{$n} ? 1 : 0 };
     for my $i (0 .. $#$lines) {
         next unless $lines->[$i] =~ $tag_re;
-        my $n = _ledger_norm($lines->[$i], $tag_re);
-        $c{$i} = 1 if defined $n && $base{$n};
+        my @d = _draft_texts($cas, $lines->[$i]);
+        @d = ($lines->[$i]) unless @d;
+        $c{$i} = 1 unless grep { !$on->($_) } @d;
     }
     return \%c;
+}
+
+# The draft texts carried_as gives a line (one, or the list when two draft lines became it), or ().
+sub _draft_texts {
+    my ($cas, $t) = @_;
+    my $v = ref $cas eq 'HASH' ? $cas->{$t} : undef;
+    return () unless defined $v;
+    return ref $v eq 'ARRAY' ? @$v : ($v);
 }
 
 # numbers ascending (lint() holds a lexical $b, the brand, so it cannot sort with $a and $b itself)
@@ -596,12 +771,20 @@ sub _step1_same {
 # - the words of an agent prompt after a `prompt=` / `prompt:` argument (not a CLI flag such as
 #   `--prompt=`): they are the spawned agent's own text, unless the `<…>` is the whole prompt
 #   value (`prompt="<the brief above>"`), a pointer or part of a path (`<scratch>/out.md`,
-#   `$TMP/<name>.md`).
+#   `$TMP/<name>.md`);
+# - in `spawns:`, a counter `<n>` that ends an agent's label after `-` (`fix-7c-<n>`: one agent
+#   per round, numbered as it starts; 0.1.5, E-3), not followed by `/`, `.`, `-` or a word
+#   character (`fix-<n>-final` still counts); the label is one word of letters, digits, `_` and
+#   `-` in a label place: right after `(`, `[`, `,`, `spawns:`, `agent:` or `label` (`label:`,
+#   `label=`), the spec's list and no other word (review: `model claude-<n>` and `output
+#   out-<n>` are stand-ins, not labels; review 5: `agents`, `labels` and a bare `agent` were
+#   label places too), so the end of a path (`$TMP/run-<n>`) still counts.
 # A pointer stands for text stated elsewhere: a `<…>` with a word such as above, same or that
 # (`<the brief above>`, `<same path>`, `<that copy>`).
 sub _placeholder {
     my ($l) = @_;
     my $ph = qr/<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/;
+    $l =~ s{((?:[(\[,]|\A\s*spawns:|\bagent:|\blabel\b[:=]?)[ \t]*["'`]?)([A-Za-z0-9_][A-Za-z0-9_-]*-)<n>(?![\w/.<-])}{$1$2}g if $l =~ /\A\s*spawns:/;
     my $pointer = sub {
         my ($t) = @_;
         while ($t =~ /($ph)/g) {

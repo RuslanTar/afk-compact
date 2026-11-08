@@ -1,0 +1,263 @@
+{
+ "id": "HL-07, HL-08, HL-09 (0.1.5 E-3: publish fixes the mechanical lints)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.5 (E-3, usage review: 14 drafts refused for id ranges, 18 for placeholders, fix-7c-<n> still flagged; a failed handoff turn costs up to 41K tokens). HL-07 id-range: publish writes each flagged range as its ids (two ranges on one line: one ADVISORY line naming both) and publishes; a line holding a range whose ends differ in kind, or one over 50 ids, is left as written and still blocks. HL-08 step1-mismatch: when Next steps has no item 1, publish adds Step 1 there as item 1, before the section's first line; an item 1 that differs still blocks. HL-09 recipe-placeholder: a spawn label's counter (`fix-7c-<n>`, `verify_safety-<n>`) passes; `<n>` before `/` or `.`, a bare `<n>` and another letter (`review-<k>`) still block. Every fix prints one ADVISORY line at the draft's line (a later LINT or ADVISORY line, a moved approval's too, keeps the draft's number), body.md stays as written, and a written row counts `lint_fixed`.",
+ "needs": [
+  "nonroot"
+ ],
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u0\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"let's finish the release prep\"}}\n{\"type\": \"assistant\", \"uuid\": \"a1\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Two questions:\\n1. Run the tests?\\n2. Push feat/x to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"1. yes\\n2. no\"}}\n{\"type\": \"assistant\", \"uuid\": \"a3\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"Shall I merge MR !12 now?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"yes, but wait for CI first\"}}\n{\"type\": \"assistant\", \"uuid\": \"a5\", \"timestamp\": \"2026-10-21T13:05:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"The release notes are ready.\"}]}}\n{\"type\": \"user\", \"uuid\": \"u6\", \"timestamp\": \"2026-10-21T13:06:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"ok\"}}\n{\"type\": \"assistant\", \"uuid\": \"a7\", \"timestamp\": \"2026-10-21T13:07:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"May I push feat/z to origin?\"}]}}\n{\"type\": \"user\", \"uuid\": \"u8\", \"timestamp\": \"2026-10-21T13:08:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/z to origin now please\"}}\n"
+    }
+   ]
+  },
+  {
+   "name": "begin",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "autofix"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/restart/B-1.md",
+   "content": "item: B-1 · runtime id a1b2c3 · class ask\nscript: none (agent spawns, one per round)\ncommand: Workflow(script=\"round.js\") — same session only\ncwd: $TMP/repo\nspawns: agent: model opus, effort xhigh, agentType wf-worker (build-7c, fix-7c-<n>, verify-accept-<n>, verify_safety-<n>)\nexpected outputs: workflow return {clean, fixes}\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "write": "$STAGE/restart/B-2.md",
+   "content": "item: B-2 · runtime id d4e5f6 · class ask\nscript: none (agent spawns)\ncommand: Agent(subagent_type=\"reviewer\", model=\"opus\", effort=\"high\", prompt=\"review the retry fix\")\ncwd: $TMP/repo\nspawns: agent: model opus, effort high (brief in review-<n>/brief.md)\nspawns: agent: model opus, effort high (log in review-<n>.log)\nspawns: agent: model opus, effort high (<n> reviewers)\nspawns: agent: model opus, effort high (review-<k>)\nexpected outputs: $TMP/repo/review.md\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-2..D-4, D-6..D-7 settled; full text in evidence/x/ledger.md\n- D-10..D-11 and D-12..X-13 parked; full text in evidence/x/ledger.md\n- D-100..D-160 settled; full text in evidence/x/ledger.md\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n- then report the result to the user\n- then read /tmp/hl07-scratch/out.log\n- status: /opt/tools/scripts/$BRAND-store status\n"
+  },
+  {
+   "name": "HL-07, HL-08, HL-09 with other LINT lines: publish refuses as before; the ADVISORY lines say what it will fix (fix: none needed, once the LINT lines are fixed) at the draft's lines; a range it cannot list (ends that differ in kind, more than 50 ids) and a <n> that is not a spawn label's counter still block; body.md is kept as written",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^ADVISORY id-range line 13: publish lists each id: D-2\\.\\.D-4 as D-2, D-3, D-4; D-6\\.\\.D-7 as D-6, D-7$",
+     "^ADVISORY step1-mismatch line 4: Next steps has no item 1; publish adds Step 1 there as item 1$",
+     "^  why: a range hides which ids exist, so carried ids get lost · fix: none needed: publish makes this change once the LINT lines are fixed$",
+     "^  why: two versions of the next action make the next session guess · fix: none needed: publish makes this change once the LINT lines are fixed$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-2, a re-ask; ",
+     "^LINT id-range line 14$",
+     "^LINT id-range line 15$",
+     "^LINT ephemeral-path line 32$",
+     "^LINT recipe-placeholder restart/B-2\\.md:5$",
+     "^LINT recipe-placeholder restart/B-2\\.md:6$",
+     "^LINT recipe-placeholder restart/B-2\\.md:7$",
+     "^LINT recipe-placeholder restart/B-2\\.md:8$",
+     "^ADVISORY store-path line 33$",
+     "^REFUSED: lint \\(7 blocking\\); draft kept at $STAGE/body.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT step1-mismatch",
+     "^LINT id-range line 13$",
+     "^LINT recipe-placeholder restart/B-1",
+     "^ADVISORY id-range line 1[45]\\b",
+     "^LINT ephemeral-path line 33$",
+     "^ADVISORY store-path line 34$",
+     "^Wrote handoff",
+     "the handoff is written with this change$"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^- D-2\\.\\.D-4, D-6\\.\\.D-7 settled; full text in evidence/x/ledger\\.md$",
+       "^## Next steps\\n- then report the result to the user$"
+      ],
+      "lacks": [
+       "^1\\. "
+      ]
+     },
+     {
+      "path": "$ROOT/repo/autofix/$STEM.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID.classic.jsonl",
+      "lacks": [
+       "^(?=.*\"REFUSED:lint\").*\"lint_fixed\""
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "REFUSED:lint",
+       "blocking": 7
+      }
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/restart/B-2.md",
+   "content": "item: B-2 · runtime id d4e5f6 · class ask\nscript: none (agent spawns)\ncommand: Agent(subagent_type=\"reviewer\", model=\"opus\", effort=\"high\", prompt=\"review the retry fix\")\ncwd: $TMP/repo\nspawns: agent: model opus, effort high\nexpected outputs: $TMP/repo/review.md\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-2..D-4, D-6..D-7 settled; full text in evidence/x/ledger.md\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry --all` — done when the suite passes\n- then report the result to the user\n- status: /opt/tools/scripts/$BRAND-store status\n"
+  },
+  {
+   "name": "HL-08: an item 1 that differs from Step 1 still blocks (publish never rewrites it); the range is still fixed",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT step1-mismatch line 2$",
+     "^ADVISORY id-range line 13: publish lists each id: D-2\\.\\.D-4 as D-2, D-3, D-4; D-6\\.\\.D-7 as D-6, D-7$",
+     "^  why: a range hides which ids exist, so carried ids get lost · fix: none needed: publish makes this change once the LINT lines are fixed$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY step1-mismatch",
+     "^LINT id-range",
+     "^Wrote handoff"
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — retry fix committed, report pending\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"yes\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-2..D-4, D-6..D-7 settled; full text in evidence/x/ledger.md\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\n| id | question: what · why it matters · options · recommendation | blocks | owner | raised by | status |\n|---|---|---|---|---|---|\n| Q-1 | Keep the 45 s retry window? Upstream retries at 40 s. Recommend 45 s | Step 2 | user | agent | unasked |\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n- then report the result to the user\n- status: /opt/tools/scripts/$BRAND-store status\n"
+  },
+  {
+   "name": "HL-07, HL-08, HL-09: nothing else blocks: the handoff is written with the ids listed and Step 1 as Next steps item 1, one ADVISORY line per fix (fix: none needed, written with this change); a moved approval and a later advisory keep the draft's line numbers; the spawn label's <n> stays in the filed recipe; the row counts lint_fixed",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "autofix",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY id-range line 13: publish lists each id: D-2\\.\\.D-4 as D-2, D-3, D-4; D-6\\.\\.D-7 as D-6, D-7$",
+     "^ADVISORY step1-mismatch line 4: Next steps has no item 1; publish adds Step 1 there as item 1$",
+     "^  why: a range hides which ids exist, so carried ids get lost · fix: none needed: the handoff is written with this change$",
+     "^  why: two versions of the next action make the next session guess · fix: none needed: the handoff is written with this change$",
+     "^ADVISORY approval-quote line 10: U-2 goes to Open questions as Q-2, a re-ask; ",
+     "^ADVISORY store-path line 30$",
+     "^Wrote handoff to: $ROOT/repo/autofix/$STEM.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "publish makes this change once the LINT lines are fixed$",
+     "^ADVISORY store-path line 31$"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/autofix/$STEM.md",
+      "has": [
+       "^- D-2, D-3, D-4, D-6, D-7 settled; full text in evidence/x/ledger\\.md$",
+       "^## Next steps\\n1\\. `bin/test retry` — for \"fix the retry window\"\\n- then report the result to the user$",
+       "^Step 1: `bin/test retry` — for \"fix the retry window\"$",
+       "^- Q-2: re-ask before acting: "
+      ],
+      "lacks": [
+       "\\.\\.D-",
+       "^## Approvals"
+      ]
+     },
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^- D-2\\.\\.D-4, D-6\\.\\.D-7 settled"
+      ]
+     },
+     {
+      "path": "$ROOT/repo/autofix/evidence/$STEM/restart/B-1.md",
+      "has": [
+       "^spawns: agent: model opus, effort xhigh, agentType wf-worker \\(build-7c, fix-7c-<n>, verify-accept-<n>, verify_safety-<n>\\)$"
+      ]
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "lint_fixed": 2,
+       "approvals_moved": 1
+      }
+     }
+    ]
+   }
+  }
+ ]
+}
