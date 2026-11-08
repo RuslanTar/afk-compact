@@ -965,18 +965,32 @@ our $OPEN_HEADING = '## Open questions';
 # on a line of 3 or more backticks or tildes (a backtick fence's info text holds no backtick) and
 # closes only on a line of the same character, at least as long, with nothing after it but white
 # space; one left open runs to the end (0.1.5 E-3 review 4: any fence line toggled, so a ``` line
-# inside a ~~~ block ended it). Indentation is not counted (a fence in a list item is one too).
+# inside a ~~~ block ended it). A fence may open at any indent (one in a list item is one too, and
+# one CommonMark reads as indented code only keeps more lines as code); the closing line may be
+# indented at most 3 columns, or as far as the opening line when that is more (review 5: a
+# "    ```" line inside a ``` block closed it, so the code after it was rewritten; tabs to the
+# next column of 4). Fences are read after blockquote markers (`>`, one space after each; review 5:
+# a range inside "> ```" was rewritten); a block in a quote ends on a line with fewer markers.
 # Returns {code => {index => 1: a fence line or a line inside}, open => {index => 1: open after it}}.
 sub fence_lines {
     my ($lines) = @_;
     my (%code, %open, $f);
+    my $cols = sub { my $w = 0; $w += $_ eq "\t" ? 4 - $w % 4 : 1 for split //, $_[0]; $w };
     for my $i (0 .. $#$lines) {
-        my $l = $lines->[$i] // '';
+        my ($l, $d) = ($lines->[$i] // '', 0);
+        if ($f) {
+            $d++ while $d < $f->{d} && $l =~ s/\A {0,3}>[ ]?//;
+            undef $f if $d < $f->{d};
+        }
         if ($f) {
             $code{$i} = 1;
-            undef $f if $l =~ ($f->[0] eq '`' ? qr/\A[ \t]*(`+)[ \t]*\r?\z/ : qr/\A[ \t]*(~+)[ \t]*\r?\z/) && length $1 >= $f->[1];
-        } elsif ($l =~ /\A[ \t]*(`{3,}|~{3,})(.*)\z/ && !(substr($1, 0, 1) eq '`' && index($2, '`') >= 0)) {
-            ($code{$i}, $f) = (1, [ substr($1, 0, 1), length $1 ]);
+            undef $f if $l =~ /\A([ \t]*)(`+|~+)[ \t]*\r?\z/ && substr($2, 0, 1) eq $f->{c}
+                && length $2 >= $f->{n} && $cols->($1) <= ($f->{w} > 3 ? $f->{w} : 3);
+        } else {
+            $d++ while $l =~ s/\A {0,3}>[ ]?//;
+            if ($l =~ /\A([ \t]*)(`{3,}|~{3,})(.*)\z/ && !(substr($2, 0, 1) eq '`' && index($3, '`') >= 0)) {
+                ($code{$i}, $f) = (1, { c => substr($2, 0, 1), n => length $2, w => $cols->($1), d => $d });
+            }
         }
         $open{$i} = 1 if $f;
     }
