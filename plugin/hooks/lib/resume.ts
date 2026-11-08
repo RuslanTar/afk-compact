@@ -13,7 +13,7 @@ import { channelToken, claimBy, measure } from './helper'
 import { clipQuestion, oneLine } from './question'
 import { escalate, helperMissing, log, stamp, vettedWatch } from './log'
 import type { Lane, LaneFacts, LaneResult } from './lane'
-import { LANES, LEGACY_STATUS, asLaneFacts, laneBasis, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
+import { LANES, LEGACY_STATUS, asLaneFacts, endedRows, laneBasis, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
 
 /**
  * MOD-SPEC §3.4: soft total 6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
@@ -259,9 +259,11 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: str
  * that measure was taken. `fresh` null: no measure is taken (a rebuild whose stored measure is
  * missing renders without one). `at`: when a stored measure was taken, so a rebuild that takes no
  * new one keeps its `@measured_at@` (IC-1 D3: the stamp shows the facts' age); else now.
+ * `notified`: the tasks the delivering prompt reported ended (`PendingResume.notified`), whose
+ * in-flight rows a block with no idle episode shows ended (an idle block takes its episode's).
  */
 export async function buildBlockWith(
-  d: Deps, sid: string, a: BlockArgs, fresh?: string | null, at?: number,
+  d: Deps, sid: string, a: BlockArgs, fresh?: string | null, at?: number, notified?: ReadonlySet<string>,
 ): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; lane?: LaneResult; running?: number }> {
   // AP-5: the saved copy goes with the re-measure, so the summary's approvals are checked.
   const remeasure = fresh === null ? undefined : fresh ?? (await measure(d, sid, a.nonce, undefined, a.savedCopy ?? undefined))
@@ -342,9 +344,12 @@ export async function buildBlockWith(
     tags.push('resumed')
     runtime.resume_line = resumeLine(a.step1)
   }
-  const block = remeasure === undefined
+  // 0.1.6: rows of units a notification reported ended read `ended`; the count above, the Basis
+  // and the measure returned stay as measured.
+  const shown = remeasure === undefined ? undefined : endedRows(remeasure, ep?.ended ?? notified ?? new Set())
+  const block = shown === undefined
     ? assemble(d.name, 'resume-context', tags, runtime, ['remeasure', ...store.drop])
-    : fitBlock(m => assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: m }, store.drop), remeasure)
+    : fitBlock(m => assemble(d.name, 'resume-context', tags, { ...runtime, remeasure: m }, store.drop), shown)
   if (block.length > BLOCK_SOFT) await log(d, sid, 'resume_block_over_soft', { nonce: a.nonce ?? null, chars: block.length })
   return { block, remeasure, measuredAt, ...(lane !== undefined ? { lane, running } : {}) }
 }
@@ -646,6 +651,18 @@ export function laneWorkStarted(s: LoadState): void {
 /** An agent loop starts again (a message woke it): a task a notification ended runs once more. */
 export function laneAgentStarted(s: LoadState, agentId: string): void {
   s.idleLane?.ended.delete(agentId)
+  s.pending?.notified?.delete(agentId)
+}
+
+/**
+ * 0.1.6, from `prompt.submit` of a prompt not of ours, before it enters: the tasks its
+ * notification reports ended (`notifiedTasks`) while a block waits, the prompt that delivers it
+ * (or one before it that did not enter), so the block shows their in-flight rows ended.
+ */
+export function pendingNotified(s: LoadState, kind: string, text: string): void {
+  const p = s.pending
+  if (!p || kind !== 'task-notification') return
+  for (const id of notifiedTasks(text)) (p.notified ??= new Set()).add(id)
 }
 
 /** Owner xxxxxxxx-25 ("Stop in halt"): an idle block's halt variant follows halt mode at delivery. */
@@ -723,11 +740,14 @@ async function freshBlock(
   const args: BlockArgs = { ...given, script: await scriptReader(d) }
   // Away digest phase 1: an idle block is built again at delivery (from its stored measure, no
   // helper call), so its lane is read with the agents running now, whatever its age.
+  // 0.1.6: likewise a block whose in-flight rows list a task its delivering prompt reported ended.
+  const notified = pend.notified
   const changed = (args.halt === true) !== (pend.args.halt === true) || args.again !== pend.args.again || args.idle === true
     || args.questionTimedOut !== pend.args.questionTimedOut || args.script !== pend.args.script
+    || (notified !== undefined && pend.remeasure !== undefined && endedRows(pend.remeasure, notified) !== pend.remeasure)
   const at = pend.measuredAt ?? pend.builtAt
   const stored = async () => changed
-    ? { ...(await buildBlockWith(d, pend.sid, args, pend.remeasure ?? null, at)), remeasured: false }
+    ? { ...(await buildBlockWith(d, pend.sid, args, pend.remeasure ?? null, at, notified)), remeasured: false }
     : { block: pend.block, remeasure: pend.remeasure, measuredAt: at, remeasured: false, ...(pend.lane !== undefined ? { lane: pend.lane } : {}) }
   if (!force && t0 - pend.builtAt <= REMEASURE_AFTER_MS) return stored()
   const fresh = await measure(d, pend.sid, pend.nonce, REMEASURE_MS, args.savedCopy ?? undefined, REMEASURE_HELPER_MS)
@@ -735,7 +755,7 @@ async function freshBlock(
     await log(d, pend.sid, 'resume_remeasure_failed', { nonce: pend.nonce, age_s: ageS })
     return stored()
   }
-  const built = await buildBlockWith(d, pend.sid, args, keepGsdLines(fresh, pend.remeasure))
+  const built = await buildBlockWith(d, pend.sid, args, keepGsdLines(fresh, pend.remeasure), undefined, notified)
   await log(d, pend.sid, 'resume_remeasured', { nonce: pend.nonce, age_s: ageS, ms: (await d.now()) - t0 })
   return { ...built, remeasured: true }
 }

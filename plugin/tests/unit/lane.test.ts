@@ -11,7 +11,7 @@ import type { Tag } from '../../hooks/lib/assemble'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
 import type { LaneFacts } from '../../hooks/lib/lane'
-import { DIGEST_END_RE, LANE_BASIS_MAX, LANE_WHY_MAX, OFF_LINE_END_RE, asLaneFacts, digestLine, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, startsWork } from '../../hooks/lib/lane'
+import { DIGEST_END_RE, LANE_BASIS_MAX, LANE_WHY_MAX, OFF_LINE_END_RE, asLaneFacts, digestLine, endedRows, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, startsWork } from '../../hooks/lib/lane'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
@@ -2420,4 +2420,64 @@ test('D-2 review 2: a `·` mark inside brackets is a note\'s too: `— todo (rev
   const h = sum('finished', ['1. write the fix · done', '2. merge the MR · todo (review: done, CI · done)', '3. run the suite — todo (the earlier run - done; rerun · done)'])
   expect([h.done, h.todo, h.unmarked]).toEqual([1, 2, 0])
   expect(laneOf(h, M).lane).toBe('working')
+})
+
+// ---- 0.1.6 sidecar lane: the in-flight rows of a block that goes out at a unit's own result
+// turn listed that unit as running (both 0.1.5 AD runs; 0.1.4 too): the sidecar slot is written
+// only at a turn's end, after it. Each test failed on e5fabaa2.
+
+/** The AD1 shape: shells ta and tb, a Monitor and a cron, measured while all ran. */
+const AD1_ROWS = 'Git: main @ 3f9c2e1, 0 modified, 0 untracked\nIn flight (sidecar 2026-11-08 11:02 +0200):\n' +
+  '  ta · shell · running\n  tb · shell · running · output /tmp/tb.out (exists)\n  m1 · monitor · running\n  c1 · cron · scheduled\nEvidence: none'
+const notifAs = (id: string, status: string): string =>
+  `<task-notification>\n<task-id>${id}</task-id>\n<status>${status}</status>\n<summary>Background command "job" ${status}</summary>\n</task-notification>`
+
+test('0.1.6 sidecar: endedRows marks only the running or pending rows of ended ids; Monitors, crons, other rows and lines outside In flight stay', () => {
+  const ended = new Set(['ta', 'tb', 'm1', 'c1', 'done1', 'x'])
+  const m = AD1_ROWS.replace('Evidence: none', '  done1 · shell · completed\n  tc · workflow · pending\nEvidence: none x · shell · running')
+  expect(endedRows(m, ended)).toBe(m
+    .replace('  ta · shell · running', '  ta · shell · ended')
+    .replace('  tb · shell · running · output', '  tb · shell · ended · output'))
+  expect(endedRows(m, new Set(['tc']))).toContain('  tc · workflow · ended\n')
+  expect(endedRows(m, new Set())).toBe(m)
+  // The count reads the measure as it was: the marked copy never feeds it.
+  expect(measuredRunning(m)).toEqual(['ta', 'tb', 'tc'])
+})
+
+for (const status of ['completed', 'failed', 'killed']) {
+  test(`0.1.6 sidecar: an idle block taken by ta's result turn (${status}) shows ta ended, tb, the Monitor and the cron as measured; the Basis count is 0.1.5's`, async ($, on) => {
+    const w = new World().install(on)
+    w.resumeHere = 'Status: soft-blocked · Acuity: stable · State: two shells run (checkpoint: clean)\nStep 1: none\n' +
+      '## Next steps\n1. when B-1 ends, read its log · todo\n2. when B-2 ends, read its log · todo\n3. `git push` · todo; gated: ask user: push\n'
+    w.measureBlock = AD1_ROWS
+    await w.start($)
+    await idleCompaction($, w)
+    await w.advance(5000)
+    const block = (await resultTurn($, w, notifAs('ta', status))).block ?? ''
+    expect(block).toContain('  ta · shell · ended\n')
+    expect(block).toContain('  tb · shell · running · output /tmp/tb.out (exists)\n')
+    expect(block).toContain('  m1 · monitor · running\n  c1 · cron · scheduled\n')
+    if (!HAS) return
+    expect(block).toContain('"Basis: 0 of 3 listed steps marked done; 1 unit running; git: not measured"')
+    expect(w.rowsOf('lane_outcome').map(r => [r.at, r.agents])).toEqual([['build', 2], ['delivery', 1]])
+    // A person back gets the whole block again: ta still reads ended there.
+    await w.turnEnd($)
+    await w.userTurn($, 'back')
+    expect(ctxOf(w)).toContain('  ta · shell · ended\n')
+  })
+}
+
+test('0.1.6 sidecar: a block with no idle episode shows the rows its delivering prompt reports ended; one a person\'s prompt takes shows them as measured', async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  w.measureBlock = AD1_ROWS
+  await raiseCompact($, { trigger: 'auto' })
+  await w.userTurn($, notif('ta'), 'task-notification')
+  const block = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  expect(block).toContain('  ta · shell · ended\n  tb · shell · running')
+  await w.turnEnd($)
+  await raiseCompact($, { trigger: 'manual' })
+  await w.userTurn($, 'go on')
+  const plain = blockOf(w, await $.prompt.context({ blocks: [] })) ?? ''
+  expect(plain).toContain('  ta · shell · running\n  tb · shell · running')
 })

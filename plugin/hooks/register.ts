@@ -15,7 +15,7 @@ import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer, resumeIdle } from './lib/idle'
 import { cancelKeepWarmTimer, noteBackground, noteEndedTasks, resumeKeepWarm } from './lib/keepwarm'
 import { startsWork } from './lib/lane'
-import { againFor, againLost, againSent, blockName, contextBlock, contextPassedOn, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted, passedBlockFor, passedLost } from './lib/resume'
+import { againFor, againLost, againSent, blockName, contextBlock, contextPassedOn, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted, passedBlockFor, passedLost, pendingNotified } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
 import { noteMode, onAttach, onCommandRun, onWorktreeTool, restartInterrupt } from './lib/restart'
 
@@ -157,6 +157,8 @@ export const register: Register = (on, options) => {
     const kind = e.origin.kind
     // Keep-warm (D-14): a task a notification reports ended is not an open job any more.
     if (!own) noteEndedTasks(state, kind, e.text)
+    // 0.1.6: and a waiting resume block shows that task's in-flight row ended.
+    if (!own) pendingNotified(state, kind, e.text)
     if (entering) {
       promptEntering(state, kind, e.text)
       // §9.4: a prompt entering cancels the pre-idle timer, and keep-warm's ping timer (D-14).

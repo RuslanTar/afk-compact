@@ -645,6 +645,11 @@ export type PendingResume = {
   lane?: LaneResult
   /** Our continue claimed it for `prompt.submit` and was dropped for a user prompt: `prompt.context` still delivers it. */
   heldClaim?: boolean
+  /**
+   * 0.1.6: the tasks a notification reported ended while the block waited (resume.ts
+   * `pendingNotified`; its delivering prompt's): a block with no idle episode shows their rows ended.
+   */
+  notified?: Set<string>
 }
 
 /** The open idle episode of away digest phase 1 (`LoadState.idleLane`). */
