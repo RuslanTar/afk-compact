@@ -15,7 +15,7 @@ my @SPEC = qw(dispatch precompact compacted postcompact copy copy_attributed cop
               handoff_user_interjected handoff_mode idle_mismatch resume_remeasured resume_remeasure_failed submit_dropped
               queue_contract handoff_export relaunch_unmatched jobs_caller_refused queue_add resume_receipt heal alert
               watch_error compaction report_withheld);
-my %CLASS = map { $_ => 1 } qw(num int bool nonce id6 hex8 hex12 stamp ts version model word rule hash actor slot tool heading drop);
+my %CLASS = map { $_ => 1 } qw(num int bool nonce id6 hex8 hex12 stamp ts version model word rule window hash actor slot tool heading drop);
 my %KIND = map { $_ => 1 } qw(enum pre list counts obj or);
 sub _check {
     my ($c, $where, $bad) = @_;
