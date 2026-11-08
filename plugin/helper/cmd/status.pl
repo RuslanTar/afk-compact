@@ -277,6 +277,9 @@ sub store_lines {
     my $q = queue::mode_text();
     $q .= " (this session's queue state unknown: no session id)" if $q eq 'on' && !defined $d;
     push @out, 'queue: ' . $q;
+    # 0.1.6: while queue_cmd is set, a pointer to the user-run `queue check` (user_run_lines), which tests the program
+    push @out, '  queue check (user-run, above) runs your program\'s list once and checks the reply against assets/queue-contract.md'
+        if $q ne 'off' && defined ctx::store_cmd();
     push @out, kept_lines();
     push @out, former_name_lines();
     push @out, map { "note: " . util::text($_) } @{ rc::settings()->{notes} || [] };
@@ -697,7 +700,9 @@ sub user_run_lines {
                                      (defined $sid ? ("reconcile --sid $sid --orphans --full") : ()), 'report',
                                      'settings reset <key> --apply',
                                      # STATE-ROOT: only while an old default folder is read (a dry run; --apply copies)
-                                     (defined rc::legacy() || defined rc::disposable_legacy() ? ('migrate') : ())));
+                                     (defined rc::legacy() || defined rc::disposable_legacy() ? ('migrate') : ()),
+                                     # 0.1.6: only while queue_cmd is set (runs its list once; never add or adopt)
+                                     (queue::mode()->{mode} ne 'off' ? ('queue check') : ())));
 }
 
 # ---------------------------------------------------------------- prod reads (S-SETTINGS B)
