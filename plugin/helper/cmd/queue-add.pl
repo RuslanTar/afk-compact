@@ -3,7 +3,9 @@
 # The main model runs it in the checkpoint's step-3 batch, one call per user-owned
 # question, with one JSON draft on stdin ({question, kind, options, blocks, context?}).
 # Steps: queue_cmd set and executable (else off, no exec) -> parse and bound the draft
-# (invalid) -> secret scan (HARD: secret, nothing sent; WARN: redacted in place) ->
+# (invalid; a blank recommendation_none_reason beside a recommended option is dropped) ->
+# secret scan (HARD: secret, nothing sent; WARN: redacted in place, then bound again, since
+# a `[redacted:<rule>]` mark can be longer than the text it replaces: invalid) ->
 # ledger <watch>/<sid>/queue-adds.jsonl (a queued or exists row for this client id:
 # EXISTS, no exec) -> caps cache (add unsupported: no exec) -> `queue_cmd add --json
 # --session <sid> --client-id <id> [--lane-name <bucket slug>]` with the queue-add/v1
@@ -26,6 +28,18 @@ our %MAX = (question => 600, blocks => 200, context => 400, label => 40, descrip
 sub _bytes { my ($s) = @_; my $c = $s; utf8::encode($c) if utf8::is_utf8($c); return length $c }
 sub _str { my ($v) = @_; return defined $v && !ref $v && $v =~ /\S/ ? 1 : 0 }
 sub _bool { my ($v) = @_; return !defined $v || jsonc::is_bool($v) ? 1 : 0 }
+
+# tidy(draft): drops a blank recommendation_none_reason (empty or only spaces) when an option is
+# recommended, where the reason has nothing to say, instead of refusing the question (off-template,
+# but it loses no entry); without a recommended option a blank reason stays and check() refuses it
+sub tidy {
+    my ($d) = @_;
+    return unless ref $d eq 'HASH' && defined $d->{recommendation_none_reason};
+    my $r = $d->{recommendation_none_reason};
+    return if ref $r || $r =~ /\S/;
+    return unless ref $d->{options} eq 'ARRAY' && grep { ref $_ eq 'HASH' && $_->{recommended} } @{ $d->{options} };
+    delete $d->{recommendation_none_reason};
+}
 
 # check(draft) -> undef when it is bounded, else the rule it breaks
 sub check {
@@ -143,6 +157,7 @@ sub run {
     else { binmode(STDIN, ':raw'); my $n = read(STDIN, $raw, $queue::ADD_MAX + 1); $raw = '' unless $n }
     return _say('invalid', 'draft-size', $t0, undef) if !defined $raw || length($raw) > $queue::ADD_MAX;
     my $d = eval { jsonc::decode($raw) };
+    tidy($d);
     my $bad = check($d);
     return _say('invalid', $bad, $t0, undef) if defined $bad;
     # HARD: nothing is sent; WARN: redacted in place, then sent
@@ -150,6 +165,9 @@ sub run {
     my @hard = map { $_->{rule} } grep { $_->{class} eq 'HARD' } map { @{ secrets::scan($$_) } } @refs;
     return _say('secret', $hard[0], $t0, undef) if @hard;
     for my $r (@refs) { ($$r) = secrets::redact($$r, ['WARN']) if @{ secrets::scan($$r) } }
+    # the caps hold for the draft the program receives (assets/queue-contract.md, add)
+    $bad = check($d);
+    return _say('invalid', $bad, $t0, undef) if defined $bad;
     my $cid = client_id($sid, $d);
     if (defined(my $id = ledger_hit($cid))) { return _say('exists', $id, $t0, undef) }
     return _say('unsupported', undef, $t0, undef) unless queue::add_supported($cmd);
