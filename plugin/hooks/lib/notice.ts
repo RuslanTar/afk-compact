@@ -15,7 +15,7 @@ export const NOTICE_MAX = 200
 
 /** The fixed text for a plugin name (the spec asset's wording, W-BETA A). */
 export function noticeFallback(name: string): string {
-  return `${name}: local compaction logs are on (content-free; nothing is sent). To share them: /${name}:report. To turn them off: set watcher to off in /config.`
+  return `${name}: local compaction logs are on (content-free; nothing is sent). To share them: /${name}:report. To turn them off: set watcher to false in /config.`
 }
 
 /**

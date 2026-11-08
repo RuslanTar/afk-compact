@@ -1,0 +1,333 @@
+{
+ "id": "D72-01 (on/off settings as true/false; the words before 0.1.6, settings set, settings migrate, the status warning, the hidden keys)",
+ "owner": "core",
+ "note": "D-72 (0.1.6; owner 2026-11-08: two-value settings as true/false, with a /config screen that shows the description): the seven on/off keys are userConfig strings with options [\"true\", \"false\"] (a picker in /config); relaunch_auto, idle_handoff_near_limit and idle_digest list their words. settings.pm %SWITCH reads true/false and every word a release before 0.1.6 saved as before (halt, model, shadow, allow, auto as true; off, code, forbid, confirm as false; another case, spaces, a JSON boolean), never as the opposite, and config.ts SWITCH is the same table (gate). Claude Code reads a saved value outside the options as unset, so status and settings show warn about such a value with the migrate command (consent keys apart: the plugin never writes one); settings set takes an old word and writes true or false; settings migrate is a dry run, --apply rewrites through the settings writer (backup, --plan), a value equal to its default is removed, consent keys are only listed with their user-run lines; resume_proceed stays tighten-only. otel_log_path and restart_on_update are not in the built manifest (they do nothing yet) but the helper still reads a saved restart_on_update. An old form from the environment gets a note.",
+ "now": "2026-11-08T12:00:00+02:00",
+ "tz": "Etc/GMT-2",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "mode": "0644",
+     "text": "{\n  \"pluginConfigs\": {\n    \"$BRAND@m\": {\n      \"options\": {\n        \"handoff_turn\": \"halt\",\n        \"idle_compact\": \"off\",\n        \"watcher\": \" Shadow \",\n        \"precompact_turn\": false,\n        \"resume_proceed\": \"confirm\",\n        \"unattended_prod_reads\": \"allow\",\n        \"relaunch_auto\": \"OFF\",\n        \"idle_digest\": \"Submit\",\n        \"idle_handoff_near_limit\": \"skip\",\n        \"restart_on_update\": \"shadow\"\n      }\n    }\n  }\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "the built manifest: the on/off keys list true and false, the three-word keys their words; otel_log_path and restart_on_update are not there",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$PLUGIN/.claude-plugin/plugin.json",
+      "has": [
+       "\"handoff_turn\": \\{\\n\\s+\"type\": \"string\",\\n\\s+\"title\": \"Handoff before stopping \\[default true\\]\",",
+       "\"options\": \\[\"true\", \"false\"\\],\\n\\s+\"default\": \"true\"",
+       "\"options\": \\[\"on\", \"shadow\", \"off\"\\],\\n\\s+\"default\": \"on\"",
+       "\"unattended_prod_reads\": \\{\\n\\s+\"type\": \"string\",\\n\\s+\"title\": \"Unattended production checks \\[default false\\]\","
+      ],
+      "lacks": [
+       "\"otel_log_path\"",
+       "\"restart_on_update\"",
+       "\"Values: "
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "settings show: each old word reads as before (true or false), a hidden key once saved; one warning with the migrate command, one for the consent keys",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^watcher true \\(your settings\\.json; default true\\)$",
+     "^handoff_turn true \\(your settings\\.json; default true\\)$",
+     "^precompact_turn false \\(your settings\\.json; default true\\)$",
+     "^idle_compact false \\(your settings\\.json; default true\\)$",
+     "^resume_proceed false \\(your settings\\.json; default true\\)$",
+     "^unattended_prod_reads true \\(your settings\\.json; default false\\)$",
+     "^idle_handoff_near_limit skip \\(your settings\\.json; default run\\)$",
+     "^restart_on_update shadow \\(your settings\\.json; default off\\)$",
+     "^warning: watcher, handoff_turn, precompact_turn, idle_compact, idle_digest, resume_proceed: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the hooks get the default\\) while the helper reads it as before; ! .*-store\\\"? settings migrate --apply saves the new form$",
+     "^warning: relaunch_auto, unattended_prod_reads: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the default\\); consent keys: pick the value again in /config$"
+    ],
+    "stdout_lacks": [
+     "^otel_log_path ",
+     "^warning: .*idle_handoff_near_limit"
+    ]
+   }
+  },
+  {
+   "name": "status: the same warnings; the setting lines in true/false",
+   "argv": [
+    "status"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^warning: watcher, handoff_turn, precompact_turn, idle_compact, idle_digest, resume_proceed: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the hooks get the default\\) while the helper reads it as before; ! .*-store\\\"? settings migrate --apply saves the new form$",
+     "^warning: relaunch_auto, unattended_prod_reads: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the default\\); consent keys: pick the value again in /config$",
+     "^unattended_prod_reads: true \\(settings file\\) · production patterns: prod-token \\+ 0 yours$",
+     "^settings: resume_proceed false \\(settings\\) · ",
+     "^  at default: .*watcher=true",
+     "^  idle_compact false \\(your settings\\.json; default true\\)$"
+    ]
+   }
+  },
+  {
+   "name": "settings show --json: true/false values and options, no hidden key, the keys saved in an old form",
+   "argv": [
+    "settings",
+    "show",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "settings.handoff_turn.value": "true",
+     "settings.handoff_turn.default": "true",
+     "settings.handoff_turn.values": [
+      "true",
+      "false"
+     ],
+     "settings.idle_compact.value": "false",
+     "settings.unattended_prod_reads.value": "true",
+     "settings.unattended_prod_reads.class": "consent",
+     "settings.relaunch_auto.values": [
+      "on",
+      "shadow",
+      "off"
+     ],
+     "old_form": [
+      "watcher",
+      "handoff_turn",
+      "relaunch_auto",
+      "unattended_prod_reads",
+      "precompact_turn",
+      "idle_compact",
+      "idle_digest",
+      "resume_proceed"
+     ]
+    },
+    "stdout_lacks": [
+     "\"otel_log_path\"",
+     "\"restart_on_update\""
+    ]
+   }
+  },
+  {
+   "name": "an old word from the environment: read as before, with a note",
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_HANDOFF_TURN": "OFF",
+    "CLAUDE_PLUGIN_OPTION_IDLE_HANDOFF_TURN": "false"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^handoff_turn false \\(plugin option; default true\\)$",
+     "^note: handoff_turn: the old value off reads as false$",
+     "^idle_handoff_turn false \\(plugin option; default true\\)$"
+    ],
+    "stdout_lacks": [
+     "^note: idle_handoff_turn"
+    ]
+   }
+  },
+  {
+   "name": "settings set takes the old words and writes true or false (a default removes); shown as saved",
+   "argv": [
+    "settings",
+    "set",
+    "idle_compact=off",
+    "handoff_turn= Halt",
+    "idle_handoff_turn=no"
+   ],
+   "capture": {
+    "PLAN": "re:--plan ([0-9a-f]{12}) --apply"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  would change idle_compact: \\\"off\\\" -> false$",
+     "^  would change handoff_turn: \\\"halt\\\" -> default true \\(removed\\)$",
+     "^  would change idle_handoff_turn: default true -> false$"
+    ]
+   }
+  },
+  {
+   "name": "settings set --apply: the new forms are written",
+   "argv": [
+    "settings",
+    "set",
+    "idle_compact=off",
+    "handoff_turn= Halt",
+    "idle_handoff_turn=no",
+    "--plan",
+    "$PLAN",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"idle_compact\": \"false\"",
+       "\"idle_handoff_turn\": \"false\""
+      ],
+      "lacks": [
+       "\"handoff_turn\"",
+       "\"off\""
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a consent key with an old word: refused, the user-run line carries true",
+   "argv": [
+    "settings",
+    "set",
+    "unattended_prod_reads=allow"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  unattended_prod_reads: a consent key; the plugin never writes it",
+     "^  unattended_prod_reads: or type: ! printf '%s' '\\{\"unattended_prod_reads\":\"true\"\\}' \\| claude plugin configure '$BRAND@m' --values-stdin$"
+    ]
+   }
+  },
+  {
+   "name": "settings migrate: a dry run of the rest (saved text -> new form; a default removes); the consent keys listed, never planned",
+   "argv": [
+    "settings",
+    "migrate"
+   ],
+   "capture": {
+    "MPLAN": "re:--plan ([0-9a-f]{12}) --apply"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings migrate: dry run, nothing written · ~/\\.claude/settings\\.json · plugin options under \\\"$BRAND@m\\\"$",
+     "^  would change watcher: \\\" Shadow \\\" -> default true \\(removed\\)$",
+     "^  would change precompact_turn: false -> \\\"false\\\"$",
+     "^  would change idle_digest: \\\"Submit\\\" -> \\\"submit\\\"$",
+     "^  would change resume_proceed: \\\"confirm\\\" -> \\\"false\\\"$",
+     "^  relaunch_auto: a consent key; the plugin never writes it",
+     "^  relaunch_auto: or type: ! printf '%s' '\\{\"relaunch_auto\":\"off\"\\}' \\| claude plugin configure",
+     "^  unattended_prod_reads: or type: ! printf '%s' '\\{\"unattended_prod_reads\":\"true\"\\}' \\| claude plugin configure",
+     "^to apply it: the same command with --plan [0-9a-f]{12} --apply$"
+    ],
+    "stdout_lacks": [
+     "would change (relaunch_auto|unattended_prod_reads|idle_handoff_near_limit|idle_compact)"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"watcher\": \" Shadow \"",
+       "\"precompact_turn\": false"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "settings migrate --apply: written with a backup; the consent keys keep their words",
+   "argv": [
+    "settings",
+    "migrate",
+    "--plan",
+    "$MPLAN",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings migrate: changed ~/\\.claude/settings\\.json \\(plugin options under \\\"$BRAND@m\\\"\\)$",
+     "^  resume_proceed: \\\"confirm\\\" -> \\\"false\\\"$",
+     "^  backup: ~/\\.claude/settings\\.json\\.$BRAND-.*\\.bak \\(the file as it was\\)$"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.claude/settings.json",
+      "has": [
+       "\"precompact_turn\": \"false\"",
+       "\"resume_proceed\": \"false\"",
+       "\"idle_digest\": \"submit\"",
+       "\"unattended_prod_reads\": \"allow\"",
+       "\"relaunch_auto\": \"OFF\"",
+       "\"restart_on_update\": \"shadow\""
+      ],
+      "lacks": [
+       "\"watcher\"",
+       "\"Submit\"",
+       "\"confirm\""
+      ]
+     },
+     {
+      "path": "$HOME/.claude/settings.json.$BRAND-*.bak",
+      "count": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "after the migrate: nothing left but the consent keys; status keeps only their warning",
+   "argv": [
+    "settings",
+    "migrate"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Asettings migrate: nothing to change but the consent keys below$",
+     "^  unattended_prod_reads: a consent key"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "status"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^warning: relaunch_auto, unattended_prod_reads: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the default\\); consent keys: pick the value again in /config$"
+    ],
+    "stdout_lacks": [
+     "settings migrate --apply saves the new form"
+    ]
+   }
+  },
+  {
+   "name": "resume_proceed stays tighten-only in the new words: false -> true is refused",
+   "argv": [
+    "settings",
+    "set",
+    "resume_proceed=auto"
+   ],
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^  resume_proceed: looser, refused: it only goes towards false here \\(saved false\\)$"
+    ]
+   }
+  }
+ ]
+}

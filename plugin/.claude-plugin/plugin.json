@@ -89,9 +89,10 @@
     },
     "handoff_turn": {
       "type": "string",
-      "title": "Handoff before stopping [default halt]",
-      "description": "Values: halt or off. halt (the default): when the plugin will not continue the work by itself after the coming compaction, it first gives the model one extra turn to write a handoff you can resume from later; off skips that turn, which saves its usage but leaves only the compaction summary.",
-      "default": "halt"
+      "title": "Handoff before stopping [default true]",
+      "description": "true (the default): when the plugin will not continue the work by itself after the coming compaction, it first gives the model one extra turn to write a handoff you can resume from later; false skips that turn, which saves its usage but leaves only the compaction summary.",
+      "options": ["true", "false"],
+      "default": "true"
     },
     "handoff_turn_max_tokens": {
       "type": "number",
@@ -103,9 +104,10 @@
     },
     "precompact_turn": {
       "type": "string",
-      "title": "Handoff before each planned compaction [default model]",
-      "description": "Values: model or code. model (the default): before each compaction the plugin starts at the compaction target, the model gets one extra turn to write a handoff while it still sees the whole conversation; code: the plugin records its own checkpoint without that turn, which uses less of your usage allowance (any other value counts as code).",
-      "default": "model"
+      "title": "Handoff before each planned compaction [default true]",
+      "description": "true (the default): before each compaction the plugin starts at the compaction target, the model gets one extra turn to write a handoff while it still sees the whole conversation; false: the plugin records its own checkpoint without that turn, which uses less of your usage allowance.",
+      "options": ["true", "false"],
+      "default": "true"
     },
     "measured_block": {
       "type": "boolean",
@@ -127,9 +129,10 @@
     },
     "watcher": {
       "type": "string",
-      "title": "Local compaction logs [default shadow]",
-      "description": "Values: shadow or off. shadow (the default) keeps local logs of how each compaction went, without any conversation text, and nothing is ever sent (you can share them yourself with /afk-compact:report); off stops new log entries and keeps the ones already written (any other value counts as shadow).",
-      "default": "shadow"
+      "title": "Local compaction logs [default true]",
+      "description": "true (the default) keeps local logs of how each compaction went, without any conversation text, and nothing is ever sent (you can share them yourself with /afk-compact:report); false stops new log entries and keeps the ones already written.",
+      "options": ["true", "false"],
+      "default": "true"
     },
     "stall_min": {
       "type": "number",
@@ -142,12 +145,6 @@
       "title": "Prompt cache lifetime (seconds) [default 300]",
       "description": "How long, in seconds, the local logs assume Claude Code's prompt cache (the stored conversation that makes the next request cheaper) stays fresh; a large compaction after a longer pause is flagged as likely costly. Default 300 (5 minutes); set 3600 if your sessions use the one-hour cache, so pauses that cost nothing are not flagged.",
       "default": 300
-    },
-    "otel_log_path": {
-      "type": "file",
-      "title": "OpenTelemetry log file [default: empty = unused]",
-      "description": "Path to an OpenTelemetry log file (Claude Code's optional usage telemetry) that you already have written, for the local logs to draw on. Empty (the default) means none; the plugin never turns OpenTelemetry on, and this version does not read the file yet, so leave it empty.",
-      "default": ""
     },
     "deny_class_patterns": {
       "type": "string",
@@ -164,7 +161,8 @@
     "relaunch_auto": {
       "type": "string",
       "title": "Restart lost background jobs [default on]",
-      "description": "Values: on, shadow or off. on (the default): when a resumed session finds that a background job (such as a long test run) was lost when Claude Code exited, it starts the job again by itself if the job is read-only or on your allowlist and every safety check passes, otherwise it asks; shadow only logs what it would have done and asks; off always asks (only your settings file counts for this option, flags and environment variables are ignored).",
+      "description": "on (the default): when a resumed session finds that a background job (such as a long test run) was lost when Claude Code exited, it starts the job again by itself if the job is read-only or on your allowlist and every safety check passes, otherwise it asks; shadow only logs what it would have done and asks; off always asks (only your settings file counts for this option, flags and environment variables are ignored).",
+      "options": ["on", "shadow", "off"],
       "default": "on"
     },
     "relaunch_allow": {
@@ -183,9 +181,10 @@
     },
     "unattended_prod_reads": {
       "type": "string",
-      "title": "Unattended production checks [default forbid]",
-      "description": "Values: forbid or allow. forbid (the default): a resumed session asks before any command that touches production and offers it for you to run, unless an approval you gave names that read-only command; allow: a read-only production check the session writes itself may run without asking. Changes to production always ask, and so do production commands copied from a handoff unless an approval you gave names that read command (only your settings file counts for this option, flags and environment variables are ignored).",
-      "default": "forbid"
+      "title": "Unattended production checks [default false]",
+      "description": "false (the default): a resumed session asks before any command that touches production and offers it for you to run, unless an approval you gave names that read-only command; true: a read-only production check the session writes itself may run without asking. Changes to production always ask, and so do production commands copied from a handoff unless an approval you gave names that read command (only your settings file counts for this option, flags and environment variables are ignored).",
+      "options": ["true", "false"],
+      "default": "false"
     },
     "prod_patterns": {
       "type": "string",
@@ -195,15 +194,17 @@
     },
     "idle_handoff_turn": {
       "type": "string",
-      "title": "Handoff when idle [default auto]",
-      "description": "Values: auto or off. auto (the default): if a long session sits idle and nobody will compact it before Claude Code's one-hour prompt cache (the stored conversation that keeps the next request cheap) expires, the plugin gives the model one turn, about 49 to 56 minutes in, to write a handoff; off never runs that turn, which saves its usage (it costs several times as much as an idle compaction).",
-      "default": "auto"
+      "title": "Handoff when idle [default true]",
+      "description": "true (the default): if a long session sits idle and nobody will compact it before Claude Code's one-hour prompt cache (the stored conversation that keeps the next request cheap) expires, the plugin gives the model one turn, about 49 to 56 minutes in, to write a handoff; false never runs that turn, which saves its usage (it costs several times as much as an idle compaction).",
+      "options": ["true", "false"],
+      "default": "true"
     },
     "idle_compact": {
       "type": "string",
-      "title": "Compact idle sessions [default auto]",
-      "description": "Values: auto or off. auto (the default): when a conversation of 200,000 tokens or more has been idle for about 54 to 56 minutes and Claude Code has not compacted it, the plugin compacts it itself before the one-hour prompt cache expires, so coming back costs less (terminal sessions only, for now); off: the plugin never compacts idle sessions, and the handoff-when-idle turn runs instead where it applies.",
-      "default": "auto"
+      "title": "Compact idle sessions [default true]",
+      "description": "true (the default): when a conversation of 200,000 tokens or more has been idle for about 54 to 56 minutes and Claude Code has not compacted it, the plugin compacts it itself before the one-hour prompt cache expires, so coming back costs less (terminal sessions only, for now); false: the plugin never compacts idle sessions, and the handoff-when-idle turn runs instead where it applies.",
+      "options": ["true", "false"],
+      "default": "true"
     },
     "idle_handoff_min_tokens": {
       "type": "number",
@@ -216,13 +217,15 @@
     "idle_handoff_near_limit": {
       "type": "string",
       "title": "Handoff when idle: near a usage limit [default run]",
-      "description": "Values: run, skip-spend or skip. run (the default): the handoff-when-idle turn runs even when one of your usage limits (the five-hour or seven-day plan window, or a spend limit) is at 90% or more, so you get the handoff anyway; it then counts toward a nearly used allowance, and with extra usage on for your plan, usage past the limit may be billed. skip-spend: no such turn while a spend limit (a money cap, for example a Claude gateway's) is at 90% or more; it still runs near a plan limit. skip: no such turn near any limit (any other value counts as run). The plugin's own idle compaction never runs at 90% or more.",
+      "description": "run (the default): the handoff-when-idle turn runs even when one of your usage limits (the five-hour or seven-day plan window, or a spend limit) is at 90% or more, so you get the handoff anyway; it then counts toward a nearly used allowance, and with extra usage on for your plan, usage past the limit may be billed. skip-spend: no such turn while a spend limit (a money cap, for example a Claude gateway's) is at 90% or more; it still runs near a plan limit. skip: no such turn near any limit. The plugin's own idle compaction never runs at 90% or more.",
+      "options": ["run", "skip-spend", "skip"],
       "default": "run"
     },
     "idle_digest": {
       "type": "string",
       "title": "Away summary after an idle compaction [default off]",
-      "description": "Values: submit, return or off. off (the default in this version): when a session compacted while you were away has finished its work or is only waiting on you, the plugin sends no turn of its own and asks for no summary; the next reply starts nothing new and says in one line where the work stands, then what needs you. submit: with nothing still running, the plugin sends one turn right away that prints a short summary (what is done, what is left, what needs you), ready when you return; return sends nothing and puts that summary at the top of the reply to your next message, which saves the turn (any other value counts as off).",
+      "description": "off (the default in this version): when a session compacted while you were away has finished its work or is only waiting on you, the plugin sends no turn of its own and asks for no summary; the next reply starts nothing new and says in one line where the work stands, then what needs you. submit: with nothing still running, the plugin sends one turn right away that prints a short summary (what is done, what is left, what needs you), ready when you return; return sends nothing and puts that summary at the top of the reply to your next message, which saves the turn.",
+      "options": ["submit", "return", "off"],
       "default": "off"
     },
     "keep_warm_hours": {
@@ -247,9 +250,10 @@
     },
     "resume_proceed": {
       "type": "string",
-      "title": "Manual resume: continue or wait [default auto]",
-      "description": "Values: auto or confirm. auto (the default): when you run /afk-compact:resume yourself, it reports what it found and then carries on with the next step; confirm: it stops after the report and waits for your go-ahead. Resumes after the plugin's own compactions are not affected, and when your settings file, a flag and an environment variable disagree, confirm wins.",
-      "default": "auto"
+      "title": "Manual resume continues after its report [default true]",
+      "description": "true (the default): when you run /afk-compact:resume yourself, it reports what it found and then carries on with the next step; false: it stops after the report and waits for your go-ahead. Resumes after the plugin's own compactions are not affected, and when your settings file, a flag and an environment variable disagree, false wins.",
+      "options": ["true", "false"],
+      "default": "true"
     },
     "handoff_reuse_window_min": {
       "type": "number",
@@ -280,12 +284,6 @@
       "title": "Extra protected branches [default: empty = the built-in list only]",
       "description": "Branch names or wildcard patterns, separated by ';', that count as protected on top of the built-in list (the remote's default branch, main, master, develop, staging, release and hotfix branches and similar): a push to one, or a merge into one, always asks you again, whatever you approved before. Empty (the default) means the built-in list only; add your own deployment branches, for example qa-env;uat/*, and note that entries can only add, never unprotect a built-in branch (only your settings file counts for this option, flags and environment variables are ignored).",
       "default": ""
-    },
-    "restart_on_update": {
-      "type": "string",
-      "title": "Restart on Claude Code update (beta) [default off]",
-      "description": "Values: on, shadow or off. on: right after a compaction, with nothing running and nobody typing, the plugin restarts the session on a newly installed Claude Code and keeps the same conversation (not active in this version yet, see /afk-compact:status); shadow only logs what it would do; off (the default) never restarts (any other value counts as off; only your settings file counts for this option, flags and environment variables are ignored).",
-      "default": "off"
     },
     "driver_skills": {
       "type": "string",

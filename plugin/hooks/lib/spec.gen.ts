@@ -981,7 +981,7 @@ export const SPEC = {
   "notice": {
     "id": "watcher-1",
     "version": 1,
-    "text": "afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to off in /config."
+    "text": "afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to false in /config."
   },
   "clamp": {
     "native_offset": 33000,

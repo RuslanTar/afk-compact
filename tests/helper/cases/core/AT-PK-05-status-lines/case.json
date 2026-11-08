@@ -20,7 +20,7 @@
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
     "stdout_has": ["\\A(?:ok|attention): [^\\n]*\\nwatcher: shadow · logs \\d+ (B|KB|MB) in \\d+ sessions · share: /$BRAND:report · off: watcher = off in /config\\n",
-                   "^notice: $BRAND: local compaction logs are on \\(content-free; nothing is sent\\)\\. To share them: /$BRAND:report\\. To turn them off: set watcher to off in /config\\.$",
+                   "^notice: $BRAND: local compaction logs are on \\(content-free; nothing is sent\\)\\. To share them: /$BRAND:report\\. To turn them off: set watcher to false in /config\\.$",
                    "^allow rule \\(default mode\\): Bash\\(\"/[^\"]+/scripts/$BRAND-store\" wait \\*\\)$",
                    "^allow rule for an older plugin folder: /old/plugins/cache/m/$BRAND/0\\.0\\.9; current: /",
                    "^allow rule for an older plugin folder: /p2/cache/$BRAND/0\\.0\\.8; current: /",

@@ -23,7 +23,7 @@
   {"name": "the fixed text",
    "argv": ["notice", "text"],
    "expect": {"exit": 0,
-    "stdout": "$BRAND: local compaction logs are on (content-free; nothing is sent). To share them: /$BRAND:report. To turn them off: set watcher to off in /config.\n",
+    "stdout": "$BRAND: local compaction logs are on (content-free; nothing is sent). To share them: /$BRAND:report. To turn them off: set watcher to false in /config.\n",
     "stdout_has": ["\\A[^\\n]{1,200}\\n\\z"], "stdout_lacks": ["\\{\\{", "\\}\\}", "@[a-z_]+@"]}},
   {"name": "watcher off: no marker",
    "options": {"watcher": "off"},
