@@ -33,10 +33,10 @@
                     "^  relaunch_allow: 1 patterns, not used while relaunch_auto is off$",
                     "^  config: relaunch_auto invalid, off used$", "^  config: relaunch_allow invalid, pattern dropped$",
                     "^  config: relaunch_quiet_s 5 clamped to 30$"],
-     "stdout_lacks": ["^note: (?!Claude Code's own idle compaction also runs)"]}},
+     "stdout_lacks": ["^note: (?!native idle compaction also runs)"]}},
   {"name": "CR-F34: CLAUDE_CONFIG_DIR naming ~/.claude reads the same file", "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20"],
    "env": {"CLAUDE_PLUGIN_OPTION_HANDOFF_ROOT": "$TMP/hr", "CLAUDE_CONFIG_DIR": "$HOME/.claude/"},
-   "expect": {"exit": 0, "stdout_has": ["^handoff mode: repo \\(accepted\\)$"], "stdout_lacks": ["^note: (?!Claude Code's own idle compaction also runs)"]}},
+   "expect": {"exit": 0, "stdout_has": ["^handoff mode: repo \\(accepted\\)$"], "stdout_lacks": ["^note: (?!native idle compaction also runs)"]}},
   {"name": "CR-F34: a settings file in another CLAUDE_CONFIG_DIR grants no consent", "setup": [
     {"write": "$TMP/cfg/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"repo_roots": "$TMP/r20", "relaunch_auto": "on", "relaunch_allow": "^.*"}}}}}],
    "argv": ["status", "--sid", "$SID", "--cwd", "$TMP/r20"],
