@@ -480,8 +480,6 @@ sub lint {
 
 # The most ids fix() writes for one id range; a longer range is left as written (and blocks).
 our $FIX_RANGE_MAX = 50;
-# A fenced code block's fence line (as skills::approvals::move_lines reads one).
-our $FENCE_RE = qr/\A[ \t]*(?:```|~~~)/;
 
 # fix($body, $blocking) (0.1.5, E-3: the usage review counted 14 drafts refused for id ranges,
 # each round a Write and a publish): the blocking entries of lint() that are mechanical, written
@@ -518,13 +516,13 @@ sub fix {
     my $idr = $at{'id-range'} ? skills::spec::id_range_re() : undef;
     # Lines left as written: a fenced or an indented code block (4 spaces or a tab, not a list
     # item) and an approval line.
-    # %code: the code lines alone; %open: a fence is open after that line.
-    my (%code, %open);
-    my $infence = 0;
+    # %code: the code lines alone; %open: a fence is open after that line. Fences as move_lines
+    # reads them (skills::approvals::fence_lines, CommonMark's closing rule).
+    my $fl = skills::approvals::fence_lines(\@lines);
+    my %code = %{ $fl->{code} };
+    my %open = %{ $fl->{open} };
     for my $i (0 .. $#lines) {
-        if ($lines[$i] =~ $FENCE_RE) { $code{$i} = 1; $infence = !$infence } elsif ($infence) { $code{$i} = 1 }
         $code{$i} = 1 if $lines[$i] =~ /\A(?: {4}|\t)/ && $lines[$i] !~ /\A\s*(?:[-*+]|[0-9]+[.)])\s/;
-        $open{$i} = $infence;
     }
     my %keep = (%{ skills::approvals::section_lines(\@lines) }, %code);
     $keep{$_} = 1 for grep { skills::approvals::is_approval_line($lines[$_]) } 0 .. $#lines;
@@ -746,15 +744,16 @@ sub _step1_same {
 # - in `spawns:`, a counter `<n>` that ends an agent's label after `-` (`fix-7c-<n>`: one agent
 #   per round, numbered as it starts; 0.1.5, E-3), not followed by `/`, `.`, `-` or a word
 #   character (`fix-<n>-final` still counts); the label is one word of letters, digits, `_` and
-#   `-` in a label place: right after `(`, `[`, `,`, `spawns:`, `agent:` or `label` (review:
-#   `model claude-<n>` and `output out-<n>` are stand-ins, not labels), so the end of a path
-#   (`$TMP/run-<n>`) still counts.
+#   `-` in a label place: right after `(`, `[`, `,`, `spawns:`, `agent:` or `label` (`label:`,
+#   `label=`), the spec's list and no other word (review: `model claude-<n>` and `output
+#   out-<n>` are stand-ins, not labels; review 5: `agents`, `labels` and a bare `agent` were
+#   label places too), so the end of a path (`$TMP/run-<n>`) still counts.
 # A pointer stands for text stated elsewhere: a `<…>` with a word such as above, same or that
 # (`<the brief above>`, `<same path>`, `<that copy>`).
 sub _placeholder {
     my ($l) = @_;
     my $ph = qr/<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/;
-    $l =~ s{((?:[(\[,]|\A\s*spawns:|\b(?:agents?|labels?)\b[:=]?)[ \t]*["'`]?)([A-Za-z0-9_][A-Za-z0-9_-]*-)<n>(?![\w/.<-])}{$1$2}g if $l =~ /\A\s*spawns:/;
+    $l =~ s{((?:[(\[,]|\A\s*spawns:|\bagent:|\blabel\b[:=]?)[ \t]*["'`]?)([A-Za-z0-9_][A-Za-z0-9_-]*-)<n>(?![\w/.<-])}{$1$2}g if $l =~ /\A\s*spawns:/;
     my $pointer = sub {
         my ($t) = @_;
         while ($t =~ /($ph)/g) {

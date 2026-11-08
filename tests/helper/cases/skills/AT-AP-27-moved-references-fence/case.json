@@ -1,0 +1,124 @@
+{
+ "id": "AT-AP-27 (moved approvals: a fence closes only on its own character, at least as long, 0.1.5 E-3 review round 5)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.5 E-3 review round 5. move_lines read any ``` or ~~~ line as a fence that opens or closes a block (0.1.4 A-3), so a ``` line inside a ~~~ block ended it and the block's own closing line opened one: a reference to a moved id inside the block was rewritten, and the references after it were not. Fences are now read as CommonMark reads them (skills::approvals::fence_lines, shared with publish's fixes): a block closes only on a line of its own character, at least as long, with nothing after it.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\":\"user\",\"uuid\":\"u0\",\"timestamp\":\"2026-10-21T13:00:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"let's finish the release prep\"}}\n{\"type\":\"assistant\",\"uuid\":\"a1\",\"timestamp\":\"2026-10-21T13:01:00+03:00\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"The release notes are ready.\"}]}}\n{\"type\":\"user\",\"uuid\":\"u2\",\"timestamp\":\"2026-10-21T13:02:00+03:00\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"ok\"}}\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "name": "begin",
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stamp prints the check time",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approval moved, code blocks kept\n## Resume here\nStatus: active · Acuity: stable · State: retry fix committed on feature/LAB-7-retry (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-7: approval \"ok\" — action delete branch old/x · targets branch old/x @ 5e5e5e5 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n~~~text\n```\nstore gc --keep U-7\n~~~\n- review: U-7 waits on CI\n````\n```\nstore gc --drop U-7\n```\n````\n- after: ask before U-7 runs\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: delete branch old/x (re-ask U-7)\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "name": "U-7 moves for its quote; the references outside the two blocks cite its Q, the ones inside stay",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY approval-quote line 10: U-7 goes to Open questions as Q-1, a re-ask; .*; lines 29, 35, 38 cite Q-1 instead$",
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^REFUSED"
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "the blocks keep U-7 as written",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "handoff-state",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB",
+      "has": [
+       "^~~~text\\n```\\nstore gc --keep U-7\\n~~~\\n- review: Q-1 waits on CI\\n````\\n```\\nstore gc --drop U-7\\n```\\n````\\n- after: ask before Q-1 runs$",
+       "^2\\. ask user: delete branch old/x \\(re-ask Q-1\\)$"
+      ],
+      "lacks": [
+       "store gc --keep Q-",
+       "store gc --drop Q-",
+       "U-7 waits",
+       "before U-7 runs",
+       "re-ask U-7"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

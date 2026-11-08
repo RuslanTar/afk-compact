@@ -960,8 +960,28 @@ sub lint {
 # a shape fault of a handoff the user asked for and approval-denied still refuse.
 our %MOVE_RULES = map { $_ => 1 } qw(approval-quote approval-plugin-turn);
 our $OPEN_HEADING = '## Open questions';
-# A fence line of a code block (a reference inside one is left alone, 0.1.4 A-3).
-my $FENCE_RE = qr/\A[ \t]*(?:```|~~~)/;
+# fence_lines(\@lines): the fenced code blocks as CommonMark reads them, for move_lines (a reference
+# inside one is left alone, 0.1.4 A-3) and skills::lint::fix, so the two never differ. A fence opens
+# on a line of 3 or more backticks or tildes (a backtick fence's info text holds no backtick) and
+# closes only on a line of the same character, at least as long, with nothing after it but white
+# space; one left open runs to the end (0.1.5 E-3 review 4: any fence line toggled, so a ``` line
+# inside a ~~~ block ended it). Indentation is not counted (a fence in a list item is one too).
+# Returns {code => {index => 1: a fence line or a line inside}, open => {index => 1: open after it}}.
+sub fence_lines {
+    my ($lines) = @_;
+    my (%code, %open, $f);
+    for my $i (0 .. $#$lines) {
+        my $l = $lines->[$i] // '';
+        if ($f) {
+            $code{$i} = 1;
+            undef $f if $l =~ ($f->[0] eq '`' ? qr/\A[ \t]*(`+)[ \t]*\r?\z/ : qr/\A[ \t]*(~+)[ \t]*\r?\z/) && length $1 >= $f->[1];
+        } elsif ($l =~ /\A[ \t]*(`{3,}|~{3,})(.*)\z/ && !(substr($1, 0, 1) eq '`' && index($2, '`') >= 0)) {
+            ($code{$i}, $f) = (1, [ substr($1, 0, 1), length $1 ]);
+        }
+        $open{$i} = 1 if $f;
+    }
+    return { code => \%code, open => \%open };
+}
 # The rule each moved line broke, in plain words (the Open questions item and the ADVISORY line).
 our %MOVE_WHY = (
     short => 'a quote under 4 words counts only as the user\'s whole message, or one line of a numbered reply, answering your message that names its target',
@@ -1074,11 +1094,10 @@ sub move_lines {
     for my $i (grep { $in->{$_} && !$mv{$_} } 0 .. $#lines) { $kept_id{$1} = 1 if $lines[$i] =~ /\b(U-[0-9]+):\s*approval\b/ }
     my $drop = !grep { $lines[$_] =~ /\S/ && !$mv{$_} } keys %$in;
     my (@see, @see2, %was);
-    my $fence = 0;
+    my $fenced = fence_lines(\@lines)->{code};
     for my $i (0 .. $#lines) {
         # 0.1.4 A-3: a fenced code block is left alone, its fence lines too.
-        if ($lines[$i] =~ $FENCE_RE) { $fence = !$fence; next }
-        next if $fence;
+        next if $fenced->{$i};
         next if $in->{$i} || $mv{$i} || ($tag_re && $lines[$i] =~ $tag_re) || $lines[$i] =~ /\(was U-[0-9]+; not carried:/;
         my @seg = split /("[^"]*"|“[^”]*”|`[^`]*`)/, $lines[$i], -1;
         my @even = grep { $_ % 2 == 0 } 0 .. $#seg;
