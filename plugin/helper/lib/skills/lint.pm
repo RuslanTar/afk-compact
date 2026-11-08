@@ -239,15 +239,17 @@ sub lint {
     # ---- carry provenance (small-rulings §2.4): with a foreign base, a U-/D-/X- line whose
     # content is the foreign base's and not the own chain's needs a `[from …]` tag; a
     # tagged approval is context only. Reworded lines are not detected (stated limit).
+    # A line publish rewrote (carried_as) is read as its draft text(s) too (0.1.5 review: a copied
+    # line whose range fix() listed no longer equalled the base's and went out untagged).
     my $tag_re = skills::spec::regex_at('carry.tag_re');
     my $note = skills::spec::get('carry.foreign_approval_note');
     if (($in->{previous_kind} // '') eq 'foreign' && defined $in->{previous}) {
         my %foreign = map { my $n = _ledger_norm($_, $tag_re); defined $n ? ($n => 1) : () } split /\n/, $in->{previous};
         my %own = map { my $n = _ledger_norm($_, $tag_re); defined $n ? ($n => 1) : () } split /\n/, ($in->{own_previous} // '');
         for my $i (0 .. $#lines) {
-            my $n = _ledger_norm($lines[$i], $tag_re) // next;
             next if $tag_re && $lines[$i] =~ $tag_re;
-            push @block, [ 'carry-provenance', 'line ' . ($i + 1) ] if $foreign{$n} && !$own{$n};
+            my @n = grep { defined } map { _ledger_norm($_, $tag_re) } $lines[$i], _draft_texts($cas, $lines[$i]);
+            push @block, [ 'carry-provenance', 'line ' . ($i + 1) ] if grep { $foreign{$_} && !$own{$_} } @n;
         }
     }
     if ($tag_re) {
@@ -498,8 +500,9 @@ our $FENCE_RE = qr/\A[ \t]*(?:```|~~~)/;
 #   other is rewritten the same way, or, when that cannot be done, neither is.
 # - step1-mismatch: when Next steps has no item 1 (no line starting `1.` or `1)`), Step 1's text
 #   (the first `Step 1:` line, as lint() reads it; an empty one adds nothing) goes in as item 1,
-#   before the section's first list line (after its text when it has none); an item 1 that
-#   differs stays. The added line counts as carried when Step 1 does.
+#   before the section's first list line outside a code block (after its text when it has none;
+#   none when that place is inside a fence left open); an item 1 that differs stays. The added
+#   line counts as carried when Step 1 does.
 # Returns {body, fixes => [{rule, line, text}…] (line: the body line it changed, Step 1's for an
 # added item), map => {fixed body line => body line; the added item reads as the Next steps
 # heading's line, so a finding on it is told apart from one on Step 1},
@@ -515,13 +518,16 @@ sub fix {
     my $idr = $at{'id-range'} ? skills::spec::id_range_re() : undef;
     # Lines left as written: a fenced or an indented code block (4 spaces or a tab, not a list
     # item) and an approval line.
-    my %keep = %{ skills::approvals::section_lines(\@lines) };
+    # %code: the code lines alone; %open: a fence is open after that line.
+    my (%code, %open);
     my $infence = 0;
     for my $i (0 .. $#lines) {
-        if ($lines[$i] =~ $FENCE_RE) { $keep{$i} = 1; $infence = !$infence } elsif ($infence) { $keep{$i} = 1 }
-        $keep{$i} = 1 if ($lines[$i] =~ /\A(?: {4}|\t)/ && $lines[$i] !~ /\A\s*(?:[-*+]|[0-9]+[.)])\s/)
-            || skills::approvals::is_approval_line($lines[$i]);
+        if ($lines[$i] =~ $FENCE_RE) { $code{$i} = 1; $infence = !$infence } elsif ($infence) { $code{$i} = 1 }
+        $code{$i} = 1 if $lines[$i] =~ /\A(?: {4}|\t)/ && $lines[$i] !~ /\A\s*(?:[-*+]|[0-9]+[.)])\s/;
+        $open{$i} = $infence;
     }
+    my %keep = (%{ skills::approvals::section_lines(\@lines) }, %code);
+    $keep{$_} = 1 for grep { skills::approvals::is_approval_line($lines[$_]) } 0 .. $#lines;
     my $add = sub {
         my ($new, @o) = @_;
         my %u = map { $_ => 1 } _draft_texts(\%was, $new), @o;
@@ -573,15 +579,19 @@ sub fix {
     if ($at{'step1-mismatch'} && defined $si && $ns && !grep { $lines[$_] =~ /\A\s*1[.)]/ } @{ $ns->{body} }) {
         my ($s1) = $lines[$si] =~ /\A\s*Step 1:\s*(.*?)\s*\z/;
         if ($s1 =~ tr/`//dr =~ /\S/) {
-            # Before the first list line, so a lead-in (`In this order:`) stays above the list.
-            my ($li) = grep { $lines[$_] =~ /\A\s*(?:[-*+]|[0-9]+[.)])\s/ } @{ $ns->{body} };
+            # Before the first list line, so a lead-in (`In this order:`) stays above the list; a line
+            # of a code block is no list line, and an item that would land in an open fence is not
+            # added (review: `- old` of a diff block took the item inside the block).
+            my ($li) = grep { !$code{$_} && $lines[$_] =~ /\A {0,3}(?:[-*+]|[0-9]+[.)])\s/ } @{ $ns->{body} };
             my @c = grep { $lines[$_] =~ /\S/ } @{ $ns->{body} };
             my $i = $li // (@c ? $c[-1] + 1 : $ns->{h} + 1);
-            my @d = _draft_texts(\%was, $lines[$si]);
-            $add->("1. $s1", @d ? @d : $lines[$si]);
-            splice @lines, $i, 0, "1. $s1";
-            splice @org, $i, 0, $ns->{h} + 1;
-            push @fixes, { rule => 'step1-mismatch', line => $si + 1, text => 'Next steps has no item 1; publish adds Step 1 there as item 1' };
+            if (!$open{ $i - 1 }) {
+                my @d = _draft_texts(\%was, $lines[$si]);
+                $add->("1. $s1", @d ? @d : $lines[$si]);
+                splice @lines, $i, 0, "1. $s1";
+                splice @org, $i, 0, $ns->{h} + 1;
+                push @fixes, { rule => 'step1-mismatch', line => $si + 1, text => 'Next steps has no item 1; publish adds Step 1 there as item 1' };
+            }
         }
     }
     return { body => $body, fixes => [], map => {}, was => {} } unless @fixes;
@@ -736,13 +746,15 @@ sub _step1_same {
 # - in `spawns:`, a counter `<n>` that ends an agent's label after `-` (`fix-7c-<n>`: one agent
 #   per round, numbered as it starts; 0.1.5, E-3), not followed by `/`, `.`, `-` or a word
 #   character (`fix-<n>-final` still counts); the label is one word of letters, digits, `_` and
-#   `-`, so the end of a path (`$TMP/run-<n>`) still counts.
+#   `-` in a label place: right after `(`, `[`, `,`, `spawns:`, `agent:` or `label` (review:
+#   `model claude-<n>` and `output out-<n>` are stand-ins, not labels), so the end of a path
+#   (`$TMP/run-<n>`) still counts.
 # A pointer stands for text stated elsewhere: a `<…>` with a word such as above, same or that
 # (`<the brief above>`, `<same path>`, `<that copy>`).
 sub _placeholder {
     my ($l) = @_;
     my $ph = qr/<[A-Za-z][A-Za-z ,;:'|-]{0,80}>/;
-    $l =~ s{(?<![^\s(\[,=:'"`])([A-Za-z0-9_][A-Za-z0-9_-]*-)<n>(?![\w/.<-])}{$1}g if $l =~ /\A\s*spawns:/;
+    $l =~ s{((?:[(\[,]|\A\s*spawns:|\b(?:agents?|labels?)\b[:=]?)[ \t]*["'`]?)([A-Za-z0-9_][A-Za-z0-9_-]*-)<n>(?![\w/.<-])}{$1$2}g if $l =~ /\A\s*spawns:/;
     my $pointer = sub {
         my ($t) = @_;
         while ($t =~ /($ph)/g) {
