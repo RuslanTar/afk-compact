@@ -538,6 +538,35 @@ export function measuredRunning(remeasure: string | undefined): string[] {
   return out
 }
 
+/** The rows `endedRows` leaves as measured: a cron is scheduled, not run, and a Monitor only watches. */
+const KEEP_ROW = /^cron$|monitor/i
+
+/**
+ * 0.1.6: `remeasure` as a block shows it, with each running or pending in-flight row whose id is
+ * in `ended` (what a notification reported ended, `notifiedTasks`) marked `ended`. The sidecar
+ * slot is written only at a turn's end (Stop, SubagentStop), so the turn a unit's result opens
+ * still finds it listed as running. Other rows, crons and Monitors stay as measured.
+ */
+export function endedRows(remeasure: string, ended: ReadonlySet<string>): string {
+  if (ended.size === 0) return remeasure
+  let inside = false
+  return remeasure.split('\n').map(line => {
+    if (/^In flight\b/.test(line)) {
+      inside = true
+      return line
+    }
+    if (!inside) return line
+    const m = INFLIGHT_ROW.exec(line)
+    if (!m) {
+      if (!/^\s/.test(line)) inside = false
+      return line
+    }
+    const [row, id = '', type = '', status = ''] = m
+    if (!ended.has(id) || KEEP_ROW.test(type.trim()) || !/^(?:running|pending)$/i.test(status)) return line
+    return row.slice(0, row.length - status.length) + 'ended' + line.slice(row.length)
+  }).join('\n')
+}
+
 /**
  * The units of this session running now: its agents (the same set as idle.ts `agentsRunning`)
  * and the background tasks `remeasure` lists as running, less every task a notification of this
