@@ -223,20 +223,33 @@ sub _test_corrupt {
 #   Step 1 none or proposed; else in-progress;
 # - a blocked word counts as in-progress while a step can run (owner xxxxxxxx-08): one marked
 #   todo that names no gate, ask, pending answer, wait or needed approval, or Step 1 set with
-#   `Gate: none` (Step 1 itself naming none of them). No step reads more held on a job, or
-#   freer, than on release-0.1.1b (owner 2026-10-28 digest rules (a), lane.ts `holdOf`): a step
-#   0.1.1b reads held ($HELD_RE, unchanged) is held on the user, a wait on a job too (`Wait for
-#   the timer notification, then reply`: a known limit of 0.1.1); a step it reads free is held on
-#   a job only when a job trigger leads it (`On the timer notification, reply …`, `when CI
-#   finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person, pronoun or person's
-#   say stands anywhere in it. A job hold is not a step that can run: the copy is taken with no
-#   result in, so it stays blocked (only the session's result turn reads it working).
+#   `Gate: none` (Step 1 itself naming none of them). No step with no wait mark reads more held
+#   on a job, or freer, than on release-0.1.1b (owner 2026-10-28 digest rules (a), lane.ts
+#   `holdOf`): a step 0.1.1b reads held ($HELD_RE, unchanged) is held on the user, a wait on a
+#   job too (`Wait for the timer notification, then reply`: a known limit of 0.1.1); a step it
+#   reads free is held on a job only when a job trigger leads it (`On the timer notification,
+#   reply …`, `when CI finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person,
+#   pronoun or person's say stands anywhere in it. A job hold is not a step that can run: the
+#   copy is taken with no result in, so it stays blocked (only the session's result turn reads
+#   it working). A wait mark (`· waits: job` or `· waits: you`, a dash for the `·` too; lane.ts
+#   `WAITS_SRC`) leads the wording: either holds the step (a mark never makes one free; `waits:
+#   job` holds a step whose words wait on a person on the job, unless it is gated), an item with
+#   one and no step mark read is to do, and the mark of the first Next steps item not done
+#   (Step 1's item), while it is to do, holds Step 1 under `Gate: none`. The form's placeholder
+#   copied as it stands (`waits: job|you`) is no mark.
 # 0.1.5 D-2: the other common marks read too (lane.ts MARK_SRC, word for word): after `—`,
 # `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case, and a mark may take a note in brackets
-# (`— done (commit 1a2b3c)`). _last_mark says which one counts.
+# (`— done (commit 1a2b3c)`). _step_mark says which one counts.
 my $MARK_RE = qr/(·|•|—|–|:|\(|\s--?)\s*(todo|done)(?=\s*$|\s*[;,.()]|\s+\d+\.\s)/mi;
-# The hold regexes below read with /aa, as JS does: \w, \d, \b and \s are ASCII, and no
-# non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts).
+# JS `\s`: wider than /aa's ASCII `\s` (a no-break or thin space is one), so a regex lane.ts
+# applies to raw text reads its spaces as this class; `holdOf` reads them as a plain space for
+# the job reading.
+my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]/;
+# The hold regexes from here on read with /aa, as JS does: \w, \d and \b are ASCII, and no
+# non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts). The wait
+# mark is read on raw text, so its spaces are JS's (`·<no-break space>waits: job` is one).
+my $WAITS_RE = qr/[·—–]$JS_SPACE*waits:$JS_SPACE*(job|you)\b(?!$JS_SPACE*[|\/])/iaa;
+my $GATED_RE = qr/\b(?:gated|ask user)\b/iaa;
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
 # lane.ts `JOB_RE` and its parts, word for word.
 my $J_WORD = q{(?:(?!(?:of|from|by|for)\s)[\w.#/"`-]+\s+)};
@@ -264,18 +277,28 @@ my $J_APPROVAL = q{(?:approv\w*|accept(?:s|ed|ing|ance)?|permi(?:ssions?|ts?|tte
     . q{check(?:s|ed|ing)?\s+(?:in\s+)?with|pending|needs?|needed|manual(?:ly)?|gat(?:e|es|ed|ing))};
 my $USER_WINS_RE = qr/\b(?:$J_PRONOUN|$J_PERSON|$J_APPROVAL)(?![\w-])/iaa;
 my $OWN_REPLY_RE = qr/(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|(?:with|and|in)\b))/iaa;
-# JS `\s`, which lane.ts `holdOf` reads as a plain space for the job reading.
-my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]/;
 
 # What holds a step (lane.ts `holdOf`): 'user', 'job', or undef when it can run. Held on the
 # user where release-0.1.1b reads it held ($HELD_RE on the step as it is); else on a job when a
 # job trigger leads it and no user-wins word stands in it; else free, as on 0.1.1b.
 sub _hold_of {
     my ($text) = @_;
+    my $w = _waits_of($text);
+    return $w if defined $w;
     return 'user' if $text =~ $HELD_RE;
     $text =~ s/$JS_SPACE/ /g;
     (my $u = $text) =~ s/$OWN_REPLY_RE/$1$2/g;
     return $text =~ $JOB_RE && $u !~ $USER_WINS_RE ? 'job' : undef;
+}
+
+# The hold a step's wait marks give (lane.ts `waitsOf`): 'user' when one says `you`, 'job' when
+# they say `job` and the step is not gated, else undef.
+sub _waits_of {
+    my ($item) = @_;
+    my @marks = map { lc } $item =~ /$WAITS_RE/g;
+    return undef unless @marks;
+    my $you = grep { $_ eq 'you' } @marks;
+    return $you || $item =~ $GATED_RE ? 'user' : 'job';
 }
 
 sub _trim { my ($s) = @_; $s =~ s/\A\s+|\s+\z//g; return $s }
@@ -300,14 +323,16 @@ sub _section {
     return (1, @out);
 }
 
-# The item's step mark (lane.ts `lastMark`); a mark inside brackets is a note's and never counts.
+# The item's step mark (lane.ts `stepMark`); a mark inside brackets is a note's and never counts.
 # Of the marks outside brackets: the last `·` mark, as on 0.1.4; else the others, `todo` if any is.
-sub _last_mark {
+# A wait mark after it is hidden.
+sub _step_mark {
     my ($item) = @_;
+    (my $t = $item) =~ s/$WAITS_RE//g;
     my ($dot, $other);
-    while ($item =~ /$MARK_RE/g) {
+    while ($t =~ /$MARK_RE/g) {
         my ($sep, $mark, $at) = ($1, lc $2, $-[0]);
-        next if _depth_at($item, $at) > 0;
+        next if _depth_at($t, $at) > 0;
         if ($sep eq '·') { $dot = $mark; next }
         next if defined $other && $other eq 'todo';
         $other = $mark;
@@ -326,6 +351,12 @@ sub _depth_at {
     return $depth;
 }
 
+# The step mark; with none, an item with a wait mark is to do (lane.ts `lastMark`).
+sub _last_mark {
+    my ($item) = @_;
+    return _step_mark($item) // ($item =~ $WAITS_RE ? 'todo' : undef);
+}
+
 # The items of a Next steps section, split as lane.ts `items` splits them.
 sub _items {
     my @out;
@@ -338,7 +369,7 @@ sub _items {
             my ($n, $at) = ($1, $-[0]);
             next unless $n == $next;
             my $cur = substr($line, $start, $at - $start);
-            next unless defined _last_mark($cur);
+            next unless defined _step_mark($cur) || $cur =~ /$WAITS_RE$JS_SPACE*[;,.)]?$JS_SPACE*\z/;
             push @out, _trim($cur);
             $start = $at + 1;
             $next++;
@@ -363,10 +394,13 @@ sub copy_status {
     my ($g) = $where =~ /^\s*Gate:[ \t]*([^·\n]*)/m;
     $g = defined $g ? _trim($g) : '';
     (my $cmd = $step) =~ s/\s+—\s+for\s+".*\z//;
-    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && !defined _hold_of($cmd)) ? 'none' : 'set';
     my ($listed, @next) = _section($t, 'next steps');
+    my @list = _items(@next);
+    my ($first) = grep { (_last_mark($_) // '') ne 'done' } @list;
+    my $mark1 = defined $first && (_last_mark($first) // '') eq 'todo' ? _waits_of($first) : undef;
+    my $gate = $g eq '' ? 'missing' : ($g =~ /\A`?none\b/i && !defined($mark1 // _hold_of($cmd))) ? 'none' : 'set';
     my ($todo, $unmarked, $free) = (0, 0, 0);
-    for my $item (_items(@next)) {
+    for my $item (@list) {
         my $m = _last_mark($item);
         if (!defined $m) { $unmarked++ }
         elsif ($m eq 'todo') { $todo++; $free++ unless defined _hold_of($item) }

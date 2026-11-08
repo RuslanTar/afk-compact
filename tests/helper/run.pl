@@ -88,6 +88,8 @@
 #     (the staged copy) over a fixed reply, independent of the temp folder's path
 #   builtin hold_parity {file, lists {<const name>: job | user | none}, min}: copies::_hold_of (the
 #     staged copy) over each named string array of a TS test file in the staged plugin
+#   builtin copy_status {rows [{summary, want}]}: copies::copy_status (the staged copy) over each
+#     fixed summary text, as lane.test.ts reads the same summaries with lane.ts
 #   builtin settings_view {home, common}: settings::view (the staged copy) against the staged
 #     manifest: a row per userConfig key in one section, its title, default, min and max the
 #     manifest's; with `common` [keys], each row's tier common when listed, else advanced
@@ -3715,6 +3717,20 @@ sub builtin {
             $total += @words;
         }
         print "#   hold_parity: $total wordings\n" if $VERBOSE;
+        return @e;
+    }
+    if ($name eq 'copy_status') {
+        # 0.1.5 E-4: the saved copy's status (copies::copy_status, the staged copy) of fixed
+        # summaries whose lane reading lane.test.ts checks too: {rows: [{summary, want}]}
+        local @INC = ("$STAGE/helper/lib", @INC);
+        require "copies.pm";
+        my $n = 0;
+        for my $r (@{ $a->{rows} || [] }) {
+            my $got = copies::copy_status($r->{summary}) // 'undef';
+            push @e, "row $n: copy_status $got, want $r->{want}" unless $got eq ($r->{want} // '');
+            $n++;
+        }
+        push @e, 'copy_status: no rows' unless $n;
         return @e;
     }
     if ($name eq 'junk_paths') {

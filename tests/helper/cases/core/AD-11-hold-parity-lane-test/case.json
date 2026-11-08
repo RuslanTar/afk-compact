@@ -1,6 +1,6 @@
 {
  "id": "AD-11-hold-parity-lane-test",
- "note": "Owner 2026-10-28 digest rules (a), 0.1.1 rule: the saved copy's hold of a step (copies.pm _hold_of) and the lane check's (lane.ts holdOf) are two copies of one rule (held on the user where release-0.1.1b's HELD_RE reads the step held, a wait on a job too; else held on a job when a job trigger leads the step and no person, pronoun or person's say stands in it; else free, as on 0.1.1b; both copies read \\w, \\b and \\d as ASCII, and any space, a no-break one too, as a plain space for the job reading), so they must agree word for word. copy_status cannot tell a user hold from a job hold, so this reads the wordings the TS lane test checks holdOf with (TRIGGERS and NO_REGRESSION_JOB: held on a job, KNOWN_LIMITS and NO_REGRESSION_USER: held on the user, NO_REGRESSION_FREE: free work; every wording of the earlier lists and review tables, non-ASCII and no-break-space wordings among them) from plugin/tests/unit/lane.test.ts itself and checks that _hold_of gives each the same hold",
+ "note": "Owner 2026-10-28 digest rules (a), 0.1.1 rule: the saved copy's hold of a step (copies.pm _hold_of) and the lane check's (lane.ts holdOf) are two copies of one rule (held on the user where release-0.1.1b's HELD_RE reads the step held, a wait on a job too; else held on a job when a job trigger leads the step and no person, pronoun or person's say stands in it; else free, as on 0.1.1b; both copies read \\w, \\b and \\d as ASCII, and any space, a no-break one too, as a plain space for the job reading), so they must agree word for word. copy_status cannot tell a user hold from a job hold, so this reads the wordings the TS lane test checks holdOf with (TRIGGERS and NO_REGRESSION_JOB: held on a job, KNOWN_LIMITS and NO_REGRESSION_USER: held on the user, NO_REGRESSION_FREE: free work; MARKED_JOB and MARKED_USER, 0.1.5 E-4: a `waits: job` or `waits: you` mark that leads the wording, and NOT_MARKED: free work whose near-mark, such as the form's placeholder `waits: job|you`, is none; every wording of the earlier lists and review tables, non-ASCII and no-break-space wordings among them) from plugin/tests/unit/lane.test.ts itself and checks that _hold_of gives each the same hold",
  "steps": [
   {
    "name": "copies::_hold_of gives every lane.test.ts wording the hold the TS test expects",
@@ -12,7 +12,10 @@
      "KNOWN_LIMITS": "user",
      "NO_REGRESSION_USER": "user",
      "NO_REGRESSION_JOB": "job",
-     "NO_REGRESSION_FREE": "none"
+     "NO_REGRESSION_FREE": "none",
+     "MARKED_JOB": "job",
+     "MARKED_USER": "user",
+     "NOT_MARKED": "none"
     },
     "min": 10
    }

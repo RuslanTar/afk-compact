@@ -233,9 +233,14 @@ def assemble(text, tags, drop=()):
 # (` · Needs you: <n> questions`) and stands after a semicolon; 39 B more on every main path. The
 # total goes to 8,890 B, the least that fits the worst path (8,872 B, 8,887 B with a 16-character
 # plugin name), with no rule text removed.
+# 0.1.5 E-4 (owner D-61): a todo step held on a running job's result or on the user ends
+# `· waits: job|you · todo`, and a gated step `· waits: you · todo`, which code reads instead of the
+# step's words (lane.ts waitsOf); 104 B more on every main path. The total goes to 8,991 B, the
+# least that fits the worst path (8,976 B, 8,991 B with a 16-character plugin name), with no rule
+# text removed.
 BUDGETS = {
     "static core":           ("chars", 4500, None),
-    "mod channel total":     ("bytes", None, 8890),
+    "mod channel total":     ("bytes", None, 8991),
     "classic channel total": ("bytes", None, 8192),
     "measured block":        ("bytes", None, 3000),   # worst case filled into @measured_facts@ and @remeasure@
     "subagent mod":          ("chars", 900, None),

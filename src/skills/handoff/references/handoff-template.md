@@ -218,6 +218,8 @@ Every ephemeral path cited anywhere in the body has a durable copy here or sits 
 - pending answer: <the unsent table, number or draft, in full> — send if not already sent
 ```
 
+A todo step held on a running job's result ends `· waits: job · todo`, one held on the user `· waits: you · todo`, as in the compaction summary, whose marks code reads. <!-- 0.1.5 E-4 (owner D-61): as the summary form -->
+
 An explicit gate (§4.2: always, approval or not), or an outward, destructive, production or self-modifying step no approval in `## Approvals` covers, reads `ask user: <action> (user-run: ! <cmd>)`, never an order. A step an approval covers names it: `<command>` — under U-2. <!-- review-fix: item 1 wording above; the lint compares the command or edit only. AP-1 (2026-10-23): scoped approvals; REVIEW-NIGHT NR-01: a gate is asked even when an approval names it -->
 
 ## 5. Evidence choice
