@@ -58,7 +58,7 @@ my $nested = sub { my ($v) = @_; return { values => $v, source => { map { $_ => 
         my ($off_status, $unk_status) = map { $_->{stdout} // '' } @o[1, 2];
         $E->ok(($off_status =~ /^Watcher: off$/m ? 1 : 0), "settings file 'OFF': status says Watcher: off");
         $E->ok(($off_status =~ /^Watcher: shadow/m ? 0 : 1), "settings file 'OFF': status does not say shadow");
-        $E->ok(($unk_status =~ /watcher setting is not "shadow" or "off"; it counts as shadow/ ? 1 : 0), "settings file 'Shadow2': status notes it");
+        $E->ok(($unk_status =~ /watcher setting is not true or false; it counts as true/ ? 1 : 0), "settings file 'Shadow2': status notes it");
         my @pre = $E->rows('classic', 'precompact');
         $E->count(\@pre, 2, "settings file: 'OFF' writes no precompact row, 'Shadow2' writes one per hook");
         # CR-F34: the driver's staged plugin holds core's test seam, so the consent folder is

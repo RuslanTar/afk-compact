@@ -57,7 +57,7 @@
      "^unattended_prod_reads true \\(your settings\\.json; default false\\)$",
      "^idle_handoff_near_limit skip \\(your settings\\.json; default run\\)$",
      "^restart_on_update shadow \\(your settings\\.json; default off\\)$",
-     "^warning: watcher, handoff_turn, precompact_turn, idle_compact, idle_digest, resume_proceed: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the hooks get the default\\) while the helper reads it as before; ! .*-store\\\"? settings migrate --apply saves the new form$",
+     "^warning: watcher, handoff_turn, precompact_turn, idle_compact, idle_digest, resume_proceed: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset, so the hooks run the default \\(only /status and the skills read it as before\\); ! .*-store\\\"? settings migrate --apply saves the new form$",
      "^warning: relaunch_auto, unattended_prod_reads: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the default\\); consent keys: pick the value again in /config$"
     ],
     "stdout_lacks": [
@@ -74,7 +74,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^warning: watcher, handoff_turn, precompact_turn, idle_compact, idle_digest, resume_proceed: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the hooks get the default\\) while the helper reads it as before; ! .*-store\\\"? settings migrate --apply saves the new form$",
+     "^warning: watcher, handoff_turn, precompact_turn, idle_compact, idle_digest, resume_proceed: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset, so the hooks run the default \\(only /status and the skills read it as before\\); ! .*-store\\\"? settings migrate --apply saves the new form$",
      "^warning: relaunch_auto, unattended_prod_reads: saved in a form from before 0\\.1\\.6; Claude Code reads such a value as unset \\(the default\\); consent keys: pick the value again in /config$",
      "^unattended_prod_reads: true \\(settings file\\) · production patterns: prod-token \\+ 0 yours$",
      "^settings: resume_proceed false \\(settings\\) · ",
@@ -341,7 +341,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^warning: idle_digest: saved as a value not on its list; Claude Code reads it as unset \\(the hooks get the default\\) while the helper reads it by its own rule; pick a value in /config$"
+     "^warning: idle_digest: saved as a value not on its list; Claude Code reads it as unset, so the hooks run the default \\(/status reads it by its own rule\\); pick a value in /config$"
     ],
     "stdout_lacks": [
      "^warning: [^\\n]*idle_digest[^\\n]*settings migrate"
