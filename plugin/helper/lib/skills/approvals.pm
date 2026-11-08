@@ -962,18 +962,19 @@ our %MOVE_RULES = map { $_ => 1 } qw(approval-quote approval-plugin-turn);
 our $OPEN_HEADING = '## Open questions';
 # code_sections(\@lines) -> {index => 1} for every line (its `## ` heading too) of a section, a
 # `## ` heading to the next (or the text before the first), that holds a line with a run of 3 or
-# more backticks or tildes anywhere in it, a blockquote line (`>` first, after any indent and list
-# markers) or a line indented 4 or more columns that is not a list continuation (a list item
-# nested less than 4 columns past its parent's text, or a line with no blank line right above it
-# indented less than 4 columns past the text of the list item it is in; tabs to the next column
-# of 4). A marker followed by 5 or more columns counts as code. No item starts on a thematic break
-# (`* * *`), a lone marker (an empty item, or a setext underline: `-`) or an ordered marker other
-# than 1 in an open paragraph (CommonMark lets none interrupt one), so a line under them is
-# measured from the item around them (review 8: each made a 4-column code line pass as a list
-# continuation). Where unsure, the section counts. move_lines and
-# skills::lint::fix rewrite nothing there (0.1.6, D-71: six reviews of 0.1.5 E-3 each found a
-# CommonMark shape that fence_lines misread, and a wrong rewrite inside a code block is worse
-# than a refusal, so no block is guessed at).
+# more backticks or tildes anywhere in it, a blockquote or HTML line (`>`, or `<` and a letter,
+# `/`, `!` or `?`, first after any indent and list markers: review 9, a list marker in an HTML
+# block is raw text, so no item starts there) or a line indented 4 or more columns that is not a
+# list continuation (a list item nested less than 4 columns past its parent's text, or a line with
+# no blank line right above it indented less than 4 columns past the text of the list item it is
+# in; tabs to the next column of 4). A marker followed by 5 or more columns counts as code. No
+# item starts on a thematic break (`* * *`), a lone marker (an empty item, or a setext underline:
+# `-`) or an ordered marker other than `1.` or `1)` in an open paragraph (CommonMark lets none
+# interrupt one; micromark not `01.` either), so a line under them is measured from the item
+# around them (review 8: each made a 4-column code line pass as a list continuation). Where
+# unsure, the section counts. move_lines and skills::lint::fix rewrite nothing there (0.1.6, D-71:
+# six reviews of 0.1.5 E-3 each found a CommonMark shape that fence_lines misread, and a wrong
+# rewrite inside a code block is worse than a refusal, so no block is guessed at).
 sub code_sections {
     my ($lines) = @_;
     my $cols = sub { my $w = 0; $w += $_ eq "\t" ? 4 - $w % 4 : 1 for split //, $_[0]; $w };
@@ -987,11 +988,11 @@ sub code_sections {
         push @sec, $i;
         next if $bad;
         if ($l !~ /\S/) { ($blank, $pc) = (1, undef); next }
-        if ($l =~ /`{3}|~{3}/ || $l =~ /\A[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)*>/) { $bad = 1; next }
+        if ($l =~ /`{3}|~{3}/ || $l =~ m{\A[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)*(?:>|<[A-Za-z/!?])}) { $bad = 1; next }
         my ($ws, $m, $sp, $rest) = $l =~ /\A([ \t]*)(?:([-*+]|[0-9]{1,9}[.)])([ \t]+|\z))?(.*)\z/s;
         my $w = $cols->($ws);
         my $brk = $l =~ /\A[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*\z|\A {0,3}#{1,6}(?:[ \t]|\z)/;
-        undef $m if defined $m && !$brk && ($rest eq '' || ($m =~ /\A[0-9]/ && $m !~ /\A0*1[.)]\z/ && defined $pc && $w >= $pc));
+        undef $m if defined $m && !$brk && ($rest eq '' || ($m =~ /\A[0-9]/ && $m !~ /\A1[.)]\z/ && defined $pc && $w >= $pc));
         # A list item's text starts after its marker and 1 to 4 spaces.
         pop @item while @item && $item[-1] > $w;
         my $rel = $w - (@item ? $item[-1] : 0);
@@ -1122,7 +1123,7 @@ sub move_lines {
     my $codesec = code_sections(\@lines);
     for my $i (0 .. $#lines) {
         # 0.1.4 A-3: a fenced code block is left alone, its fence lines too (0.1.6 D-71: its whole
-        # section, and one with a quote or an indented code line).
+        # section, and one with a quote, an HTML line or an indented code line).
         next if $codesec->{$i};
         next if $in->{$i} || $mv{$i} || ($tag_re && $lines[$i] =~ $tag_re) || $lines[$i] =~ /\(was U-[0-9]+; not carried:/;
         my @seg = split /("[^"]*"|“[^”]*”|`[^`]*`)/, $lines[$i], -1;

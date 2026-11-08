@@ -518,11 +518,11 @@ our $FIX_RANGE_MAX = 50;
 #   and close outside a word), a code span, an argument after `=` or a file name or path
 #   (_list_ranges; review: a rewritten quote lost a real approval, and a rewritten command
 #   changed its arguments); otherwise the line stays as written (and blocks). Nothing is
-#   rewritten in a section skills::approvals::code_sections names (one holding a fence, a quote
-#   or an indented code line: 0.1.6 D-71, no block is guessed at). An approval line (in
-#   `## Approvals`, or any `U-<n>: approval` line) is never rewritten (review: its action and
-#   targets are compared with the own chain's file, so a carried approval stopped being
-#   carried); a range there that still blocks once the other lines are listed stays a LINT line.
+#   rewritten in a section skills::approvals::code_sections names (one holding a fence, a quote,
+#   an HTML line or an indented code line: 0.1.6 D-71, no block is guessed at). An approval
+#   line (in `## Approvals`, or any `U-<n>: approval` line) is never rewritten (review: its
+#   action and targets are compared with the own chain's file, so a carried approval stopped
+#   being carried); a range there that still blocks once the other lines are listed stays a LINT line.
 #   Step 1 and Next steps item 1 that matched still match: when one of them is rewritten the
 #   other is rewritten the same way, or, when that cannot be done, neither is.
 # - step1-mismatch: when Next steps has no item 1 (no line starting `1.` or `1)`), Step 1's text
@@ -543,8 +543,8 @@ sub fix {
         push @{ $at{ $e->[0] } }, $1 if ($e->[1] // '') =~ /\Aline ([0-9]+)\z/;
     }
     my $idr = $at{'id-range'} ? skills::spec::id_range_re() : undef;
-    # Lines left as written: a section with a fence, a quote or an indented code line (as
-    # move_lines leaves them) and an approval line.
+    # Lines left as written: a section with a fence, a quote, an HTML line or an indented code
+    # line (as move_lines leaves them) and an approval line.
     my $code = skills::approvals::code_sections(\@lines);
     my %keep = (%{ skills::approvals::section_lines(\@lines) }, %$code);
     $keep{$_} = 1 for grep { skills::approvals::is_approval_line($lines[$_]) } 0 .. $#lines;

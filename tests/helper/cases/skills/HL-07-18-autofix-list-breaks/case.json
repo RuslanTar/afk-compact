@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.6 D-71 review 8. code_sections read `* * *`, `- - -`, a setext underline `-`, an empty item with trailing spaces (`-   `, `1.  `) and an ordered marker other than 1 under paragraph text as list items, or put an empty item's text too deep, so a line 4 columns past the real text column passed as a list continuation where CommonMark reads an indented code block: fix() listed the range in it and publish wrote the file, while 0.1.5 refused. None of these lines now starts an item, so the line under it is measured from the item around it (or the margin) and its section is left as written. Each refused step also holds a plain range in Next steps, which is listed. The last step: a numbered list with a sub-item 4 columns in is still a list, so both ranges are listed and the handoff is written.",
+ "note": "0.1.6 D-71 review 8. code_sections read `* * *`, `- - -`, a setext underline `-`, an empty item with trailing spaces (`-   `, `1.  `) and an ordered marker other than 1 under paragraph text as list items, or put an empty item's text too deep, so a line 4 columns past the real text column passed as a list continuation where CommonMark reads an indented code block (after the lone `-`, the text of an empty item; the section counts there too, on the safe side): fix() listed the range in it and publish wrote the file, while 0.1.5 refused. None of these lines now starts an item, so the line under it is measured from the item around it (or the margin) and its section is left as written. Each refused step also holds a plain range in Next steps, which is listed. The last step: a numbered list with a sub-item 4 columns in is still a list, so both ranges are listed and the handoff is written.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -155,7 +155,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "Work done holds a setext underline `-` under a text line and a line 4 columns past the text column around it: CommonMark reads that line as an indented code block, so nothing in the section is rewritten and its range blocks, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "name": "Work done holds a lone `-` under a text line and a line 4 columns in under it: CommonMark reads that line as the text of an empty item, but a lone marker under text may be a setext underline, which starts no item, so the line counts as code (fail-safe): nothing in the section is rewritten and its range blocks, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
    "expect": {
     "exit": 3,
     "stdout_has": [

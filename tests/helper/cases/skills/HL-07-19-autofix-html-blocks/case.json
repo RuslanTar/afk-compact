@@ -1,0 +1,256 @@
+{
+ "id": "HL-07 a section holding an HTML line, or a code line under `01.` in a paragraph, is left as written, and a plain section beside it is still fixed (0.1.6 D-71, review 9)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.6 D-71 review 9. code_sections did not know HTML blocks: a list marker line inside one (`<details>`, an HTML comment, at the margin or in a list item) is raw HTML, not a list item, yet it was read as one, so a marker line after a blank line, 4 columns past the end of the block, passed as a nested item where CommonMark reads an indented code block: fix() listed the range in it and publish wrote the file, while 0.1.5 refused. `01.` under text started an item too, which micromark does not read as one. A line whose first text, after any indent and list markers, is `<` and a letter, `/`, `!` or `?` now makes its section count, and only `1.` or `1)` starts an item under text. Each refused step also holds a plain range in Next steps, which is listed. The last step: an HTML block with no range is kept as written and the handoff is written.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_ab12cd34_other.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T12:00:00+03:00\nsession_id: ab12cd34-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\ngit_commit: 1234567890abcdef1234567890abcdef12345678\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-7 — other session\n## Decisions and do-not-re-raise\n- D-7: settle X-2..X-4 first\n- X-2: refuted \"r\"\n- X-3: refuted \"q\"\n- X-4: refuted \"s\"\n- X-5: refuted \"t\"\n- X-6: refuted \"u\"\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "name": "foreign base",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "foreign",
+     "previous_sid8": "ab12cd34"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n<details>\n- notes\n\n    - settle X-2..X-4 first\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n2. then settle X-5..X-6\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "Work done holds an HTML block (`<details>`) whose list marker line is raw HTML, then a blank line and a marker line 4 columns in: CommonMark reads that line as an indented code block, so nothing in the section is rewritten and its range blocks, while the range in a plain Next steps is listed",
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 26$",
+     "^ADVISORY id-range line 29: publish lists each id: X-5\\.\\.X-6 as X-5, X-6$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY id-range line 26:",
+     "^Wrote handoff"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^\\ \\ \\ \\ \\-\\ settle\\ X\\-2\\.\\.X\\-4\\ first$",
+       "^2\\.\\ then\\ settle\\ X\\-5\\.\\.X\\-6$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n<!--\n- note\n  -->\n\n    - settle X-2..X-4 first\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n2. then settle X-5..X-6\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "Work done holds an HTML comment holding a list marker line, then a blank line and a marker line 4 columns in: CommonMark reads that line as an indented code block, so nothing in the section is rewritten and its range blocks, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 27$",
+     "^ADVISORY id-range line 30: publish lists each id: X-5\\.\\.X-6 as X-5, X-6$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY id-range line 27:",
+     "^Wrote handoff"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^\\ \\ \\ \\ \\-\\ settle\\ X\\-2\\.\\.X\\-4\\ first$",
+       "^2\\.\\ then\\ settle\\ X\\-5\\.\\.X\\-6$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n  <details>\n  - note\n\n      - settle X-2..X-4 first\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n2. then settle X-5..X-6\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "Work done holds an HTML block (`<details>`) inside a list item, holding a marker line, then a blank line and a marker line 4 columns past the item's text: CommonMark reads that line as an indented code block in the item, so nothing in the section is rewritten and its range blocks, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 26$",
+     "^ADVISORY id-range line 29: publish lists each id: X-5\\.\\.X-6 as X-5, X-6$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY id-range line 26:",
+     "^Wrote handoff"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^\\ \\ \\ \\ \\ \\ \\-\\ settle\\ X\\-2\\.\\.X\\-4\\ first$",
+       "^2\\.\\ then\\ settle\\ X\\-5\\.\\.X\\-6$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n\nSome text\n01. rebuild\n\n     - settle X-2..X-4 first\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n2. then settle X-5..X-6\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "Work done holds `01.` under text (micromark lets only `1.` or `1)` interrupt a paragraph), then a blank line and a line 5 columns in: micromark reads that line as an indented code block, so nothing in the section is rewritten and its range blocks, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 27$",
+     "^ADVISORY id-range line 30: publish lists each id: X-5\\.\\.X-6 as X-5, X-6$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY id-range line 27:",
+     "^Wrote handoff"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^\\ \\ \\ \\ \\ \\-\\ settle\\ X\\-2\\.\\.X\\-4\\ first$",
+       "^2\\.\\ then\\ settle\\ X\\-5\\.\\.X\\-6$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n<details>\n- notes kept as raw HTML\n</details>\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n2. then settle X-5..X-6\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "Work done holds an HTML block and no range: it stays as written, and the range in the plain Next steps beside it is listed, so the handoff is written (same stage, the refused draft rewritten)",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY id-range line 28: publish lists each id: X-5\\.\\.X-6 as X-5, X-6$",
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^<details>\\n\\-\\ notes\\ kept\\ as\\ raw\\ HTML\\n</details>\\n## Next steps\\n",
+       "^2\\.\\ then\\ settle\\ X\\-5,\\ X\\-6$"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
