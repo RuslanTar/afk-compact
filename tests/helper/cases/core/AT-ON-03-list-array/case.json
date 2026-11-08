@@ -13,7 +13,7 @@
      "json": {"settings.protected_branches.value": "qa-env;uat/*", "settings.protected_branches.source": "settings",
               "settings.prod_patterns.value": "live-db;7", "settings.repo_roots.value": "$HOME",
               "settings.repo_roots.source": "settings",
-              "settings.watcher.value": "shadow", "settings.watcher.source": "default",
+              "settings.watcher.value": "true", "settings.watcher.source": "default",
               "settings.deny_class_patterns.value": "", "settings.deny_class_patterns.source": "default",
               "settings.stall_min.value": 60, "settings.stall_min.source": "default"},
      "stdout_has": ["\"protected_branches: a JSON list, read as its entries joined with ;\"",

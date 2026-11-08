@@ -43,7 +43,7 @@ test('AT-WB-12: a bumped id shows the notice again in an install that saw the ol
   expect(w.toasts.length).toBe(1)
 })
 
-test('watcher off: no notice claim and no toast', { options: { watcher: ' OFF ' } }, async ($, on) => {
+test('watcher off: no notice claim and no toast', { options: { watcher: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   expect([w.callsOf('notice').length, w.toasts.length]).toEqual([0, 0])

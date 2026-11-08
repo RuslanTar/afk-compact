@@ -312,8 +312,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^settings: resume_proceed confirm \\(settings\\) · ",
-     "^note: resume_proceed: the stricter confirm \\(settings\\) is used$"
+     "^settings: resume_proceed false \\(settings\\) · ",
+     "^note: resume_proceed: the stricter false \\(settings\\) is used$"
     ]
    }
   },
@@ -472,7 +472,7 @@
     },
     "want": {
      "secret_extra_rules": 3,
-     "resume_proceed": "confirm",
+     "resume_proceed": "false",
      "handoff_reuse_window_min": 30,
      "evidence_total_max_mb": 20,
      "watch_quota_mb": 0

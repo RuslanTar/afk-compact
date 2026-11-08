@@ -328,6 +328,37 @@
      "^  resume_proceed: looser, refused: it only goes towards false here \\(saved false\\)$"
     ]
    }
+  },
+  {
+   "name": "a saved value not on the list and no old form: its own warning (Claude Code gives the hooks the default), migrate leaves it",
+   "options": {
+    "idle_digest": "later"
+   },
+   "argv": [
+    "settings",
+    "show"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^warning: idle_digest: saved as a value not on its list; Claude Code reads it as unset \\(the hooks get the default\\) while the helper reads it by its own rule; pick a value in /config$"
+    ],
+    "stdout_lacks": [
+     "^warning: [^\\n]*idle_digest[^\\n]*settings migrate"
+    ]
+   }
+  },
+  {
+   "argv": [
+    "settings",
+    "migrate"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "idle_digest"
+    ]
+   }
   }
  ]
 }

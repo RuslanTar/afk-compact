@@ -25,7 +25,7 @@ test('AT-HL-01: rejectText keeps Claude Code\'s error on one line, at most 160 c
   expect(rejectClass('something else')).toBe('other')
 })
 
-test('AT-HL-02: session.start isInteractive false: one headless row after the session row; no nudge, handoff or idle turn; the plugin compaction runs as /compact, never $.session.compact; native compactions still shaped', { options: { idle_handoff_turn: 'auto', precompact_turn: 'model' } }, async ($, on) => {
+test('AT-HL-02: session.start isInteractive false: one headless row after the session row; no nudge, handoff or idle turn; the plugin compaction runs as /compact, never $.session.compact; native compactions still shaped', { options: { idle_handoff_turn: 'true', precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   w.interactive = false
   w.rateLimits = LIMITS

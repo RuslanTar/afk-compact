@@ -76,7 +76,7 @@ async function started($: Engine, w: World): Promise<void> {
 
 // ---- nothing without the config
 
-test('AT-DH-01: no trial config: turns, a typed handoff, a Skill call, compactions and a handoff turn never measure, fork or save', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-DH-01: no trial config: turns, a typed handoff, a Skill call, compactions and a handoff turn never measure, fork or save', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   w.rateLimits = LIMITS
@@ -171,7 +171,7 @@ test('AT-DH-06: M3 manual /compact: the user\'s text joins the native head and t
   expect([s?.moment.kind, s?.native?.compact_text_added, s?.native?.tail_supplied]).toEqual(['m3-manual', true, false])
 })
 
-test('AT-DH-07: M3 for the plugin\'s own compaction with no handoff turn: two forks before the call, kind m3-plugin', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-DH-07: M3 for the plugin\'s own compaction with no handoff turn: two forks before the call, kind m3-plugin', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   await started($, w)
@@ -187,7 +187,7 @@ test('AT-DH-07: M3 for the plugin\'s own compaction with no handoff turn: two fo
 // "idleCompaction": false it takes native's place at the same moment; trigger plugin says who.
 // keep_warm_hours 0: this test's fork hook answers every fork, keep-warm's ping too (D-14), and
 // keep-warm would hold the check while the agent runs (keepwarm.test.ts covers that path).
-test('AT-DH-07 (idle): the plugin\'s own idle compaction at 54 min (native vetoed) is an m3-idle moment with trigger plugin, not m3-plugin; so is the 55.5-min check\'s', { options: { precompact_turn: 'code', keep_warm_hours: 0 } }, async ($, on) => {
+test('AT-DH-07 (idle): the plugin\'s own idle compaction at 54 min (native vetoed) is an m3-idle moment with trigger plugin, not m3-plugin; so is the 55.5-min check\'s', { options: { precompact_turn: 'false', keep_warm_hours: 0 } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   w.policy = { idleCompaction: false }
@@ -293,7 +293,7 @@ test('AT-DH-11: M1 model-called Skill: once a main turn; another skill, a subage
 
 // ---- M2
 
-test('AT-DH-12: M2 pre-compaction handoff turn: exactly one old and one native fork, right before the submit; the model\'s Skill call inside the turn and the compaction after it fire nothing more', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-DH-12: M2 pre-compaction handoff turn: exactly one old and one native fork, right before the submit; the model\'s Skill call inside the turn and the compaction after it fire nothing more', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   await started($, w)
@@ -344,7 +344,7 @@ function userEntersAtSubmit($: Engine, w: World, userDropped: boolean): { held: 
   return { held: () => held, open }
 }
 
-test('AT-DH-13: M2 submit dropped because a user prompt came first, and that turn starts: the forks fired once, the record says cancelled', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-DH-13: M2 submit dropped because a user prompt came first, and that turn starts: the forks fired once, the record says cancelled', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   await started($, w)
@@ -364,7 +364,7 @@ test('AT-DH-13: M2 submit dropped because a user prompt came first, and that tur
   expect(s.map(x => [x.moment.ht, x.moment.plugin_side, x.moment.ht_rerun])).toEqual([[ht, 'cancelled', undefined]])
 })
 
-test('AT-DH-13 (re-run): the user prompt is dropped too, the delay runs again: still two forks and one record, moved to the new ht', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-DH-13 (re-run): the user prompt is dropped too, the delay runs again: still two forks and one record, moved to the new ht', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   await started($, w)
@@ -387,7 +387,7 @@ test('AT-DH-13 (re-run): the user prompt is dropped too, the delay runs again: s
   expect(s.map(x => [x.moment.ht, x.moment.ht_rerun, x.moment.plugin_side, x.moment_id])).toEqual([[first, second, 'submitted', SID_A.slice(0, 8) + '-' + first]])
 })
 
-test('AT-DH-14: M2 facts measure past 3 s: old arm skipped:facts-timeout, the native fork still starts, and the handoff turn is submitted', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-DH-14: M2 facts measure past 3 s: old arm skipped:facts-timeout, the native fork still starts, and the handoff turn is submitted', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   await started($, w)
@@ -564,7 +564,7 @@ test('AT-DH-27: a trial-save that fails gets one minimal save-failed call: the a
   expect([s[1]?.moment_id, s[1]?.native?.status, s[1]?.native?.reply, s[1]?.old?.reply]).toEqual([s[0]?.moment_id, 'ok', undefined, undefined])
 })
 
-test('AT-DH-28: M2 facts measure past 3 s with no kept facts: one skipped:facts-timeout record, no fork, the handoff turn still submitted', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-DH-28: M2 facts measure past 3 s with no kept facts: one skipped:facts-timeout record, no fork, the handoff turn still submitted', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   let k = 0
@@ -588,7 +588,7 @@ test('AT-DH-28: M2 facts measure past 3 s with no kept facts: one skipped:facts-
   expect(saves(w).map(x => [x.kind, x.moment.status, x.moment.kind])).toEqual([['skip', 'skipped:facts-timeout', 'm2-precompact']])
 })
 
-test('AT-DH-29: a turn end that measured the trial off: the handoff turn after it runs no measure of its own', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-DH-29: a turn end that measured the trial off: the handoff turn after it runs no measure of its own', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   trialOn(on, w, { state: 'off', why: 'off' })
   await started($, w)
@@ -601,7 +601,7 @@ test('AT-DH-29: a turn end that measured the trial off: the handoff turn after i
   expect(w.callsOf('trial-measure').length).toBe(2)
 })
 
-test('AT-DH-30: IC-1 D7 (ii) runs again after the M2 measure: a session that changed while it ran gets no submit and no fork', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-DH-30: IC-1 D7 (ii) runs again after the M2 measure: a session that changed while it ran gets no submit and no fork', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   await started($, w)

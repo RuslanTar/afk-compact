@@ -32,7 +32,7 @@
                    "^  ! \"/[^\"]+/scripts/$BRAND-store\" report$",
                    "^handoff mode: private ",
                    "^automatic relaunch: ",
-                   "^unattended_prod_reads: forbid ",
+                   "^unattended_prod_reads: false ",
                    "^protected branches: the shipped list \\+ 0 yours ",
                    "^idle compaction: .*\\(from your user settings; the session decides at its next turn end\\)$",
                    "^settings: resume_proceed \\S+ \\([^)]+\\) · handoff_reuse_window_min ",

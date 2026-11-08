@@ -135,7 +135,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, none \\(idle_handoff_turn: off\\)$"
+     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, none \\(idle_handoff_turn: false\\)$"
     ]
    }
   },
@@ -177,7 +177,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min$"
     ]
    }
   },
@@ -219,7 +219,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\)$"
     ]
    }
   },
@@ -429,7 +429,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\)$"
     ]
    }
   },
@@ -562,7 +562,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\) → the plugin checks at 55\\.5 min and, if Claude Code did not compact, runs its handoff turn; it does not compact itself \\(idle_compact: off\\)$"
+     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\) → the plugin checks at 55\\.5 min and, if Claude Code did not compact, runs its handoff turn; it does not compact itself \\(idle_compact: false\\)$"
     ]
    }
   },
@@ -690,7 +690,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\) → the plugin checks at 55\\.5 min only to compact itself at 200,000 tokens or more if Claude Code did not \\(no handoff turn: idle_handoff_turn: off\\)$"
+     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\) → the plugin checks at 55\\.5 min only to compact itself at 200,000 tokens or more if Claude Code did not \\(no handoff turn: idle_handoff_turn: false\\)$"
     ]
    }
   },
@@ -732,7 +732,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\); the plugin does not check and does not compact \\(idle_handoff_turn and idle_compact: off\\)$"
+     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\); the plugin does not check and does not compact \\(idle_handoff_turn and idle_compact: false\\)$"
     ]
    },
    "options": {
@@ -1104,7 +1104,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min$"
     ]
    }
   },

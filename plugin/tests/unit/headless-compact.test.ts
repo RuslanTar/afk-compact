@@ -235,7 +235,7 @@ test('AT-HC-06: a /compact that compacted without reaching our hook: compact_com
   expect(w.commandRuns.length).toBe(2)
 })
 
-test('AT-HC-07: interactive: $.session.compact as before, no /compact command', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-HC-07: interactive: $.session.compact as before, no /compact command', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await turnAtTarget($, w)

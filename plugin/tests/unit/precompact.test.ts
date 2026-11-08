@@ -10,7 +10,7 @@ import { HOME, SID_A, T0, World, markerNonce } from './harness.test'
 
 /** This build's handoff-turn text has the pre-compaction turn's own lines. */
 const PRE = hasTag('handoff-turn', 'submit-pre')
-const MODEL = { precompact_turn: 'model' }
+const MODEL = { precompact_turn: 'true' }
 const PUBLISHED = HOME + '/.claude/handoffs/r/LAB-42/2026-10-21_14-09-00_5e55a001_handoff.md'
 const SHOWN = '~/.claude/handoffs/r/LAB-42/2026-10-21_14-09-00_5e55a001_handoff.md'
 
@@ -152,21 +152,19 @@ test('AT-PC-03: model, a user turn.start during the delay: no submit, no compact
   expect([w.compacts.length, w.submits.length]).toEqual([0, 0])
 })
 
-for (const v of [
-  { name: 'code', options: { precompact_turn: 'code' }, invalid: false },
-  { name: 'sometimes', options: { precompact_turn: 'sometimes' }, invalid: true },
-]) {
-  test(`AT-PC-04 (${v.name}): as built: no submit, the normal compaction at boundary_delay_ms${v.invalid ? ', config_invalid' : ''}`, { options: v.options }, async ($, on) => {
-    const w = new World().install(on)
-    await w.start($)
-    await eligibleEnd($, w)
-    await w.advance(2000)
-    expect([w.compacts.length, w.submits.length, w.rowsOf('handoff_skipped').length]).toEqual([1, 0, 0])
-    expect(w.rowsOf('config_invalid').map(r => r.key)).toEqual(v.invalid ? ['precompact_turn'] : [])
-  })
-}
+test('AT-PC-04 (false): as built: no submit, the normal compaction at boundary_delay_ms', { options: { precompact_turn: 'false' } }, async ($, on) => {
+  const w = new World().install(on)
+  await w.start($)
+  await eligibleEnd($, w)
+  await w.advance(2000)
+  expect([w.compacts.length, w.submits.length, w.rowsOf('handoff_skipped').length]).toEqual([1, 0, 0])
+  expect(w.rowsOf('config_invalid').length).toBe(0)
+})
 
-test('AT-PC-04 (Model ): trimmed and folded to model', { options: { precompact_turn: ' Model ' } }, async ($, on) => {
+// D-72: Claude Code checks a value against the option's list, so one outside it (a word from before
+// 0.1.6 such as ' Model ' or 'code', or any other text) reaches the mod as unset: the default true,
+// the turn, and no config_invalid (parseOptions' own reading of such words: units.test.ts).
+for (const v of [' Model ', 'code', 'sometimes']) test(`AT-PC-04 (${JSON.stringify(v)}): outside the options, Claude Code gives the default true: the turn`, { options: { precompact_turn: v } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await eligibleEnd($, w)

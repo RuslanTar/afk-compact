@@ -39,7 +39,7 @@ async function nudgedTurn($: Engine, w: World): Promise<void> {
   await w.advance(2000)
 }
 
-test('AT-MG-02: boundary and continue paths: the plugin compaction and the continue submit name no model, effort or agent', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-MG-02: boundary and continue paths: the plugin compaction and the continue submit name no model, effort or agent', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await nudgedTurn($, w)
@@ -48,7 +48,7 @@ test('AT-MG-02: boundary and continue paths: the plugin compaction and the conti
   keysClean(w)
 })
 
-test('AT-MG-02: handoff-turn path (precompact_turn model): the handoff-turn submit and the compaction after it name no model', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('AT-MG-02: handoff-turn path (precompact_turn model): the handoff-turn submit and the compaction after it name no model', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)
@@ -67,7 +67,7 @@ test('AT-MG-02: handoff-turn path (precompact_turn model): the handoff-turn subm
   keysClean(w)
 })
 
-test('AT-MG-02: idle path: the pre-idle turn submit names no model; a native auto, manual or idle compaction gets instructions added and nothing else', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code', idle_compact: 'off' } }, async ($, on) => {
+test('AT-MG-02: idle path: the pre-idle turn submit names no model; a native auto, manual or idle compaction gets instructions added and nothing else', { options: { idle_handoff_turn: 'true', precompact_turn: 'false', idle_compact: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   w.policy = { idleCompaction: false }
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }]
@@ -86,7 +86,7 @@ test('AT-MG-02: idle path: the pre-idle turn submit names no model; a native aut
 
 // IDLE-COMPACT D2: with "idleCompaction": false the plugin's own idle compaction at 54 min takes
 // the 49-min turn's place; it is a plugin compaction like the others, naming no model.
-test('AT-MG-02: idle path (the plugin\'s own idle compaction): one mod-self idle compaction at 54 min with instructions only; nothing submitted', { options: { idle_handoff_turn: 'auto', precompact_turn: 'code' } }, async ($, on) => {
+test('AT-MG-02: idle path (the plugin\'s own idle compaction): one mod-self idle compaction at 54 min with instructions only; nothing submitted', { options: { idle_handoff_turn: 'true', precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   w.policy = { idleCompaction: false }
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }]
@@ -170,7 +170,7 @@ test('AT-MG-03 (root ruling 2026-10-27 23:16): the L3 idle compaction, warm, wit
   expect(w.rowsOf('compaction_cold').length).toBe(1)
 })
 
-test('AT-MG-03: the plugin\'s own compaction logs compaction_cache too', { options: { precompact_turn: 'code' } }, async ($, on) => {
+test('AT-MG-03: the plugin\'s own compaction logs compaction_cache too', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   w.compactUsage = { input_tokens: 1000, output_tokens: 9000, cache_read_input_tokens: 600000, cache_creation_input_tokens: 9000 }
@@ -180,7 +180,7 @@ test('AT-MG-03: the plugin\'s own compaction logs compaction_cache too', { optio
   expect(w.rowsOf('compaction_cold').length).toBe(0)
 })
 
-test('MG-4: the dispatch call and the handoff_turn_start row carry the session\'s model; an unreadable model is left out', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('MG-4: the dispatch call and the handoff_turn_start row carry the session\'s model; an unreadable model is left out', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   w.model = 'claude-opus-5-5[1m]'
   await w.start($)
@@ -199,7 +199,7 @@ test('MG-4: the dispatch call and the handoff_turn_start row carry the session\'
   expect(w.rowsOf('handoff_turn_start').map(r => r.model)).toEqual(['claude-opus-5-5[1m]'])
 })
 
-test('MG-3: handoff_turn_end logs the first request\'s cache_read_share for a pre-compaction turn (every reason); later steps and other turns do not change it; no step usage → null', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('MG-3: handoff_turn_end logs the first request\'s cache_read_share for a pre-compaction turn (every reason); later steps and other turns do not change it; no step usage → null', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   // A step of an ordinary turn is not a handoff turn's.
@@ -221,7 +221,7 @@ test('MG-3: handoff_turn_end logs the first request\'s cache_read_share for a pr
   expect(w.rowsOf('handoff_turn_end').map(r => [r.reason, r.cache_read_share])).toEqual([['precompact', 0.75]])
 })
 
-test('MG-3: a pre-compaction turn whose first step result has no usage: handoff_turn_end cache_read_share null', { options: { precompact_turn: 'model' } }, async ($, on) => {
+test('MG-3: a pre-compaction turn whose first step result has no usage: handoff_turn_end cache_read_share null', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await w.turnStart($)

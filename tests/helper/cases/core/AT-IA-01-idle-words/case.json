@@ -28,7 +28,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_handoff_turn"
@@ -48,7 +48,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_handoff_turn"
@@ -68,7 +68,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_handoff_turn"
@@ -88,7 +88,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_handoff_turn"
@@ -108,7 +108,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_handoff_turn"
@@ -128,7 +128,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_handoff_turn"
@@ -216,7 +216,7 @@
    }
   },
   {
-   "name": "the old on still reads as auto, with its note",
+   "name": "the old on still reads as auto (true), with the D-72 warning: a form from before 0.1.6",
    "options": {
     "idle_handoff_turn": "on"
    },
@@ -229,7 +229,7 @@
     "exit": 0,
     "stdout_has": [
      "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_handoff_turn: on reads as auto$"
+     "^warning: idle_handoff_turn: saved in a form from before 0\\.1\\.6; "
     ]
    }
   },
@@ -246,8 +246,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: idle_handoff_turn: not true, false or a yes/no word, false used$"
     ]
    }
   },
@@ -264,8 +264,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: idle_handoff_turn: not true, false or a yes/no word, false used$"
     ]
    }
   },
@@ -282,8 +282,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: idle_handoff_turn: not true, false or a yes/no word, false used$"
     ]
    }
   },
@@ -300,8 +300,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: off\\) \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_handoff_turn: not auto, off or a yes/no word, off used$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: idle_handoff_turn: not true, false or a yes/no word, false used$"
     ]
    }
   },
@@ -367,7 +367,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_compact"
@@ -387,7 +387,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_compact"
@@ -407,7 +407,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_compact"
@@ -427,7 +427,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_compact"
@@ -447,7 +447,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_compact"
@@ -467,7 +467,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_compact"
@@ -487,7 +487,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "^note: idle_compact"
@@ -647,8 +647,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_compact: not auto, off or a yes/no word, off used$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: idle_compact: not true, false or a yes/no word, false used$"
     ]
    }
   },
@@ -665,8 +665,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_compact: not auto, off or a yes/no word, off used$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: idle_compact: not true, false or a yes/no word, false used$"
     ]
    }
   },
@@ -683,8 +683,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: off\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: idle_compact: not auto, off or a yes/no word, off used$"
+     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: idle_compact: not true, false or a yes/no word, false used$"
     ]
    }
   },

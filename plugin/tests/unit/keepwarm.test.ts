@@ -16,7 +16,7 @@ import { KEEP_WARM_COLD_SHARE, KEEP_WARM_LATEST_MS, KEEP_WARM_PING_MS, forkOutco
 import { SID_A, SID_B, T0, World } from './harness.test'
 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
-const ON = { idle_handoff_turn: 'auto', precompact_turn: 'code', keep_warm_hours: 2 }
+const ON = { idle_handoff_turn: 'true', precompact_turn: 'false', keep_warm_hours: 2 }
 const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
 const MIN = 60000
 const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
@@ -995,7 +995,7 @@ for (const c of [
   { name: 'a fork the engine refuses', last: (): Answer => { throw new Error('denied by a hook') } },
   { name: 'nothing-to-fork', last: (): Answer => ({ isAnswered: false, reason: 'nothing-to-fork' }) },
 ]) {
-  test(`AT-KW-38 (REV3-1): the held check's last retry comes back past its deadline (a 3-min fork from 57:30 to 60:30, ${c.name}): stop missed, no hand-over, no turn on the lapsed cache`, { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  test(`AT-KW-38 (REV3-1): the held check's last retry comes back past its deadline (a 3-min fork from 57:30 to 60:30, ${c.name}): stop missed, no hand-over, no turn on the lapsed cache`, { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
     const w = world(on, {})
     const at: number[] = []
     let t0 = 0
@@ -1017,7 +1017,7 @@ for (const c of [
   })
 }
 
-test('AT-KW-38 (REV3-1): a fork-miss ping that comes back past the 58-min bound hands the check back; its turn path skips lapsed (no turn on a cache past the bound of the last warm request)', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-KW-38 (REV3-1): a fork-miss ping that comes back past the 58-min bound hands the check back; its turn path skips lapsed (no turn on a cache past the bound of the last warm request)', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   let t0 = 0
   on('model.fork', async () => {
@@ -1310,7 +1310,7 @@ for (const c of [
   { name: 'just before it (57:55): stop deadline with the hand-over, the check runs', ms: 25000, stop: ['deadline', true, 0], back: true },
   { name: 'just past it (58:05): stop missed, no hand-over, nothing runs', ms: 35000, stop: ['missed', false, 0], back: false },
 ]) {
-  test(`AT-KW-46: the held check's last retry comes back ${c.name}`, { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+  test(`AT-KW-46: the held check's last retry comes back ${c.name}`, { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
     const w = world(on, {})
     const at: number[] = []
     let t0 = 0
@@ -1335,7 +1335,7 @@ for (const c of [
   })
 }
 
-test('AT-KW-46: a fork-miss ping hands the check back at 56:30, past the turn\'s 55.5-min bound and before the 58-min one: the check still gets its turn', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-KW-46: a fork-miss ping hands the check back at 56:30, past the turn\'s 55.5-min bound and before the 58-min one: the check still gets its turn', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   let t0 = 0
   on('model.fork', async () => {
@@ -1506,7 +1506,7 @@ test('AT-KW-47: a fork-miss holds back only its own session: after /clear the ne
 
 const refusals = (w: World) => w.rowsOf('keep_warm_stop').filter(r => r.why === 'no-idle-path').map(r => [r.pings, r.gap_s, r.handover])
 
-test('AT-KW-51: native on, both idle paths off, an agent running: no idle record, so no fork and no ping row; one no-idle-path row per gap', { options: { ...ON, idle_handoff_turn: 'off', idle_compact: 'off' } }, async ($, on) => {
+test('AT-KW-51: native on, both idle paths off, an agent running: no idle record, so no fork and no ping row; one no-idle-path row per gap', { options: { ...ON, idle_handoff_turn: 'false', idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   const f = forks(on, w)
   await w.start($)
@@ -1553,7 +1553,7 @@ test('AT-KW-51: automatic compaction off, triggers off: the 49-min fire refuses 
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-KW-51: only the handoff turn on (native on): the check record is armed, so the gap warms as before', { options: { ...ON, idle_compact: 'off' } }, async ($, on) => {
+test('AT-KW-51: only the handoff turn on (native on): the check record is armed, so the gap warms as before', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   const f = forks(on, w)
   await w.start($)
