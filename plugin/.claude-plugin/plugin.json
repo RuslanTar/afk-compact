@@ -285,6 +285,13 @@
       "description": "Branch names or wildcard patterns, separated by ';', that count as protected on top of the built-in list (the remote's default branch, main, master, develop, staging, release and hotfix branches and similar): a push to one, or a merge into one, always asks you again, whatever you approved before. Empty (the default) means the built-in list only; add your own deployment branches, for example qa-env;uat/*, and note that entries can only add, never unprotect a built-in branch (only your settings file counts for this option, flags and environment variables are ignored).",
       "default": ""
     },
+    "restart_on_update": {
+      "type": "string",
+      "title": "Restart on Claude Code update (beta) [default off]",
+      "description": "on: right after a compaction, with nothing running and nobody typing, the plugin restarts the session on a newly installed Claude Code and keeps the same conversation (not active in this version yet, see /afk-compact:status); shadow only logs what it would do; off (the default) never restarts (only your settings file counts for this option, flags and environment variables are ignored).",
+      "options": ["on", "shadow", "off"],
+      "default": "off"
+    },
     "driver_skills": {
       "type": "string",
       "title": "Loop skills to resume [default: empty = the built-in list only]",

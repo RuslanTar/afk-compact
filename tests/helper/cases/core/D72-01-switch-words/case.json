@@ -1,7 +1,7 @@
 {
- "id": "D72-01 (on/off settings as true/false; the words before 0.1.6, settings set, settings migrate, the status warning, the hidden keys)",
+ "id": "D72-01 (on/off settings as true/false; the words before 0.1.6, settings set, settings migrate, the status warning, the hidden key, restart_on_update in /config)",
  "owner": "core",
- "note": "D-72 (0.1.6; owner 2026-11-08: two-value settings as true/false, with a /config screen that shows the description): the seven on/off keys are userConfig strings with options [\"true\", \"false\"] (a picker in /config); relaunch_auto, idle_handoff_near_limit and idle_digest list their words. settings.pm %SWITCH reads true/false and every word a release before 0.1.6 saved as before (halt, model, shadow, allow, auto as true; off, code, forbid, confirm as false; another case, spaces, a JSON boolean), never as the opposite, and config.ts SWITCH is the same table (gate). Claude Code reads a saved value outside the options as unset, so status and settings show warn about such a value with the migrate command (consent keys apart: the plugin never writes one); settings set takes an old word and writes true or false; settings migrate is a dry run, --apply rewrites through the settings writer (backup, --plan), a value equal to its default is removed, consent keys are only listed with their user-run lines; resume_proceed stays tighten-only. otel_log_path and restart_on_update are not in the built manifest (they do nothing yet) but the helper still reads a saved restart_on_update. An old form from the environment gets a note.",
+ "note": "D-72 (0.1.6; owner 2026-11-08: two-value settings as true/false, with a /config screen that shows the description): the seven on/off keys are userConfig strings with options [\"true\", \"false\"] (a picker in /config); relaunch_auto, restart_on_update, idle_handoff_near_limit and idle_digest list their words. settings.pm %SWITCH reads true/false and every word a release before 0.1.6 saved as before (halt, model, shadow, allow, auto as true; off, code, forbid, confirm as false; another case, spaces, a JSON boolean), never as the opposite, and config.ts SWITCH is the same table (gate). Claude Code reads a saved value outside the options as unset, so status and settings show warn about such a value with the migrate command (consent keys apart: the plugin never writes one); settings set takes an old word and writes true or false; settings migrate is a dry run, --apply rewrites through the settings writer (backup, --plan), a value equal to its default is removed, consent keys are only listed with their user-run lines; resume_proceed stays tighten-only. otel_log_path is not in the built manifest (it does nothing yet); restart_on_update is, a picker over on, shadow and off (D-72 root correction: the owner sets shadow in /config). An old form from the environment gets a note.",
  "now": "2026-11-08T12:00:00+02:00",
  "tz": "Etc/GMT-2",
  "steps": [
@@ -15,7 +15,7 @@
    ]
   },
   {
-   "name": "the built manifest: the on/off keys list true and false, the three-word keys their words; otel_log_path and restart_on_update are not there",
+   "name": "the built manifest: the on/off keys list true and false, the three-word keys their words, restart_on_update among them; otel_log_path is not there",
    "argv": [
     "settings",
     "show"
@@ -29,11 +29,12 @@
        "\"handoff_turn\": \\{\\n\\s+\"type\": \"string\",\\n\\s+\"title\": \"Handoff before stopping \\[default true\\]\",",
        "\"options\": \\[\"true\", \"false\"\\],\\n\\s+\"default\": \"true\"",
        "\"options\": \\[\"on\", \"shadow\", \"off\"\\],\\n\\s+\"default\": \"on\"",
-       "\"unattended_prod_reads\": \\{\\n\\s+\"type\": \"string\",\\n\\s+\"title\": \"Unattended production checks \\[default false\\]\","
+       "\"unattended_prod_reads\": \\{\\n\\s+\"type\": \"string\",\\n\\s+\"title\": \"Unattended production checks \\[default false\\]\",",
+       "\"restart_on_update\": \\{\\n\\s+\"type\": \"string\",\\n\\s+\"title\": \"Restart on Claude Code update \\(beta\\) \\[default off\\]\",",
+       "\"options\": \\[\"on\", \"shadow\", \"off\"\\],\\n\\s+\"default\": \"off\""
       ],
       "lacks": [
        "\"otel_log_path\"",
-       "\"restart_on_update\"",
        "\"Values: "
       ]
      }
@@ -41,7 +42,7 @@
    }
   },
   {
-   "name": "settings show: each old word reads as before (true or false), a hidden key once saved; one warning with the migrate command, one for the consent keys",
+   "name": "settings show: each old word reads as before (true or false), restart_on_update as saved; one warning with the migrate command, one for the consent keys",
    "argv": [
     "settings",
     "show"
@@ -84,7 +85,7 @@
    }
   },
   {
-   "name": "settings show --json: true/false values and options, no hidden key, the keys saved in an old form",
+   "name": "settings show --json: true/false values and options, restart_on_update's three, no hidden key, the keys saved in an old form",
    "argv": [
     "settings",
     "show",
@@ -107,6 +108,13 @@
       "shadow",
       "off"
      ],
+     "settings.restart_on_update.value": "shadow",
+     "settings.restart_on_update.class": "consent",
+     "settings.restart_on_update.values": [
+      "on",
+      "shadow",
+      "off"
+     ],
      "old_form": [
       "watcher",
       "handoff_turn",
@@ -119,8 +127,7 @@
      ]
     },
     "stdout_lacks": [
-     "\"otel_log_path\"",
-     "\"restart_on_update\""
+     "\"otel_log_path\""
     ]
    }
   },

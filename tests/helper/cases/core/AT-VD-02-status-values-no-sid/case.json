@@ -13,7 +13,7 @@
    "argv": ["status", "--sid", "", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
      "stdout_has": ["^session: unknown \\(no session id\\); ",
-                    "^settings values: 1 not at default, 42 at default$",
+                    "^settings values: 1 not at default, 43 at default$",
                     "^  watcher false \\(your settings\\.json; default true\\)$",
                     "^  at default: handoff_root=",
                     "^  ! \"/[^\"]+/scripts/$BRAND-store\" settings reset <key> --apply$"],

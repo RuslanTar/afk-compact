@@ -116,7 +116,7 @@
      "^  relaunch_allow: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_allow\\) or in your settings\\.json by hand$",
      "^  unattended_prod_reads: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.unattended_prod_reads\\) or in your settings\\.json by hand$",
      "^  queue_cmd: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.queue_cmd\\) or in your settings\\.json by hand$",
-     "^  restart_on_update: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in your settings\\.json by hand \\(it is not in /config in this version\\), under pluginConfigs\\[\"$BRAND@m\"\\]\\.options$"
+     "^  restart_on_update: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.restart_on_update\\) or in your settings\\.json by hand$"
     ],
     "files": [
      {
@@ -138,14 +138,14 @@
    "argv": [
     "settings",
     "set",
-    "relaunch_auto=always",
+    "restart_on_update=always",
     "--apply"
    ],
    "expect": {
     "exit": 3,
     "stdout_has": [
-     "^  relaunch_auto: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.relaunch_auto\\) or in your settings\\.json by hand$",
-     "^  relaunch_auto: the value given: [^\\n]+$"
+     "^  restart_on_update: a consent key; the plugin never writes it, whoever runs this\\. Change it yourself in /config \\(the row $BRAND\\.restart_on_update\\) or in your settings\\.json by hand$",
+     "^  restart_on_update: the value given: not on, shadow or off$"
     ],
     "files": [
      {

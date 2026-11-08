@@ -145,6 +145,7 @@ our %SECTION = (
     queue_cmd                   => [qw(jobs common)],
     repo_roots                  => [qw(safety common)],
     unattended_prod_reads       => [qw(safety common)],
+    restart_on_update           => [qw(safety common)],
     prod_patterns               => [qw(safety common)],
     secret_extra_rules          => [qw(safety common)],
     protected_branches          => [qw(safety common)],
@@ -152,18 +153,19 @@ our %SECTION = (
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
-# D-72 (0.1.6): keys left out of the manifest's userConfig, so the configure dialog and /config
-# do not offer them, because they do nothing yet: otel_log_path has no reader, restart_on_update
-# no restart route that ships (lib/restart.pm). The helper still reads them from the settings
-# file; the onboarding view skips them, and the status values list them only once set.
-our %HIDDEN = map { $_ => 1 } qw(otel_log_path restart_on_update);
+# D-72 (0.1.6): a key left out of the manifest's userConfig, so the configure dialog and /config
+# do not offer it, because it does nothing yet: otel_log_path has no reader. The helper still
+# reads it from the settings file; the onboarding view skips it, and the status values list it
+# only once set. restart_on_update stays in /config (a picker over on, shadow and off): shadow
+# logs what a restart would do, the only trial data this version gathers.
+our %HIDDEN = map { $_ => 1 } qw(otel_log_path);
 # The values an enum key takes, its manifest `options` (the configure dialog's picker), and
 # exports as is (W-BETA D); any other value exports as `other`.
 our %ENUM = (watcher => [qw(true false)], handoff_turn => [qw(true false)], relaunch_auto => [qw(on shadow off)],
              unattended_prod_reads => [qw(true false)], precompact_turn => [qw(true false)], idle_handoff_turn => [qw(true false)], idle_compact => [qw(true false)],
              idle_handoff_near_limit => [qw(run skip-spend skip)],
              idle_digest => [qw(submit return off)],
-             resume_proceed => [qw(true false)], restart_on_update => [qw(off shadow on)]);
+             resume_proceed => [qw(true false)], restart_on_update => [qw(on shadow off)]);
 # D-72 (0.1.6; owner 2026-11-08: "may be replaced with true/false", with a screen that shows the
 # description): the seven on/off keys take "true" or "false", a userConfig string with those two
 # options, so /config opens a picker with the description (a boolean flips in place there). In the
@@ -1161,7 +1163,7 @@ sub value_warnings {
         # a %HIDDEN key is not in the manifest (D-72): no /config row, nothing passed to the hooks
         my $h = $HIDDEN{ $w->{key} };
         push @l, "warning: $w->{key}: saved empty, the plugin uses the default; " . ($h ? '' : 'Claude Code passes "" to the hooks; ') . 'clear it with '
-                 . ($FILE_ONLY{ $w->{key} } ? ($h ? 'your settings.json by hand' : '/config or by hand') . ' (a consent key: the plugin never writes it)'
+                 . ($FILE_ONLY{ $w->{key} } ? '/config or by hand (a consent key: the plugin never writes it)'
                     : defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
     }
     # D-72: values saved in a form from before 0.1.6, which Claude Code reads as unset
