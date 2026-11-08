@@ -97,16 +97,21 @@ const ITEM_RE = /^\s*\d+\.\s/
  * (AD2 on 0.1.4: a summary wrote `— done`, so its Basis read 0 of 3 done): the other common
  * marks read too, after `—`, `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case, and a mark
  * may take a note in brackets (`— done (commit 1a2b3c)`). `stepMark` says which one counts.
+ * A wait mark (`WAITS_SRC`) reads after the same separators (`MARK_SEP`).
  */
-const MARK_SRC = '(·|•|—|–|:|\\(|\\s--?)\\s*(todo|done)(?=\\s*$|\\s*[;,.()]|\\s+\\d+\\.\\s)'
+const MARK_SEP = '·|•|—|–|:|\\(|\\s--?'
+const MARK_SRC = `(${MARK_SEP})\\s*(todo|done)(?=\\s*$|\\s*[;,.()]|\\s+\\d+\\.\\s)`
 /**
  * A wait mark (0.1.5, E-4): `· waits: job` (the step needs a running job's result first) or
  * `· waits: you` (it needs the user), which the summary's model writes on a todo step that waits,
  * before its `· todo` (read after it too). Code reads the hold from the mark, not the wording. A
- * dash may stand for the `·` (`— waits: you · todo`: 8 of 20 probe summaries wrote one so). The
- * form's own placeholder copied as it stands (`waits: job|you`) is no mark: it names neither.
+ * dash may stand for the `·` (`— waits: you · todo`: 8 of 20 probe summaries wrote one so), and
+ * so may any separator a step mark takes (`MARK_SEP`: `- waits: you - todo` and `• waits: you •
+ * todo` hold the step as `· waits: you · todo` does). Unlike a step mark, a wait mark inside
+ * brackets counts too (`· todo (after review · waits: you)`): it can only hold a step, never free
+ * one. The form's own placeholder copied as it stands (`waits: job|you`) is no mark: it names neither.
  */
-const WAITS_SRC = '[·—–]\\s*waits:\\s*(job|you)\\b(?!\\s*[|/])'
+const WAITS_SRC = `(?:${MARK_SEP})\\s*waits:\\s*(job|you)\\b(?!\\s*[|/])`
 /** An explicit gate in the summary form's own words (`gated …: ask user: …`): a `waits: job` mark does not lift it. */
 const GATED_RE = /\b(?:gated|ask user)\b/i
 /**

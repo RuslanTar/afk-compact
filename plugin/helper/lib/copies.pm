@@ -239,9 +239,10 @@ sub _test_corrupt {
 #   reply …`, `when CI finishes, …`, `After the run, commit`; lane.ts `JOB_RE`) and no person,
 #   pronoun or person's say stands anywhere in it. A job hold is not a step that can run: the
 #   copy is taken with no result in, so it stays blocked (only the session's result turn reads
-#   it working). A wait mark (`· waits: job` or `· waits: you`, a dash for the `·` too; lane.ts
-#   `WAITS_SRC`) leads the wording: either holds the step (a mark never makes one free; `waits:
-#   job` holds a step whose words wait on a person on the job, unless it is gated), an item with
+#   it working). A wait mark (`· waits: job` or `· waits: you`, after any separator a step
+#   mark takes; lane.ts `WAITS_SRC`) leads the wording: either holds the step (a mark never
+#   makes one free; `waits: job` holds a step whose words wait on a person on the job, unless
+#   it is gated), an item with
 #   one and no step mark read is to do, and the mark of the first Next steps item not done
 #   (Step 1's item), while it is to do, holds Step 1 under `Gate: none`. The form's placeholder
 #   copied as it stands (`waits: job|you`) is no mark.
@@ -255,8 +256,10 @@ my $MARK_RE = qr/(·|•|—|–|:|\(|\s--?)\s*(todo|done)(?=\s*$|\s*[;,.()]|\s+
 my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]/;
 # The hold regexes from here on read with /aa, as JS does: \w, \d and \b are ASCII, and no
 # non-ASCII letter folds to an ASCII one (`café`, `B-٣`, `Müller` read as in lane.ts). The wait
-# mark is read on raw text, so its spaces are JS's (`·<no-break space>waits: job` is one).
-my $WAITS_RE = qr/[·—–]$JS_SPACE*waits:$JS_SPACE*(job|you)\b(?!$JS_SPACE*[|\/])/iaa;
+# mark is read on raw text, so its spaces are JS's (`·<no-break space>waits: job` is one). It
+# reads after the separators a step mark takes ($MARK_RE's, lane.ts `MARK_SEP`: `- waits: you -
+# todo` holds the step), inside brackets too (it can only hold a step, never free one).
+my $WAITS_RE = qr/(?:·|•|—|–|:|\(|$JS_SPACE--?)$JS_SPACE*waits:$JS_SPACE*(job|you)\b(?!$JS_SPACE*[|\/])/iaa;
 my $GATED_RE = qr/\b(?:gated|ask user)\b/iaa;
 my $HELD_RE = qr/\b(?:gated|ask user|pending answer|wait(?:s|ing)? (?:on|for)|await(?:s|ing)?|blocked (?:on|by)|needs? (?:an? )?(?:approval|the user|user|owner|you|your))\b/iaa;
 # lane.ts `JOB_RE` and its parts, word for word.

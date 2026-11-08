@@ -1646,6 +1646,11 @@ const MARKED_JOB = [
   'Record the counts in RELEASE-NOTES.md – waits: job',
   'Write notes · waits: job',
   'Write notes · waits: job · waits: job',
+  'Write notes - waits: job',
+  'Write notes -- waits: job',
+  'Write notes • waits: job',
+  'Write notes: waits: job',
+  'Write notes (waits: job)',
 ]
 const MARKED_USER = [
   'On the timer notification, reply with one line acknowledging it · waits: you',
@@ -1664,6 +1669,9 @@ const MARKED_USER = [
   'ask user: push tag v1.4.0 and branch release/1.4 after they review notes — waits: job',
   'Write notes · waits: you',
   'Write notes · waits: job · waits: you',
+  'Push tag v1.4.0 - waits: you - todo',
+  'Push tag v1.4.0 • waits: you • todo',
+  'Merge · todo (after review · waits: you)',
 ]
 /**
  * Not a wait mark, so the step reads by its words (here free): no `·` or dash, another word, a
@@ -1848,6 +1856,23 @@ test('E-4 wait marks: read before or after the todo mark, in the one-line form t
     const f = laneFacts(`## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read log · waits: job${p} 2. Write notes · todo\n`)
     expect([p, f.todo, f.free, f.onJob, laneOf(f, M).lane]).toEqual([p, 2, 1, 1, 'working'])
   }
+})
+
+// The 0.1.5 integration review: the merged head read a wait mark only after `·`, `—` or `–`, so a
+// step marked `- waits: you - todo` or `• waits: you • todo` read as free work and turned a
+// hard-blocked lane working. A wait mark reads after every separator a step mark takes. This
+// test failed on 7a0456eb.
+test('wait marks read after every step-mark separator: `- waits: you - todo` and `• waits: you • todo` keep a hard-blocked lane blocked', () => {
+  const sum = (item: string, n = '1') => laneFacts(`## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps\n${n}. ${item}\n`)
+  for (const item of ['Push tag v1.4.0 - waits: you - todo', 'Push tag v1.4.0 • waits: you • todo', 'Push tag v1.4.0 -- waits: you -- todo', 'Push tag v1.4.0: waits: you: todo', 'Push tag v1.4.0 · waits: you · todo']) {
+    const f = sum(item)
+    expect([item, f.todo, f.unmarked, f.free, f.onUser, f.gate, laneOf(f, M).lane]).toEqual([item, 1, 0, 0, 1, 'set', 'hard-blocked'])
+  }
+  // The one-line form splits after such a wait mark too.
+  const one = laneFacts('## Resume here\nStatus: hard-blocked\nStep 1: none\nGate: none\n## Next steps: 1. Read the log - waits: job 2. Push • waits: you\n')
+  expect([one.todo, one.free, one.onJob, one.onUser, laneOf(one, M).lane]).toEqual([2, 0, 1, 1, 'hard-blocked'])
+  // A comma is no separator, and a dash needs its space: these read by their words (free).
+  for (const item of ['Run the docs build, waits: you · todo', 'Run the docs build-waits: you · todo']) expect([item, sum(item).free]).toEqual([item, 1])
 })
 
 test('E-4 wait marks: Next steps item 1 to do holds Step 1 under `Gate: none`; a Gate line naming a blocker stays one', () => {
