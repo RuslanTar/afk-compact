@@ -37,6 +37,11 @@ sub check {
     return 'blocks' unless _str($d->{blocks});
     return 'blocks-size' if _bytes($d->{blocks}) > $MAX{blocks};
     if (defined $d->{context}) { return 'context' unless _str($d->{context}) && _bytes($d->{context}) <= $MAX{context} }
+    # sent whenever given (model_fields), so its cap holds on every kind, recommended option or not
+    if (defined $d->{recommendation_none_reason}) {
+        return 'recommendation_none_reason' unless _str($d->{recommendation_none_reason})
+            && _bytes($d->{recommendation_none_reason}) <= $MAX{recommendation_none_reason};
+    }
     my $opts = $d->{options};
     if ($d->{kind} eq 'open') {
         return 'options-on-open' if defined $opts && !(ref $opts eq 'ARRAY' && !@$opts);
