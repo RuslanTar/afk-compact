@@ -2004,6 +2004,21 @@ test('AT-KW-56 (D-82): native on, an idle teammate (`idle`): the 55.5-min check 
   expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 0]])
 })
 
+test('AT-KW-56 (D-82): the agent list cannot be read: the Stop list\'s teammate rows count (one job each, Monitors none), as before D-82; keep-warm pings at 50', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = undefined
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: TEAMMATE_ROWS })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 60)
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_start').map(r => r.jobs)).toEqual([2])
+})
+
 // `waiting` (Claude Code 2.1.319) is an agent held by background work it owns (its own shell,
 // Monitor or Agent call), whose result is still to come, or a teammate on a plan approval: at work.
 for (const type of ['general-purpose', 'teammate']) {

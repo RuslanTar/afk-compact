@@ -99,6 +99,8 @@ export const KEEP_WARM_PROMPT = 'Reply with the single word OK.'
  * kinds that only watch or wake (a Monitor, a cron).
  */
 const NOT_JOB = /^(?:subagent|local_agent|teammate)$|monitor|cron/i
+/** A teammate's Stop-list row: counted only when the agent list cannot be read (`openJobs`). */
+const TEAMMATE = /^teammate$/i
 /** A background task status that has ended. */
 const ENDED = /^(?:completed|failed|killed|stopped|cancell?ed)$/i
 /** A background shell: it may never end (a dev server, `tail -f`), so it opens no certain result turn (D-80). */
@@ -135,8 +137,12 @@ export type KeepWarm = {
   incoming?: Due
 }
 
-/** The background tasks of the main session's last Stop (`background_tasks`), by id; `shells` the shells among them. */
-export type BgTasks = { sid: string; ids: string[]; shells: string[] }
+/**
+ * The background tasks of the main session's last Stop (`background_tasks`), by id; `shells` the
+ * shells among them; `teams` its teammate rows not ended, which count only while the agent list
+ * cannot be read.
+ */
+export type BgTasks = { sid: string; ids: string[]; shells: string[]; teams?: string[] }
 
 /**
  * Main `classic.Stop` (observe only): the in-flight background work its input lists, less the
@@ -147,15 +153,17 @@ export function noteBackground(s: Deps['state'], e: { session_id?: unknown; agen
   if (!Array.isArray(e.background_tasks) || typeof e.session_id !== 'string') return
   const ids: string[] = []
   const shells: string[] = []
+  const teams: string[] = []
   for (const t of e.background_tasks as unknown[]) {
     if (typeof t !== 'object' || t === null) continue
     const o = t as Record<string, unknown>
-    if (typeof o.id !== 'string' || o.id === '') continue
-    if (NOT_JOB.test(String(o.type ?? '')) || ENDED.test(String(o.status ?? ''))) continue
+    if (typeof o.id !== 'string' || o.id === '' || ENDED.test(String(o.status ?? ''))) continue
+    if (TEAMMATE.test(String(o.type ?? ''))) teams.push(o.id)
+    if (NOT_JOB.test(String(o.type ?? ''))) continue
     ids.push(o.id)
     if (SHELL.test(String(o.type ?? ''))) shells.push(o.id)
   }
-  s.bgTasks = { sid: e.session_id, ids, shells }
+  s.bgTasks = { sid: e.session_id, ids, shells, teams }
 }
 
 /**
@@ -170,12 +178,15 @@ export function noteEndedTasks(s: Deps['state'], kind: string, text: string): vo
 /**
  * The background jobs of this session open now: agent loops running and listed agents at work
  * (counted live; D-82: an idle teammate is no job), the last main Stop's other tasks, less any a
- * notification reported ended.
+ * notification reported ended. With no agent list to read, the Stop list's teammates count, as
+ * before D-82 (it cannot tell an idle one from one at work).
  */
 export async function openJobs(d: Deps, sid: string, shells = true): Promise<number> {
   const ids = new Set<string>(d.state.agentTurns)
-  for (const id of (await d.agentsWorking()) ?? []) ids.add(id)
+  const working = await d.agentsWorking()
+  for (const id of working ?? []) ids.add(id)
   const bg = d.state.bgTasks
+  if (working === undefined && bg?.sid === sid) for (const id of bg.teams ?? []) ids.add(id)
   if (bg?.sid === sid) for (const id of bg.ids) if (shells || !bg.shells.includes(id)) ids.add(id)
   for (const id of d.state.endedTasks) ids.delete(id)
   return ids.size
