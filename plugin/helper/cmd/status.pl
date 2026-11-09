@@ -765,11 +765,11 @@ sub regex_lines {
 }
 
 # ---------------------------------------------------------------- idle compaction (IA-4, IDLE-COMPACT §4.1 B) and SK-7
-# Who compacts an idle session (IDLE-COMPACT-SPEC §4.1, lane B): Claude Code, the plugin or
-# nobody, and the pre-idle handoff turn. The source is this session's last `idle_mode` row (the
-# mod's own merged reading: `native` vetoed / compaction-off / on / unknown, `plugin_turn`,
-# `plugin_compact`, `compact_min`, `cache_s`), which the mod writes at load and whenever the policy
-# changes for the session id (a `/clear` gets its own). With no such row (no load or turn end of
+# Who compacts an idle session (IDLE-COMPACT-SPEC §4.1, lane B): native idle compaction (Claude
+# Code), plugin idle compaction or nobody, and the idle handoff turn, with their token bands (D-75).
+# The source is this session's last `idle_mode` row (the mod's own merged reading: `native`
+# vetoed / compaction-off / on / unknown, `plugin_turn`, `plugin_compact`, `compact_min`, `cache_s`),
+# which the mod writes at load and whenever the policy changes for the session id (a `/clear` gets its own). With no such row (no load or turn end of
 # this session yet, no session id, or a row from before the plugin's own idle compaction), the
 # line is read the same way from the user settings file and the helper's environment
 # (`autoCompactEnabled` false, DISABLE_COMPACT or DISABLE_AUTO_COMPACT: automatic compaction off;
@@ -816,46 +816,69 @@ sub _user_native {
     $native = 'compaction-off' if _env_true($ENV{DISABLE_COMPACT}) || _env_true($ENV{DISABLE_AUTO_COMPACT});
     return ($native, $vetoed);
 }
-my $OWN_ON = "Claude Code's own (your settings allow it; Claude Code decides per account whether it runs)";
-my $OWN_OFF = 'Claude Code\'s own is off: "idleCompaction": false';
-my $FAILED = "the plugin's failed twice in this session; it is back once the plugin reloads";
-# The line for one policy (native, plugin_turn, plugin_compact), as the §4.1 B table words it.
+# D-75 terms (owner 2026-11-08): native idle compaction is Claude Code's own, plugin idle
+# compaction the plugin's, and the idle handoff turn the turn that writes a handoff without
+# compacting, from idle_handoff_min_tokens up to the idle-compaction minimum. The line prints
+# each path's token band from the effective values (the minimum as the mod read it, else as
+# native reads the environment; idle_handoff_min_tokens clamped as config.ts clamps it).
+my $NATIVE_ON = "native idle compaction (Claude Code; your settings allow it, Claude Code decides per account whether it runs)";
+my $NATIVE_UNKNOWN = 'native idle compaction (Claude Code; unknown: the settings could not be read)';
+my $NATIVE_OFF = 'native idle compaction is off ("idleCompaction": false)';
+my $FAILED = "it failed twice in this session; it is back once the plugin reloads";
+my $TURN = 'idle handoff turn';
+# The line for one policy (native, plugin_turn, plugin_compact), as the §4.1 B table words it,
+# with the bands: $m the idle-compaction minimum, $h idle_handoff_min_tokens.
 sub idle_line {
-    my ($native, $pt, $pc, $min, $headless, $compact_opt) = @_;
-    my $m = _thousands($min // _compact_min());
+    my ($native, $pt, $pc, $min, $headless, $compact_opt, $hmin) = @_;
+    $min //= _compact_min();
+    $hmin //= 200000;
+    my ($m, $h) = (_thousands($min), _thousands($hmin));
     my $p = 'idle compaction: ';
-    my $turn49 = 'the pre-idle handoff turn at 49 min';
+    # The turn's band under a compaction from the minimum up; none when the turn's minimum is not below it.
+    my $under = sub {
+        my ($at) = @_;
+        return " · $h–$m → $TURN$at · below → nothing" if $hmin < $min;
+        return " · below $m → nothing (no $TURN: idle_handoff_min_tokens $h is not below the minimum)";
+    };
+    # The turn alone (the plugin does not compact): from idle_handoff_min_tokens up.
+    my $alone = sub { my ($at, $why) = @_; return "$h+ → $TURN$at" . ($why // '') . ' · below → nothing' };
     if ($native eq 'vetoed') {
-        return $p . "by the plugin, about 54 min after the last request at $m tokens or more ($OWN_OFF); below that, "
-               . ($pt eq 'on' ? $turn49 : 'none (idle_handoff_turn: false)') if $pc eq 'on';
-        return $p . "none for now ($FAILED) → " . ($pt eq 'on' ? $turn49 : 'no pre-idle handoff turn') if $pc eq 'failed';
-        return $p . "none for now (the plugin's /compact waited in the queue and did not start in time; it is back once the plugin reloads)"
-               . ' → no pre-idle handoff turn (headless session)' if $pc eq 'queued';
-        return $p . "none ($OWN_OFF; the plugin's does not run in a headless session yet); no pre-idle handoff turn (headless session)"
+        if ($pc eq 'on') {
+            my $c = "$p$NATIVE_OFF · $m+ → plugin idle compaction about 54 min after the last request";
+            return $c . ($pt eq 'on' ? $under->(' at 49 min') : " · below → nothing (no $TURN: idle_handoff_turn: false)");
+        }
+        return "$p$NATIVE_OFF · plugin idle compaction: none for now ($FAILED)"
+               . ($pt eq 'on' ? ' · ' . $alone->(' at 49 min') : " · no $TURN") if $pc eq 'failed';
+        return "$p$NATIVE_OFF · plugin idle compaction: none for now (its /compact waited in the queue and did not start in time; "
+               . "it is back once the plugin reloads) · no $TURN (headless session)" if $pc eq 'queued';
+        return "$p$NATIVE_OFF · plugin idle compaction does not run in a headless session yet · no $TURN (headless session)"
             if $headless;
-        return $p . "none ($OWN_OFF; the plugin's: idle_compact: false) → $turn49" if $pt eq 'on';
-        return $p . "none ($OWN_OFF; the plugin's: idle_compact: false); no pre-idle handoff turn (idle_handoff_turn: false)";
+        my $c = "$p$NATIVE_OFF · plugin idle compaction is off (idle_compact: false)";
+        return $c . ($pt eq 'on' ? ' · ' . $alone->(' at 49 min') : " · no $TURN (idle_handoff_turn: false)");
     }
     if ($native eq 'compaction-off') {
         return $p . 'none (automatic compaction is off: "autoCompactEnabled": false or DISABLE_AUTO_COMPACT)'
-               . ($pt eq 'on' ? " → $turn49" : $headless ? '; no pre-idle handoff turn (headless session)'
-                  : '; no pre-idle handoff turn (idle_handoff_turn: false)');
+               . ($pt eq 'on' ? ' · ' . $alone->(' at 49 min') : $headless ? " · no $TURN (headless session)"
+                  : " · no $TURN (idle_handoff_turn: false)");
     }
-    my $who = $native eq 'unknown' ? 'unknown (the settings could not be read)' : $OWN_ON;
-    my $check = ' → the plugin checks at 55.5 min and, if Claude Code did not compact, ';
+    my $who = $native eq 'unknown' ? $NATIVE_UNKNOWN : $NATIVE_ON;
+    my $at = 'idle at 55.5 min';
+    return "$p$at: $m+ → $who, else plugin idle compaction" . ($pt eq 'check' ? $under->('')
+           : " · below → nothing (no $TURN: idle_handoff_turn: false)") if $pc eq 'check';
+    # The plugin does not compact: native's band first (the minimum is native's, not the turn's),
+    # then the turn, which runs at any size from idle_handoff_min_tokens when native did not run.
     if ($pt eq 'check') {
-        return $p . $who . $check . "compacts itself at $m tokens or more; below that, it runs its handoff turn" if $pc eq 'check';
         # a row of a build before lane B: the compaction while agents run only
-        return $p . $who . $check . 'runs its handoff turn, or compacts itself while agents run' if $pc eq 'agents';
-        return $p . $who . $check . "runs its handoff turn; it does not compact itself for now ($FAILED)" if $pc eq 'failed';
-        return $p . $who . $check . 'runs its handoff turn; it does not compact itself (idle_compact: false)';
+        my $why = $pc eq 'agents' ? ' (plugin idle compaction only while agents run)'
+                : $pc eq 'failed' ? " (plugin idle compaction: none for now; $FAILED)"
+                : ' (plugin idle compaction is off: idle_compact: false)';
+        return "$p$at: $m+ → $who, else $TURN" . ($hmin > $min ? " from $h up" : '') . $why
+               . ($hmin < $min ? " · $h–$m → $TURN" : '') . ' · below → nothing';
     }
-    return $p . $who . " → the plugin checks at 55.5 min only to compact itself at $m tokens or more if Claude Code did not"
-           . ' (no handoff turn: idle_handoff_turn: false)' if $pc eq 'check';
     my $why = $headless ? 'headless session'
-            : $pc eq 'failed' ? "idle_handoff_turn: false; $FAILED"
+            : $pc eq 'failed' ? "idle_handoff_turn: false; plugin idle compaction: $FAILED"
             : $compact_opt eq 'off' ? 'idle_handoff_turn and idle_compact: false' : 'idle_handoff_turn: false';
-    return $p . $who . "; the plugin does not check and does not compact ($why)";
+    return "${p}idle at about 54 min: $m+ → $who · below → nothing; the plugin does not check: no plugin idle compaction, no $TURN ($why)";
 }
 sub idle_lines {
     my ($headless, $mod) = @_;
@@ -880,17 +903,18 @@ sub idle_lines {
         ($min, $cache) = (_compact_min(), _cache_s());
     }
     $min = undef unless defined $min && !ref $min && $min =~ /\A[0-9]{1,15}\z/;
-    my $line = idle_line($native, $pt, $pc, $min, $headless, $compact_opt);
+    my ($hmin) = eval { settings::num_clamped('idle_handoff_min_tokens', $r) };
+    my $line = idle_line($native, $pt, $pc, $min, $headless, $compact_opt, $hmin);
     $line .= ' (from your user settings; the session decides at its next turn end)' unless $row;
     my @out = ($line);
     if ($native eq 'on' || $native eq 'unknown') {
         my $brand = ctx::brand();
-        push @out, "note: Claude Code's own idle compaction also runs in sessions where $brand is not enabled. To keep idle "
+        push @out, "note: native idle compaction also runs in sessions where $brand is not enabled. To keep idle "
                    . "compaction to $brand sessions, set \"idleCompaction\": false in "
-                   . util::abbrev(settings::config_dir() . '/settings.json') . "; $brand then compacts idle sessions itself.";
+                   . util::abbrev(settings::config_dir() . '/settings.json') . "; plugin idle compaction then takes its place.";
     }
     push @out, 'note: your user settings say "idleCompaction": false, but a project, local, --settings or managed value turns '
-               . "Claude Code's own back on in this session." if $row && $native eq 'on' && $user_vetoed;
+               . "native idle compaction back on in this session." if $row && $native eq 'on' && $user_vetoed;
     push @out, "idle timers: test scale, cache $cache s (STORE_TEST_IDLE_CACHE_S)" if defined $cache && !ref $cache && $cache =~ /\A[0-9]{1,6}\z/;
     return @out;
 }
@@ -920,7 +944,7 @@ sub keep_warm_lines {
     }
     my $n = $pings == 1 ? '1 ping' : "$pings pings";
     return ("$on · this gap: warming, $n so far") if $state eq 'warming';
-    return ("$on · this gap: not warming (the last refused gap: stopped before its first ping: no-idle-path, no idle compaction or handoff turn to take it over)")
+    return ("$on · this gap: not warming (the last refused gap: stopped before its first ping: no-idle-path, no plugin idle compaction or idle handoff turn to take it over)")
         if $state eq 'refused';
     $why = 'other' unless defined $why && !ref $why && $why =~ /\A[a-z0-9-]{1,24}\z/;
     return ("$on · this gap: not warming (the last warmed gap: $n, stopped: $why)") if $state eq 'stopped';

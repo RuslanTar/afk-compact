@@ -14,7 +14,7 @@ Run `<store> status --sid '${CLAUDE_SESSION_ID}'` and relay its lines as printed
 - `seat_state` of the last 5 compactions, with trigger, verdict and copy path;
 - open escalations and open watcher alerts, with the last 7 days' counts by rule;
 - halt state and auto-continues used this hour;
-- `idle compaction: …` (who compacts an idle session — Claude Code, the plugin or nobody — as this session reads your settings, with `idle_compact` and `idle_handoff_turn`; a note while Claude Code's own is on);
+- `idle compaction: …` (token bands of native idle compaction (Claude Code's), plugin idle compaction and the idle handoff turn, as this session reads your settings; a note while native is on);
 - `keep-warm: on|off …` (`keep_warm_hours`: whether the plugin keeps the cache warm while this session's own background jobs run; then the last idle gap that warmed, with its pings and why it stopped. This skill's own turn ends a gap's warming, so it shows `stopped: turn` for the gap it interrupted; only `! <store> status --sid <this session id>`, typed by the user, shows a gap still warming);
 - `smokeDue`;
 - `allow rule (default mode): …` (the rule that lets `wait` run unasked), and `allow rule for an older plugin folder: …` when one still names an old folder;

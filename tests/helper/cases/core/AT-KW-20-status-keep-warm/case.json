@@ -357,7 +357,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last refused gap: stopped before its first ping: no-idle-path, no idle compaction or handoff turn to take it over\\)$"
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last refused gap: stopped before its first ping: no-idle-path, no plugin idle compaction or idle handoff turn to take it over\\)$"
     ],
     "stdout_lacks": [
      "last warmed gap"

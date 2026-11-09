@@ -22,7 +22,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
+     "^idle compaction: native idle compaction is off \\(\\\"idleCompaction\\\": false\\) · 200,000\\+ → plugin idle compaction about 54 min after the last request · below 200,000 → nothing \\(no idle handoff turn: idle_handoff_min_tokens 200,000 is not below the minimum\\) \\(from your user settings; the session decides at its next turn end\\)$",
      "^settings: resume_proceed true \\(default\\) · handoff_reuse_window_min 15 · ticket_pattern default · secret_extra_rules 0 · evidence_total_max_mb 50 · watch_quota_mb 50$"
     ]
    }
@@ -43,7 +43,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\) · 200,000\\+ → idle handoff turn at 49 min · below → nothing \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -63,8 +63,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\) → the plugin checks at 55\\.5 min and, if Claude Code did not compact, compacts itself at 200,000 tokens or more; below that, it runs its handoff turn \\(from your user settings; the session decides at its next turn end\\)$",
-     "^note: Claude Code's own idle compaction also runs in sessions where $BRAND is not enabled\\. To keep idle compaction to $BRAND sessions, set \\\"idleCompaction\\\": false in ~/\\.claude/settings\\.json; $BRAND then compacts idle sessions itself\\.$"
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else plugin idle compaction · below 200,000 → nothing \\(no idle handoff turn: idle_handoff_min_tokens 200,000 is not below the minimum\\) \\(from your user settings; the session decides at its next turn end\\)$",
+     "^note: native idle compaction also runs in sessions where $BRAND is not enabled\\. To keep idle compaction to $BRAND sessions, set \\\"idleCompaction\\\": false in ~/\\.claude/settings\\.json; plugin idle compaction then takes its place\\.$"
     ]
    }
   },
@@ -84,7 +84,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: unknown \\(the settings could not be read\\) → the plugin checks at 55\\.5 min and, if Claude Code did not compact, compacts itself at 200,000 tokens or more; below that, it runs its handoff turn \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; unknown: the settings could not be read\\), else plugin idle compaction · below 200,000 → nothing \\(no idle handoff turn: idle_handoff_min_tokens 200,000 is not below the minimum\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -107,7 +107,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: by the plugin, about 54 min after the last request at 300,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: native idle compaction is off \\(\\\"idleCompaction\\\": false\\) · 300,000\\+ → plugin idle compaction about 54 min after the last request · 200,000–300,000 → idle handoff turn at 49 min · below → nothing \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -124,7 +124,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: by the plugin, about 54 min after the last request at 100,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, "
+     "^idle compaction: native idle compaction is off \\(\\\"idleCompaction\\\": false\\) · 100,000\\+ → plugin idle compaction about 54 min after the last request · below 100,000 → nothing"
     ]
    }
   },
@@ -141,7 +141,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: none \\(automatic compaction is off: \\\"autoCompactEnabled\\\": false or DISABLE_AUTO_COMPACT\\) · 200,000\\+ → idle handoff turn at 49 min · below → nothing \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": [
      "by the plugin"
@@ -161,7 +161,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: native idle compaction is off \\(\\\"idleCompaction\\\": false\\) · plugin idle compaction is off \\(idle_compact: false\\) · 200,000\\+ → idle handoff turn at 49 min · below → nothing \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -178,7 +178,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\); no pre-idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: native idle compaction is off \\(\\\"idleCompaction\\\": false\\) · plugin idle compaction is off \\(idle_compact: false\\) · no idle handoff turn \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -204,7 +204,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, none \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: native idle compaction is off \\(\\\"idleCompaction\\\": false\\) · 200,000\\+ → plugin idle compaction about 54 min after the last request · below → nothing \\(no idle handoff turn: idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -230,7 +230,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: none \\(Claude Code's own is off: \\\"idleCompaction\\\": false; the plugin's: idle_compact: false\\) → the pre-idle handoff turn at 49 min \\(from your user settings; the session decides at its next turn end\\)$",
+     "^idle compaction: native idle compaction is off \\(\\\"idleCompaction\\\": false\\) · plugin idle compaction is off \\(idle_compact: false\\) · 200,000\\+ → idle handoff turn at 49 min · below → nothing \\(from your user settings; the session decides at its next turn end\\)$",
      "^note: idle_compact: not true, false or a yes/no word, false used$"
     ]
    }
@@ -264,7 +264,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: by the plugin, about 54 min after the last request at 200,000 tokens or more \\(Claude Code's own is off: \\\"idleCompaction\\\": false\\); below that, none \\(idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$",
+     "^idle compaction: native idle compaction is off \\(\\\"idleCompaction\\\": false\\) · 200,000\\+ → plugin idle compaction about 54 min after the last request · below → nothing \\(no idle handoff turn: idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$",
      "^settings: resume_proceed false \\(settings\\) · handoff_reuse_window_min 60 · ticket_pattern custom · secret_extra_rules 2 · evidence_total_max_mb 10 · watch_quota_mb 0$"
     ],
     "stdout_lacks": [
@@ -296,7 +296,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\) → the plugin checks at 55\\.5 min only to compact itself at 200,000 tokens or more if Claude Code did not \\(no handoff turn: idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else plugin idle compaction · below → nothing \\(no idle handoff turn: idle_handoff_turn: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   },
@@ -313,7 +313,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: Claude Code's own \\(your settings allow it; Claude Code decides per account whether it runs\\); the plugin does not check and does not compact \\(idle_handoff_turn and idle_compact: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: idle at about 54 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\) · below → nothing; the plugin does not check: no plugin idle compaction, no idle handoff turn \\(idle_handoff_turn and idle_compact: false\\) \\(from your user settings; the session decides at its next turn end\\)$"
     ]
    }
   }
