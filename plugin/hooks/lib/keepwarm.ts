@@ -472,7 +472,7 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
         if (b.why === 'no-idle-path') await refuse(d, kw, now)
         else turnOff(kw, b)
       }
-      if (kw.phase !== 'off' || kw.bandJob !== true) return false
+      if (kw.bandJob !== true) return false
     } else if (!(await begin(d, kw, now))) return false
     // Begun by the first ping meanwhile: held as well (begin waits for its start row).
   }
