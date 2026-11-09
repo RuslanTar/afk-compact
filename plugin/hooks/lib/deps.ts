@@ -1133,16 +1133,23 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       }
     },
     async planTier() {
-      const word = async (name: string): Promise<string | undefined> => {
-        try {
-          const v = ((await $.env.get(name)) ?? '').trim().toLowerCase()
-          return /^[a-z][a-z0-9_-]{0,31}$/.test(v) ? v : undefined
-        } catch {
-          return undefined
-        }
+      // `$.env.get` takes a literal name (the engine's module rule), so each read is spelled out.
+      const word = (v: string | undefined): string | undefined => {
+        const t = (v ?? '').trim().toLowerCase()
+        return /^[a-z][a-z0-9_-]{0,31}$/.test(t) ? t : undefined
       }
-      const plan = await word('CLAUDE_CODE_SUBSCRIPTION_TYPE')
-      const tier = await word('CLAUDE_CODE_RATE_LIMIT_TIER')
+      let plan: string | undefined
+      let tier: string | undefined
+      try {
+        plan = word(await $.env.get('CLAUDE_CODE_SUBSCRIPTION_TYPE'))
+      } catch {
+        plan = undefined
+      }
+      try {
+        tier = word(await $.env.get('CLAUDE_CODE_RATE_LIMIT_TIER'))
+      } catch {
+        tier = undefined
+      }
       return { ...(plan !== undefined ? { plan } : {}), ...(tier !== undefined ? { tier } : {}) }
     },
     async entrypoint() {
