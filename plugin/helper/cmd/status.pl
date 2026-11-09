@@ -848,7 +848,8 @@ sub idle_line {
             return $c . ($pt eq 'on' ? $under->(' at 49 min') : " · below → nothing (no $TURN: idle_handoff_turn: false)");
         }
         return "$p$NATIVE_OFF · plugin idle compaction: none for now ($FAILED)"
-               . ($pt eq 'on' ? ' · ' . $alone->(' at 49 min') : " · no $TURN") if $pc eq 'failed';
+               . ($pt eq 'on' ? ' · ' . $alone->(' at 49 min') : $headless ? " · no $TURN (headless session)"
+                  : " · no $TURN (idle_handoff_turn: false)") if $pc eq 'failed';
         return "$p$NATIVE_OFF · plugin idle compaction: none for now (its /compact waited in the queue and did not start in time; "
                . "it is back once the plugin reloads) · no $TURN (headless session)" if $pc eq 'queued';
         return "$p$NATIVE_OFF · plugin idle compaction does not run in a headless session yet · no $TURN (headless session)"
@@ -872,8 +873,9 @@ sub idle_line {
         my $why = $pc eq 'agents' ? ' (plugin idle compaction only while agents run)'
                 : $pc eq 'failed' ? " (plugin idle compaction: none for now; $FAILED)"
                 : ' (plugin idle compaction is off: idle_compact: false)';
+        # "below" names its value: the turn's minimum under the band, else the idle-compaction minimum.
         return "$p$at: $m+ → $who, else $TURN" . ($hmin > $min ? " from $h up" : '') . $why
-               . ($hmin < $min ? " · $h–$m → $TURN" : '') . ' · below → nothing';
+               . ($hmin < $min ? " · $h–$m → $TURN · below $h" : " · below $m") . ' → nothing';
     }
     my $why = $headless ? 'headless session'
             : $pc eq 'failed' ? "idle_handoff_turn: false; plugin idle compaction: $FAILED"
