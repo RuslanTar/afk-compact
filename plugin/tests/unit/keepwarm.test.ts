@@ -333,7 +333,10 @@ test('AT-KW-12: the cache switched to five minutes between pings: stop ttl-5m wi
   expect(skips(w)).toEqual([['keep-warm', 'compact'], ['ttl-5m', 'compact']])
 })
 
-test('AT-KW-13: a later ping misses the main prefix (cache read near zero): stop fork-miss; the main cache is as warm as the last warm ping left it, so the held compaction goes back to the idle path and runs', { options: ON }, async ($, on) => {
+// Item 4 of 0.1.7 (probes on 2.1.319: after a fork-miss the next main request missed too, 17 of 17):
+// a fork-miss means the main cache is cold, so nothing is handed back and the idle path does not
+// compact or run its turn on it (`fork-miss` skip) until the next main request.
+test('AT-KW-13: a later ping misses the main prefix (cache read near zero): stop fork-miss with no hand-over; the main cache is cold, so the held compaction is dropped', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 0 ? WARM : COLD }))
   await w.start($)
@@ -343,12 +346,12 @@ test('AT-KW-13: a later ping misses the main prefix (cache read near zero): stop
   expect(f.at).toEqual([50, 100])
   expect(pings(w)).toEqual([['warm', 1], ['fork-miss', 1]])
   expect(w.rowsOf('keep_warm_ping')[1]?.cache_read).toBe(0)
-  expect(stops(w)).toEqual([['fork-miss', true, 1]])
-  expect(ic(w).map(r => [r.at, r.gap_s])).toEqual([['timer', 6000]])
-  expect(selfCompacts(w)).toBe(1)
+  expect(stops(w)).toEqual([['fork-miss', false, 1]])
+  expect(skips(w)).toEqual([['keep-warm', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
-test('AT-KW-13 (REV2-C): the first ping misses the main prefix: the same rule, nothing held yet, so the idle timer\'s compaction runs at 54 as armed', { options: ON }, async ($, on) => {
+test('AT-KW-13 (REV2-C): the first ping misses the main prefix: nothing held yet; the idle timer\'s compaction at 54 skips fork-miss (the cache is cold)', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w, () => ({ isAnswered: true, text: 'OK', usage: COLD }))
   await w.start($)
@@ -357,9 +360,8 @@ test('AT-KW-13 (REV2-C): the first ping misses the main prefix: the same rule, n
   await until(w, t0, 120)
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
-  expect(skips(w)).toEqual([])
-  expect(ic(w).map(r => [r.at, r.gap_s])).toEqual([['timer', 3240]])
-  expect(selfCompacts(w)).toBe(1)
+  expect(skips(w)).toEqual([['fork-miss', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-KW-14: nothing-to-fork while a request is out (a compaction starting beside the ping) is tried again at no cost once it ended; the next ping counts from the one that warmed', { options: ON }, async ($, on) => {
@@ -1031,7 +1033,7 @@ for (const c of [
   })
 }
 
-test('AT-KW-38 (REV3-1): a fork-miss ping that comes back past the 58-min bound hands the check back; its turn path skips lapsed (no turn on a cache past the bound of the last warm request)', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
+test('AT-KW-38 (REV3-1): a fork-miss ping that comes back past the 58-min bound: stop fork-miss, nothing handed back (the cache is cold), no turn', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   let t0 = 0
   on('model.fork', async () => {
@@ -1041,8 +1043,8 @@ test('AT-KW-38 (REV3-1): a fork-miss ping that comes back past the 58-min bound 
   })
   t0 = await checkGap($, w)
   await until(w, t0, 70)
-  expect(stops(w)).toEqual([['fork-miss', true, 0]])
-  expect(skips(w)).toEqual([['keep-warm', 'check'], ['lapsed', 'check']])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
+  expect(skips(w)).toEqual([['keep-warm', 'check']])
   expect(w.submits.length).toBe(0)
 })
 
@@ -1349,7 +1351,7 @@ for (const c of [
   })
 }
 
-test('AT-KW-46: a fork-miss ping hands the check back at 56:30, past the turn\'s 55.5-min bound and before the 58-min one: the check still gets its turn', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
+test('AT-KW-46: a fork-miss ping at 56:30: stop fork-miss with no hand-over (the cache is cold), so the check gets no turn', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   let t0 = 0
   on('model.fork', async () => {
@@ -1359,14 +1361,12 @@ test('AT-KW-46: a fork-miss ping hands the check back at 56:30, past the turn\'s
   })
   t0 = await checkGap($, w)
   await until(w, t0, 70)
-  expect(stops(w)).toEqual([['fork-miss', true, 0]])
-  if (IDLE) expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 1])
-  else expect(skips(w)).toEqual([['keep-warm', 'check'], ['no-asset', 'check']])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
+  expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 0])
 })
 
-// ---- A fork-miss (live probe 2026-10-31): the fork's request missed the main prefix (its thinking
-// setting differed for that history shape). The main cache is not claimed lapsed; no gap pings again
-// until the session's next main request, which changes the history.
+// ---- A fork-miss: the fork read only the prefix every session shares, so the main cache is cold
+// (0.1.7 probes); no gap pings again until the session's next main request, which writes it again.
 
 /** A person's turn with one main request (`turn.step`), ending at 260K; returns the clock at its end. */
 async function requestTurn($: Engine, w: World): Promise<number> {
@@ -1402,7 +1402,7 @@ test('AT-KW-47: after a fork-miss no ping in that gap, none in a later gap a tur
   expect(w.rowsOf('keep_warm_stop').filter(r => r.why === 'fork-miss').length).toBe(1)
 })
 
-test('AT-KW-47: a later ping\'s fork-miss stops the gap with the hand-over: no further ping in it, and the idle compaction it held runs', { options: ON }, async ($, on) => {
+test('AT-KW-47: a later ping\'s fork-miss stops the gap with no hand-over: no further ping in it, and the idle compaction it held is dropped', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 1 ? COLD : WARM }))
   await w.start($)
@@ -1410,8 +1410,8 @@ test('AT-KW-47: a later ping\'s fork-miss stops the gap with the hand-over: no f
   f.t0 = t0
   await until(w, t0, 240)
   expect(f.at).toEqual([50, 100])
-  expect(stops(w)).toEqual([['fork-miss', true, 1]])
-  expect(selfCompacts(w)).toBe(1)
+  expect(stops(w)).toEqual([['fork-miss', false, 1]])
+  expect(selfCompacts(w)).toBe(0)
 })
 
 test('AT-KW-48: a main request while the fork is out (a person\'s turn): that fork-miss does not hold back the turn\'s own gap, which pings at 50', { options: ON }, async ($, on) => {
@@ -1468,7 +1468,7 @@ test('AT-KW-49: a prompt enters while a fork-miss ping is out and stays pending;
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
 })
 
-test('AT-KW-49: the same with a held compaction (a warm ping at 50, the fork-miss at 100): the gap stops fork-miss with the hand-over, and the compaction runs', { options: ON }, async ($, on) => {
+test('AT-KW-49: the same with a held compaction (a warm ping at 50, the fork-miss at 100): the gap stops fork-miss with no hand-over, and the compaction is dropped', { options: ON }, async ($, on) => {
   const w = world(on)
   let t0 = 0
   const at: number[] = []
@@ -1494,8 +1494,8 @@ test('AT-KW-49: the same with a held compaction (a warm ping at 50, the fork-mis
   await w.settle()
   await until(w, t0, 110)
   expect(at).toEqual([50, 100])
-  expect(stops(w)).toEqual([['fork-miss', true, 1]])
-  expect(selfCompacts(w)).toBe(1)
+  expect(stops(w)).toEqual([['fork-miss', false, 1]])
+  expect(selfCompacts(w)).toBe(0)
 })
 
 test('AT-KW-47: a fork-miss holds back only its own session: after /clear the new session\'s gap pings at 50 with no request of its own yet', { options: ON }, async ($, on) => {
@@ -1580,7 +1580,7 @@ test('AT-KW-51: only the handoff turn on (native on): the check record is armed,
 
 // ---- Native idle on: after keep-warm stops, the 55.5-min check takes over (round 7).
 
-test('AT-KW-52: native on, the first ping misses the main prefix: nothing held, so the 55.5-min check logs idle_silent and compacts (agents 1)', { options: ON }, async ($, on) => {
+test('AT-KW-52: native on, the first ping misses the main prefix: nothing held; the 55.5-min check logs idle_silent and skips fork-miss (the cache is cold), agents 1', { options: ON }, async ($, on) => {
   const w = world(on, {})
   const f = forks(on, w, () => ({ isAnswered: true, text: 'OK', usage: COLD }))
   await w.start($)
@@ -1589,13 +1589,12 @@ test('AT-KW-52: native on, the first ping misses the main prefix: nothing held, 
   await until(w, t0, 120)
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
-  expect(skips(w)).toEqual([])
+  expect(skips(w)).toEqual([['fork-miss', 'check']])
   expect(w.rowsOf('idle_silent').map(r => [r.gap_s, r.tokens, r.agents])).toEqual([[3330, 260000, 1]])
-  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 3330, 1]])
-  expect(selfCompacts(w)).toBe(1)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
-test('AT-KW-52: native on, a later ping misses the main prefix: the held check goes back and compacts while warm (agents 1)', { options: ON }, async ($, on) => {
+test('AT-KW-52: native on, a later ping misses the main prefix: the held check is dropped (the cache is cold), no compaction', { options: ON }, async ($, on) => {
   const w = world(on, {})
   const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 1 ? COLD : WARM }))
   await w.start($)
@@ -1603,11 +1602,9 @@ test('AT-KW-52: native on, a later ping misses the main prefix: the held check g
   f.t0 = t0
   await until(w, t0, 240)
   expect(f.at).toEqual([50, 100])
-  expect(stops(w)).toEqual([['fork-miss', true, 1]])
+  expect(stops(w)).toEqual([['fork-miss', false, 1]])
   expect(skips(w)).toEqual([['keep-warm', 'check']])
-  expect(w.rowsOf('idle_silent').map(r => [r.gap_s, r.agents])).toEqual([[6000, 1]])
-  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 6000, 1]])
-  expect(selfCompacts(w)).toBe(1)
+  expect([w.rowsOf('idle_silent').length, ic(w).length, selfCompacts(w)]).toEqual([0, 0, 0])
 })
 
 test('AT-KW-52: native on, no job open at a ping (260K): stop no-jobs, the held check compacts at once with agents 0', { options: ON }, async ($, on) => {
@@ -2241,4 +2238,36 @@ test('AT-KW-60 (D-80): a plugin compaction logs the plan windows before and afte
   const row = w.rowsOf('compacted').find(r => r.skip === null)
   expect([row?.pct_before, row?.pct_after]).toEqual([{ five_hour: 40, seven_day: 10 }, { five_hour: 43, seven_day: 10 }])
   expect(w.storeGet('limit_deltas')).toEqual({ five_hour: [3], seven_day: [0] })
+})
+
+test('AT-KW-61 (0.1.7 item 4): after a first-ping fork-miss the cache is cold until the next main request: the compaction skips fork-miss; the next gap, after a main request, compacts as armed', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 0 ? COLD : WARM }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  expect(skips(w)).toEqual([['fork-miss', 'compact']])
+  const t1 = await requestTurn($, w)
+  w.agents = []
+  await until(w, t1, 60)
+  expect(ic(w).map(r => r.at)).toEqual(['timer'])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-61 (0.1.7 item 4, D-80): a fork-miss beside a window in the band (five_hour 95, fresh, change 1, agents running): the check skips fork-miss, not compacting a cold cache', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  w.storeSet('limit_deltas', { five_hour: [1] })
+  const f = forks(on, w, () => ({ isAnswered: true, text: 'OK', usage: COLD }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 51)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }, { kind: 'seven_day', percentUsed: 30 }]
+  await measured($, w)
+  await until(w, t0, 57)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
+  expect(skips(w)).toEqual([['fork-miss', 'check']])
+  expect(selfCompacts(w)).toBe(0)
 })

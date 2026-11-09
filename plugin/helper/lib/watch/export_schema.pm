@@ -49,7 +49,7 @@ my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-faile
                   cooldown disabled halted precompute in-flight native-on native-unknown
                   native-fired agents-running
                   lapsed present newer-turn due-missing prefix-changed adopted-cold input-ended compact-off
-                  compaction-off error keep-warm);
+                  compaction-off error keep-warm fork-miss);
 my @IDLE_SRC = qw(mod notice return both none);
 # D-80 (0.1.7, hooks/lib/limits.ts): the usage-limit rule a near-limit row or a band compaction went by
 my @LIMIT_RULE = qw(band 90 spend-90 other-90 cap no-job stale no-delta delta arm-90 option-skip option-skip-spend);

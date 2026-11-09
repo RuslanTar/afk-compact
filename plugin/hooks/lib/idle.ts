@@ -52,7 +52,7 @@ import { boundary } from './boundary'
 import { compactedSince, dispatchExists } from './compact'
 import { effective } from './config'
 import { cacheTtlOf } from './deps'
-import { keepWarmHolds, resultJobOpen } from './keepwarm'
+import { forkMissed, keepWarmHolds, resultJobOpen } from './keepwarm'
 import { laneAtCheck } from './lane'
 import { limitCtx, tierFields, verdictOf } from './limits'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
@@ -708,6 +708,8 @@ async function compactLimit(d: Deps, sid: string, u: Use, rec: Due, now: number)
 async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Due): Promise<string | Skip | Go> {
   const s = d.state
   if (!s.lastTurnAnswer) return 'aborted'
+  // A keep-warm ping since the last main request found the cache cold (keepwarm.ts): no turn on it.
+  if (forkMissed(s, sid)) return 'fork-miss'
   const tokens = u?.tokens ?? rec.tokens ?? undefined
   // 0.1.5 D-3 (owner 2026-11-07, "3. yes"; session xxxxxxxx, ~166k tokens, finished and logged
   // `small` at every check): a lane that reads finished gets the turn below the floor too; every
@@ -1109,6 +1111,8 @@ export async function compactGuards(d: Deps, sid: string, rec: Due, now: number,
   }
   const model = await d.model()
   if ((rec.cc !== null && rec.cc !== cc) || (rec.model !== null && rec.model !== model)) return no('prefix-changed')
+  // A keep-warm ping since the last main request missed the main prefix: the cache is cold (keepwarm.ts).
+  if (forkMissed(s, sid)) return no('fork-miss')
   // G3b (D6 b): an adopted load compacts only while the L1-c4 gate allows adopted loads at all.
   if (s.idleAdopted && !adoptedOk) return no('adopted-cold')
   // G4-G7: busy, a newer turn or request, a compaction since the turn end, a person at the prompt.

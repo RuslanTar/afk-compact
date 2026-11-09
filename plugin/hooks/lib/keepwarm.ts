@@ -28,16 +28,15 @@
 //   55.5-min check wait (one `handoff_skipped {why: keep-warm}` row; idle.ts `fire`); the record
 //   comes back to the idle path when warming stops with the cache still warm (`handOverIdle`).
 // - Each ping reads its usage: a cache read share of the cached prefix below 0.5 is a `fork-miss`:
-//   the fork's request did not match the main prefix (live probe 2026-10-31: a ping on a history
-//   whose last turn had a thinking block only in a middle step read 25,289 and wrote 234,319, while
-//   every main request had written the one-hour cache; the engine likely sends that fork with
-//   thinking off). It says nothing of the main cache, which stays as warm as the last warm request
-//   left it, and the next ping on the same history would miss alike: warming stops for the gap
-//   (`fork-miss`), the rule the same at the first ping and later ones (the idle record goes on by
-//   the idle path's own checks: a record held by then is handed back, anchored at the last warm
-//   request; at the first ping none is held yet and the idle timer fires as armed), and no gap of
-//   the session warms again until its next main request (a new turn changes the history; `blocked`
-//   turns such a gap `off` with no row, so the one stop row is the reason, logged once).
+//   the fork read only the prefix every session shares. It means the main cache is cold (v0.1.7
+//   probes on 2.1.319, 46 of 356 pings: the next main request within 55 min of a fork-miss missed
+//   too, 17 of 17, reading the same count, the API naming `previous_message_not_found`; model,
+//   effort and the history's shape were the same as for warm pings): warming stops for the gap
+//   (`fork-miss`) with no hand-over, the held record dropped, and the idle path skips a compaction
+//   or turn on that cold cache (`fork-miss`, idle.ts `compactGuards`, `laterChecks`) until the
+//   session's next main request; no gap of the session warms again until then either (a new turn
+//   changes the history; `blocked` turns such a gap `off` with no row, so the one stop row is the
+//   reason, logged once).
 //   `nothing-to-fork` with no request of the main session out (the engine keeps no snapshot to
 //   fork: a host that keeps none, a `/clear`) will not change at a retry: warming stops
 //   (`nothing-to-fork`) with the hand-over. While a
@@ -614,13 +613,11 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   // past its deadline (a slow one) ends the gap `missed`, with the record dropped.
   const late = kw.deferred !== undefined && t1 > heldDeadline(kw.deferred, kw.warm, scale)
   const handOver = (why: string, job = false): Promise<void> => (late ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1, false, { job }))
-  // No more pings in this gap, with the hand-over, the cache as warm as the last warm request left
-  // it: `fork-miss`, the fork did not read the main prefix and wrote nothing the main session reads
-  // (the idle path's own checks decide, as for a first ping that held nothing yet, and they refuse
-  // a turn or a compaction past the 58-minute bound of the last warm request), and no later gap
-  // pings before the session's next main request (`forkMissed`); `error`, a fork the engine
-  // refused (a hook's deny).
-  if (o.result === 'fork-miss') return stop(d, kw, 'fork-miss', true, t1)
+  // No more pings in this gap: `fork-miss`, the main cache is cold (the fork read only the shared
+  // prefix), so nothing goes back to the idle path, whose compaction or turn would read it cold too
+  // (it skips `fork-miss` until the next main request, `forkMissed`); `error`, a fork the engine
+  // refused (a hook's deny), with the hand-over.
+  if (o.result === 'fork-miss') return stop(d, kw, 'fork-miss', false, t1)
   if (o.result === 'error') return handOver('error')
   if (!busyNow(s)) {
     // No request of the main session out: there is no snapshot to fork, and a retry finds none either.
@@ -631,8 +628,11 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   return again(d, kw, t1, scale)
 }
 
-/** A fork-miss of this session with no main request since (`mainReqs` unchanged from before that fork). */
-function forkMissed(s: Deps['state'], sid: string): boolean {
+/**
+ * A fork-miss of this session with no main request since (`mainReqs` unchanged from before that
+ * fork): the main cache is cold until the next main request writes it again.
+ */
+export function forkMissed(s: Deps['state'], sid: string): boolean {
   const m = s.keepWarmForkMiss
   return m !== undefined && m.sid === sid && m.reqs === s.mainReqs
 }
