@@ -65,7 +65,7 @@ Gate: <blocker | owner gate | stay in this Claude Code process: <ids> stop on ex
 Live: <N running: B-1 <runtime id>, B-2 <runtime id>; see In flight> | nothing running (checked <stamp>) | nothing running known (not checked)
 ```
 
-One step, never a menu, traced to the latest request or an accepted plan, else `proposed`. The state names the ticket goal, not only the current sub-task.
+One step, never a menu, traced to the latest request or an accepted plan, else `proposed`. The state names the ticket goal, not only the current sub-task. The Gate's `<ids>`: only rows whose `dies on` names exit.
 Acuity tells the next session how carefully to check before acting (its reason shows in State): `unstable` broken build, half-applied migration or destructive step, red test mid-fix, MID-STEP · `watch` jobs running, a pending merge request, pipeline, review or answer, a time limit · `stable` none of these. Rate from facts; the lint flags a rating below what the helper measures. <!-- OD-15: shipped with an E-1 check; dropped if it shows no benefit -->
 
 ### 4.2 User constraints and approvals
