@@ -178,11 +178,14 @@ export async function handoffPossible(d: Deps, sid: string): Promise<boolean> {
  * by how many seconds (`late_s`); a `near-limit` row the windows read (`windows`, D-76: idle.ts
  * `limitWindows`).
  */
-export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number; windows?: string[] } = {}): Promise<void> {
+export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number; windows?: string[]; rule?: string; plan?: string; tier?: string } = {}): Promise<void> {
   await log(d, sid, 'handoff_skipped', {
     why, ht, ...(reason !== undefined && !isHalt(reason) ? { reason } : {}),
     ...(extra.kind !== undefined ? { kind: extra.kind } : {}), ...(extra.late_s !== undefined ? { late_s: extra.late_s } : {}),
     ...(extra.windows !== undefined ? { windows: extra.windows } : {}),
+    // D-80: a near-limit skip's rule (limits.ts) and the plan words Claude Code's environment had.
+    ...(extra.rule !== undefined ? { rule: extra.rule } : {}), ...(extra.plan !== undefined ? { plan: extra.plan } : {}),
+    ...(extra.tier !== undefined ? { tier: extra.tier } : {}),
   })
 }
 
