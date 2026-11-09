@@ -978,7 +978,9 @@ our $OPEN_HEADING = '## Open questions';
 # rewrite inside a code block is worse than a refusal, so no block is guessed at).
 sub code_sections {
     my ($lines) = @_;
-    my $cols = sub { my $w = 0; $w += $_ eq "\t" ? 4 - $w % 4 : 1 for split //, $_[0]; $w };
+    # $adv->($w, $s): the column after $s when it starts at column $w; $cols: from the margin.
+    my $adv = sub { my $w = $_[0]; $w += $_ eq "\t" ? 4 - $w % 4 : 1 for split //, $_[1]; $w };
+    my $cols = sub { $adv->(0, $_[0]) };
     # $pc: the text column of the item holding the paragraph open on the line above (0: the margin;
     # undef: none open; a heading or a break closes it).
     my (%out, @sec, $bad, @item, $blank, $pc);
@@ -992,12 +994,14 @@ sub code_sections {
         if ($l =~ /`{3}|~{3}/ || $l =~ m{\A[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)*(?:>|<[A-Za-z/!?])}) { $bad = 1; next }
         # Any marker of the line's leading markers followed by more than 4 columns, whether or not
         # it starts an item (review 10: a nested `- 1.      x`, or `2.      x` after a break, a
-        # heading or a lazy line, was read past).
-        my ($p, $s) = ('', $l);
-        while ($s =~ /\A([ \t]*)([-*+]|[0-9]{1,9}[.)])([ \t]+)(?=\S)/) {
-            my $u = "$1$2$3";
-            $bad = 1 if $cols->($p . $u) - $cols->("$p$1$2") > 4;
-            ($p, $s) = ($p . $u, substr($s, length $u));
+        # heading or a lazy line, was read past). A running column keeps a long line linear (0.1.7:
+        # re-measuring the prefix took 2.5 s for a 10,001-character `- - … x`).
+        my $at = 0;
+        pos($l) = 0;
+        while ($l =~ /\G([ \t]*)([-*+]|[0-9]{1,9}[.)])([ \t]+)(?=\S)/gc) {
+            my $c = $adv->($at, "$1$2");
+            $at = $adv->($c, $3);
+            if ($at - $c > 4) { $bad = 1; last }
         }
         next if $bad;
         my ($ws, $m, $sp, $rest) = $l =~ /\A([ \t]*)(?:([-*+]|[0-9]{1,9}[.)])([ \t]+|\z))?(.*)\z/s;

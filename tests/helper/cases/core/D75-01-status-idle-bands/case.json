@@ -133,7 +133,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else idle handoff turn \\(plugin idle compaction is off: idle_compact: false\\) · 100,000–200,000 → idle handoff turn · below → nothing \\(from your user settings; the session decides at its next turn end\\)$"
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\(Claude Code; your settings allow it, Claude Code decides per account whether it runs\\), else idle handoff turn \\(plugin idle compaction is off: idle_compact: false\\) · 100,000–200,000 → idle handoff turn · below 100,000 → nothing \\(from your user settings; the session decides at its next turn end\\)$"
     ],
     "stdout_lacks": ["did not run: 100,000"]
    }
@@ -150,7 +150,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\([^)]*\\), else idle handoff turn from 300,000 up \\(plugin idle compaction is off: idle_compact: false\\) · below → nothing \\("
+     "^idle compaction: idle at 55\\.5 min: 200,000\\+ → native idle compaction \\([^)]*\\), else idle handoff turn from 300,000 up \\(plugin idle compaction is off: idle_compact: false\\) · below 200,000 → nothing \\("
     ]
    }
   },
