@@ -49,8 +49,10 @@ my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-faile
                   cooldown disabled halted precompute in-flight native-on native-unknown
                   native-fired agents-running
                   lapsed present newer-turn due-missing prefix-changed adopted-cold input-ended compact-off
-                  compaction-off error keep-warm);
+                  compaction-off error keep-warm fork-miss);
 my @IDLE_SRC = qw(mod notice return both none);
+# D-80 (0.1.7, hooks/lib/limits.ts): the usage-limit rule a near-limit row or a band compaction went by
+my @LIMIT_RULE = qw(band 90 spend-90 other-90 cap no-job stale no-delta delta arm-90 option-skip option-skip-spend);
 # core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
 # `unknown` before (needs/core-to-watch.md §6)
 my $IDLE = [or => 'bool', 'unknown'];
@@ -119,9 +121,11 @@ our %SCHEMA = (
         trigger => [enum => qw(auto manual)], ci_bytes => 'int', ci_has_nonce => 'bool', ci_nonce => 'nonce',
         ci_foreign_header => 'bool', keyset_hash => 'hex8',
     },
+    # D-80 (0.1.7): a plugin compaction's plan-window shares before and after it, by window kind
     compacted => {
         nonce => 'nonce', skip => 'word', tokens_before => 'num', tokens_after => 'num', usage_present => 'bool',
         ms => 'num', t0 => 'num', ht => 'hash', handoff_ht => 'hash',
+        pct_before => [counts => 'word'], pct_after => [counts => 'word'],
     },
     postcompact => {
         trigger => [enum => qw(auto manual)], nonce_found => 'nonce', scope_found => [enum => qw(main sub manual)],
@@ -201,9 +205,11 @@ our %SCHEMA = (
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
     # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was; D-76
-    # (0.1.6): a near-limit skip's usage windows (none on older rows)
+    # (0.1.6): a near-limit skip's usage windows (none on older rows); D-80 (0.1.7): its rule and the
+    # plan words Claude Code's environment had
     handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash',
-                         kind => [enum => qw(turn check compact)], late_s => 'num', windows => [list => 'window'] },
+                         kind => [enum => qw(turn check compact)], late_s => 'num', windows => [list => 'window'],
+                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word' },
     # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load; owner xxxxxxxx-17:
     # `check` (native on or unreadable: the 55.5-min outcome check) and the served mode Claude Code
     # cached (2b, a hint only, never used to decide)
@@ -217,7 +223,8 @@ our %SCHEMA = (
     idle_silent => { gap_s => 'num', tokens => 'num', agents => 'int', served_hint => 'word' },
     # owner 2026-10-27 ("Compact (Recommended)"): at that check, with agents running, the plugin
     # compacts the session itself (its dispatch, compacted or compact_rejected rows follow)
-    idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int', at => [enum => qw(check timer)], late_s => 'num', adopted => 'bool' },
+    idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int', at => [enum => qw(check timer)], late_s => 'num', adopted => 'bool',
+                      rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word' },
     # IDLE-COMPACT-SPEC D7 (lane A): the plugin's idle compaction failed twice in a row and is off
     # for the load (`queued`: lane B1's D8).
     idle_compact_off => { why => [enum => qw(failed queued)], fails => 'int' },
@@ -232,7 +239,8 @@ our %SCHEMA = (
     keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed fork-miss no-jobs ttl-5m prefix-changed
                                              near-limit cutoff off error held-elsewhere reload nothing-to-fork deadline
                                              no-idle-path)],
-                        pings => 'int', gap_s => 'num', handover => 'bool', windows => [list => 'window'] },
+                        pings => 'int', gap_s => 'num', handover => 'bool', windows => [list => 'window'],
+                        rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word' },
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents
     # and the measure's running background tasks, at which step), and the digest turn submitted

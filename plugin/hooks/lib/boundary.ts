@@ -18,6 +18,8 @@ import { armIdle } from './idle'
 import { armKeepWarm } from './keepwarm'
 import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText, userFirst } from './deps'
 import { compactOff, log, markHeadless, skipClass } from './log'
+import { planShares, recordDeltas } from './limits'
+import type { Limit } from './limits'
 import { drawNonce } from './nonce'
 import { turnQuestion } from './question'
 import { undeliveredCheck } from './resume'
@@ -390,6 +392,8 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
     // native's place at the same moment, so the idle arm stays one stratum (trigger `plugin` tells
     // who started it); `m3-plugin` stays the turn-end compactions of an active session.
     const shadow = ah ? undefined : await shadowPrepM3(d, sid, { kind: idle ? 'm3-idle' : 'm3-plugin', nonce, trigger: 'plugin' })
+    // D-80: the usage windows before the compaction, for its change (limits.ts `recordDeltas`).
+    const before = await limitsNow(d)
     // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
     // (or reused) to the compaction's answer (DP-30 (4)). Read before the check below, so no
     // await sits between that check and the call.
@@ -409,7 +413,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
       await nativeRan(d, sid, withRecord, 'user-first')
       return { ran: false, why: 'busy' }
     }
-    const run: SelfRun = { nonce, pref, t0, ...(prodConsent !== undefined ? { prodConsent } : {}), ...(ah ? { ah } : {}), ...(idle ? { idle } : {}) }
+    const run: SelfRun = { nonce, pref, t0, before, ...(prodConsent !== undefined ? { prodConsent } : {}), ...(ah ? { ah } : {}), ...(idle ? { idle } : {}) }
     // Headless: `$.session.compact` always rejects there; the compaction runs as `/compact`.
     if (s.headless) {
       const result = await commandCompact(d, sid, run, text)
@@ -457,6 +461,17 @@ type SelfRun = {
   ah?: NonNullable<BoundaryOpts['afterHandoff']>
   /** An idle compaction (`BoundaryOpts.idle`): no thrash entry, an idle after-step. */
   idle?: NonNullable<BoundaryOpts['idle']>
+  /** D-80: the usage windows read right before the compaction (none: not read, as on the headless path). */
+  before?: Limit[]
+}
+
+/** The usage windows now, or undefined when the reading fails. */
+async function limitsNow(d: Deps): Promise<Limit[] | undefined> {
+  try {
+    return (await d.usage()).rateLimits
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -472,10 +487,17 @@ async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactR
     await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - run.t0, ...ht })
     return false
   }
+  // D-80: the plan windows before and after it (the compaction's own response refreshes them); their
+  // change is the measure the limit band goes by.
+  const limitsAfter = run.before !== undefined ? await limitsNow(d) : undefined
+  const pb = planShares(run.before)
+  const pa = planShares(limitsAfter)
   await log(d, sid, 'compacted', {
     nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
     usage_present: r.usage !== undefined, ms: (await d.now()) - run.t0, ...ht,
+    ...(Object.keys(pb).length > 0 || Object.keys(pa).length > 0 ? { pct_before: pb, pct_after: pa } : {}),
   })
+  if (run.before !== undefined) await recordDeltas(d, run.before, limitsAfter)
   await cacheRows(d, sid, nonce, r, true, 'main')
   s.lastPluginCompactAt = await d.now()
   // An idle compaction ends no nudged cycle: the thrash rule does not count it.

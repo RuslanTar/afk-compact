@@ -1,10 +1,11 @@
 // The mod: event wiring only (BUILD-PLAN §2.6). Every handler is a lib function taking Deps.
 // A hook that throws is answered by its `.catch`: `next(e)` runs the chain on (or replays what
 // the hook's own `next` settled to), so a failure here never blocks the session.
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 import { onSessionEnd, onSessionStart, onTurnStart, prepare } from './lib/alive'
 import { onOwnCompact, onTurnComplete } from './lib/boundary'
 import { onCompact, trackNative } from './lib/compact'
+import type { LoadState } from './lib/deps'
 import { claimOwnCompact, isHuman, isOwnOrigin, newState, promptEntering, promptNotEntered, promptQueued, realDeps, refuseOwnSubmit } from './lib/deps'
 import { laneTurnEnd } from './lib/digest'
 import { countCall, limitText, onInterjection, onStep } from './lib/handoff-turn'
@@ -119,10 +120,20 @@ export const register: Register = (on, options) => {
     } catch {
       // no share for this turn (handoff_turn_end logs null)
     }
+    // D-80: a main response refreshed the usage windows (limits.ts reads how fresh they are).
+    if (e.agentId === undefined) stampUsage($, state)
     return r
   }).catch(async function* ($, e, next) {
     return yield* next(e)
   })
+
+  // D-80: the engine measured the session (after a main turn, or a usage window moved a whole
+  // point, a keep-warm ping's response too): the usage windows are fresh now. Observe only.
+  on('session.measure', async ($, e, next) => {
+    const r = await next(e)
+    stampUsage($, state)
+    return r
+  }).catch(($, e, next) => next(e))
 
   // D11 (G7): a person editing the prompt box is present. Observe only, in the keystroke path:
   // nothing before `next` and nothing awaited after it.
@@ -343,4 +354,16 @@ export const register: Register = (on, options) => {
     const name = blockName($.plugin.name)
     return { ...r, blocks: [...r.blocks.filter(b => b.name !== name), { name, text: block }] }
   }).catch(($, e, next) => next(e))
+}
+
+/**
+ * D-80: the usage reading is fresh now (limits.ts reads how fresh it is). Called after a step's or
+ * a measure's `next`: nothing there may throw, or the hook's `.catch` would run `next` again.
+ */
+function stampUsage($: EngineInterface, state: LoadState): void {
+  try {
+    void $.clock.now().then(t => { state.usageAt = t }, () => undefined)
+  } catch {
+    // the stamp stays the last one
+  }
 }

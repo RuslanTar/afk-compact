@@ -333,7 +333,10 @@ test('AT-KW-12: the cache switched to five minutes between pings: stop ttl-5m wi
   expect(skips(w)).toEqual([['keep-warm', 'compact'], ['ttl-5m', 'compact']])
 })
 
-test('AT-KW-13: a later ping misses the main prefix (cache read near zero): stop fork-miss; the main cache is as warm as the last warm ping left it, so the held compaction goes back to the idle path and runs', { options: ON }, async ($, on) => {
+// Item 4 of 0.1.7 (probes on 2.1.319: after a fork-miss the next main request missed too, 17 of 17):
+// a fork-miss means the main cache is cold, so nothing is handed back and the idle path does not
+// compact or run its turn on it (`fork-miss` skip) until the next main request.
+test('AT-KW-13: a later ping misses the main prefix (cache read near zero): stop fork-miss with no hand-over; the main cache is cold, so the held compaction is dropped', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 0 ? WARM : COLD }))
   await w.start($)
@@ -343,12 +346,12 @@ test('AT-KW-13: a later ping misses the main prefix (cache read near zero): stop
   expect(f.at).toEqual([50, 100])
   expect(pings(w)).toEqual([['warm', 1], ['fork-miss', 1]])
   expect(w.rowsOf('keep_warm_ping')[1]?.cache_read).toBe(0)
-  expect(stops(w)).toEqual([['fork-miss', true, 1]])
-  expect(ic(w).map(r => [r.at, r.gap_s])).toEqual([['timer', 6000]])
-  expect(selfCompacts(w)).toBe(1)
+  expect(stops(w)).toEqual([['fork-miss', false, 1]])
+  expect(skips(w)).toEqual([['keep-warm', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
-test('AT-KW-13 (REV2-C): the first ping misses the main prefix: the same rule, nothing held yet, so the idle timer\'s compaction runs at 54 as armed', { options: ON }, async ($, on) => {
+test('AT-KW-13 (REV2-C): the first ping misses the main prefix: nothing held yet; the idle timer\'s compaction at 54 skips fork-miss (the cache is cold)', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w, () => ({ isAnswered: true, text: 'OK', usage: COLD }))
   await w.start($)
@@ -357,9 +360,8 @@ test('AT-KW-13 (REV2-C): the first ping misses the main prefix: the same rule, n
   await until(w, t0, 120)
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
-  expect(skips(w)).toEqual([])
-  expect(ic(w).map(r => [r.at, r.gap_s])).toEqual([['timer', 3240]])
-  expect(selfCompacts(w)).toBe(1)
+  expect(skips(w)).toEqual([['fork-miss', 'compact']])
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
 test('AT-KW-14: nothing-to-fork while a request is out (a compaction starting beside the ping) is tried again at no cost once it ended; the next ping counts from the one that warmed', { options: ON }, async ($, on) => {
@@ -1031,7 +1033,7 @@ for (const c of [
   })
 }
 
-test('AT-KW-38 (REV3-1): a fork-miss ping that comes back past the 58-min bound hands the check back; its turn path skips lapsed (no turn on a cache past the bound of the last warm request)', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
+test('AT-KW-38 (REV3-1): a fork-miss ping that comes back past the 58-min bound: stop fork-miss, nothing handed back (the cache is cold), no turn', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   let t0 = 0
   on('model.fork', async () => {
@@ -1041,8 +1043,8 @@ test('AT-KW-38 (REV3-1): a fork-miss ping that comes back past the 58-min bound 
   })
   t0 = await checkGap($, w)
   await until(w, t0, 70)
-  expect(stops(w)).toEqual([['fork-miss', true, 0]])
-  expect(skips(w)).toEqual([['keep-warm', 'check'], ['lapsed', 'check']])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
+  expect(skips(w)).toEqual([['keep-warm', 'check']])
   expect(w.submits.length).toBe(0)
 })
 
@@ -1349,7 +1351,7 @@ for (const c of [
   })
 }
 
-test('AT-KW-46: a fork-miss ping hands the check back at 56:30, past the turn\'s 55.5-min bound and before the 58-min one: the check still gets its turn', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
+test('AT-KW-46: a fork-miss ping at 56:30: stop fork-miss with no hand-over (the cache is cold), so the check gets no turn', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   let t0 = 0
   on('model.fork', async () => {
@@ -1359,14 +1361,12 @@ test('AT-KW-46: a fork-miss ping hands the check back at 56:30, past the turn\'s
   })
   t0 = await checkGap($, w)
   await until(w, t0, 70)
-  expect(stops(w)).toEqual([['fork-miss', true, 0]])
-  if (IDLE) expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 1])
-  else expect(skips(w)).toEqual([['keep-warm', 'check'], ['no-asset', 'check']])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
+  expect([skips(w), w.submits.length]).toEqual([[['keep-warm', 'check']], 0])
 })
 
-// ---- A fork-miss (live probe 2026-10-31): the fork's request missed the main prefix (its thinking
-// setting differed for that history shape). The main cache is not claimed lapsed; no gap pings again
-// until the session's next main request, which changes the history.
+// ---- A fork-miss: the fork read only the prefix every session shares, so the main cache is cold
+// (0.1.7 probes); no gap pings again until the session's next main request, which writes it again.
 
 /** A person's turn with one main request (`turn.step`), ending at 260K; returns the clock at its end. */
 async function requestTurn($: Engine, w: World): Promise<number> {
@@ -1402,7 +1402,7 @@ test('AT-KW-47: after a fork-miss no ping in that gap, none in a later gap a tur
   expect(w.rowsOf('keep_warm_stop').filter(r => r.why === 'fork-miss').length).toBe(1)
 })
 
-test('AT-KW-47: a later ping\'s fork-miss stops the gap with the hand-over: no further ping in it, and the idle compaction it held runs', { options: ON }, async ($, on) => {
+test('AT-KW-47: a later ping\'s fork-miss stops the gap with no hand-over: no further ping in it, and the idle compaction it held is dropped', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 1 ? COLD : WARM }))
   await w.start($)
@@ -1410,8 +1410,8 @@ test('AT-KW-47: a later ping\'s fork-miss stops the gap with the hand-over: no f
   f.t0 = t0
   await until(w, t0, 240)
   expect(f.at).toEqual([50, 100])
-  expect(stops(w)).toEqual([['fork-miss', true, 1]])
-  expect(selfCompacts(w)).toBe(1)
+  expect(stops(w)).toEqual([['fork-miss', false, 1]])
+  expect(selfCompacts(w)).toBe(0)
 })
 
 test('AT-KW-48: a main request while the fork is out (a person\'s turn): that fork-miss does not hold back the turn\'s own gap, which pings at 50', { options: ON }, async ($, on) => {
@@ -1468,7 +1468,7 @@ test('AT-KW-49: a prompt enters while a fork-miss ping is out and stays pending;
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
 })
 
-test('AT-KW-49: the same with a held compaction (a warm ping at 50, the fork-miss at 100): the gap stops fork-miss with the hand-over, and the compaction runs', { options: ON }, async ($, on) => {
+test('AT-KW-49: the same with a held compaction (a warm ping at 50, the fork-miss at 100): the gap stops fork-miss with no hand-over, and the compaction is dropped', { options: ON }, async ($, on) => {
   const w = world(on)
   let t0 = 0
   const at: number[] = []
@@ -1494,8 +1494,8 @@ test('AT-KW-49: the same with a held compaction (a warm ping at 50, the fork-mis
   await w.settle()
   await until(w, t0, 110)
   expect(at).toEqual([50, 100])
-  expect(stops(w)).toEqual([['fork-miss', true, 1]])
-  expect(selfCompacts(w)).toBe(1)
+  expect(stops(w)).toEqual([['fork-miss', false, 1]])
+  expect(selfCompacts(w)).toBe(0)
 })
 
 test('AT-KW-47: a fork-miss holds back only its own session: after /clear the new session\'s gap pings at 50 with no request of its own yet', { options: ON }, async ($, on) => {
@@ -1580,7 +1580,7 @@ test('AT-KW-51: only the handoff turn on (native on): the check record is armed,
 
 // ---- Native idle on: after keep-warm stops, the 55.5-min check takes over (round 7).
 
-test('AT-KW-52: native on, the first ping misses the main prefix: nothing held, so the 55.5-min check logs idle_silent and compacts (agents 1)', { options: ON }, async ($, on) => {
+test('AT-KW-52: native on, the first ping misses the main prefix: nothing held; the 55.5-min check logs idle_silent and skips fork-miss (the cache is cold), agents 1', { options: ON }, async ($, on) => {
   const w = world(on, {})
   const f = forks(on, w, () => ({ isAnswered: true, text: 'OK', usage: COLD }))
   await w.start($)
@@ -1589,13 +1589,12 @@ test('AT-KW-52: native on, the first ping misses the main prefix: nothing held, 
   await until(w, t0, 120)
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
-  expect(skips(w)).toEqual([])
+  expect(skips(w)).toEqual([['fork-miss', 'check']])
   expect(w.rowsOf('idle_silent').map(r => [r.gap_s, r.tokens, r.agents])).toEqual([[3330, 260000, 1]])
-  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 3330, 1]])
-  expect(selfCompacts(w)).toBe(1)
+  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
 })
 
-test('AT-KW-52: native on, a later ping misses the main prefix: the held check goes back and compacts while warm (agents 1)', { options: ON }, async ($, on) => {
+test('AT-KW-52: native on, a later ping misses the main prefix: the held check is dropped (the cache is cold), no compaction', { options: ON }, async ($, on) => {
   const w = world(on, {})
   const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 1 ? COLD : WARM }))
   await w.start($)
@@ -1603,11 +1602,9 @@ test('AT-KW-52: native on, a later ping misses the main prefix: the held check g
   f.t0 = t0
   await until(w, t0, 240)
   expect(f.at).toEqual([50, 100])
-  expect(stops(w)).toEqual([['fork-miss', true, 1]])
+  expect(stops(w)).toEqual([['fork-miss', false, 1]])
   expect(skips(w)).toEqual([['keep-warm', 'check']])
-  expect(w.rowsOf('idle_silent').map(r => [r.gap_s, r.agents])).toEqual([[6000, 1]])
-  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 6000, 1]])
-  expect(selfCompacts(w)).toBe(1)
+  expect([w.rowsOf('idle_silent').length, ic(w).length, selfCompacts(w)]).toEqual([0, 0, 0])
 })
 
 test('AT-KW-52: native on, no job open at a ping (260K): stop no-jobs, the held check compacts at once with agents 0', { options: ON }, async ($, on) => {
@@ -1943,4 +1940,409 @@ test('AT-KW-55: the 49-min fire\'s check meets a prompt that enters (busy skip) 
   expect(refusals(w)).toEqual([[0, 3000, false]])
   expect(w.submits).toEqual(['hello'])
   expect(skips(w)).toEqual([['busy', 'turn']])
+})
+
+// ---- D-82 (owner 2026-11-09, session xxxxxxxx: 22 idle teammates and 2 Monitors logged jobs 44,
+// and every idle gap warmed instead of compacting): an idle teammate is no open job. The agent
+// list says `idle` (Claude Code 2.1.319, at each TeammateIdle); the Stop list keeps it `running`
+// under a task id of its own, so it is not read from there (no double count either).
+
+const TEAMMATE_ROWS = [
+  { id: 't0g9x159q', type: 'teammate', status: 'running', description: 'teammate tim' },
+  { id: 't0g9x160r', type: 'teammate', status: 'running', description: 'teammate ann' },
+  { id: 'm1', type: 'monitor', status: 'running', description: 'x' }, { id: 'm2', type: 'monitor', status: 'running', description: 'x' },
+]
+
+test('AT-KW-56 (D-82): idle teammates (agent list `idle`, the Stop list `running`) and Monitors only: no fork, no keep-warm row; the 54-min compaction runs with agents 0', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = [{ id: 'atim-1', status: 'idle', type: 'teammate' }, { id: 'aann-2', status: 'idle', type: 'teammate' }]
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: TEAMMATE_ROWS })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 120)
+  expect(f.at).toEqual([])
+  expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_stop').length]).toEqual([0, 0])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['timer', 0]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-56 (D-82): a teammate at work counts once (agent list and Stop row); once it goes idle the next ping stops no-jobs and the compaction runs while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = [{ id: 'atim-1', status: 'running', type: 'teammate' }]
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: TEAMMATE_ROWS.slice(0, 1) })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 60)
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_start').map(r => r.jobs)).toEqual([1])
+  w.agents = [{ id: 'atim-1', status: 'idle', type: 'teammate' }]
+  await until(w, f.t0, 160)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['no-jobs', true, 1]])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['timer', 0]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-56 (D-82): native on, an idle teammate (`idle`): the 55.5-min check reads no agent running (idle_silent agents 0) and compacts at 260K', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  w.agents = [{ id: 'atim-1', status: 'idle', type: 'teammate' }]
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([0])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 0]])
+})
+
+test('AT-KW-56 (D-82): the agent list cannot be read: the Stop list\'s teammate rows count (one job each, Monitors none), as before D-82; keep-warm pings at 50', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = undefined
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: TEAMMATE_ROWS })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 60)
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_start').map(r => r.jobs)).toEqual([2])
+})
+
+// `waiting` (Claude Code 2.1.319) is an agent held by background work it owns (its own shell,
+// Monitor or Agent call), whose result is still to come, or a teammate on a plan approval: at work.
+for (const type of ['general-purpose', 'teammate']) {
+  test(`AT-KW-56 (D-82): a ${type} agent \`waiting\` on background work it owns is an open job: keep-warm pings at 50`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.agents = [{ id: 'sub-1', status: 'waiting', type }]
+    const f = forks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w)
+    f.t0 = t0
+    await until(w, t0, 60)
+    expect(f.at).toEqual([50])
+    expect(w.rowsOf('keep_warm_start').map(r => r.jobs)).toEqual([1])
+  })
+}
+
+test('AT-KW-56 (D-82): native on, keep-warm off, 150K (idle_handoff_min_tokens 100K), a subagent `waiting` on its own background work: the 55.5-min check counts it, skips small and submits no idle handoff turn', { options: { ...ON, keep_warm_hours: 0, idle_handoff_min_tokens: 100000 } }, async ($, on) => {
+  const w = world(on, {})
+  w.agents = [{ id: 'sub-1', status: 'waiting' }]
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  await until(w, t0, 60)
+  expect(skips(w)).toEqual([['small', 'check']])
+  expect(w.submits.length).toBe(0)
+})
+
+// ---- D-79 (owner 2026-11-08 23:22: "after the last keep-warm ... you would actually compact to avoid
+// re-reading the cold cache"): a stop with a job still open (the cutoff, the deadline) hands the gap
+// to plugin idle compaction from idle_handoff_min_tokens up, below Claude Code's idle minimum too,
+// since the idle handoff turn does not compact and the job's result turn would read a cold cache.
+
+const MIN100K = { ...ON, idle_handoff_min_tokens: 100000 }
+
+test('AT-KW-57 (D-79): vetoed, 150K (below the idle minimum), an agent running: the 49-min turn waits; at the cutoff plugin idle compaction runs while warm, no handoff turn', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 50)
+  expect(skips(w)).toEqual([['keep-warm', 'turn']])
+  await until(w, t0, 150)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(ic(w).map(r => [r.at, r.tokens, r.agents])).toEqual([['timer', 150000, 1]])
+  expect([selfCompacts(w), w.submits.length]).toEqual([1, 0])
+})
+
+test('AT-KW-57 (D-79): native on, 150K, an agent running: at the cutoff the held check compacts while warm (not the `small` skip)', { options: MIN100K }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 150)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(ic(w).map(r => [r.at, r.tokens, r.agents])).toEqual([['check', 150000, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-57 (D-79): vetoed, 150K, the pings fail to the held turn\'s deadline: stop deadline, plugin idle compaction runs then', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, () => OVERLOADED)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 70)
+  expect(f.at).toEqual([50, 51, 52, 53, 54, 55])
+  expect(stops(w)).toEqual([['deadline', true, 0]])
+  expect(ic(w).map(r => [r.at, r.tokens])).toEqual([['timer', 150000]])
+  expect([selfCompacts(w), w.submits.length]).toEqual([1, 0])
+})
+
+for (const c of [
+  { name: 'below idle_handoff_min_tokens (90K)', opts: MIN100K, policy: NATIVE_OFF, tokens: 90000, skip: ['small', 'compact'] },
+  { name: '"autoCompactEnabled": false', opts: MIN100K, policy: { autoCompactEnabled: false }, tokens: 150000, skip: null },
+  { name: 'idle_compact false', opts: { ...MIN100K, idle_compact: 'false' }, policy: NATIVE_OFF, tokens: 150000, skip: null },
+]) {
+  test(`AT-KW-57 (D-79): at the cutoff with a job open, ${c.name}: no compaction`, { options: c.opts }, async ($, on) => {
+    const w = world(on, c.policy)
+    const f = forks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w, c.tokens)
+    f.t0 = t0
+    await until(w, t0, 150)
+    expect(stops(w)).toEqual([['cutoff', true, 2]])
+    expect(selfCompacts(w)).toBe(0)
+    if (c.skip) expect(skips(w).slice(-1)).toEqual([c.skip])
+    // The idle handoff turn runs there instead (or no-asset without its text).
+    else if (IDLE) expect(w.submits.length).toBe(1)
+  })
+}
+
+test('AT-KW-57 (D-79): no job open at a ping (no-jobs) at 150K: the hand-over keeps the idle minimum, so the held turn runs (or no-asset), no compaction', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.agents = []
+  await until(w, t0, 101)
+  expect(stops(w)).toEqual([['no-jobs', true, 1]])
+  expect(selfCompacts(w)).toBe(0)
+  if (IDLE) expect(w.submits.length).toBe(1)
+})
+
+// ---- D-80 (owner 2026-11-08 23:31 "I think it should be adaptive", 23:59 "never fixed. always
+// adaptive"; limits.ts): above 90% a plan window lets keep-warm hand over to one warm compaction,
+// and that compaction run, only with a job whose result is certain open, a fresh reading (10 min)
+// and a measured compaction change that fits below the cap (98 five_hour, 95 seven_day); a
+// spend limit stops at 90; a window that resets before the ping's last moment is waited for.
+
+/** The engine measured the session now (after a turn, or a window moved a point): the reading is fresh. */
+async function measured($: Engine, w: World): Promise<void> {
+  await $.session.measure({ context: { tokens: w.tokens, window: 1000000 }, rateLimits: w.rateLimits, changed: ['rateLimits'] } as never)
+  await w.settle()
+}
+
+const nearStops = (w: World) => w.rowsOf('keep_warm_stop').map(r => [r.why, r.handover, r.rule])
+const nearSkips = (w: World) => w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.kind, r.rule])
+
+/** A gap that warms at 50; at 60 the windows read `limits`, fresh from `freshAt` (minutes); the next ping is due at 100. */
+async function bandGap($: Engine, on: On, w: World, limits: World['rateLimits'], freshAt = 95): Promise<ReturnType<typeof forks>> {
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = limits
+  await until(w, t0, freshAt)
+  await measured($, w)
+  await until(w, t0, 101)
+  return f
+}
+
+test('AT-KW-58 (D-80): an agent open, five_hour at 93 (fresh, measured change 2): no ping in the band, stop near-limit with the hand-over (rule band), the compaction runs while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  w.env = { CLAUDE_CODE_SUBSCRIPTION_TYPE: 'max', CLAUDE_CODE_RATE_LIMIT_TIER: 'default_claude_max_5x' }
+  const f = await bandGap($, on, w, [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }])
+  expect(f.at).toEqual([50])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'band']])
+  expect(w.rowsOf('keep_warm_stop').map(r => [r.windows, r.plan, r.tier])).toEqual([[['five_hour:93', 'seven_day:30'], 'max', 'default_claude_max_5x']])
+  expect(ic(w).map(r => [r.at, r.rule])).toEqual([['timer', 'band']])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+for (const c of [
+  { name: 'a stale reading (refreshed 40 min before)', rule: 'stale', freshAt: 60, limits: [{ kind: 'five_hour', percentUsed: 93 }], deltas: { five_hour: [2] } },
+  { name: 'no compaction change measured yet', rule: 'no-delta', limits: [{ kind: 'five_hour', percentUsed: 93 }], deltas: {} },
+  { name: 'a change of 4 points at 95', rule: 'delta', limits: [{ kind: 'five_hour', percentUsed: 95 }], deltas: { five_hour: [4] } },
+  { name: 'seven_day at 96 (its cap is 95)', rule: 'cap', limits: [{ kind: 'five_hour', percentUsed: 20 }, { kind: 'seven_day', percentUsed: 96 }], deltas: { seven_day: [0] } },
+  { name: 'a spend limit at 93', rule: 'spend-90', limits: [{ kind: 'five_hour', percentUsed: 20 }, { kind: 'spend_limit', percentUsed: 93 }], deltas: { five_hour: [0] } },
+]) {
+  test(`AT-KW-58 (D-80): an agent open, ${c.name}: stop near-limit (rule ${c.rule}), the handed-back compaction skips near-limit with it`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.storeSet('limit_deltas', c.deltas)
+    const f = await bandGap($, on, w, c.limits, c.freshAt)
+    expect(f.at).toEqual([50])
+    expect(nearStops(w)).toEqual([['near-limit', true, c.rule]])
+    expect(nearSkips(w)).toEqual([['compact', c.rule]])
+    expect(selfCompacts(w)).toBe(0)
+  })
+}
+
+test('AT-KW-58 (D-80, D-79): vetoed, 150K, an agent open, five_hour at 93 fresh before the 49-min turn (change 2): no ping; the turn goes back as a job\'s hand-over, plugin idle compaction runs (rule band), no idle handoff turn', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 45)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }]
+  await measured($, w)
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect(w.rowsOf('keep_warm_start').length).toBe(0)
+  expect(ic(w).map(r => [r.at, r.tokens, r.rule])).toEqual([['timer', 150000, 'band']])
+  expect([selfCompacts(w), w.submits.length]).toEqual([1, 0])
+})
+
+test('AT-KW-58 (D-80, D-79): native on, 150K, an agent open, five_hour at 93 fresh at the first ping (change 2): no fork at 50; the 55.5-min check goes back as a job\'s hand-over and compacts (not the `small` skip)', { options: MIN100K }, async ($, on) => {
+  const w = world(on, {})
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 49)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }]
+  await measured($, w)
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect(ic(w).map(r => [r.at, r.tokens, r.rule])).toEqual([['check', 150000, 'band']])
+  expect(skips(w).filter(s => s[0] === 'small')).toEqual([])
+  expect([selfCompacts(w), w.submits.length]).toEqual([1, 0])
+})
+
+test('AT-KW-58 (D-80): only a background shell open, five_hour at 93 (fresh, change 0): rule no-job, no compaction', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  w.storeSet('limit_deltas', { five_hour: [0] })
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: 'x' }] })
+  await w.turnEnd($)
+  const t0 = w.clock.now()
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93 }]
+  await until(w, t0, 95)
+  await measured($, w)
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'no-job']])
+  expect(nearSkips(w)).toEqual([['compact', 'no-job']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-59 (D-80): five_hour at 93 resets at 105 min, before the ping\'s 58-min bound: the ping waits for the reset (106), then warms on; the cutoff later hands over', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93, resetsAt: new Date(t0 + 105 * MIN).toISOString() } as never, { kind: 'seven_day', percentUsed: 30 }]
+  await until(w, t0, 105)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([])
+  await until(w, t0, 107)
+  expect(f.at).toEqual([50, 106])
+  expect(pings(w)).toEqual([['warm', 1], ['warm', 2]])
+  await until(w, t0, 160)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-59 (D-80): five_hour at 93 resets at 110 min, past the held compaction\'s 58-min bound (108): stop near-limit at 100 (rule stale: nothing refreshed the reading), no wait', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93, resetsAt: new Date(t0 + 110 * MIN).toISOString() } as never]
+  await until(w, t0, 120)
+  expect(f.at).toEqual([50])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'stale']])
+})
+
+test('AT-KW-60 (D-80): native on, keep-warm off, agents running, five_hour at 95, fresh at the 55.5-min check, change 1: plugin idle compaction runs in the band', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {
+  const w = world(on, {})
+  w.storeSet('limit_deltas', { five_hour: [1] })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }, { kind: 'seven_day', percentUsed: 30 }]
+  await until(w, t0, 50)
+  await measured($, w)
+  await until(w, t0, 57)
+  expect(ic(w).map(r => [r.at, r.agents, r.rule])).toEqual([['check', 1, 'band']])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-60 (D-80): no job open, five_hour at 92, fresh, change 0: plugin idle compaction skips near-limit (rule no-job)', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  w.storeSet('limit_deltas', { five_hour: [0] })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 92 }]
+  await until(w, t0, 50)
+  await measured($, w)
+  await until(w, t0, 57)
+  expect(nearSkips(w)).toEqual([['compact', 'no-job']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-60 (D-80): a plugin compaction logs the plan windows before and after it (pct_before, pct_after) and stores their change per kind', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  const before = [{ kind: 'five_hour', percentUsed: 40 }, { kind: 'seven_day', percentUsed: 10 }, { kind: 'spend_limit', percentUsed: 5 }]
+  const after = [{ kind: 'five_hour', percentUsed: 43 }, { kind: 'seven_day', percentUsed: 10 }, { kind: 'spend_limit', percentUsed: 6 }]
+  Object.defineProperty(w, 'rateLimits', { configurable: true, get() { return w.compacts.length > 0 ? after : before }, set() {} })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  await until(w, t0, 56)
+  expect(selfCompacts(w)).toBe(1)
+  const row = w.rowsOf('compacted').find(r => r.skip === null)
+  expect([row?.pct_before, row?.pct_after]).toEqual([{ five_hour: 40, seven_day: 10 }, { five_hour: 43, seven_day: 10 }])
+  expect(w.storeGet('limit_deltas')).toEqual({ five_hour: [3], seven_day: [0] })
+})
+
+test('AT-KW-61 (0.1.7 item 4): after a first-ping fork-miss the cache is cold until the next main request: the compaction skips fork-miss; the next gap, after a main request, compacts as armed', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, i => ({ isAnswered: true, text: 'OK', usage: i === 0 ? COLD : WARM }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  expect(skips(w)).toEqual([['fork-miss', 'compact']])
+  const t1 = await requestTurn($, w)
+  w.agents = []
+  await until(w, t1, 60)
+  expect(ic(w).map(r => r.at)).toEqual(['timer'])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-61 (0.1.7 item 4, D-80): a fork-miss beside a window in the band (five_hour 95, fresh, change 1, agents running): the check skips fork-miss, not compacting a cold cache', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  w.storeSet('limit_deltas', { five_hour: [1] })
+  const f = forks(on, w, () => ({ isAnswered: true, text: 'OK', usage: COLD }))
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 51)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }, { kind: 'seven_day', percentUsed: 30 }]
+  await measured($, w)
+  await until(w, t0, 57)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
+  expect(skips(w)).toEqual([['fork-miss', 'check']])
+  expect(selfCompacts(w)).toBe(0)
 })

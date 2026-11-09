@@ -19,7 +19,6 @@ import type { Deps } from './deps'
 import { isHuman, isOwnOrigin } from './deps'
 import { autoContinue, continueDecision, submitContinue } from './cont'
 import { call } from './helper'
-import { agentsRunning } from './idle'
 import { log } from './log'
 import { randomHex } from './nonce'
 
@@ -169,6 +168,16 @@ async function bounds(d: Deps, sid: string, to: string, now: number): Promise<st
 }
 
 /**
+ * The agents a restart would end: every listed one not ended, an idle teammate too (D-82 keeps
+ * it apart from the idle checks' running agents), and the agent loops whose turn runs here.
+ */
+async function agentsAlive(d: Deps): Promise<number> {
+  const ids = new Set<string>(d.state.agentTurns)
+  for (const id of (await d.agentsAlive()) ?? []) ids.add(id)
+  return ids.size
+}
+
+/**
  * G2, G6, G8, G9, G10, G11 in memory. `moment`: called from inside the compaction's own after-step,
  * where the plugin's own `busy` flag and the native compaction counter are this compaction's.
  * `items` (shadow): a running agent does not refuse; `agent` is added to the list instead.
@@ -181,7 +190,7 @@ async function liveWhy(d: Deps, sid: string, route: Route, moment: boolean, item
   if (!s.lastTurnAnswer) return 'aborted'
   if (s.askOpen > 0 || s.lastTurnAsksUser) return 'asks-user'
   if (s.halt.active) return 'halted'
-  if ((await agentsRunning(d)) > 0) {
+  if ((await agentsAlive(d)) > 0) {
     if (items === undefined) return 'agents'
     items.push('agent')
   }

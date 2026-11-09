@@ -52,8 +52,9 @@ import { boundary } from './boundary'
 import { compactedSince, dispatchExists } from './compact'
 import { effective } from './config'
 import { cacheTtlOf } from './deps'
-import { keepWarmHolds } from './keepwarm'
+import { forkMissed, keepWarmHolds, resultJobOpen } from './keepwarm'
 import { laneAtCheck } from './lane'
+import { limitCtx, tierFields, verdictOf } from './limits'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
 import { log } from './log'
 
@@ -94,10 +95,11 @@ export const IDLE_CHECK_MIN_TEXT = '55'
 /** Claude Code's default idle floor (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, IC-1 F3): `idle_silent` rows from here up only. */
 export const NATIVE_IDLE_FLOOR = 200000
 /**
- * Every rate-limit window must stay below this share (else `near-limit`): always for the plugin's
- * idle compaction; for the idle handoff turn only with `idle_handoff_near_limit: skip` (owner
- * xxxxxxxx, 2026-10-30: "I want the handoff anyway", so the default `run` does not check it), and
- * with `skip-spend` only the spend-limit windows (owner xxxxxxxx, 0.1.2: configurable, `run` the default).
+ * The idle handoff turn's limit share (`near-limit`): only with `idle_handoff_near_limit: skip`
+ * (owner xxxxxxxx, 2026-10-30: "I want the handoff anyway", so the default `run` does not check
+ * it), and with `skip-spend` only the spend-limit windows (owner xxxxxxxx, 0.1.2: configurable,
+ * `run` the default). Plugin idle compaction and keep-warm go by limits.ts (D-80: 90%, or the band
+ * above it while a job is open); a record with no window reported reads its share at arm here.
  */
 export const NEAR_LIMIT_PCT = 90
 
@@ -148,6 +150,8 @@ export type IdleKind = 'turn' | 'check' | 'compact'
  * anchored at the last warm one, with the gap's start and its warm pings so far); no timer of the
  * holding load runs for it, and a load that adopts it (a reload while warming) ends that warming
  * (`keep_warm_stop {why: reload}`) and fires it at that due, while the cache is still warm.
+ * `job` marks a record keep-warm handed back with a job still open (D-79: its result turn is
+ * certain): plugin idle compaction takes it from `idle_handoff_min_tokens` up (`compactFloor`).
  * A load that re-arms the timer has seen no turn end of its own, so the `aborted` and `published`
  * checks and `gap_s` read the turn from here. Such a load is a background session the supervisor
  * moved to a new version (no SessionEnd), a `claude respawn` or a process ended by a signal
@@ -163,6 +167,7 @@ export type Due = {
   ttl: '1h' | '5m' | null; pct: number | null; spct: number | null; cc: string | null; model: string | null
   warm?: number | null
   held?: { start: number; pings: number }
+  job?: true
 }
 
 /** Every clear of a record (§3.1): which load cleared which due, and when. */
@@ -194,6 +199,7 @@ function readDue(v: unknown): Due | undefined {
     cc: strOrNull(o.cc), model: strOrNull(o.model),
     ...(numOrNull(o.warm) !== null ? { warm: numOrNull(o.warm) } : {}),
     ...(readHeld(o.held) ?? {}),
+    ...(o.job === true ? { job: true as const } : {}),
   }
 }
 
@@ -223,13 +229,19 @@ export function scaleOf(env: IdleEnv): number {
   return env.cacheS === undefined ? 1 : env.cacheS / 3600
 }
 
-/** One idle skip row, with the timer's kind, when late by how much, and a near-limit skip's windows. */
-async function idleSkip(d: Deps, sid: string, why: string, kind: IdleKind, lateS?: number, windows?: string[]): Promise<void> {
-  await skipped(d, sid, why, null, 'idle', { kind, ...(lateS !== undefined ? { late_s: lateS } : {}), ...(windows !== undefined ? { windows } : {}) })
+/**
+ * One idle skip row, with the timer's kind, when late by how much, and a near-limit skip's windows
+ * and rule (D-80, with the plan words Claude Code's environment has).
+ */
+async function idleSkip(d: Deps, sid: string, why: string, kind: IdleKind, lateS?: number, windows?: string[], rule?: string): Promise<void> {
+  await skipped(d, sid, why, null, 'idle', {
+    kind, ...(lateS !== undefined ? { late_s: lateS } : {}), ...(windows !== undefined ? { windows } : {}),
+    ...(rule !== undefined ? { rule, ...(await tierFields(d)) } : {}),
+  })
 }
 
-/** A skip reason with the windows its row names (`near-limit`, D-76). */
-type Skip = { why: string; windows: string[] }
+/** A skip reason with the windows its row names (`near-limit`, D-76) and the rule that decided (D-80). */
+type Skip = { why: string; windows: string[]; rule?: string }
 
 /**
  * Cancels the timer (synchronous: safe before any await in a hook). The generation goes up, so a
@@ -352,10 +364,29 @@ async function persist(d: Deps, rec: Due): Promise<void> {
  * Keep-warm (D-14) hands the record it held back to the idle path with the cache still warm: due
  * now, anchored at the start of the last warm ping (`anchor` for the compaction's lapse guard,
  * `warm` for the turn's), with the episode, the turn's end and the published flag as they are now.
+ * `job` (D-79, owner 2026-11-08 23:22: "after the last keep-warm ... you would actually compact to
+ * avoid re-reading the cold cache"): a stop with a job still open (the cutoff, the deadline, the
+ * limit band) compacts from `idle_handoff_min_tokens` up, since the job's result turn would read
+ * a cold cache after an idle handoff turn, which does not compact; a 49-min turn record becomes
+ * the compaction where the plugin may compact (native vetoed, `idle_compact` on), never against
+ * `"autoCompactEnabled": false` or `idle_compact: false`.
  */
-export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number): Promise<void> {
+export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number, job = false): Promise<void> {
   const s = d.state
-  await persist(d, { ...rec, due: now, anchor: warm, warm, episode: s.idleEpisode ?? null, answer: s.lastTurnAnswer, published: s.publishedSinceHuman })
+  let kind = rec.kind
+  if (job && kind === 'turn' && idleSwitches(d).compactOn && (await d.nativeIdle()) === 'vetoed') kind = 'compact'
+  await persist(d, {
+    ...rec, kind, due: now, anchor: warm, warm, episode: s.idleEpisode ?? null, answer: s.lastTurnAnswer, published: s.publishedSinceHuman,
+    ...(job ? { job: true as const } : {}),
+  })
+}
+
+/**
+ * The smallest context plugin idle compaction takes for this record: Claude Code's idle minimum,
+ * or for a record keep-warm handed back with a job open (D-79) `idle_handoff_min_tokens` when lower.
+ */
+function compactFloor(d: Deps, rec: Due, env: IdleEnv): number {
+  return rec.job === true ? Math.min(env.compactMin, d.cfg.idle_handoff_min_tokens) : env.compactMin
 }
 
 /**
@@ -658,10 +689,27 @@ function turnNearLimit(d: Deps, u: Use, rec: Due): string[] | undefined {
   return mode === 'run' ? undefined : nearLimit(u, rec, mode === 'skip-spend')
 }
 
+/**
+ * G12 of plugin idle compaction (D-80, limits.ts): the windows reported, by the adaptive rule (a
+ * window that reset counts for nothing); none reported, the record's highest share at arm (an old
+ * reading: 90%, rule `arm-90`). A skip, or the band's rule for the `idle_compact` row, or nothing.
+ */
+async function compactLimit(d: Deps, sid: string, u: Use, rec: Due, now: number): Promise<Skip | { rule?: string }> {
+  const limits = u?.rateLimits ?? []
+  if (limits.length === 0) {
+    return rec.pct !== null && !(rec.pct < NEAR_LIMIT_PCT) ? { why: 'near-limit', windows: limitWindows([], rec.pct), rule: 'arm-90' } : {}
+  }
+  const v = verdictOf(limits, await limitCtx(d, await resultJobOpen(d, sid), now))
+  if (!v.ok) return { why: 'near-limit', windows: v.windows, rule: v.rule }
+  return v.band ? { rule: 'band' } : {}
+}
+
 /** The checks of §9.4 "Fire" from `aborted` on, in order; the first that fails is the skip reason. */
 async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Due): Promise<string | Skip | Go> {
   const s = d.state
   if (!s.lastTurnAnswer) return 'aborted'
+  // A keep-warm ping since the last main request found the cache cold (keepwarm.ts): no turn on it.
+  if (forkMissed(s, sid)) return 'fork-miss'
   const tokens = u?.tokens ?? rec.tokens ?? undefined
   // 0.1.5 D-3 (owner 2026-11-07, "3. yes"; session xxxxxxxx, ~166k tokens, finished and logged
   // `small` at every check): a lane that reads finished gets the turn below the floor too; every
@@ -669,7 +717,7 @@ async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Du
   if (tokens === undefined || (tokens < d.cfg.idle_handoff_min_tokens && (await laneAtCheck(d, sid)) !== 'finished')) return 'small'
   if (await ttl5m(d, await d.idleEnv(), u, rec)) return 'ttl-5m'
   const near = turnNearLimit(d, u, rec)
-  if (near) return { why: 'near-limit', windows: near }
+  if (near) return { why: 'near-limit', windows: near, rule: d.cfg.idle_handoff_near_limit === 'skip' ? 'option-skip' : 'option-skip-spend' }
   const ep = s.idleEpisode
   if (!ep || ep.done) return 'episode'
   if (s.publishedSinceHuman) return 'published'
@@ -705,13 +753,14 @@ async function usageOrNone(d: Deps): Promise<Use> {
 }
 
 /**
- * The agents of this session still running (owner xxxxxxxx-38; the 2026-10-27 idle compaction):
- * the listed subagents and teammates that have not ended, with the agent loops whose turn is
- * running in this load (a workflow's agents are not listed).
+ * The agents of this session at work (owner xxxxxxxx-38; the 2026-10-27 idle compaction): the
+ * listed subagents and teammates at work (D-82: an idle teammate, which waits for a message, is
+ * no running agent), with the agent loops whose turn is running in this load (a workflow's agents
+ * are not listed). Keep-warm's open jobs and the lane's Basis count read agents the same way.
  */
 export async function agentsRunning(d: Deps): Promise<number> {
   const ids = new Set<string>(d.state.agentTurns)
-  for (const id of (await d.agentsAlive()) ?? []) ids.add(id)
+  for (const id of (await d.agentsWorking()) ?? []) ids.add(id)
   return ids.size
 }
 
@@ -729,8 +778,8 @@ async function turnBlocked(d: Deps, sid: string, rec: Due, now: number, atLoad: 
   return laterChecks(d, sid, eff, await usageOrNone(d), rec)
 }
 
-/** The plugin's own idle compaction at the check (owner 2026-10-27, owner Q2): its `idle_compact` row. */
-type Compact = { compact: true; gapS: number; tokens: number; agents: number }
+/** The plugin's own idle compaction at the check (owner 2026-10-27, owner Q2): its `idle_compact` row (`rule`: the limit band's, D-80). */
+type Compact = { compact: true; gapS: number; tokens: number; agents: number; rule?: string }
 
 /**
  * Owner xxxxxxxx-17: the 55.5-min outcome check. A check that fires more than a minute late is
@@ -772,13 +821,13 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
   }
   const env = await d.idleEnv()
   const tokens = u?.tokens ?? rec.tokens ?? undefined
-  if (on.compactOn && (agents > 0 || !on.turnOn || tokens === undefined || tokens >= env.compactMin)) {
+  if (on.compactOn && (agents > 0 || !on.turnOn || tokens === undefined || tokens >= compactFloor(d, rec, env))) {
     // G0b: the check's policy is the one it was armed with (no `idle_mode` row at its fire), but
     // `"autoCompactEnabled": false` set since then (`/config`, another session's settings write)
     // is an explicit user switch: no compaction.
     const g = (await d.nativeIdle()) === 'compaction-off' ? { why: 'compaction-off' } : await compactGuards(d, sid, rec, now, env)
     // The gap is the timer's own (about 3,330 s) when the turn end is unknown.
-    if (!('why' in g)) return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents }
+    if (!('why' in g)) return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents, ...(g.rule !== undefined ? { rule: g.rule } : {}) }
     // Root call NL-2 (0.1.2): `near-limit` comes before `halted` in the guards, so under
     // `idle_handoff_near_limit: run` a halt that stops the compaction anyway (not the cap) falls
     // back to the turn the same way; `skip` keeps the near-limit skip, and `skip-spend` keeps it
@@ -862,9 +911,9 @@ export async function fire(d: Deps, rec: Due, now: number, atLoad = false): Prom
 async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: FireOut): Promise<void> {
   const s = d.state
   const sid = rec.sid
-  const skip = (why: string, lateS?: number, windows?: string[]): Promise<void> => {
+  const skip = (why: string, lateS?: number, windows?: string[], rule?: string): Promise<void> => {
     out.done = true
-    return idleSkip(d, sid, why, rec.kind, lateS, windows)
+    return idleSkip(d, sid, why, rec.kind, lateS, windows, rule)
   }
   const stored = readStored(await d.storeGet(dueKey(sid)))
   if (stored === 'tombstone' || (stored !== 'missing' && (stored.load !== s.loadId || stored.due !== rec.due))) {
@@ -901,7 +950,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   }
   const b = rec.kind === 'check' ? await checkBlocked(d, sid, rec, now, scale, atLoad) : await turnBlocked(d, sid, rec, now, atLoad)
   if (typeof b === 'string') return skip(b, b === 'lapsed' ? secs(now - rec.due) : undefined)
-  if ('why' in b) return skip(b.why, undefined, b.windows)
+  if ('why' in b) return skip(b.why, undefined, b.windows, b.rule)
   if ('compact' in b) {
     // Owner 2026-10-27 and owner Q2: one shaped compaction instead of the turn, run as the
     // `compact` timer runs its own (D4): asked once more after the checkpoint (`idleRecheck`),
@@ -912,6 +961,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
     out.done = true
     await log(d, sid, 'idle_compact', {
       gap_s: b.gapS, tokens: b.tokens, agents: b.agents, at: 'check', late_s: Math.max(0, secs(now - rec.due)), adopted: s.idleAdopted,
+      ...(b.rule !== undefined ? { rule: b.rule, ...(await tierFields(d)) } : {}),
     })
     const r = await idleBoundary(d, sid, 'check', { idle: { gapS: b.gapS }, idleRecheck: recheckOf(d, sid, rec), exemptHalt: capHalt(s) })
     if (!r.ran) await idleSkip(d, sid, r.why, 'check')
@@ -972,9 +1022,9 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
   const s = d.state
   const sid = rec.sid
   const lateS = secs(now - rec.due)
-  const skip = (why: string, windows?: string[]): Promise<void> => {
+  const skip = (why: string, windows?: string[], rule?: string): Promise<void> => {
     out.done = true
-    return idleSkip(d, sid, why, 'compact', lateS > 0 || why === 'lapsed' ? lateS : undefined, windows)
+    return idleSkip(d, sid, why, 'compact', lateS > 0 || why === 'lapsed' ? lateS : undefined, windows, rule)
   }
   let p: Policy
   try {
@@ -992,17 +1042,20 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
   // D7, or a headless load: lane A has no headless path).
   if (p.native === 'compaction-off') return skip('compaction-off')
   if (!p.compactOn) return skip('disabled')
-  let g: { why: string } | Skip | { tokens: number }
+  let g: { why: string } | Skip | { tokens: number; rule?: string }
   try {
     g = await compactGuards(d, sid, rec, now, p.env)
   } catch {
     g = { why: 'error' }
   }
-  if ('why' in g) return skip(g.why, 'windows' in g ? g.windows : undefined)
+  if ('why' in g) return skip(g.why, 'windows' in g ? g.windows : undefined, 'rule' in g ? g.rule : undefined)
   const agents = await agentsRunning(d)
   const gapS = secs(now - (rec.end ?? now))
   out.done = true
-  await log(d, sid, 'idle_compact', { gap_s: gapS, tokens: g.tokens, agents, at: 'timer', late_s: Math.max(0, lateS), adopted: s.idleAdopted })
+  await log(d, sid, 'idle_compact', {
+    gap_s: gapS, tokens: g.tokens, agents, at: 'timer', late_s: Math.max(0, lateS), adopted: s.idleAdopted,
+    ...(g.rule !== undefined ? { rule: g.rule, ...(await tierFields(d)) } : {}),
+  })
   const r = await idleBoundary(d, sid, 'compact', { idle: { gapS }, idleRecheck: recheckOf(d, sid, rec), exemptHalt: capHalt(s) })
   if (!r.ran) {
     await skip(r.why)
@@ -1042,7 +1095,7 @@ function recheckOf(d: Deps, sid: string, rec: Due): () => Promise<string | undef
  * due record (G1 ran once at the top of `fire`, before the record was cleared). `adoptedOk` is
  * ADOPTED_IDLE_COMPACT (a parameter for its unit test).
  */
-export async function compactGuards(d: Deps, sid: string, rec: Due, now: number, env: IdleEnv, adoptedOk = ADOPTED_IDLE_COMPACT): Promise<{ why: string } | Skip | { tokens: number }> {
+export async function compactGuards(d: Deps, sid: string, rec: Due, now: number, env: IdleEnv, adoptedOk = ADOPTED_IDLE_COMPACT): Promise<{ why: string } | Skip | { tokens: number; rule?: string }> {
   const s = d.state
   const no = (why: string) => ({ why })
   // G3: the cache has probably lapsed, or the timer came late (a sleep).
@@ -1058,6 +1111,8 @@ export async function compactGuards(d: Deps, sid: string, rec: Due, now: number,
   }
   const model = await d.model()
   if ((rec.cc !== null && rec.cc !== cc) || (rec.model !== null && rec.model !== model)) return no('prefix-changed')
+  // A keep-warm ping since the last main request missed the main prefix: the cache is cold (keepwarm.ts).
+  if (forkMissed(s, sid)) return no('fork-miss')
   // G3b (D6 b): an adopted load compacts only while the L1-c4 gate allows adopted loads at all.
   if (s.idleAdopted && !adoptedOk) return no('adopted-cold')
   // G4-G7: busy, a newer turn or request, a compaction since the turn end, a person at the prompt.
@@ -1070,13 +1125,13 @@ export async function compactGuards(d: Deps, sid: string, rec: Due, now: number,
   if ((await effective(d, sid)).disabled) return no('small-window')
   const u = await usageOrNone(d)
   const tokens = u?.tokens ?? rec.tokens ?? undefined
-  if (tokens === undefined || tokens < env.compactMin) return no('small')
+  if (tokens === undefined || tokens < compactFloor(d, rec, env)) return no('small')
   if (await ttl5m(d, env, u, rec)) return no('ttl-5m')
-  const near = nearLimit(u, rec)
-  if (near) return { why: 'near-limit', windows: near }
+  const lim = await compactLimit(d, sid, u, rec, now)
+  if ('why' in lim) return lim
   if (s.halt.active && s.halt.reason !== 'cap') return no('halted')
   if (s.askOpen > 0) return no('asks-user')
-  return { tokens }
+  return { tokens, ...lim }
 }
 
 /** The seconds since the last main turn end, for `handoff_turn_start.gap_s`. */

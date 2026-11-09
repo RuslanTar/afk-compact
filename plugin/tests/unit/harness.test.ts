@@ -52,7 +52,7 @@ export class World {
   breakdownThrow = false
   usageArgs: unknown[] = []
   /** `$.agent.list()` (owner xxxxxxxx-38); undefined: the call rejects. */
-  agents: { id: string; status: string }[] | undefined = []
+  agents: { id: string; status: string; type?: string }[] | undefined = []
   files = new Map<string, string>()
   writes: string[] = []
   calls: Call[] = []
@@ -244,9 +244,10 @@ export class World {
       if (this.settingsThrow) throw new Error('settings unreadable')
       return { value: this.policy }
     })
+    on('session.measure', (_$, e) => ({ changed: e.changed }))
     on('agent.list', () => {
       if (this.agents === undefined) throw new Error('no agent list')
-      return { value: this.agents.map(a => ({ id: a.id, description: 'job', type: 'general-purpose', status: a.status })) as never }
+      return { value: this.agents.map(a => ({ id: a.id, description: 'job', type: a.type ?? 'general-purpose', status: a.status })) as never }
     })
     on('ui.toast', (_$, e) => {
       this.toasts.push(e.text)

@@ -26,8 +26,9 @@ export type RunResult = {
 /**
  * `rateLimits` keeps each window's `kind` (`five_hour`, `seven_day`, a gateway's `spend_limit`;
  * `''` when the engine gave none): only a plan window is evidence of the one-hour cache (D15).
+ * `resetsAt` (D-80): when the window resets (epoch ms), absent when not reported or unreadable.
  */
-export type Usage = { tokens: number | undefined; window: number; rateLimits: { kind: string; percentUsed: number }[] }
+export type Usage = { tokens: number | undefined; window: number; rateLimits: { kind: string; percentUsed: number; resetsAt?: number }[] }
 /**
  * 0.1.4 T-11: the compaction window as Claude Code settled it, from the `summary` context breakdown
  * (`$.session.usage({ breakdown: 'summary' })`, estimated locally: no token-count request):
@@ -293,6 +294,15 @@ export interface Deps {
    * when the list cannot be read. A workflow's agents are not listed: `agentTurns` counts them.
    */
   agentsAlive(): Promise<string[] | undefined>
+  /**
+   * D-82 (owner 2026-11-09, session xxxxxxxx: 22 idle teammates read as 22 open jobs): the listed
+   * agents of this session at work now, by id: `agentsAlive` less one that waits for a message
+   * (`idle`, Claude Code 2.1.319 sets it at each TeammateIdle). Its next turn comes only when
+   * someone writes to it, so no result is on its way. `waiting` stays at work: it is held on
+   * background work it owns (a background subagent's own shell, Monitor or Agent call, a teammate's
+   * too), whose result is still coming, or on a plan approval. Undefined when the list cannot be read.
+   */
+  agentsWorking(): Promise<string[] | undefined>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
   /**
@@ -327,6 +337,12 @@ export interface Deps {
    * `claude-desktop`, `claude-vscode`, `sdk-ts`, `sdk-py`; undefined when unset, empty or unreadable.
    */
   entrypoint(): Promise<string | undefined>
+  /**
+   * D-80: the plan words Claude Code may put in its environment (`CLAUDE_CODE_SUBSCRIPTION_TYPE`,
+   * `CLAUDE_CODE_RATE_LIMIT_TIER`; undocumented, often unset), for the limit rows only, never to
+   * decide: each a short lowercase word, else left out.
+   */
+  planTier?(): Promise<{ plan?: string; tier?: string }>
 }
 
 /** What one module load keeps in memory (a reload starts a fresh one). */
@@ -601,6 +617,11 @@ export type LoadState = {
   bgTasks: BgTasks | undefined
   /** Task ids a background-task notification reported ended (keepwarm.ts `noteEndedTasks`); cleared at session end. */
   endedTasks: Set<string>
+  /**
+   * D-80 (limits.ts): when the usage reading was last refreshed, as far as this load can tell: the
+   * end of a main request (its response's headers carry it) or a `session.measure` event.
+   */
+  usageAt: number | undefined
 }
 
 /**
@@ -811,6 +832,7 @@ export function newState(loadId: string): LoadState {
     keepWarmForkMiss: undefined,
     bgTasks: undefined,
     endedTasks: new Set(),
+    usageAt: undefined,
   }
 }
 
@@ -843,7 +865,10 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       const u = await $.session.usage()
       return {
         tokens: u.context.tokens, window: u.context.window,
-        rateLimits: (u.rateLimits ?? []).map(l => ({ kind: typeof l.kind === 'string' ? l.kind : '', percentUsed: l.percentUsed })),
+        rateLimits: (u.rateLimits ?? []).map(l => {
+          const at = typeof l.resetsAt === 'string' ? Date.parse(l.resetsAt) : NaN
+          return { kind: typeof l.kind === 'string' ? l.kind : '', percentUsed: l.percentUsed, ...(Number.isFinite(at) ? { resetsAt: at } : {}) }
+        }),
       }
     },
     async version() {
@@ -1036,6 +1061,14 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
         return undefined
       }
     },
+    async agentsWorking() {
+      try {
+        const list = await $.agent.list()
+        return list.filter(a => !AGENT_ENDED.includes(a.status) && !AGENT_RESTING.includes(a.status)).map(a => a.id)
+      } catch {
+        return undefined
+      }
+    },
     paths() {
       if (!state.pathsMemo) {
         state.pathsMemo = (async () => {
@@ -1100,6 +1133,26 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
         launch: await get(() => launchDir($)),
       }
     },
+    async planTier() {
+      // `$.env.get` takes a literal name (the engine's module rule), so each read is spelled out.
+      const word = (v: string | undefined): string | undefined => {
+        const t = (v ?? '').trim().toLowerCase()
+        return /^[a-z][a-z0-9_-]{0,31}$/.test(t) ? t : undefined
+      }
+      let plan: string | undefined
+      let tier: string | undefined
+      try {
+        plan = word(await $.env.get('CLAUDE_CODE_SUBSCRIPTION_TYPE'))
+      } catch {
+        plan = undefined
+      }
+      try {
+        tier = word(await $.env.get('CLAUDE_CODE_RATE_LIMIT_TIER'))
+      } catch {
+        tier = undefined
+      }
+      return { ...(plan !== undefined ? { plan } : {}), ...(tier !== undefined ? { tier } : {}) }
+    },
     async entrypoint() {
       try {
         const v = await $.env.get('CLAUDE_CODE_ENTRYPOINT')
@@ -1145,6 +1198,13 @@ export function servedMode(text: string): string | undefined {
 
 /** `AgentStatus` values of an agent that ended (owner xxxxxxxx-38: every other status counts as running). */
 export const AGENT_ENDED: readonly string[] = ['completed', 'failed', 'killed']
+/**
+ * D-82: `AgentStatus` values of a live agent at rest: one that waits for a message (`idle`, a
+ * teammate between its turns). It stays alive (a restart would end it) but is no open job. Not
+ * `waiting`: Claude Code 2.1.319 sets it also on an agent held by background work it owns, whose
+ * result is still to come (the `AgentStatus` doc).
+ */
+export const AGENT_RESTING: readonly string[] = ['idle']
 
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message.slice(0, 120)

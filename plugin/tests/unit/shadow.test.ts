@@ -213,6 +213,21 @@ test('AT-DH-07 (idle): the plugin\'s own idle compaction at 54 min (native vetoe
 
 // ---- guards
 
+test('AT-DH-08b (D-80): the trial stays at 90: a plan window at 93 skips near-limit though plugin idle compaction\'s band would let it run (an agent at work, a fresh reading, a measured change of 1)', async ($, on) => {
+  const w = new World().install(on)
+  const forks = trialOn(on, w)
+  await started($, w)
+  w.agents = [{ id: 'sub-1', status: 'running' }]
+  w.storeSet('limit_deltas', { five_hour: [1] })
+  await turn($, w)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }]
+  await $.session.measure({ context: { tokens: w.tokens, window: 1000000 }, rateLimits: w.rateLimits, changed: ['rateLimits'] } as never)
+  await raiseCompact($, { trigger: 'manual' })
+  await w.settle()
+  expect(forks.length).toBe(0)
+  expect(saves(w).map(s => [s.moment.status, s.moment.windows])).toEqual([['skipped:near-limit', ['five_hour:93', 'seven_day:30']]])
+})
+
 test('AT-DH-08: guards cover both forks with one record each: no limits, a window at 90%, a cold prefix (58 min); no count cap', async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
