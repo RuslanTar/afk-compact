@@ -244,6 +244,7 @@ export class World {
       if (this.settingsThrow) throw new Error('settings unreadable')
       return { value: this.policy }
     })
+    on('session.measure', (_$, e) => ({ changed: e.changed }))
     on('agent.list', () => {
       if (this.agents === undefined) throw new Error('no agent list')
       return { value: this.agents.map(a => ({ id: a.id, description: 'job', type: a.type ?? 'general-purpose', status: a.status })) as never }

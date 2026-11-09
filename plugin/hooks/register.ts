@@ -119,10 +119,20 @@ export const register: Register = (on, options) => {
     } catch {
       // no share for this turn (handoff_turn_end logs null)
     }
+    // D-80: a main response refreshed the usage windows (limits.ts reads how fresh they are).
+    if (e.agentId === undefined) void $.clock.now().then(t => { state.usageAt = t }, () => undefined)
     return r
   }).catch(async function* ($, e, next) {
     return yield* next(e)
   })
+
+  // D-80: the engine measured the session (after a main turn, or a usage window moved a whole
+  // point, a keep-warm ping's response too): the usage windows are fresh now. Observe only.
+  on('session.measure', async ($, e, next) => {
+    const r = await next(e)
+    void $.clock.now().then(t => { state.usageAt = t }, () => undefined)
+    return r
+  }).catch(($, e, next) => next(e))
 
   // D11 (G7): a person editing the prompt box is present. Observe only, in the keystroke path:
   // nothing before `next` and nothing awaited after it.

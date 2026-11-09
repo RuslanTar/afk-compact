@@ -26,8 +26,9 @@ export type RunResult = {
 /**
  * `rateLimits` keeps each window's `kind` (`five_hour`, `seven_day`, a gateway's `spend_limit`;
  * `''` when the engine gave none): only a plan window is evidence of the one-hour cache (D15).
+ * `resetsAt` (D-80): when the window resets (epoch ms), absent when not reported or unreadable.
  */
-export type Usage = { tokens: number | undefined; window: number; rateLimits: { kind: string; percentUsed: number }[] }
+export type Usage = { tokens: number | undefined; window: number; rateLimits: { kind: string; percentUsed: number; resetsAt?: number }[] }
 /**
  * 0.1.4 T-11: the compaction window as Claude Code settled it, from the `summary` context breakdown
  * (`$.session.usage({ breakdown: 'summary' })`, estimated locally: no token-count request):
@@ -335,6 +336,12 @@ export interface Deps {
    * `claude-desktop`, `claude-vscode`, `sdk-ts`, `sdk-py`; undefined when unset, empty or unreadable.
    */
   entrypoint(): Promise<string | undefined>
+  /**
+   * D-80: the plan words Claude Code may put in its environment (`CLAUDE_CODE_SUBSCRIPTION_TYPE`,
+   * `CLAUDE_CODE_RATE_LIMIT_TIER`; undocumented, often unset), for the limit rows only, never to
+   * decide: each a short lowercase word, else left out.
+   */
+  planTier?(): Promise<{ plan?: string; tier?: string }>
 }
 
 /** What one module load keeps in memory (a reload starts a fresh one). */
@@ -609,6 +616,11 @@ export type LoadState = {
   bgTasks: BgTasks | undefined
   /** Task ids a background-task notification reported ended (keepwarm.ts `noteEndedTasks`); cleared at session end. */
   endedTasks: Set<string>
+  /**
+   * D-80 (limits.ts): when the usage reading was last refreshed, as far as this load can tell: the
+   * end of a main request (its response's headers carry it) or a `session.measure` event.
+   */
+  usageAt: number | undefined
 }
 
 /**
@@ -819,6 +831,7 @@ export function newState(loadId: string): LoadState {
     keepWarmForkMiss: undefined,
     bgTasks: undefined,
     endedTasks: new Set(),
+    usageAt: undefined,
   }
 }
 
@@ -851,7 +864,10 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
       const u = await $.session.usage()
       return {
         tokens: u.context.tokens, window: u.context.window,
-        rateLimits: (u.rateLimits ?? []).map(l => ({ kind: typeof l.kind === 'string' ? l.kind : '', percentUsed: l.percentUsed })),
+        rateLimits: (u.rateLimits ?? []).map(l => {
+          const at = typeof l.resetsAt === 'string' ? Date.parse(l.resetsAt) : NaN
+          return { kind: typeof l.kind === 'string' ? l.kind : '', percentUsed: l.percentUsed, ...(Number.isFinite(at) ? { resetsAt: at } : {}) }
+        }),
       }
     },
     async version() {
@@ -1115,6 +1131,19 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
         jobDir: await get(() => $.env.get('CLAUDE_JOB_DIR')),
         launch: await get(() => launchDir($)),
       }
+    },
+    async planTier() {
+      const word = async (name: string): Promise<string | undefined> => {
+        try {
+          const v = ((await $.env.get(name)) ?? '').trim().toLowerCase()
+          return /^[a-z][a-z0-9_-]{0,31}$/.test(v) ? v : undefined
+        } catch {
+          return undefined
+        }
+      }
+      const plan = await word('CLAUDE_CODE_SUBSCRIPTION_TYPE')
+      const tier = await word('CLAUDE_CODE_RATE_LIMIT_TIER')
+      return { ...(plan !== undefined ? { plan } : {}), ...(tier !== undefined ? { tier } : {}) }
     },
     async entrypoint() {
       try {

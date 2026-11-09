@@ -2086,3 +2086,159 @@ test('AT-KW-57 (D-79): no job open at a ping (no-jobs) at 150K: the hand-over ke
   expect(selfCompacts(w)).toBe(0)
   if (IDLE) expect(w.submits.length).toBe(1)
 })
+
+// ---- D-80 (owner 2026-11-08 23:31 "I think it should be adaptive", 23:59 "never fixed. always
+// adaptive"; limits.ts): above 90% a plan window lets keep-warm hand over to one warm compaction,
+// and that compaction run, only with a job whose result is certain open, a fresh reading (10 min)
+// and a measured compaction change that fits below the cap (98 five_hour, 95 seven_day); a
+// spend limit stops at 90; a window that resets before the ping's last moment is waited for.
+
+/** The engine measured the session now (after a turn, or a window moved a point): the reading is fresh. */
+async function measured($: Engine, w: World): Promise<void> {
+  await $.session.measure({ context: { tokens: w.tokens, window: 1000000 }, rateLimits: w.rateLimits, changed: ['rateLimits'] } as never)
+  await w.settle()
+}
+
+const nearStops = (w: World) => w.rowsOf('keep_warm_stop').map(r => [r.why, r.handover, r.rule])
+const nearSkips = (w: World) => w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.kind, r.rule])
+
+/** A gap that warms at 50; at 60 the windows read `limits`, fresh from `freshAt` (minutes); the next ping is due at 100. */
+async function bandGap($: Engine, on: On, w: World, limits: World['rateLimits'], freshAt = 95): Promise<ReturnType<typeof forks>> {
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = limits
+  await until(w, t0, freshAt)
+  await measured($, w)
+  await until(w, t0, 101)
+  return f
+}
+
+test('AT-KW-58 (D-80): an agent open, five_hour at 93 (fresh, measured change 2): no ping in the band, stop near-limit with the hand-over (rule band), the compaction runs while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  w.env = { CLAUDE_CODE_SUBSCRIPTION_TYPE: 'max', CLAUDE_CODE_RATE_LIMIT_TIER: 'default_claude_max_5x' }
+  const f = await bandGap($, on, w, [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }])
+  expect(f.at).toEqual([50])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'band']])
+  expect(w.rowsOf('keep_warm_stop').map(r => [r.windows, r.plan, r.tier])).toEqual([[['five_hour:93', 'seven_day:30'], 'max', 'default_claude_max_5x']])
+  expect(ic(w).map(r => [r.at, r.rule])).toEqual([['timer', 'band']])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+for (const c of [
+  { name: 'a stale reading (refreshed 40 min before)', rule: 'stale', freshAt: 60, limits: [{ kind: 'five_hour', percentUsed: 93 }], deltas: { five_hour: [2] } },
+  { name: 'no compaction change measured yet', rule: 'no-delta', limits: [{ kind: 'five_hour', percentUsed: 93 }], deltas: {} },
+  { name: 'a change of 4 points at 95', rule: 'delta', limits: [{ kind: 'five_hour', percentUsed: 95 }], deltas: { five_hour: [4] } },
+  { name: 'seven_day at 96 (its cap is 95)', rule: 'cap', limits: [{ kind: 'five_hour', percentUsed: 20 }, { kind: 'seven_day', percentUsed: 96 }], deltas: { seven_day: [0] } },
+  { name: 'a spend limit at 93', rule: 'spend-90', limits: [{ kind: 'five_hour', percentUsed: 20 }, { kind: 'spend_limit', percentUsed: 93 }], deltas: { five_hour: [0] } },
+]) {
+  test(`AT-KW-58 (D-80): an agent open, ${c.name}: stop near-limit (rule ${c.rule}), the handed-back compaction skips near-limit with it`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.storeSet('limit_deltas', c.deltas)
+    const f = await bandGap($, on, w, c.limits, c.freshAt)
+    expect(f.at).toEqual([50])
+    expect(nearStops(w)).toEqual([['near-limit', true, c.rule]])
+    expect(nearSkips(w)).toEqual([['compact', c.rule]])
+    expect(selfCompacts(w)).toBe(0)
+  })
+}
+
+test('AT-KW-58 (D-80): only a background shell open, five_hour at 93 (fresh, change 0): rule no-job, no compaction', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  w.storeSet('limit_deltas', { five_hour: [0] })
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: 'x' }] })
+  await w.turnEnd($)
+  const t0 = w.clock.now()
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93 }]
+  await until(w, t0, 95)
+  await measured($, w)
+  await until(w, t0, 101)
+  expect(f.at).toEqual([50])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'no-job']])
+  expect(nearSkips(w)).toEqual([['compact', 'no-job']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-59 (D-80): five_hour at 93 resets at 105 min, before the ping\'s 58-min bound: the ping waits for the reset (106), then warms on; the cutoff later hands over', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93, resetsAt: new Date(t0 + 105 * MIN).toISOString() } as never, { kind: 'seven_day', percentUsed: 30 }]
+  await until(w, t0, 105)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([])
+  await until(w, t0, 107)
+  expect(f.at).toEqual([50, 106])
+  expect(pings(w)).toEqual([['warm', 1], ['warm', 2]])
+  await until(w, t0, 160)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-59 (D-80): five_hour at 93 resets at 110 min, past the held compaction\'s 58-min bound (108): stop near-limit at 100 (rule stale: nothing refreshed the reading), no wait', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93, resetsAt: new Date(t0 + 110 * MIN).toISOString() } as never]
+  await until(w, t0, 120)
+  expect(f.at).toEqual([50])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'stale']])
+})
+
+test('AT-KW-60 (D-80): native on, keep-warm off, agents running, five_hour at 95, fresh at the 55.5-min check, change 1: plugin idle compaction runs in the band', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {
+  const w = world(on, {})
+  w.storeSet('limit_deltas', { five_hour: [1] })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }, { kind: 'seven_day', percentUsed: 30 }]
+  await until(w, t0, 50)
+  await measured($, w)
+  await until(w, t0, 57)
+  expect(ic(w).map(r => [r.at, r.agents, r.rule])).toEqual([['check', 1, 'band']])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-60 (D-80): no job open, five_hour at 92, fresh, change 0: plugin idle compaction skips near-limit (rule no-job)', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  w.storeSet('limit_deltas', { five_hour: [0] })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 92 }]
+  await until(w, t0, 50)
+  await measured($, w)
+  await until(w, t0, 57)
+  expect(nearSkips(w)).toEqual([['compact', 'no-job']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('AT-KW-60 (D-80): a plugin compaction logs the plan windows before and after it (pct_before, pct_after) and stores their change per kind', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {
+  const w = world(on)
+  w.agents = []
+  const before = [{ kind: 'five_hour', percentUsed: 40 }, { kind: 'seven_day', percentUsed: 10 }, { kind: 'spend_limit', percentUsed: 5 }]
+  const after = [{ kind: 'five_hour', percentUsed: 43 }, { kind: 'seven_day', percentUsed: 10 }, { kind: 'spend_limit', percentUsed: 6 }]
+  Object.defineProperty(w, 'rateLimits', { configurable: true, get() { return w.compacts.length > 0 ? after : before }, set() {} })
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  await until(w, t0, 56)
+  expect(selfCompacts(w)).toBe(1)
+  const row = w.rowsOf('compacted').find(r => r.skip === null)
+  expect([row?.pct_before, row?.pct_after]).toEqual([{ five_hour: 40, seven_day: 10 }, { five_hour: 43, seven_day: 10 }])
+  expect(w.storeGet('limit_deltas')).toEqual({ five_hour: [3], seven_day: [0] })
+})

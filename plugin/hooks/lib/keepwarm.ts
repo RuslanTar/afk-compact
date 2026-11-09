@@ -74,8 +74,9 @@ import type { Deps, RequestUsage } from './deps'
 import type { Due } from './idle'
 import { compactedSince } from './compact'
 import { prefixRead } from './deps'
-import { IDLE_CACHE_MS, IDLE_TICK_MS, NEAR_LIMIT_PCT, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, limitWindows, oneHourCache, releaseHeld, scaleOf } from './idle'
+import { IDLE_CACHE_MS, IDLE_TICK_MS, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, oneHourCache, releaseHeld, scaleOf } from './idle'
 import { notifiedTasks } from './lane'
+import { limitCtx, resetOf, tierFields, verdictOf } from './limits'
 import { log } from './log'
 
 /** The next ping, after the start of the last cache-refreshing request (a share of the cache hour, D10-scaled). */
@@ -101,6 +102,8 @@ export const KEEP_WARM_PROMPT = 'Reply with the single word OK.'
 const NOT_JOB = /^(?:subagent|local_agent|teammate)$|monitor|cron/i
 /** A background task status that has ended. */
 const ENDED = /^(?:completed|failed|killed|stopped|cancell?ed)$/i
+/** A background shell: it may never end (a dev server, `tail -f`), so it opens no certain result turn (D-80). */
+const SHELL = /^(?:shell|bash|local_bash)$/i
 
 /**
  * One idle gap's keep-warm: `start` is the start of the gap (the last main request's start at the
@@ -133,8 +136,8 @@ export type KeepWarm = {
   incoming?: Due
 }
 
-/** The background tasks of the main session's last Stop (`background_tasks`), by id. */
-export type BgTasks = { sid: string; ids: string[] }
+/** The background tasks of the main session's last Stop (`background_tasks`), by id; `shells` the shells among them. */
+export type BgTasks = { sid: string; ids: string[]; shells: string[] }
 
 /**
  * Main `classic.Stop` (observe only): the in-flight background work its input lists, less the
@@ -144,14 +147,16 @@ export function noteBackground(s: Deps['state'], e: { session_id?: unknown; agen
   if (e.agent_id !== undefined && e.agent_id !== null) return
   if (!Array.isArray(e.background_tasks) || typeof e.session_id !== 'string') return
   const ids: string[] = []
+  const shells: string[] = []
   for (const t of e.background_tasks as unknown[]) {
     if (typeof t !== 'object' || t === null) continue
     const o = t as Record<string, unknown>
     if (typeof o.id !== 'string' || o.id === '') continue
     if (NOT_JOB.test(String(o.type ?? '')) || ENDED.test(String(o.status ?? ''))) continue
     ids.push(o.id)
+    if (SHELL.test(String(o.type ?? ''))) shells.push(o.id)
   }
-  s.bgTasks = { sid: e.session_id, ids }
+  s.bgTasks = { sid: e.session_id, ids, shells }
 }
 
 /**
@@ -168,12 +173,25 @@ export function noteEndedTasks(s: Deps['state'], kind: string, text: string): vo
  * (counted live; D-82: an idle teammate is no job), the last main Stop's other tasks, less any a
  * notification reported ended.
  */
-export async function openJobs(d: Deps, sid: string): Promise<number> {
+export async function openJobs(d: Deps, sid: string, shells = true): Promise<number> {
   const ids = new Set<string>(d.state.agentTurns)
   for (const id of (await d.agentsWorking()) ?? []) ids.add(id)
-  if (d.state.bgTasks?.sid === sid) for (const id of d.state.bgTasks.ids) ids.add(id)
+  const bg = d.state.bgTasks
+  if (bg?.sid === sid) for (const id of bg.ids) if (shells || !bg.shells.includes(id)) ids.add(id)
   for (const id of d.state.endedTasks) ids.delete(id)
   return ids.size
+}
+
+/**
+ * D-80: a job whose result turn is certain is open: an agent, a workflow or a teammate at work (a
+ * background shell alone may never end). A read that throws counts as none.
+ */
+export async function resultJobOpen(d: Deps, sid: string): Promise<boolean> {
+  try {
+    return (await openJobs(d, sid, false)) > 0
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -286,12 +304,17 @@ async function step(d: Deps, kw: KeepWarm, gen: number): Promise<void> {
   }
 }
 
+/** A stop's reason, and what its row and its hand-over carry beside it (`stop`). */
+type Block = { why: string; handover: boolean } & StopExtra
+
 /**
  * Why this gap may not warm now, or undefined. `handover`: the cache is still warm, so a deferred
- * idle record goes back to the idle path; `windows`: a `near-limit` stop's (idle.ts `limitWindows`);
- * `job`: a job is still open, so the hand-over compacts from `idle_handoff_min_tokens` up (D-79).
+ * idle record goes back to the idle path; `windows` and `rule`: a `near-limit` stop's (idle.ts
+ * `limitWindows`, limits.ts); `job`: a job is still open, so the hand-over compacts from
+ * `idle_handoff_min_tokens` up (D-79). `wait` (D-80): no stop, the next ping waits for the usage
+ * windows that stop it to reset, at that moment.
  */
-async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: string; handover: boolean; windows?: string[]; job?: boolean } | undefined> {
+async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wait: number } | undefined> {
   const s = d.state
   const env = await d.idleEnv()
   const scale = scaleOf(env)
@@ -315,9 +338,24 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: strin
     u = undefined
   }
   if (!(await oneHourCache(d, env, u))) return { why: 'ttl-5m', handover: true }
-  // A window at the limit share or more; none reported (or no reading): this guard is skipped.
+  // D-80 (limits.ts): a window at 90% or more stops warming, the hand-over then compacting only in
+  // the band (a job with a certain result open, a fresh reading, the measured compaction change
+  // fits below the cap: `rule` band, with the job flag of D-79); no more pings in the band either.
+  // When every such window resets before this gap's last ping moment (and the held record's
+  // deadline), the ping waits for the reset instead of spending the last points. None reported (or
+  // no reading): this guard is skipped.
   const limits = u?.rateLimits ?? []
-  if (limits.some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { why: 'near-limit', handover: true, windows: limitWindows(limits) }
+  let wait: number | undefined
+  if (limits.length > 0) {
+    const c = await limitCtx(d, await resultJobOpen(d, kw.sid), now)
+    const v = verdictOf(limits, c)
+    if (!v.ok || v.band) {
+      const reset = resetOf(limits, c)
+      const bound = Math.min(kw.warm + KEEP_WARM_LATEST_MS * scale, kw.deferred !== undefined ? heldDeadline(kw.deferred, kw.warm, scale) : Infinity)
+      if (reset !== undefined && reset + retryMs(scale) <= bound) wait = reset + retryMs(scale)
+      else return { why: 'near-limit', handover: true, windows: v.windows, rule: v.rule, ...(v.band ? { job: true } : {}) }
+    }
+  }
   if (now - kw.start >= d.cfg.keep_warm_hours * IDLE_CACHE_MS * scale) return { why: 'cutoff', handover: true, job: true }
   // No idle path would take the gap over after the pings: no idle record armed or held for the
   // session (`incoming`: the one the idle timer's fire is asking about, a tombstone in the store by
@@ -327,7 +365,7 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: strin
   if (!d.cfg.triggers || ((kw.incoming ?? kw.deferred) === undefined && !(await idleArmed(d, kw.sid)))) {
     return { why: 'no-idle-path', handover: true }
   }
-  return undefined
+  return wait !== undefined ? { wait } : undefined
 }
 
 /**
@@ -398,7 +436,9 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
   // A turn or prompt that came during a check (or a stop): nothing is held, and the idle path reads the session as it is (busy).
   const moved = (): boolean => s.keepWarmGen !== gen || s.keepWarm !== kw
   if (kw.phase === 'armed') {
-    const b = await blocked(d, kw, now)
+    const b0 = await blocked(d, kw, now)
+    // Waiting for a reset (D-80) is no stop: the gap warms and holds the record meanwhile.
+    const b = b0 !== undefined && 'wait' in b0 ? undefined : b0
     if (moved()) return false
     if (b !== undefined) {
       // The first ping may have begun warming meanwhile: its own next checks stop it, with its row.
@@ -423,6 +463,9 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
   return true
 }
 
+/** A stop row's extra fields (`windows`, `rule`: a near-limit stop's, D-76, D-80) and a hand-over's job flag (D-79). */
+type StopExtra = { windows?: string[]; rule?: string; job?: boolean }
+
 /**
  * Warming ends for this gap: one `keep_warm_stop` row (only for a gap that warmed), and, with
  * `handover` and a deferred idle record, that record goes back to the idle path at once, anchored
@@ -430,7 +473,7 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
  * not of the plugin's own. With no hand-over the record it held is cleared, or with `keep`
  * (SessionEnd `other`) left in the store for the process that resumes the session.
  */
-async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: number, keep = false, windows?: string[], job = false): Promise<void> {
+async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: number, keep = false, x: StopExtra = {}): Promise<void> {
   const s = d.state
   if (s.keepWarm === kw) cancelKeepWarmTimer(d)
   const was = kw.phase
@@ -442,11 +485,12 @@ async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: 
   // A stop that came while the start row is written (a turn starting then): its row comes after that one.
   if (kw.startRow) await kw.startRow.catch(() => undefined)
   await log(d, kw.sid, 'keep_warm_stop', {
-    why, pings: kw.pings, gap_s: secs(now - kw.start), handover: back || (keep && rec !== undefined), ...(windows !== undefined ? { windows } : {}),
+    why, pings: kw.pings, gap_s: secs(now - kw.start), handover: back || (keep && rec !== undefined), ...(x.windows !== undefined ? { windows: x.windows } : {}),
+    ...(x.rule !== undefined ? { rule: x.rule, ...(await tierFields(d)) } : {}),
   })
   if (back && rec) {
     s.keepWarmSpent = true
-    await handOverIdle(d, rec, kw.warm, now, job)
+    await handOverIdle(d, rec, kw.warm, now, x.job === true)
   } else if (rec) await releaseHeld(d, kw.sid, keep)
 }
 
@@ -506,7 +550,19 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   // hands the record back beside it (the idle path would skip it as busy); a minute later. A stop
   // without a hand-over (`missed` at the 58-minute bound, among others) still ends the gap.
   const busy = busyNow(s)
-  if (busy && (b === undefined || b.handover)) return again(d, kw, now, scale)
+  if (busy && (b === undefined || 'wait' in b || b.handover)) return again(d, kw, now, scale)
+  if (b !== undefined && 'wait' in b) {
+    // D-80: the usage windows that stop the ping reset before its last moment: the gap warms (or
+    // goes on warming) and the ping comes then, the held record due with it.
+    if (kw.phase === 'armed' && !(await begin(d, kw, now))) return
+    if (kw.phase !== 'warming' || !ours()) return
+    kw.next = b.wait
+    if (kw.deferred !== undefined && (await heldHere(d, kw.sid)) !== undefined && ours()) {
+      await holdIdle(d, kw.deferred, { due: kw.next, warm: kw.warm, start: kw.start, pings: kw.pings })
+    }
+    if (ours()) tick(d, kw, now)
+    return
+  }
   if (kw.phase === 'armed') {
     if (b !== undefined) {
       if (b.why === 'no-idle-path') return refuse(d, kw, now)
@@ -515,7 +571,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     }
     // False when the gap moved meanwhile: nothing more here.
     if (!(await begin(d, kw, now))) return
-  } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now, false, b.windows, b.job === true)
+  } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now, false, b)
   if (kw.phase !== 'warming') return
   // The main requests before the fork: one that comes while it runs already changed the history.
   const reqs = s.mainReqs
@@ -557,7 +613,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   // A hand-over only while the held record can still fire on a warm cache: a fork that came back
   // past its deadline (a slow one) ends the gap `missed`, with the record dropped.
   const late = kw.deferred !== undefined && t1 > heldDeadline(kw.deferred, kw.warm, scale)
-  const handOver = (why: string, job = false): Promise<void> => (late ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1, false, undefined, job))
+  const handOver = (why: string, job = false): Promise<void> => (late ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1, false, { job }))
   // No more pings in this gap, with the hand-over, the cache as warm as the last warm request left
   // it: `fork-miss`, the fork did not read the main prefix and wrote nothing the main session reads
   // (the idle path's own checks decide, as for a first ping that held nothing yet, and they refuse
