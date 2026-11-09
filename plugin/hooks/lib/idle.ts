@@ -705,13 +705,14 @@ async function usageOrNone(d: Deps): Promise<Use> {
 }
 
 /**
- * The agents of this session still running (owner xxxxxxxx-38; the 2026-10-27 idle compaction):
- * the listed subagents and teammates that have not ended, with the agent loops whose turn is
- * running in this load (a workflow's agents are not listed).
+ * The agents of this session at work (owner xxxxxxxx-38; the 2026-10-27 idle compaction): the
+ * listed subagents and teammates at work (D-82: an idle teammate, which waits for a message, is
+ * no running agent), with the agent loops whose turn is running in this load (a workflow's agents
+ * are not listed). Keep-warm's open jobs and the lane's Basis count read agents the same way.
  */
 export async function agentsRunning(d: Deps): Promise<number> {
   const ids = new Set<string>(d.state.agentTurns)
-  for (const id of (await d.agentsAlive()) ?? []) ids.add(id)
+  for (const id of (await d.agentsWorking()) ?? []) ids.add(id)
   return ids.size
 }
 

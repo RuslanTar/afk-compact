@@ -91,12 +91,13 @@ export const KEEP_WARM_COLD_SHARE = 0.5
 /** The one user message of the fork: one word back, nothing read, every tool denied by the engine. */
 export const KEEP_WARM_PROMPT = 'Reply with the single word OK.'
 /**
- * Background task types not read from the Stop list: an agent (counted live from the agent list
- * and its running loops, as lane.ts `NOT_UNIT`: the Stop list is only refreshed at the next main
- * Stop, so an agent that ended with no result turn yet would stay open there), and the kinds that
- * only watch or wake (a Monitor, a cron).
+ * Background task types not read from the Stop list: an agent or a teammate (counted live from the
+ * agent list and its running loops, as lane.ts `NOT_UNIT`: the Stop list is only refreshed at the
+ * next main Stop, so an agent that ended with no result turn yet would stay open there, and it
+ * lists a teammate as `running` under a task id of its own while it waits idle, D-82), and the
+ * kinds that only watch or wake (a Monitor, a cron).
  */
-const NOT_JOB = /^(?:subagent|local_agent)$|monitor|cron/i
+const NOT_JOB = /^(?:subagent|local_agent|teammate)$|monitor|cron/i
 /** A background task status that has ended. */
 const ENDED = /^(?:completed|failed|killed|stopped|cancell?ed)$/i
 
@@ -162,12 +163,13 @@ export function noteEndedTasks(s: Deps['state'], kind: string, text: string): vo
 }
 
 /**
- * The background jobs of this session open now: agent loops running and listed agents not ended
- * (counted live), the last main Stop's other tasks, less any a notification reported ended.
+ * The background jobs of this session open now: agent loops running and listed agents at work
+ * (counted live; D-82: an idle teammate is no job), the last main Stop's other tasks, less any a
+ * notification reported ended.
  */
 export async function openJobs(d: Deps, sid: string): Promise<number> {
   const ids = new Set<string>(d.state.agentTurns)
-  for (const id of (await d.agentsAlive()) ?? []) ids.add(id)
+  for (const id of (await d.agentsWorking()) ?? []) ids.add(id)
   if (d.state.bgTasks?.sid === sid) for (const id of d.state.bgTasks.ids) ids.add(id)
   for (const id of d.state.endedTasks) ids.delete(id)
   return ids.size

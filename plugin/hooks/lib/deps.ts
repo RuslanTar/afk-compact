@@ -293,6 +293,14 @@ export interface Deps {
    * when the list cannot be read. A workflow's agents are not listed: `agentTurns` counts them.
    */
   agentsAlive(): Promise<string[] | undefined>
+  /**
+   * D-82 (owner 2026-11-09, session xxxxxxxx: 22 idle teammates read as 22 open jobs): the listed
+   * agents of this session at work now, by id: `agentsAlive` less a teammate that waits for a
+   * message (`idle`, Claude Code 2.1.319 sets it at each TeammateIdle) or for a plan approval
+   * (`waiting`). Its next turn comes only when someone writes to it, so no result is on its way.
+   * Undefined when the list cannot be read.
+   */
+  agentsWorking(): Promise<string[] | undefined>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
   /**
@@ -1036,6 +1044,14 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
         return undefined
       }
     },
+    async agentsWorking() {
+      try {
+        const list = await $.agent.list()
+        return list.filter(a => !AGENT_ENDED.includes(a.status) && !AGENT_RESTING.includes(a.status)).map(a => a.id)
+      } catch {
+        return undefined
+      }
+    },
     paths() {
       if (!state.pathsMemo) {
         state.pathsMemo = (async () => {
@@ -1145,6 +1161,11 @@ export function servedMode(text: string): string | undefined {
 
 /** `AgentStatus` values of an agent that ended (owner xxxxxxxx-38: every other status counts as running). */
 export const AGENT_ENDED: readonly string[] = ['completed', 'failed', 'killed']
+/**
+ * D-82: `AgentStatus` values of a live agent at rest: a teammate that waits for a message (`idle`)
+ * or for a plan approval (`waiting`). It stays alive (a restart would end it) but is no open job.
+ */
+export const AGENT_RESTING: readonly string[] = ['idle', 'waiting']
 
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message.slice(0, 120)

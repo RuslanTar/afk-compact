@@ -511,8 +511,11 @@ export function showsDigest(l: Lane): boolean {
 
 /** The in-flight rows of a measure (`In flight (sidecar …):`, measure.pm `inflight_lines`): id, type, status. */
 const INFLIGHT_ROW = /^\s+(\S+) · ([^·]+?) · (\S+)/
-/** Types that are not a unit of work here: agents are counted live, a Monitor or a cron only watches (AWAY-DIGEST §2.1). */
-const NOT_UNIT = /^(?:subagent|local_agent|cron)$|monitor/i
+/**
+ * Types that are not a unit of work here: agents and teammates are counted live (D-82: the measure
+ * lists an idle teammate as running), a Monitor or a cron only watches (AWAY-DIGEST §2.1).
+ */
+const NOT_UNIT = /^(?:subagent|local_agent|teammate|cron)$|monitor/i
 
 /**
  * The background tasks (shells, workflows, other kinds) a measure lists as running or pending:
@@ -575,7 +578,7 @@ export function endedRows(remeasure: string, ended: ReadonlySet<string>): string
  */
 export async function runningUnits(d: Deps, remeasure: string | undefined, ended: ReadonlySet<string>): Promise<number> {
   const ids = new Set<string>(d.state.agentTurns)
-  for (const id of (await d.agentsAlive()) ?? []) ids.add(id)
+  for (const id of (await d.agentsWorking()) ?? []) ids.add(id)
   for (const id of measuredRunning(remeasure)) ids.add(id)
   for (const id of ended) ids.delete(id)
   return ids.size

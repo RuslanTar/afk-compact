@@ -11,8 +11,9 @@ import type { Tag } from '../../hooks/lib/assemble'
 import { assemble, hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
 import type { LaneFacts } from '../../hooks/lib/lane'
-import { DIGEST_END_RE, LANE_BASIS_MAX, LANE_WHY_MAX, OFF_LINE_END_RE, asLaneFacts, digestLine, endedRows, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, startsWork } from '../../hooks/lib/lane'
-import type { PendingResume } from '../../hooks/lib/deps'
+import { DIGEST_END_RE, LANE_BASIS_MAX, LANE_WHY_MAX, OFF_LINE_END_RE, asLaneFacts, digestLine, endedRows, laneBasis, laneFacts, laneNote, laneOf, measuredRunning, notifiedTasks, resultDigestLine, runningUnits, startsWork } from '../../hooks/lib/lane'
+import type { Deps, PendingResume } from '../../hooks/lib/deps'
+import { newState } from '../../hooks/lib/deps'
 import { ARMED_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, T0, WATCH, World, raiseCompact } from './harness.test'
 
@@ -114,11 +115,25 @@ test('laneOf: every reason fits the @lane_why@ size tools/assemble budgets with'
   expect(longest.length <= LANE_WHY_MAX).toBe(true)
 })
 
+test('runningUnits (D-82): the Basis count reads agents at work: an idle teammate (listed idle, its measure row running) counts 0; at work it counts once', async () => {
+  const state = newState('l')
+  let working: string[] = []
+  const d = { state, agentsWorking: async () => working, agentsAlive: async () => ['atim-1'] } as unknown as Deps
+  const m = 'Git: x\nIn flight (sidecar 2026-10-21 14:00 +0300):\n  t-1020 · teammate · running\n  m1 · monitor · running\nEvidence: none'
+  expect(await runningUnits(d, m, new Set())).toBe(0)
+  working = ['atim-1']
+  expect(await runningUnits(d, m, new Set())).toBe(1)
+  state.agentTurns.add('atim-1')
+  expect(await runningUnits(d, m, new Set())).toBe(1)
+})
+
 test('measuredRunning, notifiedTasks, startsWork: the units a measure lists, the tasks a notification ends, the calls that start work', () => {
   const m = 'Git: x\nIn flight (sidecar 2026-10-21 14:00 +0300):\n  b1 · shell · running\n  b2 · shell · completed\n  a1 · subagent · running\n' +
     '  w1 · workflow · pending · output /tmp/w1 (exists)\n  m1 · monitor · running\n  c1 · cron · scheduled\nEvidence (automatic copies):\n  x · y · running\n'
   expect(measuredRunning(m)).toEqual(['b1', 'w1'])
   expect(measuredRunning(undefined)).toEqual([])
+  // D-82: a teammate row is counted live from the agent list (the measure lists an idle one as running).
+  expect(measuredRunning(m.replace('  m1 ·', '  t-1020 · teammate · running\n  m1 ·'))).toEqual(['b1', 'w1'])
   // An id with no status after it (b7) ends nothing (review of fix round 2: a Monitor's event has none).
   expect(notifiedTasks('<task-notification>\n<task-id>af63d8ad7bcf2ffd4</task-id>\n<status>completed</status>\n</task-notification>\n<task-id>b7</task-id>')).toEqual(['af63d8ad7bcf2ffd4'])
   expect(notifiedTasks('no ids')).toEqual([])

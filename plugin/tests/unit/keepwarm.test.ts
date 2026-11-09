@@ -1944,3 +1944,65 @@ test('AT-KW-55: the 49-min fire\'s check meets a prompt that enters (busy skip) 
   expect(w.submits).toEqual(['hello'])
   expect(skips(w)).toEqual([['busy', 'turn']])
 })
+
+// ---- D-82 (owner 2026-11-09, session xxxxxxxx: 22 idle teammates and 2 Monitors logged jobs 44,
+// and every idle gap warmed instead of compacting): an idle teammate is no open job. The agent
+// list says `idle` (Claude Code 2.1.319, at each TeammateIdle); the Stop list keeps it `running`
+// under a task id of its own, so it is not read from there (no double count either).
+
+const TEAMMATE_ROWS = [
+  { id: 't0g9x159q', type: 'teammate', status: 'running', description: 'teammate tim' },
+  { id: 't0g9x160r', type: 'teammate', status: 'running', description: 'teammate ann' },
+  { id: 'm1', type: 'monitor', status: 'running', description: 'x' }, { id: 'm2', type: 'monitor', status: 'running', description: 'x' },
+]
+
+test('AT-KW-56 (D-82): idle teammates (agent list `idle`, the Stop list `running`) and Monitors only: no fork, no keep-warm row; the 54-min compaction runs with agents 0', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = [{ id: 'atim-1', status: 'idle', type: 'teammate' }, { id: 'aann-2', status: 'idle', type: 'teammate' }]
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: TEAMMATE_ROWS })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 120)
+  expect(f.at).toEqual([])
+  expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_stop').length]).toEqual([0, 0])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['timer', 0]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-56 (D-82): a teammate at work counts once (agent list and Stop row); once it goes idle the next ping stops no-jobs and the compaction runs while warm', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.agents = [{ id: 'atim-1', status: 'running', type: 'teammate' }]
+  const f = forks(on, w)
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: TEAMMATE_ROWS.slice(0, 1) })
+  await w.turnEnd($)
+  f.t0 = w.clock.now()
+  await until(w, f.t0, 60)
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_start').map(r => r.jobs)).toEqual([1])
+  w.agents = [{ id: 'atim-1', status: 'idle', type: 'teammate' }]
+  await until(w, f.t0, 160)
+  expect(f.at).toEqual([50])
+  expect(stops(w)).toEqual([['no-jobs', true, 1]])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['timer', 0]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-56 (D-82): native on, an idle teammate waiting for a plan approval (`waiting`): the 55.5-min check reads no agent running (idle_silent agents 0) and compacts at 260K', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  w.agents = [{ id: 'atim-1', status: 'waiting', type: 'teammate' }]
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([0])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 0]])
+})
