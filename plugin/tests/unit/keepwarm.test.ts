@@ -2125,6 +2125,30 @@ test('AT-KW-57 (D-79): no job open at a ping (no-jobs) at 150K: the hand-over ke
   if (IDLE) expect(w.submits.length).toBe(1)
 })
 
+// A background shell alone (a dev server, say) may never end, so no result turn is certain (D-80
+// `resultJobOpen`): the cutoff and the deadline hand over without the job flag, at the idle minimum.
+for (const c of [
+  { name: 'the cutoff', answer: undefined, at: 150, stop: ['cutoff', true, 2] },
+  { name: 'the held turn\'s deadline', answer: () => OVERLOADED, at: 70, stop: ['deadline', true, 0] },
+]) {
+  test(`AT-KW-57 (D-79): vetoed, 150K, only a background shell open, ${c.name}: no compaction, the held turn runs`, { options: MIN100K }, async ($, on) => {
+    const w = world(on)
+    w.agents = []
+    const f = c.answer ? forks(on, w, c.answer) : forks(on, w)
+    await w.start($)
+    await w.userTurn($)
+    w.tokens = 150000
+    await stopHook($, { background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: 'x' }] })
+    await w.turnEnd($)
+    const t0 = w.clock.now()
+    f.t0 = t0
+    await until(w, t0, c.at)
+    expect(stops(w)).toEqual([c.stop])
+    expect(selfCompacts(w)).toBe(0)
+    if (IDLE) expect(w.submits.length).toBe(1)
+  })
+}
+
 // ---- D-80 (owner 2026-11-08 23:31 "I think it should be adaptive", 23:59 "never fixed. always
 // adaptive"; limits.ts): above 90% a plan window lets keep-warm hand over to one warm compaction,
 // and that compaction run, only with a job whose result is certain open, a fresh reading (10 min)

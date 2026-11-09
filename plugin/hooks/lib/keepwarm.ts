@@ -326,7 +326,8 @@ type Block = { why: string; handover: boolean } & StopExtra
 /**
  * Why this gap may not warm now, or undefined. `handover`: the cache is still warm, so a deferred
  * idle record goes back to the idle path; `windows` and `rule`: a `near-limit` stop's (idle.ts
- * `limitWindows`, limits.ts); `job`: a job is still open, so the hand-over compacts from
+ * `limitWindows`, limits.ts); `job`: a job whose result turn is certain is still open (an agent, a
+ * workflow or a working teammate, not a background shell alone), so the hand-over compacts from
  * `idle_handoff_min_tokens` up (D-79). `wait` (D-80): no stop, the next ping waits for the usage
  * windows that stop it to reset, at that moment.
  */
@@ -373,7 +374,11 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
       else return { why: 'near-limit', handover: true, windows: v.windows, rule: v.rule, ...(v.band ? { job: true } : {}) }
     }
   }
-  if (now - kw.start >= d.cfg.keep_warm_hours * IDLE_CACHE_MS * scale) return { why: 'cutoff', handover: true, job: true }
+  // D-79: the hand-over compacts from idle_handoff_min_tokens up only with a job whose result turn is
+  // certain open (D-80 `resultJobOpen`): a background shell alone (a dev server) may never end.
+  if (now - kw.start >= d.cfg.keep_warm_hours * IDLE_CACHE_MS * scale) {
+    return { why: 'cutoff', handover: true, ...((await resultJobOpen(d, kw.sid)) ? { job: true } : {}) }
+  }
   // No idle path would take the gap over after the pings: no idle record armed or held for the
   // session (`incoming`: the one the idle timer's fire is asking about, a tombstone in the store by
   // then; `deferred`: the one this gap holds), or `triggers` off, which every idle path refuses.
@@ -501,7 +506,7 @@ type StopExtra = { windows?: string[]; rule?: string; job?: boolean }
 /**
  * Warming ends for this gap: one `keep_warm_stop` row (only for a gap that warmed), and, with
  * `handover` and a deferred idle record, that record goes back to the idle path at once, anchored
- * at the last warm request (idle.ts `handOverIdle`; `job`: a job still open, D-79); the next gap then warms only after a turn
+ * at the last warm request (idle.ts `handOverIdle`; `job`: a job whose result turn is certain still open, D-79); the next gap then warms only after a turn
  * not of the plugin's own. With no hand-over the record it held is cleared, or with `keep`
  * (SessionEnd `other`) left in the store for the process that resumes the session.
  */
@@ -655,8 +660,13 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   if (!busyNow(s)) {
     // No request of the main session out: there is no snapshot to fork, and a retry finds none either.
     if (o.result === 'nothing-to-fork') return handOver('nothing-to-fork')
-    // The held record goes back while it can still fire, rather than be dropped at `missed`.
-    if (kw.deferred !== undefined && t1 + retryMs(scale) > heldDeadline(kw.deferred, kw.warm, scale)) return handOver('deadline', true)
+    // The held record goes back while it can still fire, rather than be dropped at `missed`; the
+    // job flag (D-79) only with a job whose result turn is certain open, as at the cutoff.
+    if (kw.deferred !== undefined && t1 + retryMs(scale) > heldDeadline(kw.deferred, kw.warm, scale)) {
+      const job = await resultJobOpen(d, kw.sid)
+      if (!ours()) return
+      return handOver('deadline', job)
+    }
   }
   return again(d, kw, t1, scale)
 }

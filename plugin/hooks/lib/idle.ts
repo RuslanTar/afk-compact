@@ -365,7 +365,8 @@ async function persist(d: Deps, rec: Due): Promise<void> {
  * now, anchored at the start of the last warm ping (`anchor` for the compaction's lapse guard,
  * `warm` for the turn's), with the episode, the turn's end and the published flag as they are now.
  * `job` (D-79, owner 2026-11-08 23:22: "after the last keep-warm ... you would actually compact to
- * avoid re-reading the cold cache"): a stop with a job still open (the cutoff, the deadline, the
+ * avoid re-reading the cold cache"): a stop with a job whose result turn is certain still open (an
+ * agent, a workflow or a working teammate, not a background shell alone: the cutoff, the deadline, the
  * limit band) compacts from `idle_handoff_min_tokens` up, since the job's result turn would read
  * a cold cache after an idle handoff turn, which does not compact; a 49-min turn record becomes
  * the compaction where the plugin may compact (native vetoed, `idle_compact` on), never against
