@@ -5,6 +5,7 @@ import type { Deps } from '../../hooks/lib/deps'
 import type { LimitCtx } from '../../hooks/lib/limits'
 import { LIMIT_DELTAS_KEY, LIMIT_FRESH_MS, PLAN_CAPS, planShares, readDeltas, recordDeltas, resetOf, verdictOf, windowRule } from '../../hooks/lib/limits'
 import { newState } from '../../hooks/lib/deps'
+import { resultJobOpen } from '../../hooks/lib/keepwarm'
 
 const NOW = 1792580712000
 const MIN = 60000
@@ -74,4 +75,11 @@ test('AT-LM-05: recordDeltas keeps the last five changes per plan window kind; a
   store[LIMIT_DELTAS_KEY] = { five_hour: ['x', -1, 2], seven_day: 'bad' }
   expect(await readDeltas(d)).toEqual({ five_hour: [2] })
   expect(planShares([w('five_hour', 43), w('spend_limit', 9), w('seven_day', 10)])).toEqual({ five_hour: 43, seven_day: 10 })
+})
+
+test('AT-LM-06 (design TESTS 12): a job read that throws counts as no job open: a plan window above 90 stops (rule no-job), as at 90', async () => {
+  const d = { state: newState('l'), agentsWorking: async () => { throw new Error('no agent list') } } as unknown as Deps
+  const job = await resultJobOpen(d, 'sid-1')
+  expect(job).toBe(false)
+  expect(verdictOf([w('five_hour', 93)], { ...C, job })).toEqual({ ok: false, band: false, rule: 'no-job', windows: ['five_hour:93'] })
 })
