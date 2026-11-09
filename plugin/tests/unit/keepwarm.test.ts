@@ -2184,6 +2184,40 @@ for (const c of [
   })
 }
 
+test('AT-KW-58 (D-80, D-79): vetoed, 150K, an agent open, five_hour at 93 fresh before the 49-min turn (change 2): no ping; the turn goes back as a job\'s hand-over, plugin idle compaction runs (rule band), no idle handoff turn', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 45)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }]
+  await measured($, w)
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect(w.rowsOf('keep_warm_start').length).toBe(0)
+  expect(ic(w).map(r => [r.at, r.tokens, r.rule])).toEqual([['timer', 150000, 'band']])
+  expect([selfCompacts(w), w.submits.length]).toEqual([1, 0])
+})
+
+test('AT-KW-58 (D-80, D-79): native on, 150K, an agent open, five_hour at 93 fresh at the first ping (change 2): no fork at 50; the 55.5-min check goes back as a job\'s hand-over and compacts (not the `small` skip)', { options: MIN100K }, async ($, on) => {
+  const w = world(on, {})
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 49)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }]
+  await measured($, w)
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect(ic(w).map(r => [r.at, r.tokens, r.rule])).toEqual([['check', 150000, 'band']])
+  expect(skips(w).filter(s => s[0] === 'small')).toEqual([])
+  expect([selfCompacts(w), w.submits.length]).toEqual([1, 0])
+})
+
 test('AT-KW-58 (D-80): only a background shell open, five_hour at 93 (fresh, change 0): rule no-job, no compaction', { options: ON }, async ($, on) => {
   const w = world(on)
   w.agents = []

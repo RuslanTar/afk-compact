@@ -135,6 +135,12 @@ export type KeepWarm = {
    * a ping beside that fire still finds an idle path (`blocked`).
    */
   incoming?: Due
+  /**
+   * D-80 with D-79: the gap turned `off` before its first ping in the limit band with a job open
+   * (`near-limit`, rule `band`): the idle record that fires next goes back once as a job's
+   * hand-over (a warm compaction from `idle_handoff_min_tokens` up), as at a stop of a warming gap.
+   */
+  bandJob?: boolean
 }
 
 /**
@@ -380,6 +386,15 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
 }
 
 /**
+ * An `armed` gap may not warm (no row: it never warmed); in the limit band with a job open (D-80)
+ * the idle record that fires next goes back as a job's hand-over (`bandJob`, `holds`).
+ */
+function turnOff(kw: KeepWarm, b: Block): void {
+  kw.phase = 'off'
+  if (b.why === 'near-limit' && b.job === true) kw.bandJob = true
+}
+
+/**
  * The gap may not warm for want of an idle path (`no-idle-path`): it turns `off` with one
  * `keep_warm_stop {why: no-idle-path, pings: 0, handover: false}` row (no start row before it),
  * once per gap (only an `armed` gap comes here, and it is `off` before the row is written), unlike
@@ -455,12 +470,18 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
       // The first ping may have begun warming meanwhile: its own next checks stop it, with its row.
       if (kw.phase === 'armed') {
         if (b.why === 'no-idle-path') await refuse(d, kw, now)
-        else kw.phase = 'off'
+        else turnOff(kw, b)
       }
-      return false
-    }
+      if (kw.phase !== 'off' || kw.bandJob !== true) return false
+    } else if (!(await begin(d, kw, now))) return false
     // Begun by the first ping meanwhile: held as well (begin waits for its start row).
-    if (!(await begin(d, kw, now))) return false
+  }
+  // D-80: the band before the first ping (here or at that ping): one hand-over, with the job flag.
+  if (kw.phase === 'off' && kw.bandJob === true) {
+    kw.bandJob = false
+    if (moved()) return false
+    await handOverIdle(d, rec, kw.warm, now, true)
+    return true
   }
   if (kw.phase !== 'warming') return false
   const c = await compactedSince(d, kw.sid, kw.start)
@@ -577,7 +598,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   if (kw.phase === 'armed') {
     if (b !== undefined) {
       if (b.why === 'no-idle-path') return refuse(d, kw, now)
-      kw.phase = 'off'
+      turnOff(kw, b)
       return
     }
     // False when the gap moved meanwhile: nothing more here.
