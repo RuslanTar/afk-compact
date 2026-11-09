@@ -7,7 +7,8 @@ package cachestate;
 # State: one small file per session at a fixed place no option moves (a status line reads no
 # plugin option): ${XDG_STATE_HOME:-~/.local/state}/<plugin>/cache/<sid>.v1.json. Writers:
 # cmd/log.pl after a main keep-warm or compaction row of the mod (note_rows: the mod's `compacted`
-# row comes for every compaction it wraps, Claude Code's own too, with its actor), the
+# row comes after every compaction it wraps, Claude Code's own too, with its actor; `idle_compact`
+# is written before the compaction is tried, so it is not read), the
 # SessionStart hook (on_start: the transcript path; ended_at cleared, so a resumed session is live
 # again) and SessionEnd (on_end). A write reads the file, changes it and renames
 # a temp file over it; two processes of one session (a reload) may race: the last writer wins and
@@ -32,8 +33,10 @@ our $MAX_BYTES = 65536;
 # the transcript tail read for the last main api-request line, growing once
 our @TAIL = (256 * 1024, 2 * 1024 * 1024);
 our $PRUNE_DAYS = 7;
-# the mod rows note_rows reads (keepwarm.ts, idle.ts, boundary.ts, compact.ts)
-our %ROWS = map { $_ => 1 } qw(keep_warm_start keep_warm_ping keep_warm_stop compacted idle_compact);
+# the mod rows note_rows reads (keepwarm.ts; boundary.ts and compact.ts write `compacted` once the
+# compaction ran or was skipped). Not idle.ts's `idle_compact`: it comes before the attempt, which
+# may then be skipped or never run, and a compaction that runs writes its own `compacted` row.
+our %ROWS = map { $_ => 1 } qw(keep_warm_start keep_warm_ping keep_warm_stop compacted);
 
 sub schema       { return ctx::brand() . '-cache/v1' }
 sub state_schema { return ctx::brand() . '-cache-state/v1' }
@@ -153,7 +156,7 @@ sub _apply {
     my $ev = $r->{ev};
     # a compaction a hook skipped (`skip` set) did not run
     return $ch if $ev eq 'compacted' && defined $r->{skip};
-    if ($ev eq 'compacted' || $ev eq 'idle_compact') {
+    if ($ev eq 'compacted') {
         return $ch if defined _num($s->{compacted_at}) && $t <= $s->{compacted_at};
         $s->{compacted_at} = _t($t);
         return 1;
@@ -275,8 +278,10 @@ sub keep_shim {
 # ---------------------------------------------------------------- prune
 
 # stale(now) -> [{path, bytes, mtime}...]: the state files of sessions that ended more than
-# $PRUNE_DAYS days ago (ended_at; one with none, or unreadable, by its modification time), and
-# temp files left that long; `prune --apply` deletes them.
+# $PRUNE_DAYS days ago (ended_at), those with no end not written for as long (a session that
+# crashed never gets one; one still open with no keep-warm or compaction row that long loses only
+# what `cache --sid` without --stdin reads), unreadable ones and temp files by the same age;
+# `prune --apply` deletes them.
 sub stale {
     my ($now) = @_;
     my $d = dir() // return ();

@@ -1,6 +1,6 @@
 {
  "id": "CACHE-04-lib-set",
- "note": "0.1.7 D-81 (critique 10: the lib-set test is the hard one, timing only informational): `cache` loads util, jsonc, ctx, args and cachestate and no other core library (main.pl %SUB_LIBS), so no setup path runs (status --sid writes config_note rows and once/ markers on a fresh HOME); with a state file and a transcript to read too. The step's ms is printed by -v, not asserted.",
+ "note": "0.1.7 D-81 (critique 10: the lib-set test is the hard one, timing only informational): `cache` loads util, jsonc, ctx, args and cachestate and no other library of the helper's (main.pl %SUB_LIBS; STORE_TEST_INC_OUT lists every one loaded from helper/lib, so the line must be exactly these five, which also catches a library added later or one outside @CORE), so no setup path runs (status --sid writes config_note rows and once/ markers on a fresh HOME); with a state file and a transcript to read too. The step's ms is printed by -v, not asserted.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
@@ -90,14 +90,7 @@
       "path": "$TMP/inc.txt",
       "lines": 1,
       "has": [
-       "(?:^| )util(?: |$)",
-       "(?:^| )jsonc(?: |$)",
-       "(?:^| )ctx(?: |$)",
-       "(?:^| )args(?: |$)",
-       "(?:^| )cachestate(?: |$)"
-      ],
-      "lacks": [
-       "(?:^| )(?:sha|spec|settings|paths|roots|log|rc|identity|lock|nonce|git|gsd|queue|bucket|frontmatter|detect|assemble|secrets|evidence|dispatch|transcript|scope|sessions|sidecar|ledger|copies|measure|checkpoint|sweep|reconcile|orphans|keyset|resumeblock|rollup|postcompact|repomode|jobrec|handoff_turn|notice|userre|restart|plugver)(?: |$)"
+       "^args cachestate ctx jsonc util$"
       ]
      }
     ],

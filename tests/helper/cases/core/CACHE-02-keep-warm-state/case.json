@@ -1,6 +1,6 @@
 {
  "id": "CACHE-02-keep-warm-state",
- "note": "0.1.7 D-81: cmd/log.pl keeps <state>/<plugin>/cache/<sid>.v1.json from the mod's main keep_warm_start/ping/stop, compacted and idle_compact rows (temp + rename, 0600). `cache` adds keep-warm: ↻n/max while active (max = floor((hours*60-1)/50): 7 at 6 h, 1 at 1 h, 0 at 0.5 h), the last stop. A ping counts only if it started (ts - ms) after the last main request (critique 3): a warm one moves the 1h expiry to its start + 1 h, else Claude Code's later prompt_cache.expires_at stands (probe Q2: a fork that reads the cache moves it itself); a stale ping before a later 5m main request changes nothing; a fork-miss after it reads cold (probe Q3: 17 of 17 next main requests missed). A compaction after the last request reads cold until the next one; a skipped compaction or a subagent's does not count. Out-of-order rows change nothing; a stop with no start row (no-idle-path) is a gap of its own; a torn file reads unknown, exit 0; parallel writers leave valid JSON.",
+ "note": "0.1.7 D-81: cmd/log.pl keeps <state>/<plugin>/cache/<sid>.v1.json from the mod's main keep_warm_start/ping/stop and compacted rows (temp + rename, 0600). `cache` adds keep-warm: ↻n/max while active (max = floor((hours*60-1)/50): 7 at 6 h, 1 at 1 h, 0 at 0.5 h), the last stop. A ping counts only if it started (ts - ms) after the last main request (critique 3): a warm one moves the 1h expiry to its start + 1 h, else Claude Code's later prompt_cache.expires_at stands (probe Q2: a fork that reads the cache moves it itself); a stale ping before a later 5m main request changes nothing; a fork-miss after it reads cold (probe Q3: 17 of 17 next main requests missed). A compaction after the last request reads cold until the next one; a skipped compaction or a subagent's does not count, nor an idle_compact row (idle.ts writes it before it tries plugin idle compaction, which may then be skipped or never run; review of the cache fix: the status line read `cache cold (compacted)` while warm). Out-of-order rows change nothing; a stop with no start row (no-idle-path) is a gap of its own; a torn file reads unknown, exit 0; parallel writers leave valid JSON.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
@@ -625,6 +625,170 @@
       "null": true
      },
      "last.at": 1794231450
+    }
+   }
+  },
+  {
+   "name": "idle_compact, then that compaction skipped (too-small): nothing recorded, no state file",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-g",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:58:00.000Z\", \"ev\": \"idle_compact\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"gap_s\": 480, \"tokens\": 90000, \"agents\": 0, \"at\": \"check\", \"late_s\": 0, \"adopted\": false}\n{\"v\": 1, \"ts\": \"2026-11-09T11:58:20.000Z\", \"ev\": \"compacted\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"nonce\": \"4a2b3c4d\", \"skip\": \"too-small\", \"tokens_before\": null, \"tokens_after\": null, \"usage_present\": false, \"ms\": 20}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$HOME/.local/state/$BRAND/cache/$SID-g.v1.json"
+    ]
+   }
+  },
+  {
+   "name": "so the cache still reads warm, not compacted",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "why": {
+      "null": true
+     },
+     "expires_at": 1794228600,
+     "last.kind": "main"
+    }
+   },
+   "stdin_json": {
+    "session_id": "$SID-g",
+    "transcript_path": "$TMP/proj/g.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228600
+    }
+   },
+   "setup": [
+    {
+     "write": "$TMP/proj/g.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID-g",
+       "id": "req-1794225000",
+       "timestamp": "2026-11-09T11:50:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "an idle_compact row alone (the process ended before the compaction): nothing recorded",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-g",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:59:30.000Z\", \"ev\": \"idle_compact\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"gap_s\": 570, \"tokens\": 90000, \"agents\": 0, \"at\": \"timer\", \"late_s\": 0, \"adopted\": false}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$HOME/.local/state/$BRAND/cache/$SID-g.v1.json"
+    ]
+   }
+  },
+  {
+   "name": "still warm",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 50m left\n"
+   },
+   "stdin_json": {
+    "session_id": "$SID-g",
+    "transcript_path": "$TMP/proj/g.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228600
+    }
+   }
+  },
+  {
+   "name": "then the compaction's own row (it ran): compacted",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-g",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:59:50.000Z\", \"ev\": \"compacted\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"nonce\": \"5a2b3c4d\", \"skip\": null, \"tokens_before\": 90000, \"tokens_after\": 9000, \"usage_present\": true, \"ms\": 8000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID-g.v1.json",
+      "json": {
+       "compacted_at": 1794225590
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "cold, compacted",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "cache cold (compacted)\n"
+   },
+   "stdin_json": {
+    "session_id": "$SID-g",
+    "transcript_path": "$TMP/proj/g.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228600
     }
    }
   },

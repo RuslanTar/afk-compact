@@ -98,7 +98,7 @@ sub run {
     }
     # 0.1.7 (D-81): keep-warm and compaction rows also go to the session's cache state, which
     # `cache` reads (lib/cachestate.pm; its own fixed folder, so a refused log_dir does not stop it)
-    eval { cachestate::note_rows($sid, [ map { scalar eval { jsonc::decode($_) } } grep { /"ev"\s*:\s*"(?:keep_warm_\w+|compacted|idle_compact)"/ } @rows ]) }
+    eval { cachestate::note_rows($sid, [ map { scalar eval { jsonc::decode($_) } } grep { /"ev"\s*:\s*"(?:keep_warm_\w+|compacted)"/ } @rows ]) }
         if $stream eq 'mod';
     my $path = rc::stream_path($stream);
     if (!defined $path) { args::out('REFUSED: ' . (rc::root_reason('log_dir') // 'no-watch')); return 3 }

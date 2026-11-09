@@ -606,7 +606,7 @@
    }
   },
   {
-   "name": "no api-request line at all (before 2.1.312): unknown",
+   "name": "no api-request line at all: unknown",
    "argv": [
     "cache",
     "--stdin",

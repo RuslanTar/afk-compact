@@ -87,7 +87,8 @@ our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock
 # (the AUTOLOAD below), so a call no table foresaw costs the full start, never the feature. Any
 # other subcommand, and an unknown event, loads @CORE. Test seams (STORE_TEST_MODE only):
 # STORE_TEST_LAZY=full loads @CORE for a hook too; STORE_TEST_INC_OUT=<file> gets one line, the
-# libraries loaded by the end (HOOK-LAZY-01).
+# helper's own libraries loaded by the end, from helper/lib only (`skills/prune` for one in a
+# subfolder; perl's own modules are left out), sorted (HOOK-LAZY-01, CACHE-04).
 our @HOOK_BASE = qw(util jsonc sha ctx spec settings paths roots log rc identity git detect secrets transcript args repomode userre);
 our %HOOK_EVENT = (
     PreCompact       => [qw(lock nonce bucket frontmatter assemble dispatch sessions ledger copies keyset)],
@@ -139,7 +140,7 @@ for my $pkg (@LATER) {
 END {
     my $f = $TEST ? $ENV{STORE_TEST_INC_OUT} : undef;
     if (defined $f && $f =~ m{\A/} && open(my $fh, '>>', $f)) {
-        print $fh join(' ', sort map { /\A([a-z_]+)\.pm\z/ ? $1 : () } keys %INC), "\n";
+        print $fh join(' ', sort map { m{\A([a-z_]+(?:/[a-z_]+)*)\.pm\z} && index($INC{$_} // '', "$HELPER_DIR/lib/") == 0 ? $1 : () } keys %INC), "\n";
         close $fh;
     }
 }
