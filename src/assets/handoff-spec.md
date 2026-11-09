@@ -56,7 +56,7 @@ First match wins: `stale` · `scope-leak` · `unshaped` · `ok-unclosed` · `tru
 - **Acuity** (Resume here, first line, after the status word): `stable` · `watch` · `unstable`. `unstable`: broken build, half-applied migration or destructive step, red test mid-fix, or `MID-STEP`. `watch`: jobs running, or a pending merge request, pipeline, review or answer, or a time limit. `stable`: none of these. It is the writer's rating. The **floor** is what code measured: a merge, rebase, cherry-pick or revert in progress → `unstable`; a measured in-flight row → `watch`; otherwise `stable`. A reader raises the rating to the floor and never lowers it. Missing in older files: read as `-` (no rating). <!-- T-TEXT E2, OD-15 -->
 - **Stalled** (an agent or teammate a workflow did not start): (a) idle while the output it waits on has ended. That one gets a wake message with its id. (b) No progress past due plus grace, which is only reported in the post-compaction light path. A workflow is never "stalled" in this sense (the workflow gate applies). <!-- T-TEXT E2, compaction-rem-6 -->
 - **In-flight `kind`**: `agent` · `teammate` · `workflow` · `monitor` · `cron` · `shell` · `server` · `peer` · `external`.
-- **Dies on**: `/clear` · exit · 7-day expiry · nothing. A background shell or server survives `/clear`; at exit it stops unless the user picks "Move to background and exit", so its value is `exit`.
+- **Dies on**: exit · 7-day expiry · nothing. `/clear` stops no background work: shells, servers, agents, workflows, teammates and crons keep running and their notices reach the new conversation (Claude Code 2.1.319; Monitors should too, not checked live). Exit stops them; "Move to background and exit" (when offered) hands only shells, agents and workflows to the session's next wake (2.1.319 code, not checked live), and teammates and session-only crons stop either way. So the value is `exit`, for a recurring cron `exit, 7-day expiry`, for a peer or external job `nothing`. A workflow stopped after `/clear` resumes only from the original conversation (`/resume` it first). <!-- 0.1.6 clearword: live probes on 2.1.319 -->
 - **Frontmatter `status`**: `in-progress` · `blocked` · `completed`. **`lineage_reason`**: `clear` · `fork` · `bg-copy` · `handoff-resume` · `none`.
 - **Resume relation**: `same-session` · `successor` · `other` · `unselected`. **Integrity**: `ok` · `possibly truncated` · `legacy` · `unshaped` · `s=sub`.
 - **Carry base** (`previous_kind`, RV-19): `own` (this session's file) · `chain` (a lineage predecessor's file) · `foreign` (another session's file). These are the relations `same-session`, `successor` and `other` as the writer sees them. A document with `imported_from` is never the carry base.
@@ -371,7 +371,7 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "question_status_re": "^(unasked|asked [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}|timed out|no answer \\(.+\\)|answered: .+)$",
   "restart_classes": ["auto", "ask", "never"],
   "kinds": ["agent", "teammate", "workflow", "monitor", "cron", "shell", "server", "peer", "external"],
-  "dies_on": ["/clear", "exit", "7-day expiry", "nothing"],
+  "dies_on": ["exit", "7-day expiry", "nothing"],
   "frontmatter_status": ["in-progress", "blocked", "completed"],
   "lineage_reasons": ["clear", "fork", "bg-copy", "handoff-resume", "none"],
   "relations": ["same-session", "successor", "other", "unselected"],

@@ -61,7 +61,7 @@ The title comes from the state at publish time: `# PAY-12 — retry window fix i
 ```
 Status: <working|finished|hard-blocked|soft-blocked> · Acuity: <stable|watch|unstable> · State: <one sentence tied to the ticket goal> (checkpoint: clean | MID-STEP <step>, remaining <what>)
 Step 1: `<one exact command or edit>` — for "<user's latest request, quoted when short>" | proposed
-Gate: <blocker | owner gate | stay in this session: <ids> die on /clear or exit | none> · Don't: <the likeliest mistake>
+Gate: <blocker | owner gate | stay in this Claude Code process: <ids> stop on exit | none> · Don't: <the likeliest mistake>
 Live: <N running: B-1 <runtime id>, B-2 <runtime id>; see In flight> | nothing running (checked <stamp>) | nothing running known (not checked)
 ```
 
@@ -112,12 +112,12 @@ Every decision has a because-clause; user rulings carry date and source. Over 2,
 ```
 | B-n · runtime id | kind · what · owner | due · watched (last probe) | probe | on finish | dies on | restart |
 |---|---|---|---|---|---|---|
-| B-1 · wf_7a1 | workflow · 3-lens review · main | 2026-10-21 15:10 +0300 · review.json written (probe 2026-10-21 14:05 +0300: 2 of 3 lenses) | `ls <run dir>/review.json` | summarise to user | /clear, exit | ask · restart/B-1.md |
+| B-1 · wf_7a1 | workflow · 3-lens review · main | 2026-10-21 15:10 +0300 · review.json written (probe 2026-10-21 14:05 +0300: 2 of 3 lenses) | `ls <run dir>/review.json` | summarise to user | exit (resume needs the original conversation) | ask · restart/B-1.md |
 | B-2 · task b8890 | shell · test suite · main | 2026-10-21 14:40 +0300 · exit code | `<store> wait --for 'exit:<task output>' --max 0` | record pass/fail | exit | auto · restart/B-2.md |
 ```
 
 - One row per running or unreported agent, teammate, workflow, monitor, scheduled task, background shell, server, peer session or external job, from runtime channels and probes, rewritten every time. `kind` is one of `agent` · `teammate` · `workflow` · `monitor` · `cron` · `shell` · `server` · `peer` · `external`. Past 8 rows the rest go to `<stage>/inflight.md`; the table ends `+N more: B-9, B-10; see evidence/<stem>/inflight.md`.
-- `due`: an absolute estimate; past due alone is not a failure. `probe`: one read-only command. `dies on`: `/clear`, exit, 7-day expiry or nothing; a background shell or server survives `/clear`, so it dies on exit. A shell or server probe is `<store> wait --for <spec> --max 0` (spec §14; `<store>` is the plugin's helper: write `<store>`, never its path); a job you will wait on was started with `; echo "__exit $?"` at the end, so `exit:<output>` sees its end. A subagent waiting on its own job: `waiting on <task id> · until <wait spec> · due <stamp> · output <path>`.
+- `due`: an absolute estimate; past due alone is not a failure. `probe`: one read-only command. `dies on`: exit, 7-day expiry or nothing; `/clear` stops no background work, and a workflow stopped after it resumes only from the original conversation. A shell or server probe is `<store> wait --for <spec> --max 0` (spec §14; `<store>` is the plugin's helper: write `<store>`, never its path); a job you will wait on was started with `; echo "__exit $?"` at the end, so `exit:<output>` sees its end. A subagent waiting on its own job: `waiting on <task id> · until <wait spec> · due <stamp> · output <path>`.
 - Monitors and scheduled tasks are leases: the watched condition, the last fire's outcome, and `classifier: clear <stamp>` (that exact read-only command ran once attended) or `classifier: untested`.
 - Restart class. `auto`: read-only or idempotent, cheap, local, same session; no agent spawn, not a workflow; kills nothing not proven ours; starts no detached process or new CLI session; at most once per resume and twice per chain (the plugin keeps the count). `ask`: side-effecting, outward, costly or long, and every workflow and agent spawn; a new session treats every row as `ask`. `never`: one-shot, user- or peer-owned, leftovers.
 - A workflow's restart cell names a condition, not a timer: `ask · same session: stop + resume from run id only if the journal and agent transcripts are unchanged ≥ max(15 min, 3× last progress gap) and no agent call is in progress`.

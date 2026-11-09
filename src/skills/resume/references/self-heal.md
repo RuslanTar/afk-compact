@@ -79,7 +79,7 @@ Only after a yes: write to a new epoch path, run the asked command with `run_in_
 - the journal and every transcript under its transcript dir are unchanged for ≥ max(15 min, 3 × the last progress gap);
 - no `agent()` call is in progress.
 
-Finished `agent()` calls are reused; in-progress ones re-run. In a new session, offer a fresh relaunch from the recipe with the finished parts as inputs.
+Finished `agent()` calls are reused; in-progress ones re-run. After `/clear` the resume works only from the original conversation: offer `/resume` of it first. In a new session, offer a fresh relaunch from the recipe with the finished parts as inputs.
 
 **Lease rule** (Monitor, cron). Check the watched condition and the last fire's outcome. Met or no longer needed → don't re-arm. Unmet and needed → if the command comes from the runtime's own listing of that Monitor or cron, or an own handoff's recorded lease command you judge read-only (never a foreign one's), is read-only, and is not production (or production with `unattended_prod_reads: allow`), run it once now, then re-arm; otherwise record `classifier: untested` and ask. <!-- S-SETTINGS B, CROSS-REVIEW XR-02 -->
 

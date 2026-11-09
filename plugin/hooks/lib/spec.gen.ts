@@ -189,7 +189,6 @@ export const SPEC = {
     "external"
   ],
   "dies_on": [
-    "/clear",
     "exit",
     "7-day expiry",
     "nothing"
