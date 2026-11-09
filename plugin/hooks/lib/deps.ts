@@ -296,10 +296,11 @@ export interface Deps {
   agentsAlive(): Promise<string[] | undefined>
   /**
    * D-82 (owner 2026-11-09, session xxxxxxxx: 22 idle teammates read as 22 open jobs): the listed
-   * agents of this session at work now, by id: `agentsAlive` less a teammate that waits for a
-   * message (`idle`, Claude Code 2.1.319 sets it at each TeammateIdle) or for a plan approval
-   * (`waiting`). Its next turn comes only when someone writes to it, so no result is on its way.
-   * Undefined when the list cannot be read.
+   * agents of this session at work now, by id: `agentsAlive` less one that waits for a message
+   * (`idle`, Claude Code 2.1.319 sets it at each TeammateIdle). Its next turn comes only when
+   * someone writes to it, so no result is on its way. `waiting` stays at work: it is held on
+   * background work it owns (a background subagent's own shell, Monitor or Agent call, a teammate's
+   * too), whose result is still coming, or on a plan approval. Undefined when the list cannot be read.
    */
   agentsWorking(): Promise<string[] | undefined>
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
@@ -1198,10 +1199,12 @@ export function servedMode(text: string): string | undefined {
 /** `AgentStatus` values of an agent that ended (owner xxxxxxxx-38: every other status counts as running). */
 export const AGENT_ENDED: readonly string[] = ['completed', 'failed', 'killed']
 /**
- * D-82: `AgentStatus` values of a live agent at rest: a teammate that waits for a message (`idle`)
- * or for a plan approval (`waiting`). It stays alive (a restart would end it) but is no open job.
+ * D-82: `AgentStatus` values of a live agent at rest: one that waits for a message (`idle`, a
+ * teammate between its turns). It stays alive (a restart would end it) but is no open job. Not
+ * `waiting`: Claude Code 2.1.319 sets it also on an agent held by background work it owns, whose
+ * result is still to come (the `AgentStatus` doc).
  */
-export const AGENT_RESTING: readonly string[] = ['idle', 'waiting']
+export const AGENT_RESTING: readonly string[] = ['idle']
 
 export function errText(err: unknown): string {
   if (err instanceof Error) return err.message.slice(0, 120)

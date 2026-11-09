@@ -1991,9 +1991,9 @@ test('AT-KW-56 (D-82): a teammate at work counts once (agent list and Stop row);
   expect(selfCompacts(w)).toBe(1)
 })
 
-test('AT-KW-56 (D-82): native on, an idle teammate waiting for a plan approval (`waiting`): the 55.5-min check reads no agent running (idle_silent agents 0) and compacts at 260K', { options: ON }, async ($, on) => {
+test('AT-KW-56 (D-82): native on, an idle teammate (`idle`): the 55.5-min check reads no agent running (idle_silent agents 0) and compacts at 260K', { options: ON }, async ($, on) => {
   const w = world(on, {})
-  w.agents = [{ id: 'atim-1', status: 'waiting', type: 'teammate' }]
+  w.agents = [{ id: 'atim-1', status: 'idle', type: 'teammate' }]
   const f = forks(on, w)
   await w.start($)
   const t0 = await humanTurn($, w)
@@ -2002,6 +2002,32 @@ test('AT-KW-56 (D-82): native on, an idle teammate waiting for a plan approval (
   expect(f.at).toEqual([])
   expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([0])
   expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 0]])
+})
+
+// `waiting` (Claude Code 2.1.319) is an agent held by background work it owns (its own shell,
+// Monitor or Agent call), whose result is still to come, or a teammate on a plan approval: at work.
+for (const type of ['general-purpose', 'teammate']) {
+  test(`AT-KW-56 (D-82): a ${type} agent \`waiting\` on background work it owns is an open job: keep-warm pings at 50`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.agents = [{ id: 'sub-1', status: 'waiting', type }]
+    const f = forks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w)
+    f.t0 = t0
+    await until(w, t0, 60)
+    expect(f.at).toEqual([50])
+    expect(w.rowsOf('keep_warm_start').map(r => r.jobs)).toEqual([1])
+  })
+}
+
+test('AT-KW-56 (D-82): native on, keep-warm off, 150K (idle_handoff_min_tokens 100K), a subagent `waiting` on its own background work: the 55.5-min check counts it, skips small and submits no idle handoff turn', { options: { ...ON, keep_warm_hours: 0, idle_handoff_min_tokens: 100000 } }, async ($, on) => {
+  const w = world(on, {})
+  w.agents = [{ id: 'sub-1', status: 'waiting' }]
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  await until(w, t0, 60)
+  expect(skips(w)).toEqual([['small', 'check']])
+  expect(w.submits.length).toBe(0)
 })
 
 // ---- D-79 (owner 2026-11-08 23:22: "after the last keep-warm ... you would actually compact to avoid
