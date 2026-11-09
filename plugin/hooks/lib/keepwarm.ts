@@ -323,8 +323,9 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
   if (now - kw.warm > KEEP_WARM_LATEST_MS * scale) return { why: 'missed', handover: false }
   // The record this gap holds was adopted by another load (a reload while this one runs on): that load fires it.
   if (kw.deferred !== undefined && (await heldHere(d, kw.sid)) === undefined) return { why: 'held-elsewhere', handover: false }
-  // A ping on this history missed the main prefix, and no main request came since: another would miss alike.
-  if (forkMissed(s, kw.sid)) return { why: 'fork-miss', handover: true }
+  // A ping on this history missed the main prefix, and no main request came since: the main cache
+  // is cold, so another would miss alike and nothing goes back to the idle path.
+  if (forkMissed(s, kw.sid)) return { why: 'fork-miss', handover: false }
   if ((await openJobs(d, kw.sid)) === 0) return { why: 'no-jobs', handover: true }
   // G3a's reading (idle.ts compactGuards): another version or model since the gap began; a read that throws counts as changed.
   if ((kw.cc !== null && kw.cc !== (await ccVersion(d))) || (kw.model !== null && kw.model !== (await d.model()))) {
