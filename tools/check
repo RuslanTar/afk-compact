@@ -734,7 +734,8 @@ def probes(name):
     def clear_exit(d):
         """CL-02: the first 0.1.6 build's words back: "Move to background and exit" keeps every kind."""
         edit(d, "plugin/assets/handoff-spec.md",
-             'Exit stops them; "Move to background and exit" (when offered) hands only shells, agents and workflows'
+             "Exit stops them, except a durable cron (`durable: true`, kept in `.claude/scheduled_tasks.json`);"
+             ' "Move to background and exit" (when offered) hands only shells, agents and workflows'
              " to the session's next wake (2.1.319 code, not checked live), and teammates and session-only crons"
              " stop either way. So the value is",
              'At exit they stop unless the user picks "Move to background and exit", so their value is')
