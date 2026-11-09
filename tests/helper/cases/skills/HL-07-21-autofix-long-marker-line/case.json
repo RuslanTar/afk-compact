@@ -1,0 +1,161 @@
+{
+ "id": "HL-07 a 40,000-character line of list markers is measured in linear time: one whose last marker is followed by 6 columns leaves its section as written, one of plain items is fixed and written (0.1.7 polish)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.7 polish (integration review of 0.1.6). code_sections re-measured the whole prefix for each leading list marker of a line, so a line of n markers took n squared steps: a 10,001-character `- - … x` took 2.5 s, 40,000 characters about 40 s per call. A running column keeps it linear. The first publish holds 20,000 `- ` markers and a last `-` followed by 6 columns (an indented code block, measured past the long prefix): the section stays as written and its range blocks, the plain Next steps range is listed. The second holds the same markers followed by text: plain items, so the range is listed and the handoff is written. Each publish must finish within 8 s (it took 40 s before).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_ab12cd34_other.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T12:00:00+03:00\nsession_id: ab12cd34-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\ngit_commit: 1234567890abcdef1234567890abcdef12345678\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-7 — other session\n## Decisions and do-not-re-raise\n- D-7: settle X-2..X-4 first\n- X-2: refuted \"r\"\n- X-3: refuted \"q\"\n- X-4: refuted \"s\"\n- X-5: refuted \"t\"\n- X-6: refuted \"u\"\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "name": "foreign base",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "foreign",
+     "previous_sid8": "ab12cd34"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content_parts": [
+    "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n",
+    {
+     "text": "- ",
+     "count": 20000
+    },
+    "-      settle X-2..X-4 first\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n2. then settle X-5..X-6\n"
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "Work done holds 20,000 `- ` markers, then `-      settle X-2..X-4 first`: the last marker is followed by 6 columns, an indented code block, so nothing in the section is rewritten and its range blocks, while the range in the plain Next steps is listed, within 8 s",
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT id-range line 23$",
+     "^ADVISORY id-range line 26: publish lists each id: X-5\\.\\.X-6 as X-5, X-6$",
+     "^REFUSED: lint \\(1 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^ADVISORY id-range line 23:",
+     "^Wrote handoff"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^(?:- ){20000}-      settle X-2\\.\\.X-4 first$",
+       "^2\\. then settle X-5\\.\\.X-6$"
+      ]
+     }
+    ],
+    "ms_max": 8000
+   },
+   "timeout_s": 90
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content_parts": [
+    "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n",
+    {
+     "text": "- ",
+     "count": 20000
+    },
+    "settle X-2..X-4 first\n## Next steps\n1. `bin/test retry` — for \"fix the retry window\"\n2. then settle X-5..X-6\n"
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "Work done holds 20,000 `- ` markers, then `settle X-2..X-4 first`: each marker is followed by 1 column, plain list items, so the ranges in it and in Next steps are listed and the handoff is written, within 8 s (same stage, the refused draft rewritten)",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY id-range line 23: publish lists each id: X-2\\.\\.X-4 as X-2, X-3, X-4$",
+     "^ADVISORY id-range line 26: publish lists each id: X-5\\.\\.X-6 as X-5, X-6$",
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^(?:- ){20000}settle X-2, X-3, X-4 first$",
+       "^2\\. then settle X-5, X-6$"
+      ]
+     }
+    ],
+    "ms_max": 8000
+   },
+   "timeout_s": 90
+  }
+ ]
+}

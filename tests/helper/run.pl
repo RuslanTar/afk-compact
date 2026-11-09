@@ -45,7 +45,8 @@
 #   case "plugin_at"       "<folder>": the staged copy moved there ($PLUGIN its real path, $PLUGIN_PARENT
 #                            the folder above it); setup sha_tag <text> + var: 8 hex of its sha256
 #   a step without argv, lib or setup that holds a setup action runs as a setup step
-#   setup: write with content | content_parts (mode 0600 unless given); repo {recipe} + at;
+#   setup: write with content | content_parts (a part {text, count}: text repeated; mode 0600
+#     unless given); repo {recipe} + at;
 #     git [argv] (+ cwd, env, var = stdout); bigfile + bytes (+ fill); age + minutes;
 #     run (+ capture, exit)
 #   expect: stdout_max_bytes (for a case in the system temp folder, each $TMP in stdout counts as
@@ -1192,7 +1193,11 @@ sub setup {
         my $text;
         if (exists $s->{json}) { $text = jsonc::encode($s->{json}) . "\n" }
         elsif (exists $s->{parts}) { $text = join('', @{ $s->{parts} }) }
-        elsif (exists $s->{content_parts}) { $text = join('', @{ $s->{content_parts} }); $s->{mode} //= '0600' }
+        elsif (exists $s->{content_parts}) {
+            # a part {text, count}: text repeated count times (one very long line)
+            $text = join('', map { ref $_ eq 'HASH' ? $_->{text} x $_->{count} : $_ } @{ $s->{content_parts} });
+            $s->{mode} //= '0600';
+        }
         elsif (exists $s->{content}) { $text = $s->{content}; $s->{mode} //= '0600' }
         elsif (exists $s->{bytes}) { $text = ('x' x 63 . "\n") x int($s->{bytes} / 64); $text .= 'x' x ($s->{bytes} - length $text) }
         elsif (exists $s->{lines}) { $text = join('', map { "line $_ of the output\n" } 1 .. $s->{lines}) }
