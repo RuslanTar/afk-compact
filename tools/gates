@@ -68,7 +68,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   launcher     AT-PK-01 (PKG-RUNTIME A.1, Q-R1) over a built plugin folder: no top-level `bin/`;
                the launcher is `scripts/<brand>-store`, mode 0755; the 8 hooks.json commands
                are `"${CLAUDE_PLUGIN_ROOT}/scripts/<brand>-store" hook <Event>`; no file names
-               the launcher in another folder (`/<dir>/<brand>-store`), says "on the Bash PATH"
+               the launcher in another folder (`/<dir>/<brand>-store`; the status line's shim
+               `<state>/<brand>/bin/<brand>-store` is not one), says "on the Bash PATH"
                or calls it bare (`<brand>-store <subcommand>`, no folder before it)
   BLD-05 content gates (build round 9, switched on with the wp/text merge):
   template-shape AT-TX-01: template §5 keeps Rule and What, no Caps/Where/Secret gate/Manifest
@@ -670,6 +671,10 @@ def launcher_hits(target, brand):
             continue
         for no, line in enumerate(text.splitlines(), 1):
             for m in other_dir.finditer(line):
+                # 0.1.7 D-81: the status line's stable shim, <state>/<brand>/bin/<brand>-store,
+                # is not the launcher (lib/cachestate.pm keep_shim)
+                if m.group(1) == "bin" and line[:m.start()].endswith("/" + brand):
+                    continue
                 if m.group(1) != LAUNCHER_DIR:
                     out.append((path, no, "AT-PK-01 launcher-dir",
                                 "AT-PK-01 launcher-dir: {!r} (the launcher is {}/{}-store)".format(m.group(0), LAUNCHER_DIR, brand), line))
