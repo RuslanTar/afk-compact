@@ -6,7 +6,8 @@
 # reads one JSON object per line (blank lines skipped) and appends them all in one locked
 # write, so the mod sends one batch per tool call; every line is checked before anything is
 # written. A row > 4 KB -> exit 3 `REFUSED: row-too-large` (nothing written); a batch over
-# 1 MB -> exit 3 `REFUSED: batch-too-large`.
+# 1 MB -> exit 3 `REFUSED: batch-too-large`. A mod row of keep-warm or a compaction also updates
+# the session's cache state (lib/cachestate.pm note_rows).
 # jobs (Dev-1, `--stdin` only): the mod's raw fields of a background shell (or a TaskStop),
 # completed by lib/jobrec.pm and appended to <watch>/<sid>/jobs.jsonl, whatever the
 # watcher mode. Accepted only from the recorded Claude Code parent, else exit 3
@@ -95,6 +96,10 @@ sub run {
         }
         push @rows, $b;
     }
+    # 0.1.7 (D-81): keep-warm and compaction rows also go to the session's cache state, which
+    # `cache` reads (lib/cachestate.pm; its own fixed folder, so a refused log_dir does not stop it)
+    eval { cachestate::note_rows($sid, [ map { scalar eval { jsonc::decode($_) } } grep { /"ev"\s*:\s*"(?:keep_warm_\w+|compacted)"/ } @rows ]) }
+        if $stream eq 'mod';
     my $path = rc::stream_path($stream);
     if (!defined $path) { args::out('REFUSED: ' . (rc::root_reason('log_dir') // 'no-watch')); return 3 }
     util::append($path, join('', map { "$_\n" } @rows)) if @rows;

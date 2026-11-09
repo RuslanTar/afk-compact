@@ -1,0 +1,70 @@
+{
+ "id": "CACHE-06-shim-dev-load",
+ "note": "0.1.7 D-81 (critique 7): a copy outside Claude Code's plugin cache (a --plugin-dir load, as this staged copy) never writes or moves the status line's shim; the cache state is still kept.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "SessionStart of a dev copy: no shim",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim dev-load"
+    ],
+    "absent": [
+     "$HOME/.local/state/$BRAND/bin/$BRAND-store"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "json": {
+       "transcript": "$TMP/proj/$SID.jsonl"
+      }
+     }
+    ]
+   },
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ]
+  },
+  {
+   "name": "CLAUDE_PLUGIN_ROOT outside the config folder (@inline): no shim either",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim dev-load"
+    ],
+    "absent": [
+     "$HOME/.local/state/$BRAND/bin/$BRAND-store"
+    ]
+   },
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$PLUGIN"
+   }
+  }
+ ]
+}

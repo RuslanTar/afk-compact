@@ -1,0 +1,988 @@
+{
+ "id": "CACHE-02-keep-warm-state",
+ "note": "0.1.7 D-81: cmd/log.pl keeps <state>/<plugin>/cache/<sid>.v1.json from the mod's main keep_warm_start/ping/stop and compacted rows (temp + rename, 0600). `cache` adds keep-warm: ↻n/max while active (max = floor((hours*60-1)/50): 7 at 6 h, 1 at 1 h, 0 at 0.5 h), the last stop. A ping counts only if it started (ts - ms) after the last main request (critique 3): a warm one moves the 1h expiry to its start + 1 h, else Claude Code's later prompt_cache.expires_at stands (probe Q2: a fork that reads the cache moves it itself); a stale ping before a later 5m main request changes nothing; a fork-miss after it reads cold (probe Q3: 17 of 17 next main requests missed). A compaction after the last request reads cold until the next one; a skipped compaction or a subagent's does not count, nor an idle_compact row (idle.ts writes it before it tries plugin idle compaction, which may then be skipped or never run; review of the cache fix: the status line read `cache cold (compacted)` while warm). Out-of-order rows change nothing; a stop with no start row (no-idle-path) is a gap of its own; a torn file reads unknown, exit 0; parallel writers leave valid JSON.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "keep_warm_start and a warm ping (n 1)",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:50:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 2, \"gap_s\": 3000, \"hours\": 6, \"windows\": 2}\n{\"v\": 1, \"ts\": \"2026-11-09T11:50:08.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 8000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "mode": "0600",
+      "json": {
+       "sid": "$SID",
+       "schema": "$BRAND-cache-state/v1"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the ping alone (no transcript, no stdin): warm on the 1h tier, keep-warm 1/7",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 50m left ↻1/7\n"
+   }
+  },
+  {
+   "name": "json: the ping is the last request; next due 50 min after it",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "source": "plugin",
+     "last.kind": "keep_warm",
+     "last.at": 1794225000,
+     "expires_at": 1794228600,
+     "keep_warm.active": true,
+     "keep_warm.n": 1,
+     "keep_warm.max": 7,
+     "keep_warm.hours": 6,
+     "keep_warm.gap_started_at": 1794222000,
+     "keep_warm.next_due_at": 1794228000,
+     "keep_warm.last_result": "warm",
+     "keep_warm.stop": {
+      "null": true
+     }
+    }
+   }
+  },
+  {
+   "name": "prompt_cache older than the ping (a version that does not touch it): the ping's expiry",
+   "setup": [
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794222000",
+       "timestamp": "2026-11-09T11:00:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      },
+      {
+       "type": "assistant",
+       "uuid": "a-1794222020-ok",
+       "sessionId": "$SID",
+       "timestamp": "2026-11-09T11:00:20.000Z",
+       "message": {
+        "id": "msg_1",
+        "role": "assistant",
+        "content": [
+         {
+          "type": "text",
+          "text": "ok"
+         }
+        ],
+        "usage": {
+         "cache_read_input_tokens": 9000,
+         "cache_creation_input_tokens": 10,
+         "cache_creation": {
+          "ephemeral_1h_input_tokens": 10,
+          "ephemeral_5m_input_tokens": 0
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794225600
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "source": "claude-code",
+     "last.kind": "keep_warm",
+     "last.source": "plugin",
+     "expires_at": 1794228600
+    }
+   }
+  },
+  {
+   "name": "prompt_cache's expires_at later than the ping (Claude Code's own touch): it stands",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "last.kind": "keep_warm",
+     "expires_at": 1794228605
+    }
+   },
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228605
+    }
+   }
+  },
+  {
+   "name": "prompt_cache without a transcript: the ping ended within 5 s of expires_at - ttl, so it counts",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "last.kind": "keep_warm",
+     "expires_at": 1794228610
+    }
+   },
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228610
+    }
+   }
+  },
+  {
+   "name": "a stale ping before a later 5m main request: ignored",
+   "setup": [
+    {
+     "write": "$TMP/proj/later.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794222000",
+       "timestamp": "2026-11-09T11:00:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      },
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225540",
+       "timestamp": "2026-11-09T11:59:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/later.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "ttl": "5m",
+     "last.kind": "main",
+     "last.at": 1794225540,
+     "expires_at": 1794225840,
+     "keep_warm.active": false
+    }
+   }
+  },
+  {
+   "name": "an older ping row after the newer one (another writer): nothing changes",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:48:20.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 0, \"result\": \"fork-miss\", \"cache_read\": 100, \"cache_creation\": 90000, \"since_s\": 2900, \"gap_s\": 2900, \"ms\": 500}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "json": {
+       "keep_warm": {
+        "result": "warm",
+        "n": 1
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a second warm ping, then a fork-miss",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T12:40:05.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 2, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3000, \"gap_s\": 6000, \"ms\": 5000}\n{\"v\": 1, \"ts\": \"2026-11-09T13:30:03.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 2, \"result\": \"fork-miss\", \"cache_read\": 27000, \"cache_creation\": 150000, \"since_s\": 3000, \"gap_s\": 9000, \"ms\": 3000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   },
+   "now": "2026-11-09T13:30:10.000Z"
+  },
+  {
+   "name": "a fork-miss after the last main request: cold",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "cache cold (keep-warm ping missed)\n"
+   },
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794234600
+    }
+   },
+   "now": "2026-11-09T13:30:20.000Z"
+  },
+  {
+   "name": "json: cold, fork-miss, n 2",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "cold",
+     "why": "fork-miss",
+     "last.kind": "keep_warm",
+     "last.at": 1794231000,
+     "keep_warm.n": 2,
+     "keep_warm.last_result": "fork-miss",
+     "keep_warm.active": true
+    }
+   },
+   "now": "2026-11-09T13:30:20.000Z"
+  },
+  {
+   "name": "keep_warm_stop why fork-miss",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T13:30:04.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"fork-miss\", \"pings\": 2, \"gap_s\": 9004, \"handover\": true}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "after the stop: not active, the stop's reason",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": false,
+     "keep_warm.next_due_at": {
+      "null": true
+     },
+     "keep_warm.stop.why": "fork-miss",
+     "keep_warm.stop.pings": 2,
+     "keep_warm.stop.at": 1794231004
+    }
+   },
+   "now": "2026-11-09T13:30:20.000Z"
+  },
+  {
+   "name": "a main request after the fork-miss: warm again from it",
+   "setup": [
+    {
+     "write": "$TMP/proj/after.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794231100",
+       "timestamp": "2026-11-09T13:31:40.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "now": "2026-11-09T13:32:40.000Z",
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/after.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 59m left\n"
+   }
+  },
+  {
+   "name": "compacted after that request; one skipped and a subagent's later do not count",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T13:33:20.000Z\", \"ev\": \"compacted\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"nonce\": \"1a2b3c4d\", \"skip\": null, \"tokens_before\": 300000, \"tokens_after\": 20000, \"usage_present\": true, \"ms\": 40000}\n{\"v\": 1, \"ts\": \"2026-11-09T13:35:00.000Z\", \"ev\": \"compacted\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"nonce\": \"2a2b3c4d\", \"skip\": \"vetoed\", \"tokens_before\": null, \"tokens_after\": null, \"usage_present\": false, \"ms\": 10}\n{\"v\": 1, \"ts\": \"2026-11-09T13:36:40.000Z\", \"ev\": \"compacted\", \"sid\": \"$SID\", \"actor\": \"a1b2c3d4e5f6a7b8c\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"nonce\": \"3a2b3c4d\", \"skip\": null, \"tokens_before\": 90000, \"tokens_after\": 9000, \"usage_present\": true, \"ms\": 900}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "json": {
+       "compacted_at": 1794231200
+      }
+     }
+    ]
+   },
+   "now": "2026-11-09T13:38:20.000Z"
+  },
+  {
+   "name": "a compaction after the last request: cold, compacted",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "cache cold (compacted)\n"
+   },
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/after.jsonl"
+   },
+   "now": "2026-11-09T13:38:20.000Z"
+  },
+  {
+   "name": "the next main request after the compaction: warm",
+   "setup": [
+    {
+     "write": "$TMP/proj/after2.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794231100",
+       "timestamp": "2026-11-09T13:31:40.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      },
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794231450",
+       "timestamp": "2026-11-09T13:37:30.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "now": "2026-11-09T13:38:20.000Z",
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/after2.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "why": {
+      "null": true
+     },
+     "last.at": 1794231450
+    }
+   }
+  },
+  {
+   "name": "idle_compact, then that compaction skipped (too-small): nothing recorded, no state file",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-g",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:58:00.000Z\", \"ev\": \"idle_compact\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"gap_s\": 480, \"tokens\": 90000, \"agents\": 0, \"at\": \"check\", \"late_s\": 0, \"adopted\": false}\n{\"v\": 1, \"ts\": \"2026-11-09T11:58:20.000Z\", \"ev\": \"compacted\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"nonce\": \"4a2b3c4d\", \"skip\": \"too-small\", \"tokens_before\": null, \"tokens_after\": null, \"usage_present\": false, \"ms\": 20}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$HOME/.local/state/$BRAND/cache/$SID-g.v1.json"
+    ]
+   }
+  },
+  {
+   "name": "so the cache still reads warm, not compacted",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "why": {
+      "null": true
+     },
+     "expires_at": 1794228600,
+     "last.kind": "main"
+    }
+   },
+   "stdin_json": {
+    "session_id": "$SID-g",
+    "transcript_path": "$TMP/proj/g.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228600
+    }
+   },
+   "setup": [
+    {
+     "write": "$TMP/proj/g.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID-g",
+       "id": "req-1794225000",
+       "timestamp": "2026-11-09T11:50:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "an idle_compact row alone (the process ended before the compaction): nothing recorded",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-g",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:59:30.000Z\", \"ev\": \"idle_compact\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"gap_s\": 570, \"tokens\": 90000, \"agents\": 0, \"at\": \"timer\", \"late_s\": 0, \"adopted\": false}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "absent": [
+     "$HOME/.local/state/$BRAND/cache/$SID-g.v1.json"
+    ]
+   }
+  },
+  {
+   "name": "still warm",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 50m left\n"
+   },
+   "stdin_json": {
+    "session_id": "$SID-g",
+    "transcript_path": "$TMP/proj/g.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228600
+    }
+   }
+  },
+  {
+   "name": "then the compaction's own row (it ran): compacted",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-g",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:59:50.000Z\", \"ev\": \"compacted\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"nonce\": \"5a2b3c4d\", \"skip\": null, \"tokens_before\": 90000, \"tokens_after\": 9000, \"usage_present\": true, \"ms\": 8000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID-g.v1.json",
+      "json": {
+       "compacted_at": 1794225590
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "cold, compacted",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "cache cold (compacted)\n"
+   },
+   "stdin_json": {
+    "session_id": "$SID-g",
+    "transcript_path": "$TMP/proj/g.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228600
+    }
+   }
+  },
+  {
+   "name": "a stop with no start row (no-idle-path): a gap of its own",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-b",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T12:00:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-b\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"no-idle-path\", \"pings\": 0, \"gap_s\": 2940, \"handover\": false}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "no-idle-path: not active, n 0, max unknown",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID-b",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": false,
+     "keep_warm.n": 0,
+     "keep_warm.max": {
+      "null": true
+     },
+     "keep_warm.stop.why": "no-idle-path",
+     "keep_warm.gap_started_at": 1794222660,
+     "state": "unknown"
+    }
+   }
+  },
+  {
+   "name": "keep_warm_hours 1",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-c",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:58:20.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-c\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 1, \"windows\": 0}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "max 1 at 1 h, no ping yet: 0 of 1",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID-c",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.max": 1,
+     "keep_warm.n": 0,
+     "keep_warm.active": true
+    }
+   }
+  },
+  {
+   "name": "keep_warm_hours 0.5",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-d",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:58:20.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-d\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 1500, \"hours\": 0.5, \"windows\": 0}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "max 0 at 0.5 h",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID-d",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.max": 0
+    }
+   }
+  },
+  {
+   "name": "a gap whose stop row never came (a crash): inactive past the 58-minute bound",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID-c",
+    "--json"
+   ],
+   "now": "2026-11-09T14:00:00.000Z",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": false,
+     "keep_warm.next_due_at": {
+      "null": true
+     }
+    }
+   }
+  },
+  {
+   "name": "a torn state file: unknown, exit 0",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID-e.v1.json",
+     "content": "{\"schema\":\"$BRAND-cache-state/v1\",\"sid\":\"$SID-e\",\"keep_wa"
+    }
+   ],
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID-e",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "unknown",
+     "keep_warm": {
+      "null": true
+     }
+    }
+   }
+  },
+  {
+   "name": "a torn file is replaced by the next row",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-e",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:59:10.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-e\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID-e.v1.json",
+      "json": {
+       "keep_warm": {
+        "hours": 6
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "8 writers at once: the file stays one valid JSON object, no temp file left",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-f",
+    "--stdin"
+   ],
+   "parallel": 8,
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:10:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:01.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:02.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:03.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:04.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:05.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:06.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:07.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:08.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:09.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:10.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:11.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:12.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:13.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:14.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:15.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:16.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:17.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:18.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:19.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:20.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:21.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:22.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:23.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:24.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:25.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:26.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:27.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:28.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:29.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:30.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:31.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:32.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:33.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:34.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:35.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:36.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:37.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:38.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:39.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:40.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 0, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:41.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:42.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 2, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:43.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 3, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:44.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 4, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:45.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 5, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:46.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 6, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:47.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 7, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:48.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 8, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:49.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 9, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:50.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 10, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:51.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 11, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:52.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 12, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:53.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 13, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:54.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 14, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:55.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 15, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:56.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 16, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:57.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 17, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:58.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 18, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:26:59.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 19, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:00.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 20, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:01.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 21, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:02.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 22, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:03.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 23, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:04.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 24, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:05.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 25, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:06.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 26, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:07.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 27, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:08.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 28, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:09.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 29, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:10.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 30, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:11.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 31, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:12.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 32, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:13.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 33, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:14.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 34, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:15.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 35, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:16.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 36, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:17.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 37, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:18.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 38, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:27:19.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 39, \"result\": \"warm\", \"cache_read\": 9, \"cache_creation\": 1, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 1000}\n",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID-f.v1.json",
+      "json": {
+       "sid": "$SID-f",
+       "keep_warm": {
+        "n": 39
+       }
+      },
+      "lines": 1
+     }
+    ],
+    "absent": [
+     "$HOME/.local/state/$BRAND/cache/.$SID-f.v1.json.*"
+    ]
+   }
+  }
+ ]
+}

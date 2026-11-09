@@ -227,6 +227,12 @@ sub on_SessionStart {
     eval { sidecar::note_scratchpad($spd, $sp, $src) } if defined $spd && defined $sp;
     # 0.1.3 version skew (lib/plugver.pm): this process's first start under this plugin copy
     eval { plugver::note_load($sid, $src, $p->{cwd}) };
+    # 0.1.7 (D-81): the cache state's transcript, the session live again after a resume, and the
+    # stable launcher shim for status lines (lib/cachestate.pm)
+    if (!defined $p->{agent_id}) {
+        eval { cachestate::on_start($sid, $p->{transcript_path}) };
+        eval { util::trace('cache-shim ' . cachestate::keep_shim()) } if $src ne 'compact';
+    }
     return session_compact($p) if $src eq 'compact';
     my $c = rc::claude();
     my ($lin, $where);
@@ -354,6 +360,7 @@ sub on_SessionEnd {
     my $sid = rc::sid();
     my $reason = (defined $p->{reason} && $p->{reason} =~ /^(clear|resume|logout|prompt_input_exit|other)$/) ? $p->{reason} : 'other';
     eval { sessions::write_ended($sid, $reason) } if rc::root_ok('handoff_root');
+    eval { cachestate::on_end($sid) };
     my $c = rc::claude();
     rc::emit('session', [phase => 'end', source => undef, reason => $reason, mod_loaded => undef,
                          previous_session_id => undef, lineage_reason => undef, pid => $c->{pid}, pid_lstart => $c->{lstart}]);

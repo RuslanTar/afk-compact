@@ -26,6 +26,10 @@ package skills::prune;
 #     and removes the folders left empty (rmdir only). A file it could not delete gets its row back.
 #     --apply needs the dry run's --plan (path, size and mtime of each file): a plan that differs
 #     is refused and nothing is deleted; a file changed since is not deleted.
+#   - Cache state (0.1.7): the files under ${XDG_STATE_HOME:-~/.local/state}/<plugin>/cache/ of
+#     sessions that ended, or with no end were not written, more than 7 days ago (lib/cachestate.pm
+#     stale), whatever --days says,
+#     go with the rest (in the plan and the total).
 #   - Read-only folders: the old default ~/.claude/handoffs and ~/.claude/trash-staging (while the
 #     setting is the default) and every --root folder are listed, never written.
 use strict;
@@ -447,6 +451,17 @@ sub run {
             $tot{cited_b} += $_->{bytes} for @{ $x->{cited} };
             push @{ $tot{dirs} }, $x;
         }
+    }
+    # 0.1.7 (D-81): the cache state files (lib/cachestate.pm) of sessions that ended, or with no end
+    # were not written, over 7 days ago, whatever --days says
+    my @cache = cachestate::stale($now);
+    if (@cache) {
+        my $b = 0;
+        $b += $_->{bytes} for @cache;
+        push @out, sprintf('cache state %s: %d %s of sessions ended or not written over %d days ago, %s to free', _show(cachestate::dir()),
+                           scalar @cache, @cache == 1 ? 'file' : 'files', $cachestate::PRUNE_DAYS, _size($b));
+        push @drop, @cache;
+        $tot{free} += $b;
     }
     my $plan = substr(skills::util::sha256_hex(join('', map { "$_->{path}\t$_->{bytes}\t$_->{mtime}\n" } sort { $a->{path} cmp $b->{path} } @drop)), 0, 12);
     push @out, sprintf('total: %d %s, %d files, %s to free', $tot{units}, $tot{units} == 1 ? 'folder' : 'folders', scalar @drop, _size($tot{free}))

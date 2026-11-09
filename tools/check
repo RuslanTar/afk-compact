@@ -556,7 +556,8 @@ def probes(name):
     def launcher_move(d):
         """AT-PK-01 (BLD-01): an old bin/ launcher left behind, the scripts/ launcher not
         executable, one hook command back in bin/, a text line with the bin/ path and the
-        Bash PATH promise, and a bare `<brand>-store <subcommand>` call in a shipped skill."""
+        Bash PATH promise, a bare `<brand>-store <subcommand>` call in a shipped skill, and a
+        `<dir>/<brand>/bin/<brand>-store` outside the status line shim's state folder."""
         write_text(os.path.join(d, "plugin", "bin", name + "-store"), "#!/bin/sh\n")
         os.chmod(os.path.join(d, *launcher_rel(name).split("/")), 0o644)
         p = os.path.join(d, "plugin", "hooks", "hooks.json")
@@ -568,6 +569,7 @@ def probes(name):
                "Call ${{CLAUDE_PLUGIN_ROOT}}/bin/{}-store, which is on the Bash PATH.\n".format(name))
         append(d, "plugin/skills/report/SKILL.md",
                "To wait, run `{}-store wait --max 270` in the foreground.\n".format(name))
+        append(d, "plugin/assets/cache-contract.md", "Or call `/opt/{0}/bin/{0}-store cache`.\n".format(name))
 
     def resume_hard(d):
         append(d, "src/assets/resume-context.txt", "x" * 1200 + "\n")
@@ -1092,7 +1094,8 @@ def probes(name):
           r"^GATE launcher plugin/hooks/hooks\.json: AT-PK-01 hooks: Stop command",
           r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 launcher-dir: '/bin/",
           r"^GATE launcher plugin/assets/subagent-instructions\.txt:\d+: AT-PK-01 bash-path",
-          r"^GATE launcher plugin/skills/report/SKILL\.md:\d+: AT-PK-01 bare-call: '" + re.escape(name) + r"-store w'"], None),
+          r"^GATE launcher plugin/skills/report/SKILL\.md:\d+: AT-PK-01 bare-call: '" + re.escape(name) + r"-store w'",
+          r"^GATE launcher plugin/assets/cache-contract\.md:\d+: AT-PK-01 launcher-dir: '/bin/"], None),
         ("template-shape", "AT-TX-01", gates_only("template-shape"), template_shape,
          [r"^GATE template-shape plugin/skills/handoff/references/handoff-template\.md:\d+: AT-TX-01 moved-bullet: '- \*\*Caps'",
           r"^GATE template-shape plugin/skills/handoff/references/handoff-template\.md: AT-TX-01 pointer: §6 is \d+ chars \(max 700\), no `Why:` sentence$",

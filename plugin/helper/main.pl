@@ -53,7 +53,7 @@ my %KNOWN = map { $_ => 1 } qw(
     begin stamp evidence publish locate inventory heal-check verify
     restore-evidence stash lane pin receipt risk wait project
     watch report notice trial-measure trial-save restart settings migrate prune
-    queue
+    queue cache
 );
 
 my $sub = shift @ARGV;
@@ -75,7 +75,7 @@ our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock
                git gsd queue bucket frontmatter detect assemble secrets evidence
                dispatch transcript scope sessions sidecar ledger copies measure checkpoint
                sweep reconcile orphans keyset resumeblock args rollup postcompact repomode jobrec handoff_turn notice userre
-               restart plugver);
+               restart plugver cachestate);
 # 0.1.4 (T-12): `hook <Event>` loads the base set and its event's table, not all of @CORE
 # (compiling every library was the largest part of a hook's start under load). A table holds
 # the libraries the event's handler in cmd/hook.pl calls and what they call in turn (a file-level
@@ -87,26 +87,33 @@ our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock
 # (the AUTOLOAD below), so a call no table foresaw costs the full start, never the feature. Any
 # other subcommand, and an unknown event, loads @CORE. Test seams (STORE_TEST_MODE only):
 # STORE_TEST_LAZY=full loads @CORE for a hook too; STORE_TEST_INC_OUT=<file> gets one line, the
-# libraries loaded by the end (HOOK-LAZY-01).
+# helper's own libraries loaded by the end, from helper/lib only (`skills/prune` for one in a
+# subfolder; perl's own modules are left out), sorted (HOOK-LAZY-01, CACHE-04).
 our @HOOK_BASE = qw(util jsonc sha ctx spec settings paths roots log rc identity git detect secrets transcript args repomode userre);
 our %HOOK_EVENT = (
     PreCompact       => [qw(lock nonce bucket frontmatter assemble dispatch sessions ledger copies keyset)],
     PostCompact      => [qw(lock nonce queue bucket frontmatter evidence dispatch scope sessions sidecar ledger copies sweep orphans keyset
                             rollup postcompact jobrec restart)],
     SessionStart     => [qw(lock nonce gsd queue assemble evidence dispatch sessions sidecar measure sweep orphans keyset resumeblock
-                            rollup jobrec restart plugver)],
+                            rollup jobrec restart plugver cachestate)],
     SessionEnd       => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar ledger copies measure
-                            sweep reconcile orphans resumeblock rollup postcompact jobrec restart plugver)],
+                            sweep reconcile orphans resumeblock rollup postcompact jobrec restart plugver cachestate)],
     Stop             => [qw(lock nonce gsd queue bucket frontmatter assemble evidence dispatch scope sessions sidecar ledger copies measure
                             sweep reconcile orphans resumeblock rollup postcompact jobrec restart plugver)],
     SubagentStop     => [qw(sessions sidecar jobrec)],
     StopFailure      => [],
     PermissionDenied => [qw(dispatch rollup reconcile ledger copies)],
 );
+# 0.1.7 (D-81): `cache` runs from a status line every few seconds and writes nothing: it loads only
+# these, not settings, paths, rc or identity (whose setup, args::init_sid, writes once-notes and
+# config rows). CACHE-04 holds the set (STORE_TEST_INC_OUT).
+our %SUB_LIBS = (cache => [qw(util jsonc ctx args cachestate)]);
 my $TEST = ($ENV{STORE_TEST_MODE} || '') eq '1';
 my %load = map { ($_ => 1) } @CORE;
 if ($IS_HOOK && defined $ARGV[0] && $HOOK_EVENT{ $ARGV[0] } && !($TEST && ($ENV{STORE_TEST_LAZY} || '') eq 'full')) {
     %load = map { ($_ => 1) } @HOOK_BASE, @{ $HOOK_EVENT{ $ARGV[0] } };
+} elsif ($SUB_LIBS{$sub}) {
+    %load = map { ($_ => 1) } @{ $SUB_LIBS{$sub} };
 }
 for my $lib (grep { $load{$_} } @CORE) {
     my $ok = eval { require "$lib.pm"; 1 };
@@ -133,7 +140,7 @@ for my $pkg (@LATER) {
 END {
     my $f = $TEST ? $ENV{STORE_TEST_INC_OUT} : undef;
     if (defined $f && $f =~ m{\A/} && open(my $fh, '>>', $f)) {
-        print $fh join(' ', sort map { /\A([a-z_]+)\.pm\z/ ? $1 : () } keys %INC), "\n";
+        print $fh join(' ', sort map { m{\A([a-z_]+(?:/[a-z_]+)*)\.pm\z} && index($INC{$_} // '', "$HELPER_DIR/lib/") == 0 ? $1 : () } keys %INC), "\n";
         close $fh;
     }
 }

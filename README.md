@@ -107,7 +107,7 @@ After a Claude Code update, `/afk-compact:status` may say a check is due and off
 claude plugin uninstall afk-compact
 ```
 
-Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them.
+Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them. It also leaves `~/.local/state/afk-compact/bin/afk-compact-store`, the fixed path a [status line](#the-cache-state-in-your-status-line) calls, which then runs nothing: delete it and remove the call from your status line.
 
 ## Skills
 
@@ -404,6 +404,43 @@ Plugin idle compaction and keep-warm read each usage limit Claude Code reports o
 
 When no limit is reported, keep-warm skips this check, and plugin idle compaction goes by the highest share read when its timer was set, at 90%. The idle handoff turn keeps its own setting, `idle_handoff_near_limit`. Each skip or stop for a limit logs the rule that decided in `rule` (`band`, `cap`, `no-job`, `stale`, `no-delta`, `delta`, `spend-90`, `other-90` or `arm-90`; the idle handoff turn's skips under `idle_handoff_near_limit`: `option-skip` or `option-skip-spend`) and, when Claude Code's environment has them, `CLAUDE_CODE_SUBSCRIPTION_TYPE` and `CLAUDE_CODE_RATE_LIMIT_TIER` as `plan` and `tier`; each plugin compaction logs the plan windows' shares before and after it (`pct_before`, `pct_after`).
 
+### The cache state in your status line
+
+
+Claude Code can show a status line below the prompt: a command of yours that gets the session's details as JSON on stdin (`statusLine` in your settings). The plugin's helper can put the prompt cache's state in it: whether the conversation is still cached, for how long, and, while keep-warm runs, which request of the idle gap it is at:
+
+```
+cache 1h warm 42m left ↻3/7
+```
+
+`↻3/7` is the third request of at most seven in this idle gap (`keep_warm_hours` × 60 − 1 minutes, divided by 50 and rounded down: 7 at the default 6 hours; a late or retried request can leave it at 6). A cold cache reads `cache 1h cold (expired 12m ago)`, `cache cold (compacted)` or `cache cold (keep-warm ping missed)` (a keep-warm request that did not read the conversation from the cache: the session's next request then misses it too). Before the session's first response there is nothing to read, and the command prints nothing.
+
+The command is `cache --stdin`, called through a fixed path that the plugin keeps pointing at its installed copy, `~/.local/state/afk-compact/bin/afk-compact-store` (`$XDG_STATE_HOME/afk-compact/bin/` when Claude Code's environment sets `XDG_STATE_HOME`); the first session of an installed copy writes it, and a `--plugin-dir` run never changes it. It reads Claude Code's own cache figures from the status line's input (Claude Code 2.1.312 and later; else the session's transcript) and the plugin's keep-warm record, writes nothing and exits 0 (on a host whose perl the helper cannot run it prints `REFUSED: helper-runtime`, as every command does). Neither that path nor the keep-warm record is written inside a git work tree, such as a dotfiles repository at your home folder; set `XDG_STATE_HOME` outside it then. The details are in `assets/cache-contract.md` in the plugin folder.
+
+**A plain status line.** Claude Code runs one status line command and shows its output as the whole line, so this replaces the status line you have now. In `~/.claude/settings.json`:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "~/.local/state/afk-compact/bin/afk-compact-store cache --stdin",
+  "refreshInterval": 30
+}
+```
+
+To keep your own line, call both from one script and print them together, for example:
+
+```sh
+#!/bin/sh
+in=$(cat)
+mine=$(printf '%s' "$in" | ~/bin/my-statusline)
+cache=$(printf '%s' "$in" | ~/.local/state/afk-compact/bin/afk-compact-store cache --stdin)
+printf '%s  %s\n' "$mine" "$cache"
+```
+
+**ccstatusline.** Add a Custom Command widget with the command `~/.local/state/afk-compact/bin/afk-compact-store cache --stdin` (ccstatusline passes Claude Code's JSON on to it; write the full path where `~` is not expanded), or in its settings file: `{"type": "custom-command", "commandPath": "~/.local/state/afk-compact/bin/afk-compact-store cache --stdin", "timeout": 1000, "preserveColors": false}`.
+
+**Your own format.** `cache --stdin --json` prints one JSON object (`state`, `seconds_left`, `keep_warm.n`, `keep_warm.max`, …). With `jq`, which not every system has: `… cache --stdin --json | jq -r '"\(.state) \(.seconds_left // "")"'`. A script can also ask about a session by its id, `cache --sid <session id> --json`, which reads the plugin's own record of it and its transcript.
+
 ### The away digest
 
 In this version the digest is off by default (`idle_digest: off`): the lane is read as described below, but wherever the away digest would be printed, the turn starts nothing and says in one line where the lane stands, with the `Basis:` line, then last what needs you (numbered, each with what it blocks) or `Nothing needed from you`, and the plugin sends no turn of its own. Set `idle_digest` to `submit` or `return` for the full digest.
@@ -585,6 +622,8 @@ The client id comes from the question, so the same question is not queued twice;
 | `<repository>/.claude/handoffs/<topic>/` (repo mode only; the folder is the `root` of the declaration) | A portable export of each published handoff, left untracked. Also, from `project init`, `.claude/handoffs.json` and the folder's `README.md` and `.gitignore` | `/afk-compact:handoff`; `project init` |
 | `~/.local/state/afk-compact/handoffs/.sessions/` | Session pins, `/clear` lineage, one small record per session start and end (`by-pid/`; once a day a session's records of ended processes over a week old are pruned, never its first one, one of a process that still runs, or any while a stash of it waits), and one per plugin version a Claude Code process loads (`loads/`, with a hash of the machine id; pruned once a day, keeping the records of processes that still run and another machine's for 7 days; a large prune drained from `loads-drop/` in batches) | hooks and skills |
 | `~/.local/state/afk-compact/handoffs/.watch/` (`log_dir`) | Logs and per-compaction records (see [Watcher](#watcher)) | hooks, mod, helper |
+| `~/.local/state/afk-compact/cache/` (fixed: no option moves it) | One small file per session for the [status line](#the-cache-state-in-your-status-line)'s `cache` command: the transcript path, the keep-warm gap, the last compaction and the session's end; those of sessions that ended, or with no recorded end were not written, more than 7 days ago are deleted only by `prune --apply` | helper (with each keep-warm or compaction log row), SessionStart and SessionEnd hooks |
+| `~/.local/state/afk-compact/bin/afk-compact-store` (fixed) | A two-line script that runs the installed copy's helper, for status lines; left in place by an uninstall | SessionStart hook of an installed copy |
 | `~/.claude/handoffs/` (the default before 0.1.2) | Read only, while `handoff_root` is unset or set to the default: nothing is moved or copied there, and nothing new is written there but the work folder of a handoff run begun before the update (see [Known limits of the move](#the-handoff-and-evidence-folders-moved-in-012)) | none |
 | `~/.local/state/afk-compact/disposable/<YYYY-MM-DD>/` | Automatic evidence copies, one folder per compaction, each with a `MANIFEST.tsv`; disposable items of a handoff | evidence sweep after a compaction; `/afk-compact:handoff`; deleted only by `prune --apply` |
 | `~/.claude/trash-staging/` (the default before 0.1.2) | Read only, while `disposable_root` is unset or set to the default: the copies an earlier version made there stay, and nothing new is written there | none |
@@ -620,7 +659,7 @@ Up to 0.1.1 the default `handoff_root` was `~/.claude/handoffs` and the default 
 - **What always stays.** Handoff files and saved summary copies (also a `.md` with `kind: handoff` or `kind: compact-summary` inside an evidence folder), every `MANIFEST.tsv`, a handoff's `ledger.md` and `inflight.md`, links (never followed), and every file a handoff or summary copy newer than the age cites: in a `MANIFEST.tsv` row, or by its path (or a folder above it) in the text, also with a line reference (`run.log:120`, `run.log:120-130`, `app.rb#L12`), in backticks, double or single quotes with spaces, or starting `./evidence/`, `~/` or `$HOME/`. The files an unpublished draft newer than the age kept stay too (its age: its begin date or the newest file in its folder, whichever is later). A newer handoff's own folder, with its restart recipes, is never old enough to be listed. The old folders read while the settings are the defaults (`~/.claude/handoffs`, `~/.claude/trash-staging`) and any folder you add with `--root DIR` are listed apart, read-only: nothing in them is deleted.
 - **Deleting.** `--apply` deletes only the files listed, then removes the folders left empty. The dry run prints a `plan:` hash, and `--apply` needs it: `--apply --plan <hash>` refuses (`REFUSED: plan-changed`, nothing deleted) when what it would delete has changed since (a file's path, size or modification time). Before it deletes, it marks the `MANIFEST.tsv` row of each copy it deletes `pruned` (the `scan` column), so `verify` and `/afk-compact:resume` report the copy as `pruned`, deleted on purpose, not `missing`, and `restore-evidence` skips it. A file it could not delete gets its row back and is listed as `failed` (exit 3). It refuses to delete while a store folder is refused (for example one inside a git work tree).
 
-Logs, summary copies, drafts under `.staging/` and the old `~/.claude/handoffs` are never pruned; remove them yourself once you no longer need them.
+Logs, summary copies, drafts under `.staging/` and the old `~/.claude/handoffs` are never pruned; remove them yourself once you no longer need them. The status line's cache state files of sessions that ended more than 7 days ago, or with no recorded end (a crashed session) were not written for 7 days, whatever `--days` says, are listed on a `cache state` line and deleted with the rest.
 
 ## Watcher
 
