@@ -661,6 +661,7 @@ def launcher_hits(target, brand):
         if groups is not None and n != HOOK_COUNT:
             out.append((hj, None, "AT-PK-01 hooks", "AT-PK-01 hooks: {} commands, want {}".format(n, HOOK_COUNT), ""))
     other_dir = re.compile(r"/([^/\s\"'`()<>]+)/" + re.escape(brand) + r"-store" + E)
+    shim_dir = re.compile(r"(?:/\.local/state\}?|\bXDG_STATE_HOME\}?)/" + re.escape(brand) + r"\Z")
     # A bare call (`<brand>-store <subcommand>`, no folder before it) only works if the launcher
     # is on the Bash PATH, which it is not since BLD-01: shipped text calls it by its full path
     # or through `<store>` (AT-PK-01, AT-PK-02).
@@ -671,9 +672,10 @@ def launcher_hits(target, brand):
             continue
         for no, line in enumerate(text.splitlines(), 1):
             for m in other_dir.finditer(line):
-                # 0.1.7 D-81: the status line's stable shim, <state>/<brand>/bin/<brand>-store,
+                # 0.1.7 D-81: the status line's stable shim, <state>/<brand>/bin/<brand>-store
+                # (<state> = ~/.local/state, ${XDG_STATE_HOME:-~/.local/state} or $XDG_STATE_HOME),
                 # is not the launcher (lib/cachestate.pm keep_shim)
-                if m.group(1) == "bin" and line[:m.start()].endswith("/" + brand):
+                if m.group(1) == "bin" and shim_dir.search(line[:m.start()]):
                     continue
                 if m.group(1) != LAUNCHER_DIR:
                     out.append((path, no, "AT-PK-01 launcher-dir",
