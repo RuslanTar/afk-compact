@@ -148,6 +148,8 @@ export type IdleKind = 'turn' | 'check' | 'compact'
  * anchored at the last warm one, with the gap's start and its warm pings so far); no timer of the
  * holding load runs for it, and a load that adopts it (a reload while warming) ends that warming
  * (`keep_warm_stop {why: reload}`) and fires it at that due, while the cache is still warm.
+ * `job` marks a record keep-warm handed back with a job still open (D-79: its result turn is
+ * certain): plugin idle compaction takes it from `idle_handoff_min_tokens` up (`compactFloor`).
  * A load that re-arms the timer has seen no turn end of its own, so the `aborted` and `published`
  * checks and `gap_s` read the turn from here. Such a load is a background session the supervisor
  * moved to a new version (no SessionEnd), a `claude respawn` or a process ended by a signal
@@ -163,6 +165,7 @@ export type Due = {
   ttl: '1h' | '5m' | null; pct: number | null; spct: number | null; cc: string | null; model: string | null
   warm?: number | null
   held?: { start: number; pings: number }
+  job?: true
 }
 
 /** Every clear of a record (§3.1): which load cleared which due, and when. */
@@ -194,6 +197,7 @@ function readDue(v: unknown): Due | undefined {
     cc: strOrNull(o.cc), model: strOrNull(o.model),
     ...(numOrNull(o.warm) !== null ? { warm: numOrNull(o.warm) } : {}),
     ...(readHeld(o.held) ?? {}),
+    ...(o.job === true ? { job: true as const } : {}),
   }
 }
 
@@ -352,10 +356,29 @@ async function persist(d: Deps, rec: Due): Promise<void> {
  * Keep-warm (D-14) hands the record it held back to the idle path with the cache still warm: due
  * now, anchored at the start of the last warm ping (`anchor` for the compaction's lapse guard,
  * `warm` for the turn's), with the episode, the turn's end and the published flag as they are now.
+ * `job` (D-79, owner 2026-11-08 23:22: "after the last keep-warm ... you would actually compact to
+ * avoid re-reading the cold cache"): a stop with a job still open (the cutoff, the deadline, the
+ * limit band) compacts from `idle_handoff_min_tokens` up, since the job's result turn would read
+ * a cold cache after an idle handoff turn, which does not compact; a 49-min turn record becomes
+ * the compaction where the plugin may compact (native vetoed, `idle_compact` on), never against
+ * `"autoCompactEnabled": false` or `idle_compact: false`.
  */
-export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number): Promise<void> {
+export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number, job = false): Promise<void> {
   const s = d.state
-  await persist(d, { ...rec, due: now, anchor: warm, warm, episode: s.idleEpisode ?? null, answer: s.lastTurnAnswer, published: s.publishedSinceHuman })
+  let kind = rec.kind
+  if (job && kind === 'turn' && idleSwitches(d).compactOn && (await d.nativeIdle()) === 'vetoed') kind = 'compact'
+  await persist(d, {
+    ...rec, kind, due: now, anchor: warm, warm, episode: s.idleEpisode ?? null, answer: s.lastTurnAnswer, published: s.publishedSinceHuman,
+    ...(job ? { job: true as const } : {}),
+  })
+}
+
+/**
+ * The smallest context plugin idle compaction takes for this record: Claude Code's idle minimum,
+ * or for a record keep-warm handed back with a job open (D-79) `idle_handoff_min_tokens` when lower.
+ */
+function compactFloor(d: Deps, rec: Due, env: IdleEnv): number {
+  return rec.job === true ? Math.min(env.compactMin, d.cfg.idle_handoff_min_tokens) : env.compactMin
 }
 
 /**
@@ -773,7 +796,7 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
   }
   const env = await d.idleEnv()
   const tokens = u?.tokens ?? rec.tokens ?? undefined
-  if (on.compactOn && (agents > 0 || !on.turnOn || tokens === undefined || tokens >= env.compactMin)) {
+  if (on.compactOn && (agents > 0 || !on.turnOn || tokens === undefined || tokens >= compactFloor(d, rec, env))) {
     // G0b: the check's policy is the one it was armed with (no `idle_mode` row at its fire), but
     // `"autoCompactEnabled": false` set since then (`/config`, another session's settings write)
     // is an explicit user switch: no compaction.
@@ -1071,7 +1094,7 @@ export async function compactGuards(d: Deps, sid: string, rec: Due, now: number,
   if ((await effective(d, sid)).disabled) return no('small-window')
   const u = await usageOrNone(d)
   const tokens = u?.tokens ?? rec.tokens ?? undefined
-  if (tokens === undefined || tokens < env.compactMin) return no('small')
+  if (tokens === undefined || tokens < compactFloor(d, rec, env)) return no('small')
   if (await ttl5m(d, env, u, rec)) return no('ttl-5m')
   const near = nearLimit(u, rec)
   if (near) return { why: 'near-limit', windows: near }

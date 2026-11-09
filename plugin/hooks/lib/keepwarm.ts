@@ -4,7 +4,8 @@
 // `$.model.fork` ping, so the turn the job's result opens reads the conversation from the cache
 // instead of writing it again. At the cutoff it hands over to the idle path (idle.ts: the handoff
 // turn or the plugin's idle compaction) while the cache is still warm: the decision model's policy
-// "warm to H, then compact while warm" (14 days of real sessions; live probe PASS: a fork at +50 min
+// "warm to H, then compact while warm" (D-79: a stop with a job still open compacts from
+// `idle_handoff_min_tokens` up, idle.ts `handOverIdle`; 14 days of real sessions; live probe PASS: a fork at +50 min
 // read 228,161 cached tokens and wrote 9, and the wake at +70 min read the same 228,161 from cache;
 // no Stop, UserPromptSubmit or turn event fired for the fork).
 //
@@ -287,9 +288,10 @@ async function step(d: Deps, kw: KeepWarm, gen: number): Promise<void> {
 
 /**
  * Why this gap may not warm now, or undefined. `handover`: the cache is still warm, so a deferred
- * idle record goes back to the idle path; `windows`: a `near-limit` stop's (idle.ts `limitWindows`).
+ * idle record goes back to the idle path; `windows`: a `near-limit` stop's (idle.ts `limitWindows`);
+ * `job`: a job is still open, so the hand-over compacts from `idle_handoff_min_tokens` up (D-79).
  */
-async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: string; handover: boolean; windows?: string[] } | undefined> {
+async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: string; handover: boolean; windows?: string[]; job?: boolean } | undefined> {
   const s = d.state
   const env = await d.idleEnv()
   const scale = scaleOf(env)
@@ -316,7 +318,7 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<{ why: strin
   // A window at the limit share or more; none reported (or no reading): this guard is skipped.
   const limits = u?.rateLimits ?? []
   if (limits.some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { why: 'near-limit', handover: true, windows: limitWindows(limits) }
-  if (now - kw.start >= d.cfg.keep_warm_hours * IDLE_CACHE_MS * scale) return { why: 'cutoff', handover: true }
+  if (now - kw.start >= d.cfg.keep_warm_hours * IDLE_CACHE_MS * scale) return { why: 'cutoff', handover: true, job: true }
   // No idle path would take the gap over after the pings: no idle record armed or held for the
   // session (`incoming`: the one the idle timer's fire is asking about, a tombstone in the store by
   // then; `deferred`: the one this gap holds), or `triggers` off, which every idle path refuses.
@@ -424,11 +426,11 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
 /**
  * Warming ends for this gap: one `keep_warm_stop` row (only for a gap that warmed), and, with
  * `handover` and a deferred idle record, that record goes back to the idle path at once, anchored
- * at the last warm request (idle.ts `handOverIdle`); the next gap then warms only after a turn
+ * at the last warm request (idle.ts `handOverIdle`; `job`: a job still open, D-79); the next gap then warms only after a turn
  * not of the plugin's own. With no hand-over the record it held is cleared, or with `keep`
  * (SessionEnd `other`) left in the store for the process that resumes the session.
  */
-async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: number, keep = false, windows?: string[]): Promise<void> {
+async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: number, keep = false, windows?: string[], job = false): Promise<void> {
   const s = d.state
   if (s.keepWarm === kw) cancelKeepWarmTimer(d)
   const was = kw.phase
@@ -444,7 +446,7 @@ async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: 
   })
   if (back && rec) {
     s.keepWarmSpent = true
-    await handOverIdle(d, rec, kw.warm, now)
+    await handOverIdle(d, rec, kw.warm, now, job)
   } else if (rec) await releaseHeld(d, kw.sid, keep)
 }
 
@@ -513,7 +515,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     }
     // False when the gap moved meanwhile: nothing more here.
     if (!(await begin(d, kw, now))) return
-  } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now, false, b.windows)
+  } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now, false, b.windows, b.job === true)
   if (kw.phase !== 'warming') return
   // The main requests before the fork: one that comes while it runs already changed the history.
   const reqs = s.mainReqs
@@ -555,7 +557,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   // A hand-over only while the held record can still fire on a warm cache: a fork that came back
   // past its deadline (a slow one) ends the gap `missed`, with the record dropped.
   const late = kw.deferred !== undefined && t1 > heldDeadline(kw.deferred, kw.warm, scale)
-  const handOver = (why: string): Promise<void> => (late ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1))
+  const handOver = (why: string, job = false): Promise<void> => (late ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1, false, undefined, job))
   // No more pings in this gap, with the hand-over, the cache as warm as the last warm request left
   // it: `fork-miss`, the fork did not read the main prefix and wrote nothing the main session reads
   // (the idle path's own checks decide, as for a first ping that held nothing yet, and they refuse
@@ -568,7 +570,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     // No request of the main session out: there is no snapshot to fork, and a retry finds none either.
     if (o.result === 'nothing-to-fork') return handOver('nothing-to-fork')
     // The held record goes back while it can still fire, rather than be dropped at `missed`.
-    if (kw.deferred !== undefined && t1 + retryMs(scale) > heldDeadline(kw.deferred, kw.warm, scale)) return handOver('deadline')
+    if (kw.deferred !== undefined && t1 + retryMs(scale) > heldDeadline(kw.deferred, kw.warm, scale)) return handOver('deadline', true)
   }
   return again(d, kw, t1, scale)
 }

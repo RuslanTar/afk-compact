@@ -2006,3 +2006,83 @@ test('AT-KW-56 (D-82): native on, an idle teammate waiting for a plan approval (
   expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([0])
   expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 0]])
 })
+
+// ---- D-79 (owner 2026-11-08 23:22: "after the last keep-warm ... you would actually compact to avoid
+// re-reading the cold cache"): a stop with a job still open (the cutoff, the deadline) hands the gap
+// to plugin idle compaction from idle_handoff_min_tokens up, below Claude Code's idle minimum too,
+// since the idle handoff turn does not compact and the job's result turn would read a cold cache.
+
+const MIN100K = { ...ON, idle_handoff_min_tokens: 100000 }
+
+test('AT-KW-57 (D-79): vetoed, 150K (below the idle minimum), an agent running: the 49-min turn waits; at the cutoff plugin idle compaction runs while warm, no handoff turn', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 50)
+  expect(skips(w)).toEqual([['keep-warm', 'turn']])
+  await until(w, t0, 150)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(ic(w).map(r => [r.at, r.tokens, r.agents])).toEqual([['timer', 150000, 1]])
+  expect([selfCompacts(w), w.submits.length]).toEqual([1, 0])
+})
+
+test('AT-KW-57 (D-79): native on, 150K, an agent running: at the cutoff the held check compacts while warm (not the `small` skip)', { options: MIN100K }, async ($, on) => {
+  const w = world(on, {})
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 150)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(ic(w).map(r => [r.at, r.tokens, r.agents])).toEqual([['check', 150000, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('AT-KW-57 (D-79): vetoed, 150K, the pings fail to the held turn\'s deadline: stop deadline, plugin idle compaction runs then', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w, () => OVERLOADED)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 70)
+  expect(f.at).toEqual([50, 51, 52, 53, 54, 55])
+  expect(stops(w)).toEqual([['deadline', true, 0]])
+  expect(ic(w).map(r => [r.at, r.tokens])).toEqual([['timer', 150000]])
+  expect([selfCompacts(w), w.submits.length]).toEqual([1, 0])
+})
+
+for (const c of [
+  { name: 'below idle_handoff_min_tokens (90K)', opts: MIN100K, policy: NATIVE_OFF, tokens: 90000, skip: ['small', 'compact'] },
+  { name: '"autoCompactEnabled": false', opts: MIN100K, policy: { autoCompactEnabled: false }, tokens: 150000, skip: null },
+  { name: 'idle_compact false', opts: { ...MIN100K, idle_compact: 'false' }, policy: NATIVE_OFF, tokens: 150000, skip: null },
+]) {
+  test(`AT-KW-57 (D-79): at the cutoff with a job open, ${c.name}: no compaction`, { options: c.opts }, async ($, on) => {
+    const w = world(on, c.policy)
+    const f = forks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w, c.tokens)
+    f.t0 = t0
+    await until(w, t0, 150)
+    expect(stops(w)).toEqual([['cutoff', true, 2]])
+    expect(selfCompacts(w)).toBe(0)
+    if (c.skip) expect(skips(w).slice(-1)).toEqual([c.skip])
+    // The idle handoff turn runs there instead (or no-asset without its text).
+    else if (IDLE) expect(w.submits.length).toBe(1)
+  })
+}
+
+test('AT-KW-57 (D-79): no job open at a ping (no-jobs) at 150K: the hand-over keeps the idle minimum, so the held turn runs (or no-asset), no compaction', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 60)
+  w.agents = []
+  await until(w, t0, 101)
+  expect(stops(w)).toEqual([['no-jobs', true, 1]])
+  expect(selfCompacts(w)).toBe(0)
+  if (IDLE) expect(w.submits.length).toBe(1)
+})
