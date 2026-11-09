@@ -1,0 +1,331 @@
+{
+ "id": "CACHE-05-shim",
+ "note": "0.1.7 D-81 (critique 7): SessionStart of an installed copy (Claude Code's plugin cache layout) writes ${XDG_STATE_HOME:-~/.local/state}/<plugin>/bin/<plugin>-store, a #!/bin/sh exec of its own launcher (temp + rename, 0755), which runs `cache` under sh; it points it here again when its target is gone or older, keeps one that runs a newer version that still exists, and leaves a file that is not such a shim (the user's own) alone. XDG_STATE_HOME moves it.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "plugin_at": "$HOME/.claude/plugins/cache/m/$BRAND/9.0.0",
+ "manifest": {
+  "version": "9.0.0"
+ },
+ "steps": [
+  {
+   "name": "first SessionStart: the shim written",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "mode": "0755",
+      "contains": [
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n"
+      ]
+     }
+    ],
+    "trace_has": [
+     "cache-shim written"
+    ]
+   },
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ]
+  },
+  {
+   "name": "the shim runs cache under sh",
+   "exec": [
+    "/bin/sh",
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 10m left\n"
+   }
+  },
+  {
+   "name": "and directly (its mode)",
+   "exec": [
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 10m left\n"
+   }
+  },
+  {
+   "name": "the same again: left as it is",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim same"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a shim whose target is gone: pointed here again",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim written"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n"
+      ]
+     }
+    ]
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+     "content": "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$HOME/gone/scripts/$BRAND-store' \"$@\"\n",
+     "mode": "0755"
+    }
+   ]
+  },
+  {
+   "name": "a shim of an older version that still exists: pointed here",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim written"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n"
+      ]
+     }
+    ]
+   },
+   "setup": [
+    {
+     "write": "$HOME/old/.claude-plugin/plugin.json",
+     "json": {
+      "name": "$BRAND",
+      "version": "0.1.6"
+     }
+    },
+    {
+     "write": "$HOME/old/scripts/$BRAND-store",
+     "content": "#!/bin/sh\n",
+     "mode": "0755"
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+     "content": "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$HOME/old/scripts/$BRAND-store' \"$@\"\n",
+     "mode": "0755"
+    }
+   ]
+  },
+  {
+   "name": "a shim of a newer version that still exists: kept",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim newer-kept"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$HOME/new/scripts/$BRAND-store' \"$@\"\n"
+      ]
+     }
+    ]
+   },
+   "setup": [
+    {
+     "write": "$HOME/new/.claude-plugin/plugin.json",
+     "json": {
+      "name": "$BRAND",
+      "version": "10.0.0"
+     }
+    },
+    {
+     "write": "$HOME/new/scripts/$BRAND-store",
+     "content": "#!/bin/sh\n",
+     "mode": "0755"
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+     "content": "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$HOME/new/scripts/$BRAND-store' \"$@\"\n",
+     "mode": "0755"
+    }
+   ]
+  },
+  {
+   "name": "a file of the user's own there: left alone",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim foreign"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "#!/bin/sh\necho mine\n"
+      ]
+     }
+    ]
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+     "content": "#!/bin/sh\necho mine\n",
+     "mode": "0755"
+    }
+   ]
+  },
+  {
+   "name": "XDG_STATE_HOME: the shim under it",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/xdg/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n"
+      ]
+     },
+     {
+      "path": "$TMP/xdg/$BRAND/cache/$SID.v1.json",
+      "json": {
+       "transcript": "$TMP/proj/$SID.jsonl"
+      }
+     }
+    ]
+   },
+   "env": {
+    "XDG_STATE_HOME": "$TMP/xdg"
+   }
+  },
+  {
+   "name": "a compaction's SessionStart: the shim is not checked",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_absent": [
+     "cache-shim same"
+    ]
+   }
+  }
+ ]
+}

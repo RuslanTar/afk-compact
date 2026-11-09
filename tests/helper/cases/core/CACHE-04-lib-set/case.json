@@ -1,0 +1,110 @@
+{
+ "id": "CACHE-04-lib-set",
+ "note": "0.1.7 D-81 (critique 10: the lib-set test is the hard one, timing only informational): `cache` loads util, jsonc, ctx, args and cachestate and no other core library (main.pl %SUB_LIBS), so no setup path runs (status --sid writes config_note rows and once/ markers on a fresh HOME); with a state file and a transcript to read too. The step's ms is printed by -v, not asserted.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "the libraries loaded",
+   "setup": [
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225540",
+       "timestamp": "2026-11-09T11:59:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "transcript": "$TMP/proj/$SID.jsonl",
+      "keep_warm": {
+       "started_at": 1794225570,
+       "gap_start": 1794225540,
+       "hours": 6,
+       "n": 0,
+       "warm_at": 1794225540,
+       "last_at": 1794225570
+      }
+     }
+    }
+   ],
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "env": {
+    "STORE_TEST_INC_OUT": "$TMP/inc.txt"
+   },
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794229140
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 59m left ↻0/7\n",
+    "files": [
+     {
+      "path": "$TMP/inc.txt",
+      "lines": 1,
+      "has": [
+       "(?:^| )util(?: |$)",
+       "(?:^| )jsonc(?: |$)",
+       "(?:^| )ctx(?: |$)",
+       "(?:^| )args(?: |$)",
+       "(?:^| )cachestate(?: |$)"
+      ],
+      "lacks": [
+       "(?:^| )(?:sha|spec|settings|paths|roots|log|rc|identity|lock|nonce|git|gsd|queue|bucket|frontmatter|detect|assemble|secrets|evidence|dispatch|transcript|scope|sessions|sidecar|ledger|copies|measure|checkpoint|sweep|reconcile|orphans|keyset|resumeblock|rollup|postcompact|repomode|jobrec|handoff_turn|notice|userre|restart|plugver)(?: |$)"
+      ]
+     }
+    ],
+    "absent": [
+     "$HOME/.local/state/$BRAND/handoffs"
+    ]
+   }
+  }
+ ]
+}

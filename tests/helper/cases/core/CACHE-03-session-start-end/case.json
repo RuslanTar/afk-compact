@@ -1,0 +1,281 @@
+{
+ "id": "CACHE-03-session-start-end",
+ "note": "0.1.7 D-81: SessionStart records the transcript path in the cache state, so `cache --sid` without --stdin reads the transcript's last main request; SessionEnd sets ended_at; a resume of the same id clears it (critique 6), and a row after the end does too. A subagent's SessionStart writes nothing.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "SessionStart startup: the transcript path kept",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794224400",
+       "timestamp": "2026-11-09T11:40:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      },
+      {
+       "type": "assistant",
+       "uuid": "a-1794224410-ok",
+       "sessionId": "$SID",
+       "timestamp": "2026-11-09T11:40:10.000Z",
+       "message": {
+        "id": "msg_S",
+        "role": "assistant",
+        "content": [
+         {
+          "type": "text",
+          "text": "ok"
+         }
+        ],
+        "usage": {
+         "cache_read_input_tokens": 9000,
+         "cache_creation_input_tokens": 10,
+         "cache_creation": {
+          "ephemeral_1h_input_tokens": 10,
+          "ephemeral_5m_input_tokens": 0
+         }
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "mode": "0600",
+      "json": {
+       "transcript": "$TMP/proj/$SID.jsonl"
+      },
+      "keys_absent": [
+       "ended_at"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "--sid alone reads that transcript",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 40m left\n"
+   }
+  },
+  {
+   "name": "SessionEnd: ended_at",
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionEnd",
+    "reason": "prompt_input_exit"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "json": {
+       "ended_at": 1794225600
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "an ended session: ended_at in the reading",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "ended_at": 1794225600,
+     "state": "warm"
+    }
+   }
+  },
+  {
+   "name": "a live status line (prompt_cache on stdin) overrides it",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "ended_at": {
+      "null": true
+     }
+    }
+   },
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794225700
+    }
+   }
+  },
+  {
+   "name": "SessionStart resume of the same id: ended_at cleared",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "now": "2026-11-09T12:10:00Z",
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "json": {
+       "transcript": "$TMP/proj/$SID.jsonl"
+      },
+      "keys_absent": [
+       "ended_at"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "SessionEnd again, then a keep-warm row of a later process: live again",
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "now": "2026-11-09T12:20:00Z",
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionEnd",
+    "reason": "other"
+   },
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "json": {
+       "ended_at": 1794226800
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a row after the end",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T12:21:40.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 1}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+      "keys_absent": [
+       "ended_at"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a subagent's SessionStart: no state for its id",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-sub",
+    "agent_id": "a1b2c3",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "absent": [
+     "$HOME/.local/state/$BRAND/cache/$SID-sub.v1.json"
+    ]
+   }
+  }
+ ]
+}

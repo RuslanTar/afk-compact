@@ -1,0 +1,135 @@
+{
+ "id": "HT-PR-03-prune-cache-state (prune lists the cache state files of sessions that ended over 7 days ago, whatever --days, and --apply deletes them with the plan)",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.7 D-81: `prune` adds the status line's cache state files (<state>/<plugin>/cache/<sid>.v1.json) of sessions that ended more than 7 days ago (ended_at; without one, the file's modification time), and temp files left that long, to its plan; --apply deletes them. A session that ended 2 days ago, or one still writing, stays.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "setup and dry run",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/old-ended.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "old-ended",
+      "transcript": "/x/old-ended.jsonl",
+      "ended_at": 1793534400
+     }
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/new-ended.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "new-ended",
+      "transcript": "/x/new-ended.jsonl",
+      "ended_at": 1794052800
+     }
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/old-no-end.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "old-no-end",
+      "transcript": "/x/old-no-end.jsonl"
+     }
+    },
+    {
+     "touch": "$HOME/.local/state/$BRAND/cache/old-no-end.v1.json",
+     "at": "2026-10-30T00:00:00Z"
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/live.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "live",
+      "transcript": "/x/live.jsonl"
+     }
+    },
+    {
+     "touch": "$HOME/.local/state/$BRAND/cache/live.v1.json",
+     "at": "2026-11-09T11:00:00Z"
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/.live.v1.json.123.ab12",
+     "content": "{"
+    },
+    {
+     "touch": "$HOME/.local/state/$BRAND/cache/.live.v1.json.123.ab12",
+     "at": "2026-10-01T00:00:00Z"
+    }
+   ],
+   "argv": [
+    "prune",
+    "--days",
+    "30"
+   ],
+   "capture": {
+    "PLAN": "re:plan: ([0-9a-f]{12})"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^cache state .*/cache: 3 files of sessions that ended over 7 days ago, \\d+ KB to free$",
+     "^plan: [0-9a-f]{12} "
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/old-ended.v1.json"
+     },
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/old-no-end.v1.json"
+     }
+    ]
+   }
+  },
+  {
+   "name": "apply",
+   "argv": [
+    "prune",
+    "--days",
+    "30",
+    "--apply",
+    "--plan",
+    "$PLAN"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^deleted: 3 files"
+    ],
+    "absent": [
+     "$HOME/.local/state/$BRAND/cache/old-ended.v1.json",
+     "$HOME/.local/state/$BRAND/cache/old-no-end.v1.json",
+     "$HOME/.local/state/$BRAND/cache/.live.v1.json.123.ab12"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/new-ended.v1.json"
+     },
+     {
+      "path": "$HOME/.local/state/$BRAND/cache/live.v1.json"
+     }
+    ]
+   }
+  },
+  {
+   "name": "nothing left to prune",
+   "argv": [
+    "prune",
+    "--days",
+    "30"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "^cache state"
+    ],
+    "stdout_has": [
+     "^nothing to prune$"
+    ]
+   }
+  }
+ ]
+}
