@@ -1,0 +1,149 @@
+{
+ "id": "HL-07 carry-provenance through a fix, HL-09 spawn label place (0.1.5 E-3 review round 4)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.5 E-3 review round 4. HL-07: an untagged line copied from a foreign base still blocks carry-provenance after publish lists its range (the re-lint reads a rewritten line as its draft text too; before: the listed text no longer equalled the base's, and the line was published without its [from …] tag); tagged, it is listed and published with its tag. HL-09: a `-<n>` counter is a label only in a label place, so `model claude-<n>` in spawns: is a placeholder.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "git": [
+      "rev-parse",
+      "HEAD"
+     ],
+     "cwd": "$TMP/repo",
+     "var": "HEAD0"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_09-00-00_11111111_retry.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0a0a0a\ndate: 2026-10-21T09:00:00+03:00\nsession_id: $SID\nactor: main\ngit_commit: $HEAD0\n---\n⟪$BRAND v1 n=0a0a0a0a s=manual⟫\n# LAB-7 — own first pass\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n⟪/$BRAND n=0a0a0a0a⟫\n"
+    },
+    {
+     "write": "$ROOT/repo/LAB-7/2026-10-21_12-00-00_ab12cd34_other.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0f0f0f0f\ndate: 2026-10-21T12:00:00+03:00\nsession_id: ab12cd34-aaaa-4bbb-8ccc-dddddddddddd\nactor: main\ngit_commit: 1234567890abcdef1234567890abcdef12345678\n---\n⟪$BRAND v1 n=0f0f0f0f s=manual⟫\n# LAB-7 — other session\n## Decisions and do-not-re-raise\n- D-7: settle X-2..X-4 first\n- X-2: refuted \"r\"\n- X-3: refuted \"q\"\n- X-4: refuted \"s\"\n## In flight\nNothing in flight known (not checked)\n⟪/$BRAND n=0f0f0f0f⟫\n"
+    }
+   ]
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "name": "foreign base",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "previous_kind": "foreign",
+     "previous_sid8": "ab12cd34"
+    }
+   },
+   "capture": {
+    "STAGE": "json:stage",
+    "NONCE": "json:nonce",
+    "STEM": "json:stem"
+   }
+  },
+  {
+   "write": "$STAGE/restart/B-1.md",
+   "content": "item: B-1 · runtime id a1b2c3 · class ask\nscript: none (agent spawns, one per round)\ncommand: Workflow(script=\"round.js\") — same session only\ncwd: $TMP/repo\nspawns: agent: model claude-<n>, effort high (fix-<n>)\nexpected outputs: workflow return {clean}\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-2: settle X-2..X-4 first\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "HL-07: an untagged foreign line whose range publish lists still blocks carry-provenance; HL-09: a model id ending in -<n> is a placeholder",
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^LINT carry-provenance line 11$",
+     "^LINT recipe-placeholder restart/B-1\\.md:5$",
+     "^ADVISORY id-range line 11: publish lists each id: X-2\\.\\.X-4 as X-2, X-3, X-4$",
+     "^REFUSED: lint \\(2 blocking\\); draft kept at $STAGE/body\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT id-range",
+     "^Wrote handoff"
+    ],
+    "files": [
+     {
+      "path": "$STAGE/body.md",
+      "has": [
+       "^- D-2: settle X-2\\.\\.X-4 first$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "write": "$STAGE/restart/B-1.md",
+   "content": "item: B-1 · runtime id a1b2c3 · class ask\nscript: none (agent spawns, one per round)\ncommand: Workflow(script=\"round.js\") — same session only\ncwd: $TMP/repo\nspawns: agent: model opus, effort high (fix-<n>)\nexpected outputs: workflow return {clean}\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n- D-2: settle X-2..X-4 first [from ab12cd34 · D-7 · 2026-10-21 12:00 +0300]\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "name": "HL-07: tagged, the foreign line is listed and published with its tag",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY id-range line 11: publish lists each id: X-2\\.\\.X-4 as X-2, X-3, X-4$",
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$"
+    ],
+    "stdout_lacks": [
+     "^LINT "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/repo/LAB-7/$STEM.md",
+      "has": [
+       "^- D-2: settle X-2, X-3, X-4 first \\[from ab12cd34 · D-7 · 2026-10-21 12:00 \\+0300\\]$"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

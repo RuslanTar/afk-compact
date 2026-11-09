@@ -195,7 +195,9 @@ our %SCHEMA = (
                          # AP-4 (2026-10-23): counts and outward class ids of the checked approvals, never a quote
                          approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int', hashed => 'int', context => 'int' }], approval_classes => [list => 'word'],
                          # 0.1.3 APPROVALS: how many approval lines publish moved to Open questions (a count)
-                         approvals_moved => 'int' },
+                         approvals_moved => 'int',
+                         # 0.1.5 (E-3): how many mechanical lints publish fixed itself (a count)
+                         lint_fixed => 'int' },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
     # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was; D-76

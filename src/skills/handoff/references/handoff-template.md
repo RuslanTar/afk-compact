@@ -235,7 +235,7 @@ The helper sets session id, actor, file name, lineage and lock (spec §18); neve
 
 ## 7. Lint (helper)
 
-`publish` lints the draft and recipes and never edits them; the published file differs only by moved approval lines and the references to them (the ADVISORY lines say which). Each `LINT <id> <where>` (blocking: nothing published) or `ADVISORY <id> <where>` (published) is followed by `  why: <reason> · fix: <fix>`; the rule list is spec §15. Why here: the rules you need while drafting are in §1–§4; the lint names any you missed, with its fix.
+`publish` lints the draft and recipes; the published file differs only by moved approval lines and the references to them, dropped ledger lines copied back, id ranges written as their ids and a missing Next steps item 1 copied from Step 1 (the ADVISORY lines say which). Each `LINT <id> <where>` (blocking: nothing published) or `ADVISORY <id> <where>` (published) is followed by `  why: <reason> · fix: <fix>`; the rule list is spec §15. Why here: the rules you need while drafting are in §1–§4; the lint names any you missed, with its fix.
 
 ## 8. Subagent form (returned as text, never written)
 
