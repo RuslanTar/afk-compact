@@ -8,6 +8,7 @@
     "plugin/LICENSE",
     "plugin/NOTICE",
     "plugin/README.md",
+    "plugin/assets/cache-contract.md",
     "plugin/assets/checkpoint-nudge.txt",
     "plugin/assets/examples/queue-folder.sh",
     "plugin/assets/handoff-instructions.txt",
