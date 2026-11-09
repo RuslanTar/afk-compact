@@ -19,6 +19,7 @@ package watch::export_schema;
 #                       `mcp__<server>__<tool>` name (and the sweep's own `mcp`) as `mcp`, else
 #                       `other`; an MCP server name is the user's own word and never exported
 #   rule                an alert rule id (A-NN), else dropped
+#   window              a usage window as `kind:percent` (D-76: `seven_day:94`, `arm:95`), else dropped
 #   [list => CLASS]     an array; each item through CLASS (items that fail are dropped)
 #   [counts => CLASS]   an object {key: number}; keys through CLASS (word by default), values num
 #   [obj => {...}]      a nested object with its own field classes
@@ -197,9 +198,10 @@ our %SCHEMA = (
                          approvals_moved => 'int' },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
-    # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was
+    # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was; D-76
+    # (0.1.6): a near-limit skip's usage windows (none on older rows)
     handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash',
-                         kind => [enum => qw(turn check compact)], late_s => 'num' },
+                         kind => [enum => qw(turn check compact)], late_s => 'num', windows => [list => 'window'] },
     # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load; owner xxxxxxxx-17:
     # `check` (native on or unreadable: the 55.5-min outcome check) and the served mode Claude Code
     # cached (2b, a hint only, never used to decide)
@@ -228,7 +230,7 @@ our %SCHEMA = (
     keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed fork-miss no-jobs ttl-5m prefix-changed
                                              near-limit cutoff off error held-elsewhere reload nothing-to-fork deadline
                                              no-idle-path)],
-                        pings => 'int', gap_s => 'num', handover => 'bool' },
+                        pings => 'int', gap_s => 'num', handover => 'bool', windows => [list => 'window'] },
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents
     # and the measure's running background tasks, at which step), and the digest turn submitted

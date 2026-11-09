@@ -536,11 +536,14 @@ our $TIME = qr/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:
 # The served model by the export's own class (watch/export.pm `model`, MG-4): a plain id with
 # Claude Code's `[1m]`-style suffix kept; a cloud ARN or profile path (an account id) dropped.
 our $MODEL = qr{^[a-z][a-z0-9._-]{0,63}(?:\[[0-9a-z]{1,8}\])?$};
+# D-76: a near-limit skip's usage windows, each `kind:percent` (`arm:percent` from the idle
+# record), as the export's `window` class takes them; at most 8 kept.
+our $WINDOW = qr/\A[a-z][a-z0-9_]{0,31}:(?:[0-9]{1,4}|unknown)\z/;
 our %MOMENT_FIELD = (
     session_id => $ID, kind => qr/^[a-z0-9-]{1,20}$/, trigger => qr/^[a-z-]{1,20}$/, position => 'int',
     ht => $ID, ht_rerun => $ID, turn_id => $ID, nonce => qr/^[0-9a-f]{8}$/, opened_at => $TIME, plugin_side => qr/^[a-z-]{1,20}$/,
     facts_age_s => 'int', model => $MODEL, cc_version => $ID, worktree => 'path', branch => 'text', head => qr/^[0-9a-f]{4,64}$/,
-    dirty => 'int', old_chain_flagged => 'int', tokens => 'int', status => qr/^[a-z:-]{1,40}$/,
+    dirty => 'int', old_chain_flagged => 'int', tokens => 'int', status => qr/^[a-z:-]{1,40}$/, windows => 'windows',
 );
 our %ARM_FIELD = (
     status => qr/^[a-z:-]{1,40}$/, started_at => $TIME, ended_at => $TIME, http_status => 'int', error => qr/^[a-z_]{1,40}$/,
@@ -591,6 +594,12 @@ sub _clean {
         if ($t eq 'bool') { $o{$k} = jsonc::bool(jsonc::is_bool($v) ? $$v : $v) if jsonc::is_bool($v) || (!ref $v && $v =~ /^[01]$/); next }
         if ($t eq 'path') { $o{$k} = $v if !ref $v && $v =~ m{^/} && $v !~ /[\0\n]/ && length($v) <= 1024; next }
         if ($t eq 'text') { $o{$k} = $v if !ref $v && $v !~ /[\0\n]/ && length($v) <= 255; next }
+        if ($t eq 'windows') {
+            next unless ref $v eq 'ARRAY';
+            my @w = grep { defined $_ && !ref $_ && $_ =~ $WINDOW } @$v;
+            $o{$k} = [ splice(@w, 0, 8) ];
+            next;
+        }
         $o{$k} = $v if !ref $v && $v =~ $t;
     }
     return \%o;
