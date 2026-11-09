@@ -11,8 +11,9 @@
 //   a teammate at work is open (its result turn is certain; a background shell alone may never
 //   report), the reading is fresh (refreshed in the last 10 minutes: a reading 50 minutes old says
 //   nothing of the other sessions on the account), and the share plus the largest of the last five
-//   changes the plugin's own compactions made in that window kind, plus one point, stays below the
-//   cap (none measured yet: 90%). A window whose reset time has passed has reset: its old reading
+//   changes the plugin's own compactions made in that window kind (one under a point counts as one:
+//   readings are whole points, and one taken before Claude Code refreshed it reads 0), plus one
+//   point, stays below the cap (none measured yet: 90%). A window whose reset time has passed has reset: its old reading
 //   counts for nothing.
 // - any other window stops at 90%.
 // Each rule name goes on the row of the skip or stop it decided (`rule`).
@@ -25,6 +26,8 @@ export const LIMIT_SHARE = 90
 export const PLAN_CAPS: Readonly<Record<string, number>> = { five_hour: 98, seven_day: 95 }
 /** D-80: a reading refreshed this recently is fresh. */
 export const LIMIT_FRESH_MS = 10 * 60000
+/** D-80: the smallest measured compaction change the band counts (a whole point: readings are whole points). */
+export const LIMIT_DELTA_FLOOR = 1
 /** D-80: the measured compaction changes kept per window kind (the newest). */
 export const LIMIT_DELTAS_KEPT = 5
 /** The store key of the measured changes: `{ five_hour: number[], seven_day: number[] }`, oldest first. */
@@ -61,7 +64,7 @@ export function windowRule(l: Limit, c: LimitCtx): string {
   if (c.usageAt === undefined || c.now - c.usageAt > LIMIT_FRESH_MS) return 'stale'
   const ds = c.deltas[l.kind] ?? []
   if (ds.length === 0) return 'no-delta'
-  return l.percentUsed + Math.max(...ds) + 1 < cap ? 'band' : 'delta'
+  return l.percentUsed + Math.max(LIMIT_DELTA_FLOOR, ...ds) + 1 < cap ? 'band' : 'delta'
 }
 
 /** The verdict over every window reported (none: ok, rule `90`). */

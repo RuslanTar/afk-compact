@@ -25,9 +25,12 @@ test('AT-LM-02: a plan window above 90 runs on in the band only with a job open,
   expect(windowRule(w('five_hour', 93), { ...C, usageAt: NOW - 11 * MIN })).toBe('stale')
   expect(windowRule(w('five_hour', 93), { ...C, usageAt: undefined })).toBe('stale')
   expect(windowRule(w('five_hour', 93), { ...C, deltas: {} })).toBe('no-delta')
-  // A change of 4 points at 95: 95 + 4 + 1 is not below 98. A change of 0 at 96: 97 < 98.
+  // A change of 4 points at 95: 95 + 4 + 1 is not below 98. A change under a point counts as one
+  // (a reading not yet refreshed after the compaction reads 0): at 95, 97 < 98; at 96, 98 is not.
   expect(windowRule(w('five_hour', 95), { ...C, deltas: { five_hour: [4] } })).toBe('delta')
-  expect(windowRule(w('five_hour', 96), { ...C, deltas: { five_hour: [0] } })).toBe('band')
+  expect(windowRule(w('five_hour', 95), { ...C, deltas: { five_hour: [0] } })).toBe('band')
+  expect(windowRule(w('five_hour', 96), { ...C, deltas: { five_hour: [0, 0, 0, 0, 0] } })).toBe('delta')
+  expect(windowRule(w('five_hour', 96), { ...C, deltas: { five_hour: [0.4] } })).toBe('delta')
   expect(windowRule(w('five_hour', 97), { ...C, deltas: { five_hour: [0] } })).toBe('delta')
   // The largest of the last changes counts.
   expect(windowRule(w('five_hour', 93), { ...C, deltas: { five_hour: [0, 5, 1] } })).toBe('delta')
