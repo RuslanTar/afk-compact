@@ -168,7 +168,7 @@ sub _apply {
     if ($ev eq 'keep_warm_start') {
         my $gs = $t - $gap;
         $s->{keep_warm} = { started_at => _t($t), gap_start => _t($gs), hours => _num($r->{hours}), n => 0, warm_at => _t($gs),
-                            ping_at => undef, ping_end => undef, result => undef, stop => undef, last_at => _t($t) };
+                            result => undef, stop => undef, last_at => _t($t) };
         return 1;
     }
     if ($ev eq 'keep_warm_ping') {
@@ -178,8 +178,12 @@ sub _apply {
         $kw = $s->{keep_warm} = { started_at => undef, gap_start => _t($gs), hours => undef, n => 0, warm_at => _t($gs), stop => undef }
             unless $kw && _same_gap($kw, $gs);
         my $res = !ref $r->{result} && defined $r->{result} && $r->{result} =~ /\A[a-z-]{1,40}\z/ ? $r->{result} : 'error';
-        @$kw{qw(n result ping_at ping_end last_at)} = (_num($r->{n}) // $kw->{n} // 0, $res, _t($start), _t($t), _t($t));
+        @$kw{qw(n result last_at)} = (_num($r->{n}) // $kw->{n} // 0, $res, _t($t));
         $kw->{warm_at} = _t($start) if $res eq 'warm';
+        # the gap's last warm ping and last fork-miss, kept apart from the latest ping: a warm ping's
+        # cache outlives a later ping that failed (api-error, aborted, error, nothing-to-fork)
+        $kw->{warm_ping} = [_t($start), _t($t)] if $res eq 'warm';
+        $kw->{miss_ping} = [_t($start), _t($t)] if $res eq 'fork-miss';
         return 1;
     }
     # keep_warm_stop (one with no start before it, `no-idle-path`, is a gap of its own)
@@ -337,6 +341,14 @@ sub last_main {
 
 sub _int { my ($v) = @_; return defined $v ? int($v) : undef }
 
+# _ping(kw state, warm | fork-miss) -> [start, end] of the gap's last ping with that result, or undef
+sub _ping {
+    my ($kw, $res) = @_;
+    my $p = $kw->{ $res eq 'warm' ? 'warm_ping' : 'miss_ping' };
+    return undef unless ref $p eq 'ARRAY' && defined _num($p->[0]);
+    return [_num($p->[0]), _num($p->[1])];
+}
+
 # report(sid => S, input => status-line JSON or undef, now => epoch) -> the `<plugin>-cache/v1` object
 sub report {
     my (%o) = @_;
@@ -380,22 +392,26 @@ sub report {
     }
     my $last = defined $main_at ? { kind => 'main', at => $main_at } : undef;
     my $why;
-    # the plugin's keep-warm ping, when it started after the last main request
-    if ($kw && defined _num($kw->{ping_at}) && defined $kw->{result}) {
-        my $after = defined $main_at ? $kw->{ping_at} > $main_at
-                  : defined $anchor ? (_num($kw->{ping_end}) // $kw->{ping_at}) + $TOUCH_SLACK_S >= $anchor
-                  : 1;
-        if ($after && $kw->{result} eq 'warm') {
-            $last = { kind => 'keep_warm', at => $kw->{ping_at} };
-            if (!defined $src) { ($src, $ttl, $exp) = ('plugin', '1h', $kw->{ping_at} + $TTL_S{'1h'}) }
-            elsif (($ttl // '') eq '1h') { $exp = _max($exp, $kw->{ping_at} + $TTL_S{'1h'}) }
-        } elsif ($after && $kw->{result} eq 'fork-miss') {
-            # the ping did not read the main prefix: the main cache was found cold (v0.1.7 probes Q3:
-            # the next main request missed in 17 of 17 such cases)
-            $last = { kind => 'keep_warm', at => $kw->{ping_at} };
-            $src //= 'plugin';
-            $why = 'fork-miss';
-        }
+    # the plugin's keep-warm pings, when they started after the last main request: the gap's last
+    # warm one and its last fork-miss, whatever pings came after them; the later of the two decides
+    my $after = sub {
+        my ($p) = @_;
+        return 0 unless defined $p;
+        return defined $main_at ? $p->[0] > $main_at : defined $anchor ? ($p->[1] // $p->[0]) + $TOUCH_SLACK_S >= $anchor : 1;
+    };
+    my ($wp, $mp) = $kw ? (_ping($kw, 'warm'), _ping($kw, 'fork-miss')) : ();
+    $wp = undef unless $after->($wp);
+    $mp = undef unless $after->($mp);
+    if ($mp && (!$wp || $mp->[0] > $wp->[0])) {
+        # the ping did not read the main prefix: the main cache was found cold (v0.1.7 probes Q3:
+        # the next main request missed in 17 of 17 such cases)
+        $last = { kind => 'keep_warm', at => $mp->[0] };
+        $src //= 'plugin';
+        $why = 'fork-miss';
+    } elsif ($wp) {
+        $last = { kind => 'keep_warm', at => $wp->[0] };
+        if (!defined $src) { ($src, $ttl, $exp) = ('plugin', '1h', $wp->[0] + $TTL_S{'1h'}) }
+        elsif (($ttl // '') eq '1h') { $exp = _max($exp, $wp->[0] + $TTL_S{'1h'}) }
     }
     # a compaction after the last request: the next one writes the cache anew
     my $ref = $last ? $last->{at} : $anchor;
