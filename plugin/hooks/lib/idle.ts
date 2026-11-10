@@ -150,8 +150,10 @@ export type IdleKind = 'turn' | 'check' | 'compact'
  * anchored at the last warm one, with the gap's start and its warm pings so far); no timer of the
  * holding load runs for it, and a load that adopts it (a reload while warming) ends that warming
  * (`keep_warm_stop {why: reload}`) and fires it at that due, while the cache is still warm.
- * `job` marks a record keep-warm handed back with a job still open (D-79: its result turn is
- * certain): plugin idle compaction takes it from `idle_handoff_min_tokens` up (`compactFloor`).
+ * `job` marks a record keep-warm handed back with a job still open (D-79: an agent's, a workflow's
+ * or a working teammate's result turn would read the conversation cold; a background shell may never
+ * end, and it counts all the same): plugin idle compaction takes it from `idle_handoff_min_tokens` up
+ * (`compactFloor`).
  * A load that re-arms the timer has seen no turn end of its own, so the `aborted` and `published`
  * checks and `gap_s` read the turn from here. Such a load is a background session the supervisor
  * moved to a new version (no SessionEnd), a `claude respawn` or a process ended by a signal
