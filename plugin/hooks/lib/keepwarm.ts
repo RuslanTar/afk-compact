@@ -4,9 +4,10 @@
 // `$.model.fork` ping, so the turn the job's result opens reads the conversation from the cache
 // instead of writing it again. At the cutoff it hands over to the idle path (idle.ts: the handoff
 // turn or the plugin's idle compaction) while the cache is still warm: the decision model's policy
-// "warm to H, then compact while warm" (D-79: a stop with a job still open compacts from
-// `idle_handoff_min_tokens` up, idle.ts `handOverIdle`; 14 days of real sessions; live probe PASS: a fork at +50 min
-// read 228,161 cached tokens and wrote 9, and the wake at +70 min read the same 228,161 from cache;
+// "warm to H, then compact while warm" (D-79: the cutoff, deadline and limit-band stops with an
+// agent, a workflow or a working teammate open compact from `idle_handoff_min_tokens` up, idle.ts
+// `handOverIdle`; 14 days of real sessions; live probe PASS: a fork at +50 min read 228,161 cached
+// tokens and wrote 9, and the wake at +70 min read the same 228,161 from cache;
 // no Stop, UserPromptSubmit or turn event fired for the fork).
 //
 // One gap at a time, armed at every main turn end beside the idle timer (`armKeepWarm`):
