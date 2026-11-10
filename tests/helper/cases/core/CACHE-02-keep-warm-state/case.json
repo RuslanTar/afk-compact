@@ -1,6 +1,6 @@
 {
  "id": "CACHE-02-keep-warm-state",
- "note": "0.1.7 D-81: cmd/log.pl keeps <state>/<plugin>/cache/<sid>.v1.json from the mod's main keep_warm_start/ping/stop and compacted rows (temp + rename, 0600). `cache` adds keep-warm: ↻n/max while active (max = floor((hours*60-1)/50): 7 at 6 h, 1 at 1 h, 0 at 0.5 h), the last stop. A ping counts only if it started (ts - ms) after the last main request (critique 3): a warm one moves the 1h expiry to its start + 1 h, else Claude Code's later prompt_cache.expires_at stands (probe Q2: a fork that reads the cache moves it itself); a stale ping before a later 5m main request changes nothing; a fork-miss after it reads cold (probe Q3: 17 of 17 next main requests missed). A compaction after the last request reads cold until the next one; a skipped compaction or a subagent's does not count, nor an idle_compact row (idle.ts writes it before it tries plugin idle compaction, which may then be skipped or never run; review of the cache fix: the status line read `cache cold (compacted)` while warm). Out-of-order rows change nothing; a stop with no start row (no-idle-path) is a gap of its own; a torn file reads unknown, exit 0; parallel writers leave valid JSON.",
+ "note": "0.1.7 D-81: cmd/log.pl keeps <state>/<plugin>/cache/<sid>.v1.json from the mod's main keep_warm_start/ping/stop and compacted rows (temp + rename, 0600). `cache` adds keep-warm: ↻n/max while active (max = floor((hours*60-1)/50): 7 at 6 h, 1 at 1 h, 0 at 0.5 h), the last stop. A ping counts only if it started (ts - ms) after the last main request (critique 3): a warm one moves the 1h expiry to its start + 1 h, else Claude Code's later prompt_cache.expires_at stands (probe Q2: a fork that reads the cache moves it itself); a stale ping before a later 5m main request changes nothing; a ping that failed after a warm one (api-error, error) leaves that warm one's expiry (review 2 of the cache lane); a fork-miss after it reads cold (probe Q3: 17 of 17 next main requests missed). A compaction after the last request reads cold until the next one; a skipped compaction or a subagent's does not count, nor an idle_compact row (idle.ts writes it before it tries plugin idle compaction, which may then be skipped or never run; review of the cache fix: the status line read `cache cold (compacted)` while warm). Out-of-order rows change nothing; a stop with no start row (no-idle-path) is a gap of its own; a torn file reads unknown, exit 0; parallel writers leave valid JSON.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
@@ -485,6 +485,103 @@
    "expect": {
     "exit": 0,
     "stdout": "cache 1h warm 59m left\n"
+   }
+  },
+  {
+   "name": "a warm ping, then a ping that failed (api-error) 50 min later, in one gap",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-w",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:50:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-w\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 2}\n{\"v\": 1, \"ts\": \"2026-11-09T11:50:08.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-w\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 8000}\n{\"v\": 1, \"ts\": \"2026-11-09T12:40:02.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-w\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"api-error\", \"status\": 529, \"cache_read\": null, \"cache_creation\": null, \"since_s\": 3000, \"gap_s\": 6000, \"ms\": 2000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "the failed ping does not undo the warm one: warm until its start + 1 h (transcript, no prompt_cache)",
+   "setup": [
+    {
+     "write": "$TMP/proj/w.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID-w",
+       "id": "req-1794222000",
+       "timestamp": "2026-11-09T11:00:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "now": "2026-11-09T12:41:00.000Z",
+   "stdin_json": {
+    "session_id": "$SID-w",
+    "transcript_path": "$TMP/proj/w.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 9m left ↻1/7\n"
+   }
+  },
+  {
+   "name": "then a ping that ended in an error",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-w",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T12:41:02.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-w\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"error\", \"cache_read\": null, \"cache_creation\": null, \"since_s\": 3060, \"gap_s\": 6061, \"ms\": 1000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "json: the warm ping stays the last request; last_result error",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID-w",
+    "--json"
+   ],
+   "now": "2026-11-09T12:42:00.000Z",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "source": "plugin",
+     "last.kind": "keep_warm",
+     "last.at": 1794225000,
+     "expires_at": 1794228600,
+     "keep_warm.n": 1,
+     "keep_warm.last_result": "error"
+    }
    }
   },
   {
