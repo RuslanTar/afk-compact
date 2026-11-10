@@ -17,8 +17,8 @@
 // - Warming starts, at the first ping or at an idle timer's fire, only for a main, non-headless
 //   session, while a background job of this session is open, on the one-hour cache (Claude Code's
 //   own TTL switch, else a five-hour or seven-day plan window reported: the idle path's reading,
-//   so never the five-minute cache, whose break-even is under 2 h), and below 90% of every usage
-//   window it can read (none reported: that guard is skipped). Plain user absence never warms
+//   so never the five-minute cache, whose break-even is under 2 h), and with no usage window it
+//   can read stopping it (limits.ts, D-80; none reported: that guard is skipped). Plain user absence never warms
 //   anything (IC-1 objection: "spend usage on every absence"). Nor a gap no idle path can take
 //   over (`no-idle-path`): no idle record armed or held for the session (`idle_handoff_turn` and
 //   `idle_compact` both off, or no kind at this context size), or `triggers` off (every idle path
@@ -49,11 +49,12 @@
 //   the gap began (`compacted`, Claude Code's own idle one included), no background job is open
 //   (`no-jobs`), the cache is not the one-hour one any more (`ttl-5m`), the main model or Claude
 //   Code version changed since the gap began (`prefix-changed`: `/model` sends no request, and a
-//   ping on the new prefix would write it all again), a usage window reached 90% (`near-limit`),
+//   ping on the new prefix would write it all again), a usage window's rule stops it (`near-limit`:
+//   90%, or a plan window's band with a job open, limits.ts),
 //   or the cutoff came (`cutoff`: `keep_warm_hours` of cache hours since the gap began; a gap past
 //   it before its first ping never warms), or no idle path is left (`no-idle-path`). Those but `turn`, `session-end`, `session-changed`,
-//   `compacted`, `missed` (past the 58-minute bound: a sleep, or the session busy to the end; or a
-//   fork back past the held record's deadline) and
+//   `compacted`, `fork-miss` (the main cache is cold), `missed` (past the 58-minute bound: a sleep,
+//   or the session busy to the end; or a fork back past the held record's deadline) and
 //   `held-elsewhere` (another load adopted the record) hand the deferred idle record back.
 // - `keepWarmGen` counts what disturbs a gap (a turn or prompt, the session's end, a new gap, a
 //   stop); the ping timer's own re-arm does not bump it. Every step that awaits takes it first and
