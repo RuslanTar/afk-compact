@@ -107,7 +107,7 @@ After a Claude Code update, `/afk-compact:status` may say a check is due and off
 claude plugin uninstall afk-compact
 ```
 
-Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them. It also leaves `~/.local/state/afk-compact/bin/afk-compact-store`, the fixed path a [status line](#the-cache-state-in-your-status-line) calls, which then runs nothing: delete it and remove the call from your status line.
+Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them. It also leaves `~/.local/state/afk-compact/bin/afk-compact-store`, the fixed path a [status line](#the-cache-state-in-your-status-line) calls, which keeps running the old copy of the plugin until Claude Code deletes that folder, then fails: delete it and remove the call from your status line.
 
 ## Skills
 
