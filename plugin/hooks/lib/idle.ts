@@ -54,8 +54,8 @@ import { effective } from './config'
 import { cacheTtlOf } from './deps'
 import { forkMissed, keepWarmHolds, resultJobOpen } from './keepwarm'
 import { laneAtCheck } from './lane'
-import type { UsageFields } from './limits'
-import { limitCtx, ownReadings, tierFields, usageFields, verdictOf } from './limits'
+import type { LimitNote, Reading, UsageFields, Verdict } from './limits'
+import { judge, limitCtx, noteOf, readingsNow, tierFields } from './limits'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
 import { log } from './log'
 
@@ -241,6 +241,15 @@ async function idleSkip(d: Deps, sid: string, why: string, kind: IdleKind, lateS
     kind, ...(lateS !== undefined ? { late_s: lateS } : {}), ...(windows !== undefined ? { windows } : {}),
     ...(rule !== undefined ? { rule, ...(await tierFields(d)) } : {}), ...usage,
   })
+}
+
+/**
+ * The fields an action's row gets from its limit note (D-80, D-83: the rule, the plan words, the
+ * windows with their sources and ages), none without one.
+ */
+export async function limitFields(d: Deps, n: LimitNote | undefined): Promise<Record<string, string | number | readonly string[] | Record<string, number>>> {
+  if (n === undefined) return {}
+  return { rule: n.rule, ...(await tierFields(d)), windows: n.windows, ...n.usage }
 }
 
 /**
@@ -646,7 +655,8 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
   schedule(d, own, now, rec.due <= now)
 }
 
-type Go = { tokens: number; allowance: number; native: number; calls: number }
+/** The idle handoff turn may run; `limit`: why a reading at the limit did not stop it (D-83), for its start row. */
+type Go = { tokens: number; allowance: number; native: number; calls: number; limit?: LimitNote }
 
 type Use = { tokens: number | undefined; rateLimits: Usage['rateLimits'] } | undefined
 
@@ -676,48 +686,47 @@ export async function oneHourCache(d: Deps, env: IdleEnv, u: Use): Promise<boole
   return planOf(u).length > 0
 }
 
-/** D-83: the `usage_src` and `usage_age_s` of the record's reading at arm (taken at its turn end). */
-function armUsage(rec: Due, now: number): UsageFields {
-  return { usage_src: ['arm:plugin'], usage_age_s: { arm: Math.max(0, secs(now - (rec.end ?? rec.due))) } }
+/**
+ * The record's highest share at arm (`spend`: of the spend limits) as a reading of its own (kind
+ * `arm`), taken at its turn end: none reported now (an adopted load before its first response).
+ */
+function armReading(rec: Due, spend = false): Reading[] {
+  const pct = spend ? rec.spct : rec.pct
+  return pct === null ? [] : [{ kind: 'arm', percentUsed: pct, at: rec.end ?? undefined, src: 'plugin' }]
 }
-
-/** A near-limit reading: the windows its row names (`limitWindows`) and their source and age (D-83). */
-type Near = { windows: string[]; usage: UsageFields }
 
 /**
- * G12: a window at the limit share or more (any kind, a gateway's too; `spendOnly`: a gateway's
- * spend limit only, plan windows ignored); none reported: the record's reading at arm. Near the
- * limit: the windows its row names, with their source and age; else undefined.
+ * G12, the idle handoff turn's own near-limit rule (`idle_handoff_near_limit`; never under `run`):
+ * a window at the limit share or more (any kind, a gateway's too; `skip-spend`: a gateway's spend
+ * limit only, plan windows ignored), by the trust rule of D-83 (limits.ts `judge`): every fresh
+ * reading of that kind at the share or more; none reported, the record's reading at arm.
  */
-function nearLimit(d: Deps, u: Use, rec: Due, now: number, spendOnly = false): Near | undefined {
-  const limits = u?.rateLimits ?? []
-  if (limits.length > 0) {
-    if (!limits.some(l => (!spendOnly || l.kind === SPEND_WINDOW) && !(l.percentUsed < NEAR_LIMIT_PCT))) return undefined
-    return { windows: limitWindows(limits), usage: usageFields(ownReadings(limits, d.state.usageAt), now) }
-  }
-  const pct = spendOnly ? rec.spct : rec.pct
-  return pct !== null && pct >= NEAR_LIMIT_PCT ? { windows: limitWindows([], pct), usage: armUsage(rec, now) } : undefined
-}
-
-/** The idle handoff turn's own near-limit skip (`idle_handoff_near_limit`): never under `run`. */
-function turnNearLimit(d: Deps, u: Use, rec: Due, now: number): Near | undefined {
+async function turnNearLimit(d: Deps, sid: string, u: Use, rec: Due, now: number): Promise<Verdict | undefined> {
   const mode = d.cfg.idle_handoff_near_limit
-  return mode === 'run' ? undefined : nearLimit(d, u, rec, now, mode === 'skip-spend')
+  if (mode === 'run') return undefined
+  const spendOnly = mode === 'skip-spend'
+  const limits = u?.rateLimits ?? []
+  const rs = limits.length > 0 ? await readingsNow(d, sid, limits) : armReading(rec, spendOnly)
+  const rule = spendOnly ? 'option-skip-spend' : 'option-skip'
+  return judge(rs, { job: false, usageAt: undefined, now, deltas: {} }, r => ((spendOnly && r.kind !== SPEND_WINDOW && r.kind !== 'arm') || r.percentUsed < NEAR_LIMIT_PCT ? 'ok' : rule))
 }
 
 /**
- * G12 of plugin idle compaction (D-80, limits.ts): the windows reported, by the adaptive rule (a
- * window that reset counts for nothing); none reported, the record's highest share at arm (an old
- * reading: 90%, rule `arm-90`). A skip, or the band's rule for the `idle_compact` row, or nothing.
+ * G12 of plugin idle compaction (D-80, D-83, limits.ts): every reading of the windows, the
+ * session's own and the shared record's, by the adaptive rule and the trust rule (a window that
+ * reset counts for nothing, only fresh readings decide, any one under the limit lets it run);
+ * none reported, the record's highest share at arm (90%, rule `arm-90`, only while that reading
+ * is fresh). A skip, or the rule for the `idle_compact` row (`band`, `split`, `no-fresh`), or nothing.
  */
-async function compactLimit(d: Deps, sid: string, u: Use, rec: Due, now: number): Promise<Skip | { rule?: string; usage?: UsageFields }> {
+async function compactLimit(d: Deps, sid: string, u: Use, rec: Due, now: number): Promise<Skip | { limit?: LimitNote }> {
   const limits = u?.rateLimits ?? []
-  if (limits.length === 0) {
-    return rec.pct !== null && !(rec.pct < NEAR_LIMIT_PCT) ? { why: 'near-limit', windows: limitWindows([], rec.pct), rule: 'arm-90', usage: armUsage(rec, now) } : {}
-  }
-  const v = verdictOf(limits, await limitCtx(d, await resultJobOpen(d, sid), now))
+  const c = await limitCtx(d, await resultJobOpen(d, sid), now)
+  const v = limits.length > 0
+    ? judge(await readingsNow(d, sid, limits), c)
+    : judge(armReading(rec), c, r => (r.percentUsed < NEAR_LIMIT_PCT ? 'ok' : 'arm-90'))
   if (!v.ok) return { why: 'near-limit', windows: v.windows, rule: v.rule, usage: v.usage }
-  return v.band ? { rule: 'band', usage: v.usage } : {}
+  const limit = noteOf(v)
+  return limit !== undefined ? { limit } : {}
 }
 
 /** The checks of §9.4 "Fire" from `aborted` on, in order; the first that fails is the skip reason. */
@@ -732,8 +741,9 @@ async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Du
   // other limit stands. Unknown tokens still skip: the turn's allowance below needs the size.
   if (tokens === undefined || (tokens < d.cfg.idle_handoff_min_tokens && (await laneAtCheck(d, sid)) !== 'finished')) return 'small'
   if (await ttl5m(d, await d.idleEnv(), u, rec)) return 'ttl-5m'
-  const near = turnNearLimit(d, u, rec, await d.now())
-  if (near) return { why: 'near-limit', windows: near.windows, rule: d.cfg.idle_handoff_near_limit === 'skip' ? 'option-skip' : 'option-skip-spend', usage: near.usage }
+  const tl = await turnNearLimit(d, sid, u, rec, await d.now())
+  if (tl !== undefined && !tl.ok) return { why: 'near-limit', windows: tl.windows, rule: tl.rule, usage: tl.usage }
+  const limit = tl !== undefined ? noteOf(tl) : undefined
   const ep = s.idleEpisode
   if (!ep || ep.done) return 'episode'
   if (s.publishedSinceHuman) return 'published'
@@ -742,7 +752,7 @@ async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Du
   if (c === undefined) return 'no-asset'
   const allowance = Math.min(d.cfg.handoff_turn_max_tokens, eff.native_trigger - SPENT_MARGIN - tokens)
   if (allowance < MIN_ALLOWANCE) return 'headroom'
-  return { tokens, allowance, native: eff.native_trigger, calls: c }
+  return { tokens, allowance, native: eff.native_trigger, calls: c, ...(limit !== undefined ? { limit } : {}) }
 }
 
 export function isBusy(s: Deps['state']): boolean {
@@ -795,7 +805,7 @@ async function turnBlocked(d: Deps, sid: string, rec: Due, now: number, atLoad: 
 }
 
 /** The plugin's own idle compaction at the check (owner 2026-10-27, owner Q2): its `idle_compact` row (`rule`: the limit band's, D-80). */
-type Compact = { compact: true; gapS: number; tokens: number; agents: number; rule?: string; usage?: UsageFields }
+type Compact = { compact: true; gapS: number; tokens: number; agents: number; limit?: LimitNote }
 
 /**
  * Owner xxxxxxxx-17: the 55.5-min outcome check. A check that fires more than a minute late is
@@ -843,12 +853,12 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
     // is an explicit user switch: no compaction.
     const g = (await d.nativeIdle()) === 'compaction-off' ? { why: 'compaction-off' } : await compactGuards(d, sid, rec, now, env)
     // The gap is the timer's own (about 3,330 s) when the turn end is unknown.
-    if (!('why' in g)) return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents, ...(g.rule !== undefined ? { rule: g.rule, usage: g.usage } : {}) }
+    if (!('why' in g)) return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents, ...(g.limit !== undefined ? { limit: g.limit } : {}) }
     // Root call NL-2 (0.1.2): `near-limit` comes before `halted` in the guards, so under
     // `idle_handoff_near_limit: run` a halt that stops the compaction anyway (not the cap) falls
     // back to the turn the same way; `skip` keeps the near-limit skip, and `skip-spend` keeps it
     // only when a spend limit is at the share (plan windows alone fall back as under `run`).
-    const haltedToo = g.why === 'near-limit' && turnNearLimit(d, u, rec, now) === undefined && d.state.halt.active && d.state.halt.reason !== 'cap'
+    const haltedToo = g.why === 'near-limit' && (await turnNearLimit(d, sid, u, rec, now))?.ok !== false && d.state.halt.active && d.state.halt.reason !== 'cap'
     if (agents > 0 || !on.turnOn || (g.why !== 'halted' && g.why !== 'compaction-off' && !haltedToo)) return 'windows' in g ? g : g.why
   }
   if (agents > 0) return 'agents-running'
@@ -977,7 +987,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
     out.done = true
     await log(d, sid, 'idle_compact', {
       gap_s: b.gapS, tokens: b.tokens, agents: b.agents, at: 'check', late_s: Math.max(0, secs(now - rec.due)), adopted: s.idleAdopted,
-      ...(b.rule !== undefined ? { rule: b.rule, ...(await tierFields(d)), ...b.usage } : {}),
+      ...(await limitFields(d, b.limit)),
     })
     const r = await idleBoundary(d, sid, 'check', { idle: { gapS: b.gapS }, idleRecheck: recheckOf(d, sid, rec), exemptHalt: capHalt(s) })
     if (!r.ran) await idleSkip(d, sid, r.why, 'check')
@@ -986,6 +996,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   }
   const h = newTurn('idle', b.tokens, b.allowance, b.native, b.calls)
   if (rec.kind === 'check') h.idleMin = IDLE_CHECK_MIN_TEXT
+  if (b.limit !== undefined) h.limit = b.limit
   s.handoffTurn = h
   let ok: boolean
   try {
@@ -1058,7 +1069,7 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
   // D7, or a headless load: lane A has no headless path).
   if (p.native === 'compaction-off') return skip('compaction-off')
   if (!p.compactOn) return skip('disabled')
-  let g: { why: string } | Skip | { tokens: number; rule?: string; usage?: UsageFields }
+  let g: { why: string } | Skip | { tokens: number; limit?: LimitNote }
   try {
     g = await compactGuards(d, sid, rec, now, p.env)
   } catch {
@@ -1070,7 +1081,7 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
   out.done = true
   await log(d, sid, 'idle_compact', {
     gap_s: gapS, tokens: g.tokens, agents, at: 'timer', late_s: Math.max(0, lateS), adopted: s.idleAdopted,
-    ...(g.rule !== undefined ? { rule: g.rule, ...(await tierFields(d)), ...g.usage } : {}),
+    ...(await limitFields(d, g.limit)),
   })
   const r = await idleBoundary(d, sid, 'compact', { idle: { gapS }, idleRecheck: recheckOf(d, sid, rec), exemptHalt: capHalt(s) })
   if (!r.ran) {
@@ -1111,7 +1122,7 @@ function recheckOf(d: Deps, sid: string, rec: Due): () => Promise<string | undef
  * due record (G1 ran once at the top of `fire`, before the record was cleared). `adoptedOk` is
  * ADOPTED_IDLE_COMPACT (a parameter for its unit test).
  */
-export async function compactGuards(d: Deps, sid: string, rec: Due, now: number, env: IdleEnv, adoptedOk = ADOPTED_IDLE_COMPACT): Promise<{ why: string } | Skip | { tokens: number; rule?: string; usage?: UsageFields }> {
+export async function compactGuards(d: Deps, sid: string, rec: Due, now: number, env: IdleEnv, adoptedOk = ADOPTED_IDLE_COMPACT): Promise<{ why: string } | Skip | { tokens: number; limit?: LimitNote }> {
   const s = d.state
   const no = (why: string) => ({ why })
   // G3: the cache has probably lapsed, or the timer came late (a sleep).

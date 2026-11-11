@@ -75,10 +75,10 @@ import type { Deps, RequestUsage } from './deps'
 import type { Due } from './idle'
 import { compactedSince } from './compact'
 import { prefixRead } from './deps'
-import { IDLE_CACHE_MS, IDLE_TICK_MS, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, oneHourCache, releaseHeld, scaleOf } from './idle'
+import { IDLE_CACHE_MS, IDLE_TICK_MS, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, limitFields, oneHourCache, releaseHeld, scaleOf } from './idle'
 import { notifiedTasks } from './lane'
-import type { UsageFields } from './limits'
-import { limitCtx, resetOf, tierFields, verdictOf } from './limits'
+import type { LimitNote, UsageFields } from './limits'
+import { judge, limitCtx, noteOf, readingsNow, tierFields } from './limits'
 import { log } from './log'
 
 /** The next ping, after the start of the last cache-refreshing request (a share of the cache hour, D10-scaled). */
@@ -144,6 +144,8 @@ export type KeepWarm = {
    * hand-over (a warm compaction from `idle_handoff_min_tokens` up), as at a stop of a warming gap.
    */
   bandJob?: boolean
+  /** D-83: the last check's limit note (a reading at the limit that did not stop the ping), for its row. */
+  note?: LimitNote
 }
 
 /**
@@ -367,11 +369,14 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
   // no reading): this guard is skipped.
   const limits = u?.rateLimits ?? []
   let wait: number | undefined
+  kw.note = undefined
   if (limits.length > 0) {
+    // D-83: every reading of the windows, the session's own and the shared record's (limits.ts `judge`).
     const c = await limitCtx(d, await resultJobOpen(d, kw.sid), now)
-    const v = verdictOf(limits, c)
+    const v = judge(await readingsNow(d, kw.sid, limits), c)
+    kw.note = noteOf(v)
     if (!v.ok || v.band) {
-      const reset = resetOf(limits, c)
+      const reset = v.reset
       const bound = Math.min(kw.warm + KEEP_WARM_LATEST_MS * scale, kw.deferred !== undefined ? heldDeadline(kw.deferred, kw.warm, scale) : Infinity)
       if (reset !== undefined && reset + retryMs(scale) <= bound) wait = reset + retryMs(scale)
       else return { why: 'near-limit', handover: true, windows: v.windows, rule: v.rule, usage: v.usage, ...(v.band ? { job: true } : {}) }
@@ -640,6 +645,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   await log(d, kw.sid, 'keep_warm_ping', {
     n: kw.pings, result: o.result, cache_read: o.read, cache_creation: o.created,
     since_s: secs(since), gap_s: secs(now - kw.start), ms: t1 - now, ...(o.status !== undefined ? { status: o.status } : {}),
+    ...(await limitFields(d, kw.note)),
   })
   // Disturbed during the row (a prompt entering and still pending): no next step here, nor a retry
   // or a stop; the prompt's turn, or `resumeKeepWarm` once a hook drops it, takes the gap on.
