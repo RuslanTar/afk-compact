@@ -69,7 +69,7 @@
    }
   },
   {
-   "name": "a settings file that is not JSON: unreadable, the outcome check too (O-9)",
+   "name": "a settings file that is not JSON: unreadable, the outcome check too",
    "setup": [
     {
      "write": "$HOME/.claude/settings.json",
