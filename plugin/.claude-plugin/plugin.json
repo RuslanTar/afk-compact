@@ -217,7 +217,7 @@
     "idle_handoff_near_limit": {
       "type": "string",
       "title": "Idle handoff turn: near a usage limit [default run]",
-      "description": "run (the default): the idle handoff turn runs even when one of your usage limits (the five-hour or seven-day plan window, or a spend limit) is at 90% or more, so you get the handoff anyway; it then counts toward a nearly used allowance, and with extra usage on for your plan, usage past the limit may be billed. skip-spend: no such turn while a spend limit (a money cap, for example a Claude gateway's) is at 90% or more; it still runs near a plan limit. skip: no such turn near any limit. Plugin idle compaction and keep-warm do not go by this value: they follow their own limit rule (README: Near a usage limit).",
+      "description": "run (the default): the idle handoff turn runs even when one of your usage limits (the five-hour or seven-day plan window, or a spend limit) is at 90% or more, so you get the handoff anyway; it then counts toward a nearly used allowance, and with extra usage on for your plan, usage past the limit may be billed. skip-spend: no such turn while a spend limit (a money cap, for example a Claude gateway's) is at 90% or more; it still runs near a plan limit. skip: no such turn while any limit is at 90% or more. Both count only readings from the last 10 minutes and skip only when every one of a limit is at 90% or more. Plugin idle compaction and keep-warm do not go by this value: they follow their own limit rule (README: Near a usage limit).",
       "options": ["run", "skip-spend", "skip"],
       "default": "run"
     },
