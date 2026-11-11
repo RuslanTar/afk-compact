@@ -1,6 +1,6 @@
-# T-11 (WATCH §9): a chain where n-1 has D-7 and n has neither D-7 nor a
+# T-11: a chain where n-1 has D-7 and n has neither D-7 nor a
 # Superseded:/fold line -> lost_D 1; A-09 warn. D-8 is named in a fold line
-# and D-9 in a range "D-9..D-10" (a range folds nothing, HK-07) but D-9 stays
+# and D-9 in a range "D-9..D-10" (a range folds nothing) but D-9 stays
 # listed, so only D-7 is lost. The previous summary is read from its saved copy.
 my ($n1, $n2) = ('f0f00011', 'f0f00012');
 my $prev = "---\nkind: compact-summary\n---\n"

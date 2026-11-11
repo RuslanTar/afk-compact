@@ -1,5 +1,5 @@
-# T-19 (WATCH §9, M-04): native auto at 770K with the 800K window ->
-# band_position at-native; A-05. Thresholds from the MOD-SPEC §1.2 clamp over
+# T-19 (M-04): native auto at 770K with the 800K window ->
+# band_position at-native; A-05. Thresholds from the settings clamp over
 # the settings (no mod config row: classic-only). A second auto compaction in
 # band raises nothing.
 {

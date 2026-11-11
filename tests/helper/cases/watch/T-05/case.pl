@@ -1,5 +1,5 @@
-# T-05 (WATCH §9): a precompute dispatch never installed. The
-# `precompute_not_reused` row is reconcile's (WP-core, MOD-SPEC §5.4) and is
+# T-05: a precompute dispatch never installed. The
+# `precompute_not_reused` row is reconcile's and is
 # checked at integration; the watcher's part: it is never a failure (M-19,
 # TF decision 9), so no A-17 at any later Stop.
 my $n = 'c0c00005';

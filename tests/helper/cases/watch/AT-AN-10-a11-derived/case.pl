@@ -1,4 +1,4 @@
-# AT-AN-10 (0.1.3 alert noise, root decision 3): a background shell with no recorded output path
+# AT-AN-10 (0.1.3 alert noise): a background shell with no recorded output path
 # has the file Claude Code writes for it, <tmp>/claude-<uid>/<project>/<sid>/tasks/<id>.output
 # (<project>: the folder of the session's transcript). A-11 checks that file when it exists: one
 # that has not moved for an hour raises A-11 (source derived), one that moved a minute ago does

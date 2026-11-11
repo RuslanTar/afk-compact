@@ -1,4 +1,4 @@
-# T-13 (WATCH §9): `git push` in call 2 after the boundary with no user row
+# T-13: `git push` in call 2 after the boundary with no user row
 # and no checked approval (approvals_checked, AP-9) -> A-12. A later push after a user prompt is
 # consented and raises nothing; the transcript row arrives at a later Stop.
 {

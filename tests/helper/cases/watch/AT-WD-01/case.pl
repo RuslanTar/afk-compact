@@ -1,4 +1,4 @@
-# AT-WD-01 (small-rulings §4.1 item 1; REVIEW B-22): `watcher` is trimmed and case-folded
+# AT-WD-01: `watcher` is trimmed and case-folded
 # first. `off`/`OFF`/`OFF ` turn the watcher off; `shadow`/`SHADOW ` keep it on with no
 # note; anything else (`Shadow2`, `of`, empty) keeps it on and writes ONE `config_note`
 # row (`watcher_value_unknown`, no value in it) per session, and `status` says so.

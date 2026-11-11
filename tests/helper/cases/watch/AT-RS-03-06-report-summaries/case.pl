@@ -1,7 +1,7 @@
-# AT-RS-03, AT-RS-04, AT-RS-06 (SPEC-DELTAS RS-2/RS-3; owner xxxxxxxx-19, 2026-10-23: summaries in
+# AT-RS-03, AT-RS-04, AT-RS-06 (RS-2/RS-3: summaries in
 # a beta report are opt-in per report, asked each time). "Summaries" are the saved main
 # compaction copies (<root>/<repo>/<bucket>/compact/*.md); published handoffs are their own kind
-# with their own yes (owner xxxxxxxx-33, RS-5: AT-RS-07-08-report-handoffs).
+# with their own yes (RS-5: AT-RS-07-08-report-handoffs).
 # - RS-03: `report --dry-run` prints `summaries: <n> available (<KB>)` (main copies within
 #   --since; subagent copies and handoffs are not counted) and writes nothing.
 # - RS-04: `report --with-summaries`: a copy holding a secret and one holding the home folder are

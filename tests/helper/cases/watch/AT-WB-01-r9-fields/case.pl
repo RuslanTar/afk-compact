@@ -1,13 +1,13 @@
-# AT-WB-01 / AT-WB-02, the round-9 fields (W-BETA B.2; BUILD-ROUND-9 WCH-09, CROSS-REVIEW §4
-# item 3): every content-free field the other work packages added this round has an export
+# AT-WB-01 / AT-WB-02, the round-9 fields: every content-free field the other work packages
+# added this round has an export
 # class, so it is exported as its class and never dropped as unknown:
-#   core (needs/core-to-watch.md §3, §5, §6, §7): session scratchpad / under_temp_root, rollup
+#   core: session scratchpad / under_temp_root, rollup
 #     proof / proof_lag_ms / settle_waited_ms / sentinel_place / resume values, idle as a JSON
 #     bool or `unknown` (rollup and compaction_boundary, which also carries idle_source and
 #     idle_gap_s), copy_attributed proof `slot`, queue_contract why values, finished_by;
-#   skills (needs/skills-to-watch.md): heal prod_class and effects prod-read/prod-write,
+#   skills: heal prod_class and effects prod-read/prod-write,
 #     handoff_publish attempt / template_rev / acuity / acuity_floor, resume_receipt cmds_asked;
-#   mod (needs/mod-to-watch.md): handoff_skipped reason precompact, handoff_turn_end compaction
+#   mod: handoff_skipped reason precompact, handoff_turn_end compaction
 #     (bool), submit_dropped site, config_effective null thresholds, the _raw values,
 #     small_window and min_window (a number or `never`), dispatch idle_gap_s.
 # Rows are given as the watcher reads them (watch::json decodes booleans to 1 and 0).

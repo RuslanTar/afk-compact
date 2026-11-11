@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): a work tree $HOME/Café (NFC name, nothing decomposed)
+# Unsafe roots: a work tree $HOME/Café (NFC name, nothing decomposed)
 # whose .gitignore says `*`, then `!wlogs/` and `!wlogs/**`. log_dir $HOME/Café/wlogs is not
 # made yet. The folder is brought back and its files are not ignored, so git status would show
 # the watcher's files: root-in-git. The same case under an ASCII work tree is refused; a

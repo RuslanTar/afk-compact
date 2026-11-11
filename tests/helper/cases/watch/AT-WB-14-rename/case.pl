@@ -1,4 +1,4 @@
-# AT-WB-14 (W-BETA; BUILD-ROUND-9 WCH-09): rename safety. `report verify` accepts a bundle
+# AT-WB-14: rename safety. `report verify` accepts a bundle
 # whose `plugin` (and `schema`) is the old name or the new name, as long as the schema is
 # `<plugin>-report/1`; a schema that does not match its own plugin name fails.
 my %got;

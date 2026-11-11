@@ -1,7 +1,7 @@
-# AT-CAP-02, watcher half (S-SETTINGS A; BUILD-ROUND-9 WCH-02): watch/ctx.pm's fallback
+# AT-CAP-02, watcher half: watch/ctx.pm's fallback
 # for every key it reads equals the manifest default (src/plugin.json userConfig), and
 # `max_auto_continues_per_hour` defaults to 6: a mod `continue` row with 6 continues in
-# the last hour raises no A-19 under default settings; 7 does (WATCHER-SPEC A-19).
+# the last hour raises no A-19 under default settings; 7 does.
 use Cwd ();
 use File::Basename ();
 my $repo = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../..');
@@ -31,7 +31,7 @@ my $repo = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../..');
             next unless ref $uc->{$k} eq 'HASH' && exists $uc->{$k}{default};
             my $want = $uc->{$k}{default};
             my $got = $s->{$k};
-            # STATE-ROOT (0.1.2): the default names the plugin ({{plugin}} in src/plugin.json)
+            # State root (0.1.2): the default names the plugin ({{plugin}} in src/plugin.json)
             if ($k eq 'handoff_root') { $want =~ s{\A~}{$ENV{HOME}}; $want =~ s/{{plugin}}/$brand/g }
             if ($k eq 'triggers') { $want = $want ? 'true' : 'false' }
             # D-72: an on/off key's manifest default (true or false) is the word the watcher runs

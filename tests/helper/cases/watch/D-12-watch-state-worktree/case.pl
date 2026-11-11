@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; STATE-ROOT 0.1.2): a work tree at or under the state folder
+# Unsafe roots: a work tree at or under the state folder
 # (~/.local/state/<plugin>). `git init` in the default handoff root makes the root its own work
 # tree: ignoring a folder there cannot help, so `status` gives only the key to set, and the
 # watcher's default log folder (.watch under the root, unset log_dir) joins that line. Then

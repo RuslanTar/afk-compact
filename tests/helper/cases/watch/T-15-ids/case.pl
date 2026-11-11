@@ -1,4 +1,4 @@
-# T-15 with real id kinds (WATCH M-06, MOD-SPEC §3.3): the mod's liveness
+# T-15 with real id kinds (M-06): the mod's liveness
 # file carries the `turn.start` turnId, the PostCompact payload a prompt_id;
 # they are different ids. A file written at this turn's start still counts ->
 # bypass_suspected; A-16. (A-26 also fires: with no dispatch at all the

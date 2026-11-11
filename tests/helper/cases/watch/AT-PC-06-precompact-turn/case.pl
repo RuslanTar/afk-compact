@@ -1,10 +1,10 @@
-# AT-PC-06 (S-SETTINGS D; WATCHER-SPEC M-17, A-18, A-19, §6.3; BUILD-ROUND-9 WCH-08): the
+# AT-PC-06 (M-17, A-18, A-19): the
 # pre-compaction turn (`precompact_turn: model`, ht reason `precompact`) is a handoff turn
 # for M-17: its plugin-origin submit is logged as `handoff_turn`, never as a continue, so it
 # is no A-19 input (even at cap 0) and no A-27 input. A-18 does not apply to it: a
 # published precompact turn never stands in for the missing last-cycle handoff of a
 # `halt:` continue row, and a `handoff_skipped why: again` (the precompact skip) does not
-# settle a halt row early, nor does any skip of the optional turn (`reason: precompact`, needs/mod-to-watch.md 2).
+# settle a halt row early, nor does any skip of the optional turn (`reason: precompact`).
 my ($hp, $hq) = ('abcd0101', 'abcd0102');
 my $rec = sub { my ($h, $t) = @_; return { v => 1, ht => $h, session_id => $T::SID, reason => 'precompact', max_calls => 34,
                                            max_tokens => 64000, opened_at => T::loc($t) } };

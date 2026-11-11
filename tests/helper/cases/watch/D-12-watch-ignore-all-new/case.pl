@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): the control for the not-made-yet checks. A dotfiles
+# Unsafe roots: the control for the not-made-yet checks. A dotfiles
 # home that ignores everything (`*`) and a log_dir ($HOME/wlogs) not made yet: the root is
 # ignored, so it is ok from the first call on. Both launcher calls write their precompact row
 # there, `status` has no refusal and `git status` shows nothing under wlogs.

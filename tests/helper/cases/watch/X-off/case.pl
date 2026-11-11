@@ -1,4 +1,4 @@
-# WATCH §8.6: `watcher: off` removes every watcher code path. Plugin-core
+# `watcher: off` removes every watcher code path. Plugin-core
 # writes (core's) are not part of the watcher library, so nothing is written.
 my $body = "# CANARY-TEXT-topic\n";
 {

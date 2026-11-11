@@ -1,5 +1,5 @@
-# AT-WB-01, watcher half (W-BETA B.2; BUILD-ROUND-9 WCH-09): every event type of WATCHER-SPEC
-# §6.3 (the list below, as folded on 2026-10-22; `bg` is a sidecar file, never exported) and
+# AT-WB-01, watcher half: every event type of the watcher's event list
+# (the list below, as folded on 2026-10-22; `bg` is a sidecar file, never exported) and
 # every `ev` the shipped code writes (found in the plugin source: rc::emit, log_row,
 # log_event/ctx::log, the mod's log()) has an export-schema entry, and every class in the
 # schema is one the transform knows. An `ev` not in the schema drops the whole row (counted). Every
@@ -35,7 +35,7 @@ sub _check {
         my ($E) = @_;
         require watch::export_schema;
         my $s = watch::export_schema::schema();
-        $E->ok((exists $s->{$_} ? 1 : 0), "§6.3 ev $_ has a schema entry") for @SPEC;
+        $E->ok((exists $s->{$_} ? 1 : 0), "event list ev $_ has a schema entry") for @SPEC;
         my %code;
         my @q = ("$plugin/helper", "$plugin/hooks");
         while (@q) {

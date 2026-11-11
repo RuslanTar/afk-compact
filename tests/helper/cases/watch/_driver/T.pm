@@ -1,6 +1,6 @@
 package T;
-# Synthetic transcript and record builders for the watcher cases (WATCH §9).
-# Shapes follow TF Q3 §1a (keys, not positions). All text is synthetic; the
+# Synthetic transcript and record builders for the watcher cases.
+# Shapes are keyed by name (keys, not positions). All text is synthetic; the
 # planted canaries (`CANARY-TEXT-...`) must never reach a watcher row (T-18).
 use strict;
 use warnings;
@@ -95,7 +95,7 @@ sub dispatch {
              pid => 4242, pid_lstart => 'Tue Oct 21 13:00:00 2026', ts => loc($t) };
 }
 
-# A log row in the WATCH §6.2 envelope, for rows other writers own.
+# A log row in the shared row envelope, for rows other writers own.
 sub row {
     my ($ev, $t, %f) = @_;
     my $actor = delete $f{actor} // 'main';
@@ -126,7 +126,7 @@ sub main_body {
 }
 
 
-# W-BETA fixture install (AT-WB-02..07): a watch tree and a handoff root with planted
+# Beta report fixture install (AT-WB-02..07): a watch tree and a handoff root with planted
 # canaries in every place the report must never copy from. @BETA_CANARIES lists the strings
 # a bundle must not contain (the case adds $HOME, the user and host names).
 our $AGENT = 'a9a00b3f36332744e';
@@ -153,7 +153,7 @@ sub beta_install {
             ci_nonce => 'f0f00001', ci_foreign_header => \0, keyset_hash => '62a951d7'),
         row('postcompact', 31, writer => 'classic', trigger => 'auto', nonce_found => 'f0f00001', scope_found => 'main',
             # section_chars keys as watch::shape writes them (slugs, `preamble`), a heading literal and
-            # an unknown heading (owner xxxxxxxx-34: exported as fixed section ids, else `other`)
+            # an unknown heading (exported as fixed section ids, else `other`)
             verdict => 'ok', summary_chars => 9000, section_chars => { resume_here => 300, decisions_and_do => 40,
             preamble => 7, '## Task as assigned' => 20, 'CANARY-TEXT heading' => 5, canary_slug => 3 },
             secret_hits => ['jwt'], measured_stamp => '2026-10-21 14:00 +0300',
@@ -192,7 +192,7 @@ sub beta_install {
           json => { tasks => [ { id => 'b1', type => 'shell', output_path => '$HOME/CANARY-evidence-path/o' } ] } },
         { path => '$WATCH/version.json', json => { lastVersion => '2.1.306', smokeDue => '2.1.306' } },
         { path => '$WATCH/fingerprints/94c3672537e5.seen', text => '' },
-        # core's round-9 files (needs/core-to-watch.md §3, §5, §7): never report inputs, never a
+        # core's round-9 files: never report inputs, never a
         # session folder. queue-state.json holds the queue tool's path, scratchpad.json the
         # scratchpad path, a kept mismatch stash the raw summary.
         { path => '$WATCH/$SID/queue-state.json',
@@ -238,7 +238,7 @@ sub zip_entries {
 }
 
 
-# W13 fixture (WATCHER-SPEC §10.2/§10.3; WCH-10): one session's rows as the realtime tier
+# W13 fixture: one session's rows as the realtime tier
 # leaves them: sweep boundary records with the per-compaction fields, postcompact rows, the
 # rollup, resume_inject, continue, alerts and a config_effective row. %o: n (main
 # compactions, default 3), bad_copy (index of a compaction with copy missing), sid.
@@ -283,7 +283,7 @@ sub w13_session {
 }
 
 
-# WP-fix fixtures (tests/fixtures, fixtures README). A case that needs one returns
+# Fixtures (tests/fixtures, fixtures README). A case that needs one returns
 # `skip => ...` while it is not on the branch (fixture_or_skip). Placeholders as the core case
 # runner fills them: $TMP $HOME $ROOT $WATCH $SID, {{plugin}}, {{marketplace}}, $SECRET{<id>}
 # (the joined fragments of secrets/corpus.json).

@@ -1,6 +1,6 @@
-# T-04 (WATCH §9): precompute dispatch, then a boundary with precomputed:true,
+# T-04: precompute dispatch, then a boundary with precomputed:true,
 # durationMs 20 -> joined; excluded from failure and thrash; verdict stale even
-# when the nonce matches (nonce_match recorded apart, HK-61).
+# when the nonce matches (nonce_match recorded apart).
 # The rollup's `verdict: stale` is core's (compactions.jsonl); this case checks
 # the watcher's joined boundary record.
 my $n = 'b0b00004';

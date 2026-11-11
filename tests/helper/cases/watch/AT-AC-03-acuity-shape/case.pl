@@ -1,7 +1,7 @@
-# AT-AC-03 (T-TEXT E6 acceptance table, F (watch); needs/fix-to-watch.md 3): a main summary
+# AT-AC-03 (acceptance table, watcher row): a main summary
 # whose Resume here status line carries the Acuity field (`Status: … · Acuity: <word> ·
 # State: …`) keeps the watcher's shape elements: `resume_here_le5` true (Resume here has 4
-# lines) and `step1_present` true. The golden summaries are WP-fix's
+# lines) and `step1_present` true. The golden summaries are
 # tests/fixtures/summaries/acuity/*.txt when that folder is on the branch; the two inline
 # bodies below (the same Resume here forms, watch and unstable) run always.
 my $spec = main::spec_for_tests();

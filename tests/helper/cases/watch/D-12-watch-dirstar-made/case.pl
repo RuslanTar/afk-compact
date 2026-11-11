@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir $HOME/wlogs is already made, in a home whose
+# Unsafe roots: log_dir $HOME/wlogs is already made, in a home whose
 # .gitignore says `.claude/`, `*/` (every folder) and `!wlogs/` (that folder is brought back).
 # The folder is not ignored, so files written in it show in git status: root-in-git. Asked
 # with a trailing slash, git also matches `*/` against the empty entry inside the existing

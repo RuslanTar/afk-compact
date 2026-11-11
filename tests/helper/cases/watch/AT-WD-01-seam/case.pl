@@ -1,4 +1,4 @@
-# AT-WD-01-seam (CR-F15; small-rulings §4.1 item 1, REVIEW B-22, WATCHER-SPEC §8 item 6):
+# AT-WD-01-seam (CR-F15):
 # core hands the watcher `settings::resolve`'s nested shape {values => {...}, source, notes},
 # and `status` lets the watcher resolve it itself. Values from the user's settings file
 # reach the watcher through both: `watcher` is trimmed and case-folded there too, an

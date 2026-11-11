@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12 unsafe roots; H-1): a home folder that is a dotfiles git
+# Unsafe roots: a home folder that is a dotfiles git
 # repository puts the default handoff root and its .watch folder inside a work tree that does
 # not ignore them (root-in-git). The watcher then writes nothing: no rows, no alerts, no
 # session folders, from on_hook, on_stop and through the real launcher (where core passes no

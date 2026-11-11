@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): the folder holding the deciding .gitignore is named
+# Unsafe roots: the folder holding the deciding .gitignore is named
 # `x:1:y`, and its .gitignore says `*`, then `!*`. log_dir $HOME/x:1:y/wlogs is not made yet;
 # git's last match for it is `!*` (not ignored), so it is root-in-git. Git names that match
 # `x:1:y/.gitignore:2:!*`: a parse of that text that splits at the first `:<digits>:` reads

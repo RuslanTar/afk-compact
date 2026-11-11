@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir is $HOME/wlogs inside a dotfiles home that
+# Unsafe roots: log_dir is $HOME/wlogs inside a dotfiles home that
 # ignores `.claude/`, `.local/state/<plugin>/` and `wlogs/`. A folder-only pattern (`wlogs/`) matches only a folder, so
 # git check-ignore must be asked about `wlogs/` (trailing slash) while the folder is not made
 # yet. Both roots are git-ignored, so the watcher writes its rows to $HOME/wlogs and `status`

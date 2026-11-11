@@ -1,4 +1,4 @@
-# AT-P5-08 (P5-FOLD A3; BUILD-ROUND-9 WCH-02): with no mod `config_effective` row, the
+# AT-P5-08: with no mod `config_effective` row, the
 # watcher's fallback thresholds equal the mod's clamp() (config.ts, plus the A3 window
 # floor) for every window x `handoff_turn`. The table below is config.ts's arithmetic
 # (reserve 52,000 + 64,000 with `halt`, 100,000 with `off`; native = window - 33,000;
@@ -79,7 +79,7 @@ my @T = (
         $E->is($s->{min_window}, 344000, 'spec clamp.reserve_base 60,000 is read (180,000 + 40,000 + 124,000)');
         my $b = $th->({ native_window_tokens => 1000000 }, { clamp => { native_offset => 'x', min_target => -1 } });
         $E->is($b->{native}, 967000, 'a non-numeric constant takes the built-in value');
-        # The mod's config_effective row wins over the fallback (needs/mod-to-watch.md 5): when it
+        # The mod's config_effective row wins over the fallback: when it
         # says disabled, its thresholds are null and the _raw values are never taken as thresholds.
         my $cfg = sub {
             my ($row) = @_;

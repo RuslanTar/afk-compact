@@ -1,9 +1,9 @@
-# T-15 extended (WATCHER-SPEC M-06, A-16; P5-FOLD A5; BUILD-ROUND-9 WCH-07): a subagent's
+# T-15 extended (M-06, A-16): a subagent's
 # compaction can set off bypass_suspected (P5: the one bypass row was a subagent's). The
 # PostCompact has the parent sid and no agent id, there is only the classic fallback
 # dispatch (no mod dispatch), the mod ran this turn; the boundary is in the agent's transcript. A-16 fires, and its row has
 # `actor: unknown` (classic payloads carry no agent id). The text is the spec's
-# `alert_texts.A-16` (WP-text renders the "possibly in a subagent" wording).
+# `alert_texts.A-16` (it renders the "possibly in a subagent" wording).
 my $agent = 'a9a00b3f363327445';
 my $n = 'd0d00015';
 my $body = "# CANARY-TEXT-topic\n## Task as assigned\nCANARY-TEXT-body\n";

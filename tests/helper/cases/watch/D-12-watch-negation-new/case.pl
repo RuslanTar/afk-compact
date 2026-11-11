@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir $HOME/wlogs, not made yet, in a dotfiles home
+# Unsafe roots: log_dir $HOME/wlogs, not made yet, in a dotfiles home
 # whose .gitignore says `wlogs/`, then `!*`, then `.claude/` and `.local/state/<plugin>/`. The last pattern that names wlogs
 # is the negation `!*`, so the folder is not ignored. `git check-ignore -v` names a negated
 # match too and exits 0; read as "ignored", the root would pass and the first call would write

@@ -1,5 +1,5 @@
-# T-08 (WATCH §9, shared with AT-M5-08): the sidecar ring is plugin core
-# (WP-core writes bg/slot-<k>.json at Stop/SubagentStop). The watcher's part:
+# T-08 (shared with AT-M5-08): the sidecar ring is plugin core
+# (core writes bg/slot-<k>.json at Stop/SubagentStop). The watcher's part:
 # it reads the ring, dedupes ids across slots (one shell id repeated in all
 # 20 slots counts once: one A-11 at most per id), and never writes a slot.
 # 0.1.3 alert noise: an item with no known output path (the teammate) raises

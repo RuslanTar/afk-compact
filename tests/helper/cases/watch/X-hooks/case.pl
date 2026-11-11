@@ -1,5 +1,5 @@
-# ROOT-RULINGS F2-5 (PRIV-09, SAFE-09): `stop_failure` and `permission_denied`
-# have one writer, core's `hook` (WATCH W10/W11). The watcher's on_hook writes
+# F2-5: `stop_failure` and `permission_denied`
+# have one writer, core's `hook`. The watcher's on_hook writes
 # nothing for StopFailure or PermissionDenied and reads no transcript for them
 # (a transcript read here dies, which would leave a watch_error row). Through
 # the real launcher, one denial gives exactly one `permission_denied` row with

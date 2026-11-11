@@ -1,4 +1,4 @@
-# ROOT-RULINGS F2-4 (SAFE-02), WATCH W9: the incremental cache load runs inside
+# F2-4: the incremental cache load runs inside
 # the Stop's hard stop too. A fake clock passes the hard stop while the mod
 # stream is read: no rule runs on part of a stream, the run is dropped (one
 # `sweep_partial {reason: hard-stop, stage: load}`, no sweep row), but the

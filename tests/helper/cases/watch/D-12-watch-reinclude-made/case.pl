@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir is $HOME/wlogs, already made, in a dotfiles
+# Unsafe roots: log_dir is $HOME/wlogs, already made, in a dotfiles
 # home whose .gitignore ignores .claude/, .local/state/<plugin>/ and the contents of wlogs (`wlogs/*`) but brings
 # `*.jsonl` back there. git says the folder wlogs itself is not ignored, so log_dir is
 # root-in-git: nothing is written there and `git status` shows nothing new under wlogs. Asked

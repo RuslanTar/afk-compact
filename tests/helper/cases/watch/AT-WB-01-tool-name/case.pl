@@ -1,4 +1,4 @@
-# AT-WB-01 / AT-WB-02, tool names (W-BETA B.2, B.3; re-review regression on export_schema.pm:142):
+# AT-WB-01 / AT-WB-02, tool names (re-review regression on export_schema.pm:142):
 # the hook writes the payload's tool name as it is (hook.pl on_PermissionDenied), so an MCP tool
 # name carries the user's own server name (`mcp__acme-payroll__list`). Tool names go through the
 # `tool` class: a Claude Code built-in name is kept, any `mcp__*` name (and the sweep's own `mcp`)

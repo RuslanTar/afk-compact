@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir $HOME/wlogs, not made yet, in a home whose
+# Unsafe roots: log_dir $HOME/wlogs, not made yet, in a home whose
 # .gitignore says `wlogs`, then `!wlogs/` (a folder of that name is brought back), then
 # `wlogs/*` and `!wlogs/*.jsonl`. As written the root reads ignored (by `wlogs`), with a slash
 # it reads ignored (by `wlogs/*`, matching the empty entry): two different lines, so it is

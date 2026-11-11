@@ -1,4 +1,4 @@
-# WCH-09 zip writer (W-BETA B.6, CROSS-REVIEW XR-20): STORE always works; DEFLATE is used only
+# Zip writer: STORE always works; DEFLATE is used only
 # when the optional raw-deflate module loads (inside an eval) and the deflated body is smaller.
 # An entry that would deflate more than $DEFLATE_RATIO_MAX times stays STORE, so a bundle never
 # trips the analyzer's ratio-bomb refusal (tools/beta-analyze RATIO_MAX 100). The reader inflates

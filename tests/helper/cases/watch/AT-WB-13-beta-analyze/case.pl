@@ -1,4 +1,4 @@
-# AT-WB-13 (W-BETA F; BUILD-PLAN §2.5; BUILD-ROUND-9 WCH-11), with the analyzer half of
+# AT-WB-13, with the analyzer half of
 # AT-WB-14: `python3 -I tools/beta-analyze run INBOX --out DIR` over a real `report` bundle and
 # its variants. A zip-slip, absolute-name, symlink, oversize (declared in the headers only),
 # ratio-bomb, foreign-name, non-zip and symlinked inbox file is refused at intake; a bad hash
@@ -7,7 +7,7 @@
 # has the per-install and pooled tables and the §G bars, each install gets the `watch report
 # --input` report. The analyzer deletes nothing, writes only under DIR, refuses a DIR that is
 # not fresh, needs -I, and has no network or delete code. `forget` lists one install's files
-# and removes nothing. When WP-fix's tests/fixtures/beta/ is present, its cases.json
+# and removes nothing. When tests/fixtures/beta/ is present, its cases.json
 # outcomes hold too. 0.1.4 (T-5, T-6): the install's store also holds a sweep row with four shaped
 # main compactions (ok, ok-trailer, ok-unclosed, truncated) and a second alert that a later
 # alert_closed row closed, so the verdict mix counts ok-unclosed as ok (3 of 4) and the alerts count
@@ -239,9 +239,10 @@ push @{ $alog->{jsonl} },
                    '## Runtime', '## Seat state (compactions)', '## Trigger mix and idle share',
                    '## Verdict mix, shaped main compactions', '## tokens_before at main compactions (to scale)',
                    '## Alerts by rule', '## watch_error classes (stage/class)', '## Watcher overhead p95 per hook',
-                   '## Config changed from default', '## Notice and watcher off', '## Benefit bars (W-BETA G)') {
+                   '## Config changed from default', '## Notice and watcher off') {
             $has->($md, qr/^\Q$h\E$/m, "BETA-REPORT has $h");
         }
+        $has->($md, qr/^## Benefit bars(?: \([^)]*\))?$/m, "BETA-REPORT has ## Benefit bars");
         $has->($md, qr/^- Bundles: 14 \(3 valid, 2 quarantined, 8 refused at intake, 1 duplicate, 0 unverified\)$/m, 'header counts');
         $has->($md, qr/^\| Uptake \| >=3 installs each return >=1 valid bundle \| 2 \| FAIL \|$/m, 'uptake bar');
         $has->($md, qr/^\| Bundle validity \| .* \| 3 of 13 valid, 2 quarantined \| FAIL \|$/m, 'validity bar');
@@ -319,7 +320,7 @@ push @{ $alog->{jsonl} },
         }
         $has->($got{spec_list}{md}, qr/^- 50% ok\/truncated of 4$/m, "a spec listing ok and truncated: 2 of the install's 4 shaped compactions ok, by that list");
         $has->($got{spec_none}{md}, qr/^- 75% ok\/ok-trailer\/ok-unclosed of 4$/m, 'a spec with no list: the three of 0.1.3');
-        # WP-fix's fixture zips (tests/fixtures/beta, FIX-06), once that folder is on the branch
+        # The fixture zips (tests/fixtures/beta), once that folder is on the branch
         if ($got{fx_cases}) {
             $E->is($got{fx_run}{exit}, 0, "fixture run exit 0 ($got{fx_run}{err})");
             for my $zn (sort keys %{ $got{fx_cases}{zips} }) {

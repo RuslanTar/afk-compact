@@ -1,4 +1,4 @@
-# T-12, second half (WATCH §9): 3 such compactions -> rapid_refill_run 2; no A-07.
+# T-12, second half: 3 such compactions -> rapid_refill_run 2; no A-07.
 my @t = (T::prompt(0), T::assistant_text(5));
 for my $i (0 .. 2) {
     my $at = 100 * ($i + 1);

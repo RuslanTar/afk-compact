@@ -1,4 +1,4 @@
-# T-16 (WATCH §9): a malformed JSON line and an unreadable transcript ->
+# T-16: a malformed JSON line and an unreadable transcript ->
 # watch_error rows; no stdout; the hook path exits 0. The rows after the bad
 # line are still swept.
 {

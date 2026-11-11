@@ -1,9 +1,9 @@
-# T-18 (WATCH §9, §8.2): canary strings planted in instructions, summary,
+# T-18: canary strings planted in instructions, summary,
 # commands, user text, denial input and reason, error details and the last
 # assistant message reach no watcher row (the driver greps every file under
 # <watch> after each case; this case touches every hook-time writer). The
 # denial and the failed stop also run through the real launcher, whose core
-# hook is the one writer of their rows (ROOT-RULINGS F2-5).
+# hook is the one writer of their rows (F2-5).
 my $n = '5e5e0018';
 my $deny = '{"session_id":"' . $T::SID . '","transcript_path":"/nonexistent/t.jsonl","cwd":"/nonexistent",'
          . '"hook_event_name":"PermissionDenied","tool_name":"Bash","tool_input":{"command":"CANARY-TEXT-denied"},'

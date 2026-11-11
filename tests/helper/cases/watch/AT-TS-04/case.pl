@@ -1,4 +1,4 @@
-# AT-TS-04 (small-rulings §3a, M-10): watch::shape::fabricated against a measured block,
+# AT-TS-04 (M-10): watch::shape::fabricated against a measured block,
 # with stamp and legacy tokens. A token counts unless measured:true and its whole text is
 # one of the measured block's stamps; `listed` never counts.
 require watch::shape;

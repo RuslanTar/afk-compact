@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir $HOME/Café/wlogs is not made yet; the folder
+# Unsafe roots: log_dir $HOME/Café/wlogs is not made yet; the folder
 # Café exists with its name stored decomposed (NFD: e + U+0301, as macOS apps often make it).
 # The home's .gitignore says `*`, then `!Café/` and `!Café/**` written composed (NFC). git
 # (core.precomposeUnicode, set by git init on macOS) reads folder names and command-line paths

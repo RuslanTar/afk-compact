@@ -1,4 +1,4 @@
-# AT-IC-C42 (watcher half; IDLE-COMPACT-SPEC §1.4, MOD-SPEC §3.4 idle exception): an idle
+# AT-IC-C42 (watcher half): an idle
 # compaction's resume block waits on disk for the next turn, which may come in the next process
 # (resume-persist), and only prompt.context delivers it. A main Stop that sweeps such a compaction
 # before any claim does not raise A-23 count 0: the compaction is held and decided at a later

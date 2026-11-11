@@ -1,4 +1,4 @@
-# WATCH W9 soft limit: the sweeper checks the clock every 200 lines and stops
+# W9 soft limit: the sweeper checks the clock every 200 lines and stops
 # reading once the soft limit has passed. Every line it consumed has been
 # analyzed: here line 200 is a boundary and the limit is already past, so the
 # cut comes after line 200 and the boundary is in the result. Then a real Stop

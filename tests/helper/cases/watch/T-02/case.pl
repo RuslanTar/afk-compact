@@ -1,4 +1,4 @@
-# T-02 (WATCH §9): mod-driven compaction; the summary row right after the
+# T-02: mod-driven compaction; the summary row right after the
 # boundary, postTokens after preservedMessages -> parsed by key; trigger plugin
 # from the self-call dispatch (M-01).
 my $n = 'a0a00002';

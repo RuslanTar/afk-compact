@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): as D-12-watch-reinclude-made (`wlogs/*`, then
+# Unsafe roots: as D-12-watch-reinclude-made (`wlogs/*`, then
 # `!wlogs/*.jsonl`), but log_dir $HOME/wlogs is not made yet. The first call must not make
 # it and write into the repository, and the second call answers the same: root-in-git both
 # times, nothing new under wlogs in `git status`.

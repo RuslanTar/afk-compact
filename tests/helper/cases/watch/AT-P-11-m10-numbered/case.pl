@@ -1,4 +1,4 @@
-# PKG-RUNTIME B.5 (BUILD-ROUND-9 WCH-03): M-10 `fabricated` counts with numbered captures
+# M-10 `fabricated` counts with numbered captures
 # give the counts the named-capture version gave (expected values recorded from main
 # 7d9efdd), with the spec time regexes (one of which has its own capture group) and with
 # the built-in fallbacks. Columns: no measured block; measured with stamps; empty spec.

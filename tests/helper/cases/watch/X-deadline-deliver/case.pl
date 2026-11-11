@@ -1,4 +1,4 @@
-# ROOT-RULINGS F2-4 (SAFE-02), WATCH W9 / §7.2: delivery runs only before the
+# F2-4: delivery runs only before the
 # Stop's hard stop. With delivery switched to system-message, a fake clock
 # passes the hard stop right after the run is committed (sweep rows and
 # offsets saved): that Stop prints nothing and leaves no `delivered/` marker,

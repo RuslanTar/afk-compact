@@ -1,4 +1,4 @@
-# Rows are <= 4 KB (BUILD-PLAN §3.2). A row that would exceed the cap is not
+# Rows are <= 4 KB. A row that would exceed the cap is not
 # written in part; one `watch_error {stage: <ev>, error_class: row-too-large}`
 # row is left instead. Forced here with 300 clutter classes in the spec.
 my $spec = main::spec_for_tests();

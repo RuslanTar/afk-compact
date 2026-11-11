@@ -1,4 +1,4 @@
-# AT-AN-15 (0.1.3 alerts, root call 3b): the first plugin hook a session runs is a Stop (the plugin
+# AT-AN-15 (0.1.3 alerts): the first plugin hook a session runs is a Stop (the plugin
 # was installed or reloaded mid-session on the classic path), so the session has no row yet when
 # that Stop's rules run. That Stop's own start is where observing began: a boundary from before it
 # with no hook row or dispatch of its own is history (no A-01, hookless A-15 or A-05). A boundary

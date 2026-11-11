@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): a work tree $HOME/Café (NFC name) whose .gitignore
+# Unsafe roots: a work tree $HOME/Café (NFC name) whose .gitignore
 # says `wlogs/`. log_dir $HOME/Café/wlogs is not made yet and git ignores it once made, so the
 # watcher writes its rows there and status has no refusal (an ASCII work tree like this is
 # D-12-watch-logdir-dirpattern). A non-ASCII byte in the work tree's own path must not make

@@ -1,4 +1,4 @@
-# AT-RS-07, AT-RS-08 (SPEC-DELTAS RS-5; owner xxxxxxxx-33, "Also handoffs", 2026-10-23: when the
+# AT-RS-07, AT-RS-08 (RS-5, handoffs too: when the
 # user agrees to add summaries, the same dialog asks a second, separate yes for published
 # handoffs; each kind scanned and withheld on any hit).
 # - RS-07: `report --dry-run` prints `handoffs: <n> available (<KB>)` beside the summaries line:

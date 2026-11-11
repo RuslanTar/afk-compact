@@ -1,4 +1,4 @@
-# The entry-point wrapper (lib/watch.pm; BUILD-PLAN §3.1 hook rules): an
+# The entry-point wrapper (lib/watch.pm): an
 # internal error in on_hook, on_stop or status_lines prints nothing, writes
 # nothing to stderr and leaves one `watch_error {stage, error_class}` row. A
 # die message that is not a plain class becomes `internal`, so its text never

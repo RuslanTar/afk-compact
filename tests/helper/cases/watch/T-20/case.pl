@@ -1,4 +1,4 @@
-# T-20 (WATCH §9, M-19c, §2 join 2): a precompute PreCompact (auto, no nonce)
+# T-20 (M-19c): a precompute PreCompact (auto, no nonce)
 # with no PostCompact, then an unshaped plugin compaction 0.7 s later ->
 # precompute_or_failed (info), no failed:no-post; the later compaction does not
 # time-join to the precompute dispatch; verdict unshaped.

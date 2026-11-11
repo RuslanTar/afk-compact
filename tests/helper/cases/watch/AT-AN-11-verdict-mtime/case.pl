@@ -1,4 +1,4 @@
-# AT-AN-11 (0.1.3 alert noise, root decision 5): without a session id the verdict picks the
+# AT-AN-11 (0.1.3 alert noise): without a session id the verdict picks the
 # sessions by their rollup stream's time (compactions.jsonl), not the session folder's, which
 # changes only when an entry is added: a folder untouched for 10 days whose rollup got two rows
 # today counts them.

@@ -1,4 +1,4 @@
-# T-09 (WATCH §9): a plugin-origin continue row, plus a later user row quoting
+# T-09: a plugin-origin continue row, plus a later user row quoting
 # the same text with no origin -> auto_continue 1 (match on origin, never on
 # text, M-17). The count over a session is W13; the sweep row marks the rows.
 my $quote = "Note from the user's $T::BRAND plugin: CANARY-TEXT-continue";

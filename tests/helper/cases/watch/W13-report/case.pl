@@ -1,6 +1,6 @@
-# W13 `watch report` (WATCHER-SPEC §10.2, §10.3; W-BETA E; BUILD-ROUND-9 WCH-10): over the live
+# W13 `watch report`: over the live
 # <watch> folder the report is written to <watch>/reports/<date>_watch-report.md (a second run
-# adds `-2`, nothing is overwritten) with the header, the audit, the §10.3 bar table, per-day
+# adds `-2`, nothing is overwritten) with the header, the audit, the bar table, per-day
 # counts, the to-scale tokens_before histogram with the thresholds, duration percentiles by
 # trigger, the verdict mix, friction lines, alerts by rule and the cost line. Lines that need
 # the transcript tier say `deferred (derived tier)` and never FAIL. `--export` writes the

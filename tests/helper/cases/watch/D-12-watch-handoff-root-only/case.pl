@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): the handoff root alone is refused. log_dir lies
+# Unsafe roots: the handoff root alone is refused. log_dir lies
 # outside any work tree (ok), while HOME is a dotfiles git repository that does not ignore
 # .claude/, so the default handoff root is root-in-git. Through the real launcher core still
 # logs to log_dir (its own rows and session folder), but the watcher writes nothing there:

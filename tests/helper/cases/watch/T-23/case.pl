@@ -1,4 +1,4 @@
-# T-23 (WATCH §9, M-15): an unshaped main compaction whose resume block lacks
+# T-23 (M-15): an unshaped main compaction whose resume block lacks
 # the non-ok note; a resume block of 10,500 chars -> A-23 twice. The
 # resume_inject rows are core's (`claim`) and the mod's; here they are given.
 my ($n1, $n2) = ('8e8e0001', '8e8e0002');

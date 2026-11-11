@@ -1,4 +1,4 @@
-# AT-WB-03 (W-BETA B.3; BUILD-ROUND-9 WCH-09): the identity scan fails closed. A schema
+# AT-WB-03: the identity scan fails closed. A schema
 # hole lets an identifying string through (a `word`-class field holding the repo folder's
 # name, a basename under handoff_root): that staged file is withheld, the manifest names it
 # with reason `identity` and a count (never the string), the WITHHELD line prints, the exit

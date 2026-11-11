@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): `root-unchecked` refuses for one call only. HOME is
+# Unsafe roots: `root-unchecked` refuses for one call only. HOME is
 # a dotfiles repository that ignores .claude/ and .local/state/<plugin>/ (an ok root), but this helper call's root-check
 # deadline ($roots::DEADLINE) has already passed, so git check-ignore cannot run: the library
 # PreCompact writes nothing and `status` says root-unchecked. A later launcher call (its own

@@ -1,4 +1,4 @@
-# T-15 (WATCH §9, M-06): PostCompact with no dispatch, the mod loaded (its
+# T-15 (M-06): PostCompact with no dispatch, the mod loaded (its
 # liveness file written in this turn, by this process), no self-call ->
 # bypass_suspected; A-16 (warn at the first in a session).
 my $body = "# CANARY-TEXT-topic\n## Summary\nCANARY-TEXT-body\n";

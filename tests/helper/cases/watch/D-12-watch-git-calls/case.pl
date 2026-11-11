@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): a root check asks git once. HOME is a dotfiles
+# Unsafe roots: a root check asks git once. HOME is a dotfiles
 # repository that ignores .claude/. roots::check_path on a root that exists runs one
 # `git check-ignore`, and on a root not made yet also one (both forms go in one -z --stdin
 # call). Each check is counted from the test trace's `git` lines. D-12-watch-root-form only

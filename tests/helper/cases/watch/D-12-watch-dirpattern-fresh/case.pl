@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): a fresh install in a dotfiles home that ignores the
+# Unsafe roots: a fresh install in a dotfiles home that ignores the
 # default handoff root with a folder-only pattern (`.local/state/<plugin>/handoffs/`); the root is not made
 # yet. The root is git-ignored, so it is ok from the first call on: every PreCompact (the
 # library call and both launcher calls) leaves its row, and `status` has no refusal. Before the

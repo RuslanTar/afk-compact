@@ -1,5 +1,5 @@
-# WATCH M-09 in-flight elements by the spec's literals (BUILD-PLAN §3.4: the
-# watcher hard-codes no regex; finding TF-5): rows are the lines matching
+# M-09 in-flight elements by the spec's literals (the
+# watcher hard-codes no regex): rows are the lines matching
 # `inflight_compact_row_re`, the marker is `more_compaction_re`, and "over 8"
 # is `inflight_max_rows`, all read from the shipped spec asset. A table line
 # (`| B-3 |`), a labelled line (`Row: B-4 ...`) and a bare `+3 more items` are

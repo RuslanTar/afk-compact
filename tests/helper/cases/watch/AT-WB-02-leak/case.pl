@@ -1,5 +1,5 @@
-# AT-WB-02 leak canary, AT-WB-07 zip shape, AT-WB-01 drop counts (W-BETA B; WATCHER-SPEC §8.1;
-# BUILD-ROUND-9 WCH-09). A fixture install plants unique canaries in the home path, the repo,
+# AT-WB-02 leak canary, AT-WB-07 zip shape, AT-WB-01 drop counts.
+# A fixture install plants unique canaries in the home path, the repo,
 # branch and bucket names, a ticket id, summary and handoff text, a jobs command, evidence
 # paths, a queue question, a draft, unknown fields and an unknown event, plus secret-shaped
 # values. `report` builds a zip; every entry is unpacked and none holds any canary, the raw
@@ -79,7 +79,7 @@ my %got;
         $E->ok(($al->{key}{actor} =~ /\A[0-9a-f]{12}\z/ ? 1 : 0), 'an agent id is hashed');
         $E->is($al->{key}{session_id}, $al->{sid}, 'one sid hashes to one value');
         my ($pc) = grep { $_->{ev} eq 'postcompact' } @r;
-        # owner xxxxxxxx-34: fixed section ids (spec_version 2), never a position or a slug
+        # fixed section ids (spec_version 2), never a position or a slug
         $E->is(join(',', map { "$_=$pc->{section_chars}{$_}" } sort keys %{ $pc->{section_chars} || {} }),
                'main:decisions=40,main:resume-here=300,other=8,preamble=7,sub:task=20',
                'section_chars: slugs and literals become fixed section ids, an unknown heading or slug other');

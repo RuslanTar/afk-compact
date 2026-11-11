@@ -1,4 +1,4 @@
-# ROOT-RULINGS F2-4 (SAFE-02), WATCH W9: the rows the rules read come from the
+# F2-4: the rows the rules read come from the
 # persisted incremental cache under <watch>/<sid>/watch-cache/ (state.json,
 # written atomically, 0600; rows.jsonl). A Stop decodes only the stream lines
 # that are new since the last Stop and whose kind the rules read, never the
