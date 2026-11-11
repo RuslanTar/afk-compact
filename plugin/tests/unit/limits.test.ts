@@ -233,3 +233,69 @@ test('AT-LM-14 (D-83, review): a failed record write is not counted as written: 
   await noteUsage(d, NOW + 2000)
   expect(calls).toBe(3)
 })
+
+test('AT-LM-16 (0.1.9, review): usage writes are throttled: parallel refreshes spawn one helper, a share moving by fractions within a point writes nothing until USAGE_NOTE_MS, a refresh during a write is folded into one check of the newest reading after it, a failed write drops the folded one', async () => {
+  let pct = 41.2
+  const sent: { at: number; windows: { pct: number }[] }[] = []
+  let gate: (() => void) | undefined
+  let fail = false
+  const d = {
+    state: newState('l'), helper: '/p/helper',
+    usage: async () => ({ tokens: 1, window: 2, rateLimits: [w('seven_day', pct)] }),
+    sessionId: async () => '5e55a001-0c0f-4f1e-9a00-00000000a001',
+    run: async (_argv: string[], _ms: number, stdin?: string) => {
+      sent.push(JSON.parse(stdin ?? '{}'))
+      if (gate === undefined) await new Promise<void>(r => { gate = r })
+      return fail ? { ok: false, exitCode: 64, stdout: '', error: '' } : { ok: true, exitCode: 0, stdout: '{"readings":[]}\n', error: '' }
+    },
+  } as unknown as Deps
+  const open = () => { const g = gate; gate = () => undefined; g?.() }
+  const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve() }
+  // 20 subagent responses at once, the share moving by fractions: one helper
+  const all = Array.from({ length: 20 }, (_, i) => noteUsage(d, NOW + i))
+  await settle()
+  pct = 41.9
+  await settle()
+  open()
+  await Promise.all(all)
+  expect(sent.map(x => [x.at, x.windows[0]?.pct])).toEqual([[NOW / 1000, 41.2]])
+  expect([d.state.usageNote?.at, d.state.usageNoting]).toEqual([NOW, undefined])
+  // fractions within the point: nothing; the next point: written at once
+  pct = 41.99
+  await noteUsage(d, NOW + MIN)
+  expect(sent.length).toBe(1)
+  pct = 42.1
+  await noteUsage(d, NOW + 2 * MIN)
+  expect(sent.map(x => x.windows[0]?.pct)).toEqual([41.2, 42.1])
+  // unchanged: written again once USAGE_NOTE_MS old, so a skip decision elsewhere reads a fresh entry
+  pct = 42.6
+  await noteUsage(d, NOW + 2 * MIN + USAGE_NOTE_MS - 1)
+  expect(sent.length).toBe(2)
+  await noteUsage(d, NOW + 2 * MIN + USAGE_NOTE_MS)
+  expect(sent.map(x => [x.at, x.windows[0]?.pct]).slice(2)).toEqual([[(NOW + 2 * MIN + USAGE_NOTE_MS) / 1000, 42.6]])
+  // a refresh during a write that moves a point: one more write after it, of the newest reading
+  gate = undefined
+  pct = 43.2
+  const a = noteUsage(d, NOW + 20 * MIN)
+  await settle()
+  pct = 44.5
+  const b = [noteUsage(d, NOW + 20 * MIN + 1), noteUsage(d, NOW + 20 * MIN + 2)]
+  open()
+  await Promise.all([a, ...b])
+  expect(sent.map(x => [x.at, x.windows[0]?.pct]).slice(3)).toEqual([[(NOW + 20 * MIN) / 1000, 43.2], [(NOW + 20 * MIN + 2) / 1000, 44.5]])
+  expect(d.state.usageNote?.at).toBe(NOW + 20 * MIN + 2)
+  // a failed write: the folded refresh is dropped, the next refresh tries again
+  gate = undefined
+  fail = true
+  pct = 45.5
+  const c = noteUsage(d, NOW + 30 * MIN)
+  await settle()
+  pct = 46.5
+  const e = noteUsage(d, NOW + 30 * MIN + 1)
+  open()
+  await Promise.all([c, e])
+  expect([sent.length, d.state.usageNote?.at, d.state.usageNoting]).toEqual([6, NOW + 20 * MIN + 2, undefined])
+  fail = false
+  await noteUsage(d, NOW + 31 * MIN)
+  expect(sent.map(x => x.windows[0]?.pct).slice(6)).toEqual([46.5])
+})

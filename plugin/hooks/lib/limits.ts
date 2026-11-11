@@ -363,27 +363,57 @@ export function recordWindows(limits: readonly Limit[]): { kind: string; pct: nu
   return limits.filter(l => l.kind !== '' && Number.isFinite(l.percentUsed)).map(l => ({ kind: l.kind, pct: l.percentUsed, resets_at: l.resetsAt === undefined ? null : Math.floor(l.resetsAt / 1000) }))
 }
 
+/**
+ * The key a reading is compared by: each window's kind, whole points of its share and reset. A share
+ * that moves by a fraction (each response's headers, many subagents at once) is the same reading
+ * for the record until it reaches the next point or `USAGE_NOTE_MS` passes (0.1.9).
+ */
 function noteKey(w: ReturnType<typeof recordWindows>): string {
-  return w.map(x => `${x.kind}:${x.pct}:${x.resets_at ?? ''}`).join(',')
+  return w.map(x => `${x.kind}:${Math.floor(x.pct)}:${x.resets_at ?? ''}`).join(',')
 }
 
 /**
  * D-83: Claude Code refreshed the session's usage reading at `at` (a response, `session.measure`):
- * written to the shared record when it changed or the last write is `USAGE_NOTE_MS` old. A failed
+ * written to the shared record when it changed (by whole points, `noteKey`) or the last write is
+ * `USAGE_NOTE_MS` old, so a written reading is never more than that old while refreshes come and a
+ * skip decision elsewhere still reads it as fresh (`LIMIT_FRESH_MS`). One write at a time (0.1.9):
+ * a refresh while one runs is folded into one more check after it, of the newest reading. A failed
  * read writes nothing, and a failed helper call is not counted as written (the next refresh tries
- * again); a write the helper could not make (no record in a git work tree, a full disk) is not
- * reported, so it is tried again `USAGE_NOTE_MS` later (fewer fresh readings, the safe side).
+ * again; a refresh folded in meanwhile is dropped); a write the helper could not make (no record in
+ * a git work tree, a full disk) is not reported, so it is tried again `USAGE_NOTE_MS` later (fewer
+ * fresh readings, the safe side).
  */
 export async function noteUsage(d: Deps, at: number): Promise<void> {
+  const busy = d.state.usageNoting
+  if (busy !== undefined) {
+    busy.next = Math.max(busy.next ?? at, at)
+    return
+  }
+  const run: { next: number | undefined } = { next: undefined }
+  d.state.usageNoting = run
+  try {
+    for (let t: number | undefined = at; t !== undefined; t = run.next) {
+      run.next = undefined
+      if (!(await noteOnce(d, t))) return
+    }
+  } finally {
+    d.state.usageNoting = undefined
+  }
+}
+
+/** One check of `noteUsage`: false when the helper call failed. */
+async function noteOnce(d: Deps, at: number): Promise<boolean> {
   let w: ReturnType<typeof recordWindows>
   try {
     w = recordWindows((await d.usage()).rateLimits)
   } catch {
-    return
+    return true
   }
-  if (w.length === 0) return
+  if (w.length === 0) return true
   const key = noteKey(w)
   const n = d.state.usageNote
-  if (n !== undefined && n.key === key && at - n.at < USAGE_NOTE_MS) return
-  if ((await usageRecord(d, await d.sessionId(), { at: at / 1000, windows: w })) !== undefined) d.state.usageNote = { key, at }
+  if (n !== undefined && n.key === key && at - n.at < USAGE_NOTE_MS) return true
+  if ((await usageRecord(d, await d.sessionId(), { at: at / 1000, windows: w })) === undefined) return false
+  d.state.usageNote = { key, at }
+  return true
 }
