@@ -1,5 +1,5 @@
 {
- "id": "CACHE-07-shim-directory-marketplace",
+ "id": "CACHE-09-shim-directory-marketplace",
  "note": "0.1.9: a copy Claude Code reads in place from a directory marketplace (`claude plugin install <name> --marketplace <folder>`; `claude plugin list` names it under \"Read from\", while installed_plugins.json still records a cache installPath) counts as installed: its folder lies at or under a marketplace in <config>/plugins/known_marketplaces.json (installLocation, or a directory or file source's folder) that installed_plugins.json has the plugin installed from (settings::load_source). So its SessionStart keeps the status line's shim and points an older version's at itself, its data folder is <name>-<marketplace>, the options are pluginConfigs[<name>@<marketplace>], and its load records take the scope of that install's cache folder. The same folder loaded with --plugin-dir (CLAUDE_PLUGIN_DATA the <name>-inline folder) and a marketplace the plugin is not installed from stay dev loads: no shim. CACHE-05 holds the cache layout, CACHE-06 the --plugin-dir one.",
  "now": "2026-11-11T07:00:00Z",
  "tz": "UTC",
