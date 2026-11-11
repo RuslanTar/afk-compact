@@ -373,7 +373,7 @@ sub render {
     push @o, '- Days covered: ' . (@days ? scalar(@days) . " ($days[0]..$days[-1])" : '0'), '';
     push @o, '## Audit', '';
     push @o, @$fails ? (map { "- FAIL $_" } @$fails) : ('- PASS (boundaries = postcompact = rollup rows; every dispatch settled; every watch_error has a class)');
-    push @o, '', '## Bars (WATCHER-SPEC §10.3)', '', '| Bar | Target | Measured | Result |', '|---|---|---|---|';
+    push @o, '', '## Bars', '', '| Bar | Target | Measured | Result |', '|---|---|---|---|';
     push @o, map { "| $_->[0] | $_->[1] | $_->[2] | $_->[3] |" } @{ bars($s, $source) };
     push @o, '', '## Per day', '', '| Day | Main compactions | Alerts |', '|---|---|---|';
     push @o, map { "| $_ | " . ($s->{days}{$_}{compactions} // 0) . ' | ' . ($s->{days}{$_}{alerts} // 0) . ' |' } @days;
@@ -385,17 +385,17 @@ sub render {
     }
     push @o, '', '## Verdict mix (main)', '';
     push @o, (%{ $s->{verdicts} } ? join(', ', map { "$_ $s->{verdicts}{$_}" } sort keys %{ $s->{verdicts} }) : 'none');
-    push @o, '', 'Idle compactions (the rollup `idle` field, IC-1): ' . ($s->{idle} // 0) . " of $s->{main}";
+    push @o, '', 'Idle compactions (the rollup `idle` field): ' . ($s->{idle} // 0) . " of $s->{main}";
     push @o, '', "Size join conflicts (rollup vs compaction_boundary, the rollup value kept): $s->{join_conflict}";
     my $d = $s->{deny};
     my $cnt = sub { my $h = shift; return join(', ', map { "$_ $h->{$_}" } sort keys %$h) || 'none' };
-    push @o, '', '## Denials (permission_denied rows, D-13)', '';
+    push @o, '', '## Denials (permission_denied rows)', '';
     push @o, "- Total: $d->{total}; control (reason classifier-unavailable, kept apart): $d->{control}",
              '- By turn kind: ' . $cnt->($d->{turn_kind}), '- By cause: ' . $cnt->($d->{caused_by}),
              "- In a post-compaction turn caused by the plugin: $d->{post_compaction_plugin}",
              '- By guard class (control excluded): ' . $cnt->($d->{guard_class});
     push @o, '', '## Background survival', '', ($source eq 'remote' ? 'n/a (remote)' : 'deferred (derived tier)');
-    push @o, '', '## Friction (WATCHER-SPEC §5)', '', map { "- $_" } @{ friction($s, $source) };
+    push @o, '', '## Friction', '', map { "- $_" } @{ friction($s, $source) };
     push @o, '', '## Alerts by rule', '';
     my %by;
     push @{ $by{ $_->{rule} // '?' } }, $_ for @{ $s->{alert_rows} };

@@ -183,7 +183,7 @@ sub smoke_lines {
             . (defined $store ? "run: ! " . util::text($store) . " smoke)"
                : "run the plugin's smoke command; its folder path holds both quote kinds, so no command line can name it: store_path_unquotable)"),
             '  the instruction text\'s "next window has / lacks" list was last reviewed for '
-            . ($v->{previousVersion} // 'the previous version') . '; live smoke subset to re-run: AT-M1-13, AT-M2-05, AT-M4-05');
+            . ($v->{previousVersion} // 'the previous version') . '; live smoke checks to re-run: compaction and resume delivery, the compaction nudge, background subagents');
 }
 
 # The refused roots of the private store, one line each (unsafe roots, D-12). For roots in a git work tree

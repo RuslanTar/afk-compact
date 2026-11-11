@@ -21,7 +21,7 @@ sub lines {
         return \@out;
     }
     my $mode = $watch::alerts::DELIVERY eq 'status-only'
-             ? 'alerts are shown here only (Stop delivery waits for probe P-W2)'
+             ? 'alerts are shown here only (Stop delivery waits for a delivery probe)'
              : 'alerts are shown at the next Stop and here';
     push @out, "Watcher: shadow; $mode";
     push @out, q(Watcher: the watcher setting is not true or false; it counts as true) if $ctx->{settings}{watcher_unknown};
