@@ -1,6 +1,6 @@
 package watch::spec;
-# lib/watch/spec.pm: read the spec-literals block (assets/handoff-spec.json,
-# BUILD-PLAN §3.4). Owner: WP-watch. The watcher hard-codes no heading and no
+# lib/watch/spec.pm: read the spec-literals block (assets/handoff-spec.json).
+# The watcher hard-codes no heading and no
 # class regex: every list comes from the spec. A missing key gives an empty
 # list, and the metric that needs it is logged as null.
 use strict;
@@ -74,7 +74,7 @@ sub secret_classes {
             $c{$e->{id}} = uc($e->{class} // '');
         }
     }
-    # SK-2 (S-SETTINGS E2): the user's secret_extra_rules ids (user-hard-<n>, user-warn-<n>).
+    # the user's secret_extra_rules ids (user-hard-<n>, user-warn-<n>).
     my $x = eval { settings::secret_extra() };
     if (ref $x eq 'HASH') { $c{ $_->{id} } = $_->{class} for @{ $x->{rules} || [] } }
     return \%c;

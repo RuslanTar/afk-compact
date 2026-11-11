@@ -1,13 +1,12 @@
 package watch::report;
-# lib/watch/report.pm: W13 `watch report` and `watch audit` (WATCHER-SPEC §10.2, §10.3, §10.7;
-# W-BETA E; BUILD-PLAN §0 W13). Owner: WP-watch.
+# lib/watch/report.pm: `watch report` and `watch audit`.
 #
 # Input: the live <watch> folder (every session's mod, classic, alerts and rollup rows and its
 # events/ files), or with --input DIR a folder of export-transformed rows (a `report` bundle's
 # rows/, one file per session), read by the same code. Rows only: the transcript-derived tier
-# (D-01..D-06, M-18 after-side, the baseline from `watch backfill`) is not built in v1, so
-# those lines say `deferred (derived tier)`, and with --input `n/a (remote)` (the owner has no
-# friend transcript); neither counts as a failure. Output is counts, enums and ids only.
+# (the after-side metrics and the baseline from `watch backfill`) is not built in v1, so
+# those lines say `deferred (derived tier)`, and with --input `n/a (remote)` (no transcripts
+# come with the rows); neither counts as a failure. Output is counts, enums and ids only.
 # `--export` puts the rows through the report export transform first (hashed ids, no paths).
 use strict;
 use warnings;
@@ -61,7 +60,7 @@ sub load {
 
 sub _ev { return $_[0]{ev} // 'compaction' }
 sub _b { my $v = shift; return ref $v eq 'SCALAR' ? ($$v ? 1 : 0) : ($v ? 1 : 0) }
-# An idle value as the word M-01 uses: core writes a JSON bool (decoded 1 or 0) once
+# An idle value as the trigger metric uses it: core writes a JSON bool (decoded 1 or 0) once
 # reconcile settled it, `unknown` before; older rows hold the words.
 sub _idle_word {
     my ($v) = @_;
@@ -71,8 +70,8 @@ sub _idle_word {
 }
 
 # The compactions of one session: the sweep's boundary records (deduped by uuid; they carry
-# the realtime fields M-01..M-20), else the rollup rows, each joined by nonce to core's
-# `compaction_boundary` row (PKG-RUNTIME E.2; the first one per nonce counts): a null rollup
+# the realtime fields), else the rollup rows, each joined by nonce to core's
+# `compaction_boundary` row (the first one per nonce counts): a null rollup
 # size takes the boundary value, a non-null one is kept. In list context also the number of
 # rollup rows whose non-null value disagrees with the boundary row (`join_conflict`).
 sub compactions {
@@ -211,7 +210,7 @@ sub stats {
     return \%s;
 }
 
-# --- bars (§10.3) -------------------------------------------------------------
+# --- bars ---------------------------------------------------------------------
 
 sub bars {
     my ($s, $source) = @_;
@@ -262,7 +261,7 @@ sub bars {
     return \@b;
 }
 
-# --- friction (§5, the row-derivable ones) -------------------------------------
+# --- friction (the row-derivable ones) -----------------------------------------
 
 sub friction {
     my ($s, $source) = @_;
@@ -295,7 +294,7 @@ sub friction {
     return \@f;
 }
 
-# --- audit (§10.2 step 1) ----------------------------------------------------
+# --- audit --------------------------------------------------------------------
 
 sub audit {
     my ($L) = @_;
@@ -447,7 +446,7 @@ sub _opts {
 
 # report_cli(\@argv) -> exit code. Prints `WATCH-REPORT <path>`, or the report itself with
 # --input and no --out. `REFUSED: <key>: <reason>`, exit 3, when it would write under a refused
-# watch dir or handoff root (WATCH §6.1).
+# watch dir or handoff root.
 sub report_cli {
     my ($argv, $seed) = @_;
     my $o = _opts($argv, out => 1, export => 1) or return 64;
@@ -455,7 +454,7 @@ sub report_cli {
     my ($since, $label) = _since_arg($o->{since}, $ctx->{now});
     return 64 if defined $since && $since eq 'bad';
     return 64 if $o->{export} && defined $o->{input};
-    # WATCH §6.1: a report that writes under the watch dir (--export's salt, the default
+    # a report that writes under the watch dir (--export's salt, the default
     # reports/ folder) writes nothing there while the watch dir or handoff root is refused
     if ($o->{export} || (!defined $o->{out} && !defined $o->{input})) {
         if (my $why = watch::ctx::refused($ctx)) { print "REFUSED: $why\n"; return 3 }

@@ -1,15 +1,15 @@
 package watch;
-# lib/watch.pm: library seam of BUILD-PLAN §3.6. Owner: WP-watch.
+# lib/watch.pm: the watcher's library seam.
 #
 #   watch::on_hook(event, payload, ctx[, left])  rows written at hook time (SessionEnd: the end pass)
 #   watch::on_stop(ctx, deadline)         sweep + rules + delivery at main Stop
-#   watch::status_lines(sid[, ctx])       lines for `status` (MOD-SPEC §11)
+#   watch::status_lines(sid[, ctx])       lines for `status`
 #   watch::verdict_line(sid[, ctx])       the verdict line that opens `status`
 #
 # ctx is described in lib/watch/ctx.pm. Every entry point is wrapped: it never
 # dies, never prints and never writes stderr (a hook's stdout is model-visible
 # on PreCompact); an internal error becomes one `watch_error {stage,
-# error_class}` row. `watcher: off` turns every entry into a no-op (WATCH §8.6);
+# error_class}` row. `watcher: off` turns every entry into a no-op;
 # plugin-core writes are core's and are not here.
 use strict;
 use warnings;
@@ -18,8 +18,8 @@ use watch::ctx;
 use watch::io;
 use watch::json;
 
-# StopFailure and PermissionDenied have one writer, core's `hook` (ROOT-RULINGS
-# F2-5): core writes `stop_failure` and `permission_denied` (with its computed
+# StopFailure and PermissionDenied have one writer, core's `hook`:
+# core writes `stop_failure` and `permission_denied` (with its computed
 # classes) and the watcher only reads them, so on_hook does nothing for them.
 my %HOOKS = (
     PreCompact  => 'pre_compact',
@@ -91,7 +91,7 @@ sub on_hook {
 
 # `deadline`: the hard stop as epoch seconds, or seconds from now when small.
 #
-# Time (WATCH W9; ROOT-RULINGS F2-4): every phase runs inside the hard stop.
+# Time: every phase runs inside the hard stop.
 # The sweep reads until the soft limit. The rows the rules need come from the
 # persisted incremental cache (lib/watch/cache.pm), which reads only the new
 # stream bytes. The rules check the clock as they go. When the hard stop
@@ -169,7 +169,7 @@ sub on_stop {
             watch::ctx::error_row($ctx, 'sweep', 'unreadable') if $f->{unreadable};
             watch::ctx::error_row($ctx, 'sweep', 'bad-json') if $f->{bad_lines};
             watch::ctx::log_row($ctx, 'sweep', $_, actor => $f->{actor}) for watch::sweep::rows_for($f);
-            # Only a time cut is a budget breach (WATCH W9, FR-22, A-25); a
+            # Only a time cut is a budget breach (A-25); a
             # file left over by the 5 MB cap is `sweep.partial` alone.
             if ($f->{time_cut}) {
                 watch::ctx::log_row($ctx, 'sweep_partial', { file => $f->{file}, from_off => $f->{from_off},
@@ -209,7 +209,7 @@ sub on_stop {
     return $out;
 }
 
-# Hard stop (WATCH W9): the run keeps no transcript offset and no session
+# Hard stop: the run keeps no transcript offset and no session
 # state, so no swept boundary or event goes unevaluated; the next Stop sweeps
 # and evaluates it again. `stage` names the phase the clock ran out in.
 sub _hard_stop {

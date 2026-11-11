@@ -1,11 +1,11 @@
 package watch::rules;
-# lib/watch/rules.pm: the Stop-time rule engine (WATCHER-SPEC §2 joins, §3
-# realtime fields, §7.1 rules A-01..A-29). Owner: WP-watch. Inputs: this
+# lib/watch/rules.pm: the Stop-time rule engine (joins, realtime fields, rules A-01..A-29).
+# Inputs: this
 # session's rows (classic, mod, mod fallback events, dispatch records, rollup,
 # sidecar slots) and the sweeper's new boundaries and events. Output: alert
-# rows and `precompute_or_failed` info rows. Never acts (WATCH §7.2).
+# rows and `precompute_or_failed` info rows. Never acts.
 #
-# Time (WATCH W9, ROOT-RULINGS F2-4): with `$ctx->{_deadline}` set (the Stop's
+# Time (F2-4): with `$ctx->{_deadline}` set (the Stop's
 # hard stop, on the watch::io::mono clock) the engine checks the clock between
 # compactions, events and rule blocks and dies "hard-stop\n" once it has
 # passed. Everything the rules write is idempotent (alert ids; one
@@ -24,7 +24,7 @@ use watch::hturn;
 
 my %BADV = map { $_ => 1 } qw(unshaped truncated stale);
 my $JOIN_S = 120;
-# A-28 (MG-5): a handoff turn's first request that read under this share of its input from the
+# A-28: a handoff turn's first request that read under this share of its input from the
 # cache, at this many context tokens or more, is cold (the mod applies the same share to a
 # compaction's prefix read and writes compaction_cold).
 our $COLD_SHARE = 0.5;
@@ -33,7 +33,7 @@ our $COLD_MIN_TOKENS = 100_000;
 our $A23_HELD_MAX = 50;
 # A-27: the main boundaries whose history and idle facts the session state keeps (bmeta).
 our $BMETA_MAX = 50;
-# W-19: the context window of the standard models (thresholds: a larger autoCompactWindow needs a
+# The context window of the standard models (thresholds: a larger autoCompactWindow needs a
 # context seen above it)
 our $STD_WINDOW = 200_000;
 # A-24 (set below with the walk)
@@ -96,7 +96,7 @@ sub load_session {
 
 # The rollup stream (<watch>/<sid>/compactions.jsonl) holds the rollup rows (`ev:
 # compaction`, written before the store had an `ev` for them: no `ev`) and core's
-# `compaction_boundary` rows (PKG-RUNTIME E.2; one per nonce, append-only). Join by nonce:
+# `compaction_boundary` rows (one per nonce, append-only). Join by nonce:
 # a null rollup field takes the boundary value, a non-null rollup value is never replaced,
 # and a disagreement is a `join_conflict` (named on the row as `_join_conflict`, counted).
 # A repeated boundary row for a nonce is ignored (the first one counts).
@@ -136,7 +136,7 @@ sub join_row {
         my ($x, $y) = map { ref $_ eq 'SCALAR' ? ($$_ ? 1 : 0) : $_ } ($r->{$k}, $bv);
         push @c, $k if "$x" ne "$y";
     }
-    # IC-1 D1 (needs/core-to-watch.md §6, as core's rollup::rows): reconcile decides the idle
+    # As core's rollup::rows: reconcile decides the idle
     # facts once the boundary row exists and writes them on the compaction_boundary row; the
     # PostCompact rollup row says `unknown` (or null) until then. Such a rollup value takes the
     # boundary's; a settled one is kept. No join_conflict: the rollup never settles idle itself.
@@ -149,7 +149,7 @@ sub join_row {
     return $r;
 }
 
-# C-STORE D5/D10 (MOD-SPEC §5.9 step 4): the newest `copy_attributed` row per id6. The
+# The newest `copy_attributed` row per id6. The
 # copy-path and actor joins take it over the `copy` row and the rollup row (read-only).
 sub attributed_by_id6 {
     my (@rows) = @_;
@@ -161,10 +161,10 @@ sub attributed_by_id6 {
     return \%a;
 }
 
-# `permission_denied` rows (core's hook, WATCHER-SPEC §6.3; D-13 deny_rate): counts by
-# `turn_kind` (`post-compaction` includes the pending-record case of PKG-RUNTIME E.1),
-# `caused_by` and `guard_class`. D-13 keeps `reason_class` `classifier-unavailable` apart as
-# the control (CR-17): such a row counts in `control`, not in `guard_class`. Content-free:
+# `permission_denied` rows (core's hook; the deny rate): counts by
+# `turn_kind` (`post-compaction` includes the pending-record case),
+# `caused_by` and `guard_class`. `reason_class` `classifier-unavailable` is kept apart as
+# the control: such a row counts in `control`, not in `guard_class`. Content-free:
 # classes and counts only. `watch report` (lib/watch/report.pm) counts with deny_counts.
 sub deny_summary {
     my ($S) = @_;
@@ -210,12 +210,12 @@ sub _bg_slots {
 }
 
 # Effective thresholds: the mod's latest config_effective row, else the
-# MOD-SPEC §1.2 clamp over the settings when the window is configured.
+# threshold clamp over the settings when the window is configured.
 sub thresholds {
     my ($ctx, $S, $seen) = @_;
     return { off => 1 } if rows_of($S, 'triggers_off') || rows_of($S, 'trigger_disabled_small_window');
     my ($cfg) = reverse rows_of($S, 'config_effective');
-    # A disabled row (needs/mod-to-watch.md 5) has null thresholds and the computed values in
+    # A disabled row has null thresholds and the computed values in
     # soft_max_raw / target_raw, which are never thresholds (they can be negative): off.
     return { off => 1, why => $cfg->{disabled} }
         if $cfg && defined $cfg->{disabled} && !ref $cfg->{disabled} && length $cfg->{disabled};
@@ -273,7 +273,7 @@ sub cc_compact_window {
     return $ctx->{_cc_window} = defined $v ? ($v < $floor ? $floor : int $v) : undef;
 }
 
-# The clamp constants (P5-FOLD A3): one shared source, the spec's `clamp` object
+# The clamp constants: one shared source, the spec's `clamp` object
 # (assets/handoff-spec.json, rendered for the mod too). A missing or non-numeric key takes
 # the built-in value, which equals the mod's config.ts constant.
 our %CLAMP = (native_offset => 33000, min_target => 120000, reserve_base => 52000,
@@ -291,7 +291,7 @@ sub clamp_constants {
     return \%k;
 }
 
-# WATCHER-SPEC M-04 fallback: with no mod row (classic-only), the MOD-SPEC §1.2 clamp over
+# Fallback: with no mod row (classic-only), the threshold clamp over
 # the settings, the same formula as the mod's clamp(): the window below the floor counts
 # as the floor; `reserve` from `handoff_turn`/`handoff_turn_max_tokens`; disabled below
 # `min_target`. `min_window` is the smallest window that stays enabled ('never' when the
@@ -345,7 +345,7 @@ sub band {
     return 'below-target';
 }
 
-# --- joins (WATCH §2) -------------------------------------------------------
+# --- joins ------------------------------------------------------------------
 
 sub _pkey { my $p = shift; return join '|', ($p->{ts} // ''), ($p->{nonce_found} // '') }
 
@@ -470,7 +470,7 @@ sub build_compactions {
 sub _derive {
     my ($ctx, $S, $C) = @_;
     my ($B, $P, $D) = @$C{qw(B P D)};
-    # Attribution, WATCH §2 join 4.
+    # Attribution.
     my $actor;
     if ($P && ($P->{scope_found} // '') eq 'sub' && $D && defined $D->{agent_id}) { $actor = $D->{agent_id} }
     elsif ($B) { $actor = $B->{actor} }
@@ -492,7 +492,7 @@ sub _derive {
     $C->{actor} = $actor;
     $C->{main} = $actor eq 'main' ? 1 : 0;
     $C->{precompute} = (($B && ${ $B->{precomputed} }) || ($D && ($D->{trigger} // '') eq 'precompute')) ? 1 : 0;
-    # Trigger, M-01.
+    # Trigger.
     my $trig;
     if ($D && ($D->{channel} // '') eq 'mod-self') { $trig = 'plugin' }
     elsif ($D && ($D->{channel} // '') ne 'classic' && defined $D->{trigger}) { $trig = $D->{trigger} }
@@ -505,7 +505,7 @@ sub _derive {
     $C->{nonce} = $D ? $D->{nonce} : ($P && $P->{nonce_found}) ? $P->{nonce_found} : 'none';
     $C->{nonce_match} = ($P && $D && defined $P->{nonce_found} && $P->{nonce_found} eq $D->{nonce}) ? 1 : 0;
     $C->{channel} = $D ? $D->{channel} : ($P ? 'none' : undef);
-    # Verdict, M-07, with what the sweep adds: precomputed and attribution.
+    # Verdict, with what the sweep adds: precomputed and attribution.
     my $v = $P ? $P->{verdict} : undef;
     if ($B && ${ $B->{precomputed} }) { $v = 'stale' }
     elsif ($P && $actor ne 'main' && $actor ne 'unattributed') {
@@ -518,11 +518,11 @@ sub _derive {
     $C->{key} = { session_id => $ctx->{sid}, actor => $actor,
                   compaction_seq => ($B ? $B->{seq} : undef), nonce => $C->{nonce} };
     $C->{id} = $B ? ('b:' . ($B->{uuid} // $B->{line})) : ('p:' . _pkey($P));
-    # Copy, M-14.
+    # Copy.
     my $copy;
     my $rk = $D ? $D->{nonce} : $P ? $P->{nonce_found} : undef;
     # Sizes: the swept boundary first; without one, the rollup row joined with core's
-    # `compaction_boundary` row by nonce (PKG-RUNTIME E.2, join_rollup).
+    # `compaction_boundary` row by nonce (join_rollup).
     my $roll = defined $rk ? $S->{rollup}{$rk} : undef;
     $C->{pre} = ($B && defined $B->{pre}) ? $B->{pre} : $roll ? $roll->{pre_tokens} : undef;
     $C->{pre_src} = !defined $C->{pre} ? undef : ($B && defined $B->{pre}) ? 'transcript' : 'rollup';
@@ -538,7 +538,7 @@ sub _derive {
     $copy = copy_of($S, $rk, $C->{ref_t});
     $C->{copy} = $copy;
     $C->{copy_bad} = copy_bad($copy);
-    # Liveness, M-06.
+    # Liveness.
     if ($P) {
         my $modd = $D && ($D->{channel} // '') =~ /\Amod-/;
         my $self = grep { ($_->{channel} // '') eq 'mod-self' && defined _t($_) && defined _t($P)
@@ -561,14 +561,14 @@ sub _derive {
         $B->{bypass_suspected} = watch::ctx::B($C->{bypass_suspected});
         $B->{mod_off} = watch::ctx::B($C->{mod_off});
         $B->{postcompact} = watch::ctx::B($P);
-        # M-01 idle (IC-1 D1): from the rollup row (mod OR the native notice, settled at
+        # idle: from the rollup row (mod OR the native notice, settled at
         # reconcile); an idle compaction arrives as trigger `auto`.
         $B->{idle} = $C->{idle};
         $B->{idle_source} = $C->{idle_source};
     }
 }
 
-# copy_of(S, nonce, time) -> the compaction's copy (M-14): the rollup row's, else the copy rows
+# copy_of(S, nonce, time) -> the compaction's copy: the rollup row's, else the copy rows
 # by nonce (by time within JOIN_S without one), else a failed, exists or mismatch row; `missing`.
 # 0.1.4: a rollup copy that says failed or missing (PostCompact's save failed and kept the stash)
 # gives way to a saved, exists or late copy row of the same compaction (the later save; reconcile
@@ -748,7 +748,7 @@ sub evaluate {
             $R->(rule => 'A-15', severity => $once->('A-15'), id_parts => [@idp, 'arm'], %k,
                  evidence => { arm_fp => $P->{arm_fp} });
         }
-        # M-06 / A-16 (P5-FOLD A5): a subagent's compaction can set off bypass_suspected too.
+        # A-16: a subagent's compaction can set off bypass_suspected too.
         # Classic payloads carry no agent id, so a row for a compaction not proven main has
         # `actor: unknown` (the alert text says "possibly in a subagent").
         if ($c->{bypass_suspected} && !$c->{precompute}) {
@@ -793,7 +793,7 @@ sub evaluate {
     return $C;
 }
 
-# --- A-23 and the idle block (IDLE-COMPACT-SPEC §1.4, MOD-SPEC §3.4) ----------
+# --- A-23 and the idle block ---------------------------------------------------
 #
 # An idle compaction sends no continue: its resume block waits on disk for the next turn (the
 # person's return, a background result, or the first turn of the next process of this session
@@ -1021,7 +1021,7 @@ sub history_boundary {
 }
 
 # idle_compaction(S, compaction) -> 1 for an idle compaction: the rollup's settled idle (mod
-# OR the native notice, IC-1 D1), or the mod's dispatch record says idle. A swept boundary
+# OR the native notice), or the mod's dispatch record says idle. A swept boundary
 # whose dispatch an earlier P-only record already took (the sweep lagged behind the hooks in a
 # long transcript) has no D of its own: a main mod dispatch marked idle from $JOIN_S before
 # it to 1 s after it is that compaction's.
@@ -1051,7 +1051,7 @@ sub _event_rules {
     my $okv = watch::spec::ok_verdicts($ctx->{spec});
     my $R = sub { watch::alerts::raise($ctx, $ex, @_) };
     my $vh = $sess->{vh} || [];
-    # A-12 (AP-9, 2026-10-23): an outward call after a boundary or a manual resume is consented
+    # A-12: an outward call after a boundary or a manual resume is consented
     # by a later human-typed row (the sweep's window consent) or by an approval checked for that
     # window: a class in the approvals_checked of a dispatch row or the classes of an
     # approvals_carry row (`measure` on the handoff or on the summary's copy) logged between the
@@ -1068,7 +1068,7 @@ sub _event_rules {
     }
     my $approved = sub {
         my ($e) = @_;
-        # A push the sweep saw going to a protected branch is the protected-push gate (R3-15).
+        # A push the sweep saw going to a protected branch is the protected-push gate.
         return 0 if !@carry || $gate{ $e->{class} // '' } || ($e->{protected} && $gate{'protected-push'});
         # Event times are epochs (watch::rows::ts_of).
         my $t = _num($e->{ts}) // return 0;
@@ -1114,7 +1114,7 @@ sub _event_rules {
             $R->(rule => 'A-20', severity => 'critical', id_parts => [$e->{win_uuid}, $e->{line}],
                  evidence => { line => $e->{line} }) unless $healed;
         } elsif ($k eq 'handoff_turn') {
-            # M-17: the submit of this ht was swept; the Stop now running ends that turn or a later one.
+            # the submit of this ht was swept; the Stop now running ends that turn or a later one.
             $sess->{ht_seen}{ $e->{ht} } = 1 if defined $e->{ht};
         } elsif ($k eq 'continue') {
             my $pos;
@@ -1156,9 +1156,9 @@ sub _event_rules {
     for my $r (rows_of($S, 'thrash')) {
         $R->(rule => 'A-07', severity => 'critical', id_parts => ['mod', $r->{ts}], evidence => { mod_thrash => \1 });
     }
-    # A-28 (MG-5, ratify R4 guard, 2026-10-23): a compaction_cold row (the mod's prefix read under
-    # its cold share; an older version's row has the read share of all input instead: root ruling
-    # 2026-10-27 23:16), or a handoff turn whose first request read under $COLD_SHARE of its input
+    # A-28: a compaction_cold row (the mod's prefix read under
+    # its cold share; an older version's row has the read share of all input instead),
+    # or a handoff turn whose first request read under $COLD_SHARE of its input
     # from the cache at >= $COLD_MIN_TOKENS (handoff_turn_end cache_read_share; the context size
     # from its handoff_turn_start t0): the request may have gone to another model than the
     # session's own.
@@ -1176,7 +1176,7 @@ sub _event_rules {
         $R->(rule => 'A-28', severity => 'warn', id_parts => ['handoff-turn', $r->{handoff_ht} // $r->{ts}],
              evidence => { read_share => $share, kind => 'handoff-turn' });
     }
-    # A-29 (ID-2, 2026-10-23): an idle_unshaped row (reconcile: a "Compacted while idle" boundary
+    # A-29: an idle_unshaped row (reconcile: a "Compacted while idle" boundary
     # that no plugin dispatch shaped; native idle compaction ran on its own).
     for my $r (rows_of($S, 'idle_unshaped')) {
         $R->(rule => 'A-29', severity => 'warn', id_parts => [ 'b', $r->{boundary_uuid} // $r->{ts} ], evidence => {});
@@ -1210,7 +1210,7 @@ sub _session_rules {
 
     # A-17 (a) a skipped after-step, (b) a mod dispatch without `compacted` in 15 min. A
     # dispatch whose call Claude Code rejected as headless (`compact_rejected {error_class:
-    # headless}`, 2026-10-27 headless probe) is explained: Claude Code rejects a plugin's
+    # headless}`) is explained: Claude Code rejects a plugin's
     # compaction call in that session, so it is not a missing after-step. So is a headless
     # `/compact` the host cannot run (`compact_command {error_class: no-command|input-ended}`).
     my %compacted;
@@ -1223,7 +1223,7 @@ sub _session_rules {
     for my $r (rows_of($S, 'compacted')) {
         $compacted{ $r->{nonce} } = 1 if defined $r->{nonce};
         next unless defined $r->{skip} && !ref $r->{skip};
-        # DP-29 (E-M-15): the mod dropped its dispatch because a native compaction ran; the
+        # DP-29: the mod dropped its dispatch because a native compaction ran; the
         # row (with the nonce) closes that dispatch, so it is neither a skipped after-step (a)
         # nor a dispatch without `compacted` (b, the nonce is in %compacted above).
         # So for one dropped because a person's turn or prompt came first (`user-first`).
@@ -1275,7 +1275,7 @@ sub _session_rules {
     $sess->{pof} = \@pof;
     tick($ctx);
     # A-17 (d): a StopFailure within 60 s of a counted dispatch. Core's hook
-    # writes the one `stop_failure` row (ROOT-RULINGS F2-5); the watcher reads it.
+    # writes the one `stop_failure` row; the watcher reads it.
     for my $sf (rows_of($S, 'stop_failure')) {
         my $st = _t($sf) // next;
         my ($d) = grep { !$excluded->($_) && defined _t($_) && $st - _t($_) >= 0 && $st - _t($_) <= 60 } @{ $S->{disp_list} };
@@ -1290,7 +1290,7 @@ sub _session_rules {
              evidence => { failed => 'rejected', count => scalar @rej });
     }
     # A-18: auto-continue stopped by a halt with no handoff written that turn, or in the
-    # plugin-submitted handoff turn of the same ht (DP-14: in a last cycle the handoff is
+    # plugin-submitted handoff turn of the same ht (in a last cycle the handoff is
     # published in its own turn, after the nudged one). Nothing is raised while that outcome
     # is open: the handoff turn is still to come (no ht yet, inside the grace period, and the
     # mod has not said it skipped) or has not been seen finishing.
@@ -1311,7 +1311,7 @@ sub _session_rules {
                     || grep { ($_->{ht} // '') eq $ht->{ht} } rows_of($S, 'handoff_user_interjected'), rows_of($S, 'handoff_skipped');
             } else {
                 # A skip of an optional turn (pre-compaction `again`, any row with `reason:
-                # precompact` or `idle`; needs/mod-to-watch.md 2: last-cycle rows carry no
+                # precompact` or `idle`; last-cycle rows carry no
                 # reason) says nothing about the last-cycle handoff turn.
                 $settled = !$handoff_on
                     || ($ctx->{now} - $rt) >= $watch::hturn::OPEN_AFTER_ROW_S
@@ -1338,7 +1338,7 @@ sub _session_rules {
         }
     }
     tick($ctx);
-    # A-24: quota warnings from the sweep; the watch dir over watch_quota_mb (SK-6, default 50; 0 = off).
+    # A-24: quota warnings from the sweep; the watch dir over watch_quota_mb (default 50; 0 = off).
     for my $r (rows_of($S, 'warn_quota')) {
         $R->(rule => 'A-24', severity => 'warn', id_parts => ['quota', $r->{ts}], evidence => { mb => $r->{mb} });
     }

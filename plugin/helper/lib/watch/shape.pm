@@ -1,17 +1,17 @@
 package watch::shape;
-# lib/watch/shape.pm: per-summary shape metrics, WATCHER-SPEC §3 M-08..M-13.
-# Owner: WP-watch. Input is the normalized body from the core detector (one
-# detector run, WATCH W6). Text is read in memory only; the result holds counts,
-# classes and ids, never text (WATCH §8.2).
+# lib/watch/shape.pm: per-summary shape metrics.
+# Input is the normalized body from the core detector (one
+# detector run). Text is read in memory only; the result holds counts,
+# classes and ids, never text.
 use strict;
 use warnings;
 use utf8;
 use watch::spec;
 use watch::io;
 
-# Main section roles, by position in spec `sections_main` (the CONSISTENCY §1
-# section order; `## Approvals` after User constraints since the 2026-10-23 scoped-approval
-# ruling, AP-3). Used only when the spec lists exactly this many sections.
+# Main section roles, by position in spec `sections_main` (the handoff spec's
+# section order; `## Approvals` after User constraints since scoped approvals).
+# Used only when the spec lists exactly this many sections.
 my @MAIN_ROLES = qw(resume_here user_constraints approvals decisions in_flight live_state
                     open_questions location work_done evidence next_steps);
 my %NONE_ROLES = map { $_ => 1 } qw(user_constraints in_flight live_state open_questions);
@@ -34,7 +34,7 @@ sub _slug {
     return join('_', @w) || 'other';
 }
 
-# Split at heading literals matched as a prefix of a `#` line (MOD §5.1).
+# Split at heading literals matched as a prefix of a `#` line.
 # Returns [ {key, role, index, lines => [..]} ... ]; the part before the first
 # known heading is `preamble`, unknown headings are `other`.
 sub split_sections {
@@ -70,12 +70,12 @@ sub size_band {
     return $n < 2000 ? 'under-2K' : $n <= 4000 ? '2-4K' : 'over-4K';
 }
 
-# RV-24 (small-rulings §3a): a stamp is `YYYY-MM-DD HH:MM ±hhmm`, regex `time_re` of the
+# A stamp is `YYYY-MM-DD HH:MM ±hhmm`, regex `time_re` of the
 # spec asset; the legacy short forms (`HH:MM`, `MM-DD HH:MM`, `time_legacy_re`) are still read
 # and counted, never written. The fallbacks below only serve a spec without the keys.
 my $TIME_RE = '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}';
 my $LEGACY_RE = '(?:[0-9]{2}-[0-9]{2} )?[0-9]{2}:[0-9]{2}';
-# M-10 only: a date plus a time that is not a whole stamp (no zone, `+hh:mm`, ISO `T`/`Z`).
+# Check-time metric only: a date plus a time that is not a whole stamp (no zone, `+hh:mm`, ISO `T`/`Z`).
 my $NEAR_RE = qr/[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(?![0-9])/;
 
 sub time_res {
@@ -106,7 +106,7 @@ sub measured_stamps {
     return @out;
 }
 
-# M-10: `checked <stamp>` and `[verified <stamp>` tokens, in the stamp form and in the legacy
+# Check times: `checked <stamp>` and `[verified <stamp>` tokens, in the stamp form and in the legacy
 # short forms. With a measured block, a token whose whole text equals one of the block's
 # stamps does not count (`$stamps`, from measured_stamps). `listed` never counts.
 sub fabricated {
@@ -119,9 +119,9 @@ sub fabricated {
         $n++ unless $measured && defined $t && $ok{$t};
     };
     # A near-stamp (a date and a time with the zone dropped or in another form, e.g.
-    # `2026-10-21 14:05`, `... +03:00`, `2026-10-21T14:05:12Z`) is a check time too and
-    # counts, as `[verified <near-stamp>` does below (CR-F16); it never equals a whole stamp.
-    # Numbered captures only (PKG-RUNTIME B.5): `%+` loads Tie::Hash::NamedCapture, which
+    # `2026-10-21 14:05`, `... +00:00`, `2026-10-21T14:05:12Z`) is a check time too and
+    # counts, as `[verified <near-stamp>` does below; it never equals a whole stamp.
+    # Numbered captures only: `%+` loads Tie::Hash::NamedCapture, which
     # perl-base 5.28 (Debian 10) lacks. Each form is tried at the same place in the order the
     # alternation had (whole stamp, near-stamp, legacy), each with its own `$1`, so a capture
     # group inside a spec regex (`time_legacy_re` has one) never shifts the numbering.
@@ -218,7 +218,7 @@ sub _ledger {
              text => \%text, by_text => \%by_text, carried => \%carried };
 }
 
-# 0.1.5 (E-1, stable ledger): a saved copy's body without the ledger lines the helper carried into
+# 0.1.5 (stable ledger): a saved copy's body without the ledger lines the helper carried into
 # it, given its `ledger_carried` value (`<n> lines (U-3, D-2, ab12cd34:D-1); sha256 <hex>`, maybe
 # JSON-quoted). The helper carries a line into User constraints or Decisions only when the
 # summary's User constraints, Approvals and Decisions named none of its ids, so every line of those
@@ -263,7 +263,7 @@ sub uncarried {
     return join "\n", @keep;
 }
 
-# M-11 against the previous summary text (or undef). 0.1.4: an old id is lost only when the new
+# Lost ids against the previous summary text (or undef). 0.1.4: an old id is lost only when the new
 # ledger has neither the id (as an entry, in the id list another entry line or one of its merged
 # clauses starts with, or named on a Superseded/fold line) nor an entry with the same normalised
 # text (norm_entry); such a line under another id counts as `renumbered`, an id in another entry
@@ -295,7 +295,7 @@ sub ledger_diff {
              ledger_src => $src };
 }
 
-# M-13: chars matched per class, over the whole body (classes may span lines).
+# Clutter: chars matched per class, over the whole body (classes may span lines).
 sub clutter {
     my ($body, $spec) = @_;
     my $classes = watch::spec::classes($spec, 'clutter_classes');
@@ -325,7 +325,7 @@ sub arm_fp {
     return defined $hex ? substr($hex, 0, 12) : undef;
 }
 
-# M-09 elements (main summaries; needs the role map).
+# Section elements (main summaries; needs the role map).
 sub elements {
     my ($parts, $spec) = @_;
     my %by;
@@ -378,8 +378,8 @@ sub elements {
     }
 
     # In-flight rows and the `+N more` marker by the spec's own literals
-    # (inflight_compact_row_re, more_compaction_re, inflight_max_rows; BUILD-PLAN
-    # §3.4): a missing literal leaves its element null.
+    # (inflight_compact_row_re, more_compaction_re, inflight_max_rows): a missing literal
+    # leaves its element null.
     my $row_rx = watch::spec::regex($spec, 'inflight_compact_row_re');
     my $more_rx = watch::spec::regex($spec, 'more_compaction_re');
     my $max = $spec->{inflight_max_rows};

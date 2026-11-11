@@ -1,14 +1,14 @@
 package watch::export;
-# lib/watch/export.pm: `report` (WATCHER-SPEC §8.1, W-BETA B; BUILD-PLAN §3.1) and the export
-# transform it shares with `watch report --export`. Owner: WP-watch.
+# lib/watch/export.pm: `report` and the export
+# transform it shares with `watch report --export`.
 #
-# The bundle is built from the allowlist inputs only (B.1), every row goes through the
+# The bundle is built from the allowlist inputs only, every row goes through the
 # export schema (lib/watch/export_schema.pm), each staged file then passes the fail-closed
-# identity scan (B.3) and the secret scan (B.4), and what passes is zipped (lib/watch/
+# identity scan and the secret scan, and what passes is zipped (lib/watch/
 # bundle.pm). Nothing is uploaded and nothing under <watch> is changed or deleted: the
-# only files this writes are the zip, the local salt and the install id (D-8, AT-WB-06),
-# plus one `report_withheld` row when a file is withheld. `--dry-run` writes nothing at all
-# (Dev-6). No network module is used (AT-WB-11).
+# only files this writes are the zip, the local salt and the install id (AT-WB-06),
+# plus one `report_withheld` row when a file is withheld. `--dry-run` writes nothing at all.
+# No network module is used (AT-WB-11).
 use strict;
 use warnings;
 use utf8;
@@ -55,14 +55,14 @@ my %RX = (
     ts      => qr/\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:?[0-9]{2})\z/,
     version => qr/\A[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(?:-[0-9A-Za-z.]{1,20})?\z/,
     word    => qr/\A[a-z][a-z0-9_-]{0,31}\z/,
-    # MG-4: a plain model id only; no `:` or `/`, so a cloud ARN or profile path (an account id)
+    # a plain model id only; no `:` or `/`, so a cloud ARN or profile path (an account id)
     # is dropped, never exported
     model   => qr{\A[a-z][a-z0-9._-]{0,63}(?:\[[0-9a-z]{1,8}\])?\z},
     rule    => qr/\A[A-Z]-[0-9]{2}\z/,
-    # D-76: a usage window as a near-limit row names it, `kind:percent` (Claude Code's window kind
+    # a usage window as a near-limit row names it, `kind:percent` (Claude Code's window kind
     # or `arm`, a whole percent or `unknown`)
     window  => qr/\A[a-z][a-z0-9_]{0,31}:(?:[0-9]{1,4}|unknown)\z/,
-    # D-83: where a usage window's reading came from, `kind:source` (`plugin`, `statusline`, `peer`)
+    # where a usage window's reading came from, `kind:source` (`plugin`, `statusline`, `peer`)
     wsrc    => qr/\A[a-z][a-z0-9_]{0,31}:(?:plugin|statusline|peer)\z/,
 );
 
@@ -210,8 +210,8 @@ sub transform_row {
     return \%o;
 }
 
-# Spec headings -> fixed section ids, for the `heading` class (owner xxxxxxxx-34, "Stable section
-# ids"; was `main:<n>`/`sub:<n>` by position, spec_version 1). From spec_version 2 the spec's
+# Spec headings -> fixed section ids, for the `heading` class (stable section
+# ids; was `main:<n>`/`sub:<n>` by position, spec_version 1). From spec_version 2 the spec's
 # `section_ids` gives each heading literal of sections_main / sections_subagent its id
 # (`main:<role>` / `sub:<role>`). Keys: the literal, the slug a section_chars row holds
 # (watch::shape::_slug, its producer) and the id itself. A heading without a well-formed id of its
@@ -374,7 +374,7 @@ sub identity_list {
     my @roots;
     my $rr = $ctx->{settings}{repo_roots_list} || [];
     for my $r (@$rr) { push @c, $r; (my $b = $r) =~ s{/+\z}{}; $b =~ s{.*/}{}s; push @c, $b; push @roots, $r }
-    # STATE-ROOT (0.1.2): the repository and bucket names of the pre-0.1.2 default root
+    # Legacy root (0.1.2): the repository and bucket names of the pre-0.1.2 default root
     # ~/.claude/handoffs count too (rows written before the update name them); more names only
     # withhold more, so it is read whatever handoff_root says (the path is
     # watch::ctx's one constant, $LEGACY_ROOT).
@@ -392,18 +392,18 @@ sub identity_list {
     push @c, @{ $o{extra} || [] };
     push @c, _git_remotes(\@roots, watch::io::mono() + $GIT_BUDGET_S) unless $o{no_git};
     my %seen;
-    # The vocabulary exemption holds for the class-checked files only; free text (a summary,
-    # RS-2, or a handoff, RS-5) is scanned against every identity string (`all => 1`).
+    # The vocabulary exemption holds for the class-checked files only; free text (a summary
+    # or a handoff) is scanned against every identity string (`all => 1`).
     my $vocab = $o{all} ? {} : vocabulary($ctx->{brand} // 'plugin', $ctx->{spec});
     return [ grep { length($_) >= $IDENTITY_MIN && !$vocab->{ lc $_ } && !$seen{ lc $_ }++ }
              map { my $x = $_; utf8::encode($x) if utf8::is_utf8($x); $x } grep { defined && !ref } @c ];
 }
 
-# --- summaries (RS-2) and handoffs (RS-5) ---------------------------------------
+# --- summaries and handoffs -------------------------------------------------------
 
-# RS-2 (owner xxxxxxxx-19, 2026-10-23): the summaries a report may add when the user says yes in
+# The summaries a report may add when the user says yes in
 # that run: the saved main compaction copies, <root>/<repo>/<bucket>/compact/*.md (not subagent
-# or unattributed copies). RS-5 (owner xxxxxxxx-33, "Also handoffs", which settles O-8): the
+# or unattributed copies). The handoffs:
 # published handoffs, a second and separate yes: the top-level <root>/<repo>/<bucket>/*.md files
 # whose frontmatter says `kind: handoff` and `writer: handoff` (what `publish` writes), not an
 # imported copy of a repository export (`imported_from`: a teammate's text) and not an export.
@@ -489,7 +489,7 @@ sub _content_entries {
     return \@e;
 }
 
-# E-W-1 (provisional; needs/watch-escalations.md): the bundle's own vocabulary. The transform
+# The bundle's own vocabulary. The transform
 # can emit these words only as themselves (field names, enum values, event names, the brand,
 # the fixed README words), so an identity string that is exactly one of them (case-folded) is
 # no leak and is left off the list; otherwise a repo folder named like the plugin, `main` or
@@ -527,7 +527,7 @@ sub vocabulary {
               system-message watch_error_classes PASS FAIL total kinds classic_stream alerts mod_stream rollup events
               dispatch pending bg handoff-turn checkpoint watch-cache offsets heal resume-claimed jobs fingerprints
               keyset notice reports .orphans key));
-    # config.json's own words (W-BETA B.5, D): its fields, the export classes and path values,
+    # config.json's own words: its fields, the export classes and path values,
     # the settings key names and the enum values core exports as themselves.
     $add->(qw(keys class value default clamped num bool enum path list unset custom custom-in-home unknown));
     {
@@ -538,14 +538,14 @@ sub vocabulary {
     my @u = POSIX::uname();
     $add->($u[0], $u[4]);
     $add->(_readme($brand) =~ /([A-Za-z][A-Za-z0-9_-]{3,})/g);
-    # RS-2, RS-5: the manifest keys and README words of a bundle with summaries, handoffs or both
+    # the manifest keys and README words of a bundle with summaries, handoffs or both
     for my $k (@watch::export_schema::CONTENT_KINDS) {
         $add->($watch::export_schema::CONTENT{$k}{flag}, $k, "${k}_n", "${k}_withheld");
     }
     for my $w ({ summaries => 1 }, { handoffs => 1 }, { summaries => 1, handoffs => 1 }) {
         $add->(_readme($brand, $w) =~ /([A-Za-z][A-Za-z0-9_-]{3,})/g);
     }
-    # xxxxxxxx-34: the manifest's spec_version and the fixed section ids the rows hold (each id
+    # the manifest's spec_version and the fixed section ids the rows hold (each id
     # and its role word), so a repo or bucket folder named like a section is no identity hit
     $add->('spec_version', @watch::export_schema::SECTION_KEEP);
     $add->($_, (split /:/, $_, 2)[1]) for grep { $_ =~ $watch::export_schema::SECTION_ID_RE } values %{ heading_ids($spec) };
@@ -562,7 +562,7 @@ sub identity_hits {
 
 # --- secret scan (B.4) ------------------------------------------------------
 
-# E-W-3 (provisional; needs/watch-escalations.md): what the secret scan reads in a staged
+# What the secret scan reads in a staged
 # JSON file. Field names are the schema's fixed vocabulary (the WARN key-value rule hits the
 # schema's own `"key":"soft_max"`), so a JSON file is scanned as its values, one per line
 # (every string value and every object key below the top level, which are class-checked
@@ -612,7 +612,7 @@ sub secret_hits {
 sub _readme {
     my ($brand, $with) = @_;
     $with = {} unless ref $with eq 'HASH';
-    # RS-2, RS-5: a bundle the user chose to add summaries or handoffs to says so, and that
+    # A bundle the user chose to add summaries or handoffs to says so, and that
     # business content in them is not masked; without them the content-free promise stands as it
     # was.
     my ($s, $h) = ($with->{summaries} ? 1 : 0, $with->{handoffs} ? 1 : 0);
@@ -699,7 +699,7 @@ sub _probes {
     my ($alive_y, $alive_n) = (0, 0);
     my $smoke;
     # the rollup rows joined with core's compaction_boundary rows by nonce (the idle facts are
-    # settled there, needs/core-to-watch.md §6); idle is a JSON bool (1 or 0) or `unknown`
+    # settled there); idle is a JSON bool (1 or 0) or `unknown`
     my %bound;
     for my $r (@$all) {
         next unless ($r->{ev} // '') eq 'compaction_boundary' && defined $r->{nonce} && !ref $r->{nonce};
@@ -755,16 +755,16 @@ sub _probes {
 
 sub _w { my $v = shift; return (defined $v && !ref $v && $v =~ /\A[a-z][a-z0-9_.:-]{0,31}\z/) ? $v : defined $v ? 'other' : 'none' }
 
-# config.json (W-BETA B.5, D). Core's settings::export_view([resolved]) returns an ordered
+# config.json. Core's settings::export_view([resolved]) returns an ordered
 # object (jsonc::obj, a blessed array of key/value pairs; a plain hash is read too) of the
-# exported values (needs/core-to-watch.md §4). The watcher wraps it as
+# exported values. The watcher wraps it as
 # {available: true, keys: {<key>: {class, value, default, clamped}}}: `class` from
 # %settings::EXPORT; `default` true when the value equals core's export of the key's default
 # (export_view over the defaults resolve() would use); `clamped` true for a number the clamp
 # moves (_clamped). Any failure exports nothing: {available: false, why}.
 sub _config {
     my ($ctx) = @_;
-    # settings.pm has no export classes yet (CORE-02): export nothing rather than guess.
+    # settings.pm has no export classes yet: export nothing rather than guess.
     return { available => \0, why => 'no-export-classes' } unless defined &settings::export_view;
     my $r = eval {
         # `report` runs without rc::init (cmd/report.pl), so rc::settings() is empty there:
@@ -851,9 +851,9 @@ sub clamped_keys {
     return _clamped({ spec => $spec }, \%v);
 }
 
-# The number keys the clamp moves (the mod's config.ts, MOD-SPEC §1.2): a value outside the
+# The number keys the clamp moves (the mod's config.ts): a value outside the
 # manifest's min/max; a window below the window floor; handoff_turn_max_tokens outside its
-# bounds; the soft max and target over what the §1.2 clamp gives for the configured window
+# bounds; the soft max and target over what the clamp gives for the configured window
 # (watch::rules::fallback_thresholds, the watcher's copy of that clamp).
 sub _clamped {
     my ($ctx, $v) = @_;
@@ -994,7 +994,7 @@ sub _assemble {
     for my $h (sort keys %rows) {
         push @staged, [ "rows/$h.jsonl", join('', map { _canon($_) } @{ $rows{$h} }) ];
     }
-    # RS-2, RS-5: each summary and each handoff passes the same two scans; its identity scan uses
+    # Each summary and each handoff passes the same two scans; its identity scan uses
     # every identity string (identity_all), since it is free text. A file with any hit is withheld.
     for my $k (@watch::export_schema::CONTENT_KINDS) {
         push @staged, map { [ $_->[0], $_->[1] ] } @{ $o->{content}{$k} || [] };
@@ -1039,10 +1039,10 @@ sub _assemble {
         scan => { secret_rules_version => (ref $ctx->{spec} eq 'HASH' ? $ctx->{spec}{spec_version} : undef),
                   identity_list_size => scalar(@$id_list) },
         export_schema => $watch::export_schema::VERSION,
-        # xxxxxxxx-34: the spec version the section ids follow (2 and up: fixed ids, heading_ids)
+        # the spec version the section ids follow (2 and up: fixed ids, heading_ids)
         spec_version => _spec_version($ctx->{spec}),
         ms => int((watch::io::mono() - ($o->{t0} // watch::io::mono())) * 1000),
-        # RS-2/RS-3, RS-5: only in a bundle the user added that kind to
+        # only in a bundle the user added that kind to
         (map { my $k = $_;
                ($watch::export_schema::CONTENT{$k}{flag} => \1,
                 "${k}_n" => scalar(grep { (watch::export_schema::content_kind($_->[0]) // '') eq $k } @ok),
@@ -1077,7 +1077,7 @@ sub _spec_version {
     return (defined $v && !ref $v && $v =~ /\A[0-9]{1,4}\z/) ? 0 + $v : undef;
 }
 
-# The first-run notice marker id (W-BETA A): the spec's `notice.id` (`watcher-1`), else that.
+# The first-run notice marker id: the spec's `notice.id` (`watcher-1`), else that.
 sub _notice_id {
     my ($ctx) = @_;
     my $n = ref $ctx->{spec} eq 'HASH' ? $ctx->{spec}{notice} : undef;
@@ -1157,7 +1157,7 @@ sub _usage {
     return 64;
 }
 
-# RS-2, RS-5: `summaries: <n> available (<KB>)` and `handoffs: <n> available (<KB>)`, the dry
+# `summaries: <n> available (<KB>)` and `handoffs: <n> available (<KB>)`, the dry
 # run's lines the report skill asks on (one yes per kind).
 sub _available_line {
     my ($kind, $files) = @_;
@@ -1184,7 +1184,7 @@ sub cli {
         elsif ($x =~ /\A--out=(.+)\z/) { $o{out} = $1 }
         elsif ($x eq '--max-mb') { $o{max_mb} = shift @a; return _usage() unless defined $o{max_mb} && $o{max_mb} =~ /\A[1-9][0-9]{0,3}\z/ }
         elsif ($x =~ /\A--max-mb=([1-9][0-9]{0,3})\z/) { $o{max_mb} = $1 }
-        # RS-2, RS-5: only on the command line, each after the user's own yes to that kind in this
+        # only on the command line, each after the user's own yes to that kind in this
         # run (the report skill); no setting turns either on
         elsif ($x eq '--with-summaries') { $o{summaries} = 1 }
         elsif ($x eq '--with-handoffs') { $o{handoffs} = 1 }
@@ -1194,7 +1194,7 @@ sub cli {
     my $ctx = watch::ctx::init({ %{ $seed || {} }, sid => 'unknown' });
     my $since = _since($o{since}, $ctx->{now});
     return _usage() if defined $since && $since eq 'bad';
-    # WATCH §6.1: a real run writes the salt, the install id and report_withheld rows under the
+    # a real run writes the salt, the install id and report_withheld rows under the
     # watch dir; while it or the handoff root is refused, nothing runs (a dry run writes nothing)
     if (!$o{dry}) {
         if (my $refused = watch::ctx::refused($ctx)) { print "REFUSED: $refused\n"; return 3 }
@@ -1237,7 +1237,7 @@ sub cli {
                              _ts_date($res->{from}) // '?', _ts_date($res->{to}) // '?') : ''),
         join('', map { $cfiles{$_} ? sprintf(', %s/ (%d files)', $_, scalar @{ $cfiles{$_} }) : '' } @watch::export_schema::CONTENT_KINDS);
     print "TRUNCATED: over --max-mb, the newest rows are kept (from " . (_ts_date($res->{from}) // '?') . ")\n" if $res->{truncated};
-    # RS-2, RS-5: the dry run says what could be added, per kind; a run with summaries or
+    # The dry run says what could be added, per kind; a run with summaries or
     # handoffs lists each one (the source path is shown here, on your screen, never in the zip).
     if ($o{dry}) { print _available_line($_, $avail{$_}) for @watch::export_schema::CONTENT_KINDS }
     my $src = $res->{content_src} || {};
@@ -1334,7 +1334,7 @@ sub verify_zip {
     }
     my $m = defined $data{'manifest.json'} ? eval { watch::json::decode($data{'manifest.json'}) } : undef;
     if (ref $m ne 'HASH') { push @p, 'manifest: missing or not JSON'; return @p }
-    # RS-3, RS-5: summaries/ only with manifest with_summaries true, handoffs/ only with
+    # summaries/ only with manifest with_summaries true, handoffs/ only with
     # with_handoffs true (each kind its own yes), and as many as <kind>_n says
     my %with;
     for my $k (@watch::export_schema::CONTENT_KINDS) {
@@ -1373,7 +1373,7 @@ sub verify_zip {
     return @p;
 }
 
-# xxxxxxxx-34: the section ids in a bundle's rows follow its manifest's spec_version: none or 1,
+# The section ids in a bundle's rows follow its manifest's spec_version: none or 1,
 # ids by position (`main:3`) or the older slugs, never a fixed id; 2 and up, fixed ids
 # (`main:next-steps`) only. `preamble` and `other` are fine in both. A bundle never mixes the two.
 sub _section_id_problems {

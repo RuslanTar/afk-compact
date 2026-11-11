@@ -1,9 +1,9 @@
 package watch::bundle;
-# lib/watch/bundle.pm: the `report` zip writer and reader, and HMAC-SHA256 (WATCHER-SPEC
-# §8.1 Output, W-BETA B.6). Owner: WP-watch. Floor modules only (R-1, AT-P-11 L1): an own
+# lib/watch/bundle.pm: the `report` zip writer and reader, and HMAC-SHA256.
+# Floor modules only (AT-P-11 L1): an own
 # zip writer (local headers, central directory, CRC-32 from a 256-entry table). Each entry is
-# STORE, or DEFLATE when the optional raw-deflate module loads (inside an eval: W-BETA B.6,
-# XR-20; the floor lint allows it since W2C-4) and the deflated body is smaller. An entry whose
+# STORE, or DEFLATE when the optional raw-deflate module loads (inside an eval; the floor
+# lint allows it) and the deflated body is smaller. An entry whose
 # deflated body would be more than $DEFLATE_RATIO_MAX times smaller stays STORE, so a bundle
 # never trips the analyzer's ratio-bomb refusal (tools/beta-analyze RATIO_MAX 100). The reader
 # takes STORE, and DEFLATE when the raw-inflate module loads; any other method is an error.

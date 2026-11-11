@@ -1,7 +1,7 @@
 package watch::supersede;
 # lib/watch/supersede.pm: closes the alert rows an older version wrote under a rule that changed
 # since (A-01, A-05, A-11 and the hookless A-15 in 0.1.3; A-09 and A-27 in 0.1.4; lib/watch/rules.pm)
-# when the rule as it is now would not raise them. Owner: WP-watch.
+# when the rule as it is now would not raise them.
 #
 # Store-wide, at a main Stop in the time left after delivery (watch.pm on_stop): every
 # session's alerts log is checked once, and again whenever it changed since (a process of an
@@ -216,7 +216,7 @@ sub _a09 {
 
 # A-27 (0.1.4): the continue's last main boundary (the main sweep rows' boundary record with the
 # highest line before the continue's line) is a history boundary or an idle compaction: closed;
-# so is a row whose continue is the plugin's handoff-turn submit, told by its text (W-2: no
+# so is a row whose continue is the plugin's handoff-turn submit, told by its text (no
 # continue). Any other continue, also one that cannot be tied to a boundary, stays open.
 sub _a27 {
     my ($K, $r) = @_;

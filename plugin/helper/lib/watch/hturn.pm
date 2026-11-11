@@ -1,6 +1,5 @@
 package watch::hturn;
-# lib/watch/hturn.pm: the plugin-submitted handoff turn (MOD-SPEC §9.1, D-18; WATCHER-SPEC
-# M-17, A-18, A-19, A-27, DP-14 (6)). Owner: WP-watch.
+# lib/watch/hturn.pm: the plugin-submitted handoff turn (A-18, A-19, A-27).
 #
 # The mod opens a handoff turn with `handoff-turn open`, which exclusive-creates
 # <watch>/<sid>/handoff-turn/<ht>.json (core's handoff_turn.pm: {v, ht, session_id, reason,
@@ -62,9 +61,9 @@ sub submit_for {
 }
 
 # The optional handoff turns that never follow a `continue` row: the pre-compaction turn
-# (`precompact`, MOD-SPEC §9.3, OD-4) and the pre-idle turn (`idle`, §9.4). M-17 still
+# (`precompact`) and the pre-idle turn (`idle`). The sweep still
 # classes their submit as a handoff turn (submit_for is reason-blind), but they are no
-# last-cycle handoff for A-18 (S-SETTINGS D: "A-18 does not apply").
+# last-cycle handoff for A-18 (A-18 does not apply to them).
 our %OPTIONAL = map { $_ => 1 } qw(precompact idle);
 
 # The last-cycle handoff turn opened for a halted `continue` row at epoch $rt (first one at

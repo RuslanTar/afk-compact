@@ -1,6 +1,6 @@
 package watch::json;
-# lib/watch/json.pm: the watcher's JSON codec (floor modules only, RUNTIME §4).
-# Owner: WP-watch. Strings stay UTF-8 byte strings in and out: \uXXXX escapes
+# lib/watch/json.pm: the watcher's JSON codec (floor modules only).
+# Strings stay UTF-8 byte strings in and out: \uXXXX escapes
 # (and surrogate pairs) decode to UTF-8 bytes, and encode passes bytes >= 0x80
 # through. Booleans decode to 1 and 0; encode writes \1 and \0 as true and false.
 # Encode is canonical: object keys sorted, no spaces.

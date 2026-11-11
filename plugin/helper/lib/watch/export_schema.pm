@@ -1,13 +1,13 @@
 package watch::export_schema;
 # lib/watch/export_schema.pm: the allowlist export schema of `report` and `watch report
-# --export` (WATCHER-SPEC §8.1, W-BETA B.2). Owner: WP-watch.
+# --export`.
 #
 # One class per field, per `ev`. Anything not listed is dropped and counted: a field missing
 # here is dropped (manifest `dropped{"ev.field"}`), and an `ev` missing here drops the whole
 # row (`dropped{"ev"}`). No value passes as free text. Classes:
 #   num, int, bool      numbers and booleans as they are (anything else: dropped)
 #   nonce, id6, hex8, hex12, stamp, ts, version   checked against their pattern (else dropped)
-#   model               a model id as Claude Code names it (MG-4; a public product id), else dropped
+#   model               a model id as Claude Code names it (a public product id), else dropped
 #   hash                HMAC-SHA256 under the local salt, first 12 hex (sid, agent, task, ht, ...)
 #   actor               main/unknown/sub/sub-unknown/unattributed kept, any other value hashed
 #   slot                a path becomes main, subagents or unattributed (else other)
@@ -19,14 +19,14 @@ package watch::export_schema;
 #                       `mcp__<server>__<tool>` name (and the sweep's own `mcp`) as `mcp`, else
 #                       `other`; an MCP server name is the user's own word and never exported
 #   rule                an alert rule id (A-NN), else dropped
-#   window              a usage window as `kind:percent` (D-76: `seven_day:94`, `arm:95`), else dropped
-#   wsrc                a usage window's source as `kind:source` (D-83: `five_hour:peer`), else dropped
+#   window              a usage window as `kind:percent` (`seven_day:94`, `arm:95`), else dropped
+#   wsrc                a usage window's source as `kind:source` (`five_hour:peer`), else dropped
 #   [list => CLASS]     an array; each item through CLASS (items that fail are dropped)
 #   [counts => CLASS]   an object {key: number}; keys through CLASS (word by default), values num
 #   [obj => {...}]      a nested object with its own field classes
 #   heading             a spec section heading (its literal, or the slug a section_chars row
 #                       holds) becomes its fixed section id from the spec's `section_ids`
-#                       (`main:<role>`/`sub:<role>`, spec_version 2; owner xxxxxxxx-34), else
+#                       (`main:<role>`/`sub:<role>`, spec_version 2), else
 #                       `other`; `preamble` and `other` stay as they are
 #   [or => CLASS, @words]  one of the listed words as it is, else the value through CLASS
 #                       (idle: a bool or `unknown`; min_window: a number or `never`)
@@ -52,13 +52,13 @@ my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-faile
                   lapsed present newer-turn due-missing prefix-changed adopted-cold input-ended compact-off
                   compaction-off error keep-warm fork-miss);
 my @IDLE_SRC = qw(mod notice return both none);
-# D-80 (0.1.7, hooks/lib/limits.ts): the usage-limit rule a near-limit row or a band compaction went by;
-# D-83 (0.1.8): why a reading at the limit did not stop an action (split, no-fresh)
+# 0.1.7 (hooks/lib/limits.ts): the usage-limit rule a near-limit row or a band compaction went by;
+# 0.1.8: why a reading at the limit did not stop an action (split, no-fresh)
 my @LIMIT_RULE = qw(band 90 spend-90 other-90 cap no-job stale no-delta delta arm-90 option-skip option-skip-spend split no-fresh);
-# D-83 (0.1.8): a decision's readings: each window's source and age, the fresh readings per kind, the anomalies
+# 0.1.8: a decision's readings: each window's source and age, the fresh readings per kind, the anomalies
 my %USAGE = (usage_src => [list => 'wsrc'], usage_age_s => [counts => 'word'], usage_n => [counts => 'word'], usage_anomaly => [list => 'wsrc']);
 # core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
-# `unknown` before (needs/core-to-watch.md §6)
+# `unknown` before
 my $IDLE = [or => 'bool', 'unknown'];
 my @ACUITY = qw(stable watch unstable -);
 # Claude Code's own tool names (fixed by Claude Code, the same for every install): the only tool
@@ -71,7 +71,7 @@ our @BUILTIN_TOOLS = qw(Agent AskUserQuestion Bash BashOutput CronCreate CronDel
 my %BUILTIN_TOOL = map { $_ => 1 } @BUILTIN_TOOLS;
 sub builtin_tool { my ($v) = @_; return defined $v && !ref $v && $BUILTIN_TOOL{$v} ? 1 : 0 }
 my @SEVERITY = qw(critical warn info);
-# SESSION-RESTART §4.1: a gate's or a failure's reason, a class word or `launcher-invalid:<word>`
+# restart on update: a gate's or a failure's reason, a class word or `launcher-invalid:<word>`
 my @RESTART_WHY = qw(off headless no-launcher job-unknown note-pattern bypass-not-available launch-file launcher-cap
                      bypass-left attached unsupported-os no-drift version-unknown on-hold busy aborted asks-user halted
                      agents background-work crons draft present remote session-rules session-dirs worktree mode-unknown
@@ -80,7 +80,7 @@ my @RESTART_WHY = qw(off headless no-launcher job-unknown note-pattern bypass-no
                      same-version not-confirmed launcher-refused bg-not-shipped restriction-lost
                      keepset-unverified);
 my $RESTART_WHY = [pre => [@RESTART_WHY], [qw(launcher-invalid)]];
-# What G3 found about the launcher on a shadow row of the terminal route (`ok` or its why)
+# What the launcher check found about the launcher on a shadow row of the terminal route (`ok` or its why)
 my $RESTART_LAUNCHER = [pre => [qw(ok no-launcher)], [qw(launcher-invalid)]];
 
 my %ENVELOPE = (
@@ -91,7 +91,7 @@ my %ENVELOPE = (
 sub envelope { return \%ENVELOPE }
 
 our %SCHEMA = (
-    # --- the rollup row (MOD-SPEC §2.5) and its boundary join (PKG-RUNTIME E.2) ---
+    # --- the rollup row and its boundary join ---
     compaction => {
         session_id => 'hash', compaction_seq => 'int', nonce => 'nonce', id6 => 'id6', join => 'word',
         trigger => [enum => @TRIGGER], midturn => 'bool', idle => $IDLE,
@@ -112,7 +112,7 @@ our %SCHEMA = (
         nonce => 'nonce', id6 => 'id6', boundary_uuid => 'hash', pre_tokens => 'num', post_tokens => 'num',
         duration_ms => 'num', precomputed => 'bool', idle => $IDLE, idle_source => [enum => @IDLE_SRC], idle_gap_s => 'num',
     },
-    # --- WATCHER-SPEC §6.3 ---
+    # --- denied calls and their caused_by ---
     dispatch => {
         nonce => 'nonce', trigger => [enum => @TRIGGER], agent_id => 'hash', compaction_seq => 'int',
         channel => [enum => @CHANNEL], instructions_bytes => 'int', block_bytes => 'int', measured => 'bool',
@@ -125,12 +125,12 @@ our %SCHEMA = (
         trigger => [enum => qw(auto manual)], ci_bytes => 'int', ci_has_nonce => 'bool', ci_nonce => 'nonce',
         ci_foreign_header => 'bool', keyset_hash => 'hex8',
     },
-    # D-80 (0.1.7): a plugin compaction's plan-window shares before and after it, by window kind
+    # 0.1.7: a plugin compaction's plan-window shares before and after it, by window kind
     compacted => {
         nonce => 'nonce', skip => 'word', tokens_before => 'num', tokens_after => 'num', usage_present => 'bool',
         ms => 'num', t0 => 'num', ht => 'hash', handoff_ht => 'hash',
         pct_before => [counts => 'word'], pct_after => [counts => 'word'],
-        # D-83 (0.1.8): the source of those readings and their ages in seconds, by kind
+        # 0.1.8: the source of those readings and their ages in seconds, by kind
         usage_src => [list => 'wsrc'], usage_age_s_before => [counts => 'word'], usage_age_s_after => [counts => 'word'],
     },
     postcompact => {
@@ -147,7 +147,7 @@ our %SCHEMA = (
     },
     copy => { nonce => 'nonce', id6 => 'id6', result => [pre => [qw(saved exists late unattributed mismatch)], [qw(failed)]],
               slot => [enum => qw(main subagents unattributed)], rel_path => 'slot',
-              # 0.1.5 (E-1): counts of the ledger lines carried from the previous copy, changed or reused
+              # 0.1.5: counts of the ledger lines carried from the previous copy, changed or reused
               ledger => [obj => { carried => 'int', changed => 'int', reused => 'int' }] },
     copy_attributed => { id6 => 'id6', nonce => 'nonce', from_rel => 'slot', rel_path => 'slot', actor => 'actor',
                          proof => [enum => qw(a b c slot)], seq => 'int', pre_tokens => 'num', post_tokens => 'num' },
@@ -160,7 +160,7 @@ our %SCHEMA = (
     nudge => { tokens => 'num', turn_seq => 'int', askq_open => 'bool', halt => 'bool', active => 'bool', last_cycle => 'bool' },
     continue => { result => [pre => [qw(submitted)], [qw(skipped halt)]], continues_last_hour => 'int', halt => 'word',
                   skipped => 'word', after => [enum => qw(restart)] },
-    # 2026-10-27 (headless probe): the rejection's class; Claude Code's own error text stays local
+    # headless loads: the rejection's class; Claude Code's own error text stays local
     compact_rejected => { nonce => 'nonce', attempt => 'int', error_class => [enum => qw(headless turn-running other)], error => 'drop' },
     # a headless load (`claude -p`, the Agent SDK, an app or editor built on it): no nudge in it;
     # one row per session id (`same-load`: a new id in it, as after a /clear), and one more when
@@ -198,45 +198,45 @@ our %SCHEMA = (
     permission_denied => { tool_name => 'tool', reason_class => 'word', guard_class => 'word',
                            turn_kind => [enum => qw(post-compaction resume nudge other)], caused_by => [enum => qw(plugin session)] },
     handoff_publish => { result => [pre => [qw(wrote)], [qw(REFUSED)]], bytes => 'int', lint_rules => [list => 'word'], size_band => 'word',
-                         # 0.1.5 (E-1): counts of the ledger lines carried, changed and reused (stable ledger)
+                         # 0.1.5: counts of the ledger lines carried, changed and reused (stable ledger)
                          ledger => [obj => { carried => 'int', changed => 'int', reused => 'int' }],
                          kind => 'word', writer => 'word', ht => 'hash',
                          attempt => 'int', template_rev => 'hex8', acuity => [enum => @ACUITY], acuity_floor => [enum => @ACUITY],
-                         # AP-4 (2026-10-23): counts and outward class ids of the checked approvals, never a quote
+                         # counts and outward class ids of the checked approvals, never a quote
                          approvals => [obj => { lines => 'int', checked => 'int', unchecked => 'int', hashed => 'int', context => 'int' }], approval_classes => [list => 'word'],
-                         # 0.1.3 APPROVALS: how many approval lines publish moved to Open questions (a count)
+                         # 0.1.3: how many approval lines publish moved to Open questions (a count)
                          approvals_moved => 'int',
-                         # 0.1.5 (E-3): how many mechanical lints publish fixed itself (a count)
+                         # 0.1.5: how many mechanical lints publish fixed itself (a count)
                          lint_fixed => 'int' },
     config_note => { key => 'word', note => 'word' },
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
-    # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was; D-76
-    # (0.1.6): a near-limit skip's usage windows (none on older rows); D-80 (0.1.7): its rule and the
-    # plan words Claude Code's environment had; D-83 (0.1.8): each window's source and age
+    # The idle timer's kind, and how late a late fire was;
+    # 0.1.6: a near-limit skip's usage windows (none on older rows); 0.1.7: its rule and the
+    # plan words Claude Code's environment had; 0.1.8: each window's source and age
     handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash',
                          kind => [enum => qw(turn check compact)], late_s => 'num', windows => [list => 'window'],
                          rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
                          %USAGE },
-    # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load; owner xxxxxxxx-17:
+    # The pair at each change in a load:
     # `check` (native on or unreadable: the 55.5-min outcome check) and the served mode Claude Code
     # cached (2b, a hint only, never used to decide)
-    # IDLE-COMPACT-SPEC §1.2, §2.3 (lane B): native vetoed / compaction-off (`off` in older rows), the
-    # plugin's own idle compaction (`check`: at the 55.5-min check, lane B and owner Q2; `agents`: lane
-    # A's while agents run), Claude Code's idle minimum and the test seam's cache length
+    # Native vetoed / compaction-off (`off` in older rows), the
+    # plugin's own idle compaction (`check`: at the 55.5-min check; `agents`:
+    # while agents run), Claude Code's idle minimum and the test seam's cache length
     idle_mode => { native => [enum => qw(on off unknown vetoed compaction-off)], plugin_turn => [enum => qw(on check off)], served_hint => 'word',
                    plugin_compact => [enum => qw(on agents check failed queued off)], compact_min => 'num', cache_s => 'num' },
-    # owner xxxxxxxx-17: a break of 55.5 min or more at 200K and more with no compaction since the
+    # A break of 55.5 min or more at 200K and more with no compaction since the
     # turn end, while the setting allowed native idle compaction (native stayed silent)
     idle_silent => { gap_s => 'num', tokens => 'num', agents => 'int', served_hint => 'word' },
-    # owner 2026-10-27 ("Compact (Recommended)"): at that check, with agents running, the plugin
+    # At that check, with agents running, the plugin
     # compacts the session itself (its dispatch, compacted or compact_rejected rows follow)
     idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int', at => [enum => qw(check timer)], late_s => 'num', adopted => 'bool',
                       rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
                       windows => [list => 'window'], %USAGE },
-    # IDLE-COMPACT-SPEC D7 (lane A): the plugin's idle compaction failed twice in a row and is off
-    # for the load (`queued`: lane B1's D8).
+    # The plugin's idle compaction failed twice in a row and is off
+    # for the load (`queued`: waiting for the next idle gap).
     idle_compact_off => { why => [enum => qw(failed queued)], fails => 'int' },
-    # keep-warm (D-14, 2026-10-30): an idle gap with this session's own background jobs open warms
+    # keep-warm: an idle gap with this session's own background jobs open warms
     # its one-hour cache with fork pings (counts and classes only: the cache tokens each ping read
     # and wrote, its result, an HTTP status), then stops for one reason, handing the idle timer's
     # record back to the idle path or not; or a gap no idle path could take over refuses before warming
@@ -244,9 +244,9 @@ our %SCHEMA = (
     keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int', ping_s => 'int' },
     keep_warm_ping => { n => 'int', result => [enum => qw(warm fork-miss nothing-to-fork api-error aborted error)], cache_read => 'num',
                         cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int',
-                        # D-83 (0.1.8): a reading at the limit that did not stop the ping
+                        # 0.1.8: a reading at the limit that did not stop the ping
                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word', windows => [list => 'window'], %USAGE },
-    # 0.1.8: the next ping waits for a usage window's reset (D-80): when it is due (next_s from the row)
+    # 0.1.8: the next ping waits for a usage window's reset: when it is due (next_s from the row)
     keep_warm_wait => { n => 'int', gap_s => 'num', next_s => 'num', windows => [list => 'window'], rule => [enum => @LIMIT_RULE],
                         plan => 'word', tier => 'word', %USAGE },
     keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed fork-miss no-jobs ttl-5m prefix-changed
@@ -255,7 +255,7 @@ our %SCHEMA = (
                         pings => 'int', gap_s => 'num', handover => 'bool', windows => [list => 'window'],
                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
                         %USAGE },
-    # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
+    # away digest phase 1: the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents
     # and the measure's running background tasks, at which step), and the digest turn submitted
     # right after one with nothing running, or why not
@@ -267,7 +267,7 @@ our %SCHEMA = (
                                             skipped:halt skipped:headless skipped:disabled skipped:cap skipped:claimed skipped:submit-failed)] },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
                             max_calls => 'int', max_tokens => 'num', model => 'model',
-                            # D-83 (0.1.8): an idle turn a reading at the limit did not stop
+                            # 0.1.8: an idle turn a reading at the limit did not stop
                             rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word', windows => [list => 'window'], %USAGE },
     handoff_turn_end => {
         handoff_turn => [pre => [@HT_END], [qw(failed)]], handoff_ht => 'hash', handoff_tokens => 'num',
@@ -278,25 +278,25 @@ our %SCHEMA = (
     handoff_limit => { ht => 'hash', band => [enum => @BAND], calls => 'int', tokens => 'num' },
     handoff_race => { trigger => [enum => qw(auto)], draft => 'bool', published => 'bool', ht => 'hash' },
     handoff_user_interjected => { ht => 'hash' },
-    # OT-1 / OT-4 (owner xxxxxxxx-06, 2026-10-22): the turn of a handoff-turn prompt a user turn
+    # The turn of a handoff-turn prompt a user turn
     # cancelled, aborted at its start (or the abort failed and it ran with no nudge; why
-    # `rejected`, or `other-text` when the turn may carry another prompt too: REVIEW-NIGHT-3 R3-07)
+    # `rejected`, or `other-text` when the turn may carry another prompt too)
     handoff_orphan_aborted => { turn_id => 'hash', ht => 'hash' },
     handoff_orphan_abort_failed => { turn_id => 'hash', ht => 'hash', why => [enum => qw(rejected other-text)] },
     handoff_mode => { mode => [enum => qw(private repo)], reason => 'word', declared => 'bool', accepted => 'bool' },
     idle_mismatch => { nonce => 'nonce' },
-    # MG-3 / MG-5 (2026-10-23): the summarizer request's cache read, and a cold one (A-28). Root
-    # ruling 2026-10-27 23:16: the prefix read (cache reads over reads and writes) and the input
+    # The summarizer request's cache read, and a cold one (A-28).
+    # The prefix read (cache reads over reads and writes) and the input
     # outside the cache (uncovered) replace the read share of all input; older rows keep read_share.
     compaction_cache => { nonce => 'nonce', prefix_read => 'num', uncovered => 'num', read_share => 'num' },
     compaction_cold => { nonce => 'nonce', prefix_read => 'num', read_share => 'num' },
-    # ID-2 (2026-10-23): a native idle compaction no plugin dispatch shaped (A-29)
+    # a native idle compaction no plugin dispatch shaped (A-29)
     idle_unshaped => { boundary_uuid => 'hash' },
     resume_remeasured => { nonce => 'nonce', age_s => 'num', ms => 'num' },
-    # owner xxxxxxxx-37 (replaces ID-3's [idle-return] line): the idle block went again to a
+    # The idle block (in place of an [idle-return] line) went again to a
     # person's return after a background result's turn took it; re-measured or not
     idle_return => { nonce => 'nonce', age_s => 'num', remeasured => 'bool' },
-    # RP-2 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): a resume block over its soft 6,500 chars
+    # a resume block over its soft 6,500 chars
     resume_block_over_soft => { nonce => 'nonce', chars => 'int' },
     resume_remeasure_failed => { nonce => 'nonce', age_s => 'num' },
     submit_dropped => { why => [enum => qw(session-changed)], site => [enum => qw(continue handoff-turn)] },
@@ -304,17 +304,17 @@ our %SCHEMA = (
     handoff_export => { result => 'word', reason => 'word', bytes => 'int', rules => [list => 'word'] },
     relaunch_unmatched => { task_id => 'hash', origin_sid => 'hash', sha8 => 'drop' },
     jobs_caller_refused => { reason => 'word' },
-    # SR-7 (2026-10-23): one `risk` call; the class ids only, never the command
+    # one `risk` call; the class ids only, never the command
     risk => { source => [enum => qw(own foreign)], result => [enum => qw(none ask)], classes => [list => 'word'] },
     queue_add => { result => 'word', exit => 'int', ms => 'num' },
     resume_receipt => { relation => 'word', tier => 'word', calls => 'int', drift => [list => 'word'],
                         bg => [counts => 'word'], questions => 'int', adopt => 'word', cmds_asked => 'int',
-                        # SR-8 (2026-10-23): handoff commands run unasked; scoped approvals carried / used / asked
+                        # handoff commands run unasked; scoped approvals carried / used / asked
                         cmds_run => 'int', approvals_carried => 'int', approvals_used => 'int', approvals_asked => 'int' },
     heal => { origin_sid => 'hash', item => 'hash', result => [pre => [qw(ok)], [qw(ok REFUSED)]], bumped => 'bool', count => 'int',
               verdict => 'word', confidence => 'word', effects => 'word', signals => [counts => 'word'],
               mode => 'word', new_task_id => 'hash', prod_class => 'word',
-              # HC-1 (2026-10-23): a recorded job, or an own handoff's recipe
+              # a recorded job, or an own handoff's recipe
               run_source => [enum => qw(recorded handoff)] },
     alert => { alert_id => 'word', rule => 'rule', severity => [enum => @SEVERITY],
                key => [obj => { session_id => 'hash', actor => 'actor', compaction_seq => 'int', nonce => 'nonce' }],
@@ -339,7 +339,7 @@ our %SCHEMA = (
     alert_closed => { alert_id => q(word), rule => q(rule), reason => [enum => q(superseded: rule changed in 0.1.3), q(superseded: rule changed in 0.1.4),
                                                                       q(resolved: copy saved), q(resolved: below quota)] },
     watch_error => { stage => 'word', error_class => 'word' },
-    # --- other rows of MOD-SPEC (kebab-case there, snake_case on disk) and of the built code ---
+    # --- other rows (kebab-case in the design, snake_case on disk) and of the built code ---
     bypass_suspected => { nonce => 'nonce', causes => [list => 'word'] },
     mod_off => { nonce => 'nonce' },
     compaction_unresolved => { nonce => 'nonce', trigger => [enum => @TRIGGER], channel => [enum => @CHANNEL] },
@@ -369,8 +369,8 @@ our %SCHEMA = (
     layers_missing => { id6 => 'id6', trigger => [enum => @TRIGGER] },
     lock_stale => { lock => 'word', reason => 'word' },
     measure => { bytes => 'int', ms => 'num', brief => 'bool' },
-    # AP-5 (2026-10-23): approvals a measure found checked (handoff or summary); counts and class ids only;
-    # origins (owner xxxxxxxx-12 "Count, log origin"): the carried ones by the origin kind of the row
+    # approvals a measure found checked (handoff or summary); counts and class ids only;
+    # origins: the carried ones by the origin kind of the row
     # their quote was found in
     approvals_carry => { source => [enum => qw(handoff summary)], checked => 'int', gate => 'int', unchecked => 'int', unverified => 'int', context => 'int', classes => [list => 'word'],
                          origins => [counts => [enum => qw(human composer bridge sdk none dialog unknown)]] },
@@ -405,7 +405,7 @@ our %SCHEMA = (
     verdict => { nonce => 'nonce', verdict => [enum => @VERDICT] },
     verdict_mismatch => { nonce => 'nonce', postcompact => [enum => @VERDICT], after_step => [enum => @VERDICT] },
     version_change => { from => 'version', to => 'version' },
-    # SESSION-RESTART §6.3: restart on update, content-free (no argv, model, path or env value)
+    # restart on update, content-free (no argv, model, path or env value)
     version_drift => { running => 'version', installed => 'version' },
     refresh_skipped => { why => $RESTART_WHY, route => [enum => qw(fg bg)], to => 'version', types => [list => 'word'] },
     refresh_would => { route => [enum => qw(fg bg)], from => 'version', to => 'version', continue => 'bool',
@@ -424,8 +424,8 @@ our %SCHEMA = (
 
 sub schema { return \%SCHEMA }
 
-# RS-3 (owner xxxxxxxx-19, 2026-10-23: summaries opt-in per report, asked each time) and RS-5
-# (owner xxxxxxxx-33, "Also handoffs": a second, separate yes): the file kinds that hold session
+# Summaries (opt-in per report, asked each time) and handoffs
+# (a second, separate yes): the file kinds that hold session
 # text. A `summaries/<12 hex>.md` entry is allowed only in a bundle whose manifest says
 # `with_summaries: true`, a `handoffs/<12 hex>.md` entry only with `with_handoffs: true` (the user
 # said yes to that kind, `report --with-summaries` / `--with-handoffs`, in that run); `report
@@ -452,7 +452,7 @@ sub content_allowed {
     return ref $v eq 'SCALAR' ? ($$v ? 1 : 0) : (!ref $v && $v eq '1') ? 1 : 0;
 }
 
-# Owner xxxxxxxx-34 ("Stable section ids", 2026-10-23): from spec_version 2 a handoff section is
+# Stable section ids: from spec_version 2 a handoff section is
 # exported by its fixed id (`main:next-steps`), from the spec's `section_ids`, never by its
 # position (`main:3`, spec_version 1), so a section added, moved or renamed never shifts another
 # one's id. The manifest says `spec_version`; `report verify` refuses a bundle whose rows hold
