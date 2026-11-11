@@ -1,30 +1,30 @@
 package settings;
-# lib/settings.pm: settings order of BUILD-PLAN §3.1 / MOD-SPEC §2.6. Owner: WP-core.
+# lib/settings.pm: settings order.
 #   explicit flag -> CLAUDE_PLUGIN_OPTION_<KEY> -> pluginConfigs[<key>].options in
 #   ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json -> userConfig default.
 # Empty values and values starting `${user_config.` count as unset; a leading ~ is
-# expanded. pluginConfigs key (E-14, provisional): `<name>@inline` when
+# expanded. pluginConfigs key: `<name>@inline` when
 # CLAUDE_PLUGIN_ROOT is set and a --plugin-dir load (load_source); otherwise the
 # single key whose part before `@` is the brand; several -> defaults + ambiguous.
-# Consent keys (DP-3, REVIEW A-3; %FILE_ONLY) are read from the settings file only: a
+# Consent keys (%FILE_ONLY) are read from the settings file only: a
 # model-run Bash call can pass flags and env, so those two sources are ignored with the
 # note `<key>: settings file only`. That file is the account's ~/.claude/settings.json: a
 # CLAUDE_CONFIG_DIR or HOME naming another folder gives the consent keys their safe values
 # (CR-F34, config_dir_foreign). Paths (dir and file keys) are UTF-8 bytes whatever
-# their source, as env, flag and file-system values are (SR 1.1).
+# their source, as env, flag and file-system values are.
 use strict;
 use warnings;
 use utf8;
 require "userre.pm";    # U-06: the time bound for the user's own patterns
 
-# The keys of MOD-SPEC §1.2 (45 with idle_digest, restart_on_update, idle_handoff_near_limit and keep_warm_hours): type; fallback (used only when the manifest lacks the key:
+# The keys (45 with idle_digest, restart_on_update, idle_handoff_near_limit and keep_warm_hours): type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
-# holds the fallback equal to the manifest default); export class (W-BETA D, AT-WB-08: num,
+# holds the fallback equal to the manifest default); export class (AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).
 our @KEYS = (
-    [handoff_root                => 'dir',  '~/.local/state/<plugin>/handoffs', 'path'],    # STATE-ROOT (0.1.2); lib/paths.pm
+    [handoff_root                => 'dir',  '~/.local/state/<plugin>/handoffs', 'path'],    # state folder (0.1.2); lib/paths.pm
     [log_dir                     => 'dir',  '',                        'path'],
-    [disposable_root             => 'dir',  '~/.local/state/<plugin>/disposable', 'path'],    # STATE-ROOT (0.1.2); lib/paths.pm
+    [disposable_root             => 'dir',  '~/.local/state/<plugin>/disposable', 'path'],    # state folder (0.1.2); lib/paths.pm
     [disposable_keep_days        => 'num',  0,                         'num'],
     [evidence_quota_mb           => 'num',  500,                       'num'],
     [queue_cmd                   => 'file', '',                        'path'],
@@ -34,7 +34,7 @@ our @KEYS = (
     [native_window_tokens        => 'num',  0,                         'num'],
     [boundary_delay_ms           => 'num',  2000,                      'num'],
     [cooldown_ms                 => 'num',  30000,                     'num'],
-    [max_auto_continues_per_hour => 'num',  6,                         'num'],    # owner 2026-10-22 04:10 (S-SETTINGS A)
+    [max_auto_continues_per_hour => 'num',  6,                         'num'],
     [measured_block              => 'bool', 0,                         'bool'],
     [auto_evidence               => 'bool', 1,                         'bool'],
     [warn_ui                     => 'bool', 1,                         'bool'],
@@ -43,51 +43,51 @@ our @KEYS = (
     [cache_ttl_s                 => 'num',  300,                       'num'],
     [otel_log_path               => 'file', '',                        'path'],
     [deny_class_patterns         => 'str',  '',                        'list'],
-    # design pass of 2026-10-21: D-18 (mod keys), D-12 and Dev-1 (helper keys)
+    # mod keys, handoff-root keys and relaunch keys
     [handoff_turn                => 'str',  'true',                    'enum'],
     [handoff_turn_max_tokens     => 'num',  64000,                     'num'],
     [repo_roots                  => 'str',  '',                        'list'],
     [relaunch_auto               => 'str',  'on',                      'enum'],
     [relaunch_allow              => 'str',  '',                        'list'],
     [relaunch_quiet_s            => 'num',  120,                       'num'],
-    # 2026-10-22: S-SETTINGS B (helper), D (mod; the default `model` is the owner's xxxxxxxx-18,
-    # 2026-10-23 01:48, E-1 checks it; PT-1), IC-1 (mod)
+    # helper and mod keys; the default `model` is checked by the
+    # experiment tooling
     [unattended_prod_reads       => 'str',  'false',                   'enum'],
     [prod_patterns               => 'str',  '',                        'list'],
     [precompact_turn             => 'str',  'true',                    'enum'],
-    # idle D3 (owner 2026-10-23 02:4x, IA-1): `auto` = the plugin's pre-idle turn only while
+    # `auto` = the plugin's pre-idle turn only while
     # Claude Code's own idle compaction is off; `off` = never (the old `on` reads as auto)
     [idle_handoff_turn           => 'str',  'true',                    'enum'],
     [idle_handoff_min_tokens     => 'num',  200000,                    'num'],
-    # owner 2026-10-30 (xxxxxxxx, "I want the handoff anyway"): `run` = the pre-idle handoff turn
+    # `run` = the pre-idle handoff turn (a handoff is wanted anyway)
     # also runs with a rate-limit window at 90% or more; `skip` = it skips there (near-limit);
     # `skip-spend` (0.1.2) = it skips only at a gateway's spend limit (a money cap), not a plan window
     [idle_handoff_near_limit     => 'str',  'run',                     'enum'],
-    # IDLE-COMPACT-SPEC (D9): `auto` = the plugin compacts an idle session itself while Claude
+    # `auto` = the plugin compacts an idle session itself while Claude
     # Code's own idle compaction is off (`"idleCompaction": false`); `off` = never
     [idle_compact                => 'str',  'true',                    'enum'],
-    # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): the digest turn right after an
+    # away digest phase 1: the digest turn right after an
     # idle compaction of a finished or blocked lane (`submit`), or none until the next turn
-    # (`return`); `off` (owner rule (c), 2026-10-28: on only after a live PASS) asks for no digest
+    # (`return`); `off` (on only after a live pass) asks for no digest
     [idle_digest                 => 'str',  'off',                     'enum'],
-    # keep-warm (D-14, 2026-10-30): while this session's own background jobs run, the plugin keeps
+    # keep-warm: while this session's own background jobs run, the plugin keeps
     # the one-hour prompt cache warm for up to this many hours of an idle gap; 0 = off
     [keep_warm_hours             => 'num',  6,                         'num'],
-    # SK-7 (owner 2026-10-23 xxxxxxxx-12/-13/-14, "Add both keys"; S-SETTINGS E1-E6)
+    # ticket, secret, resume and quota keys
     [ticket_pattern              => 'str',  '[A-Z][A-Z0-9]+-[0-9]+',   'drop'],
     [secret_extra_rules          => 'str',  '',                        'list'],
     [resume_proceed              => 'str',  'true',                    'enum'],
     [handoff_reuse_window_min    => 'num',  15,                        'num'],
     [evidence_total_max_mb       => 'num',  50,                        'num'],
     [watch_quota_mb              => 'num',  50,                        'num'],
-    # owner xxxxxxxx-29 (2026-10-23, "add the add-only setting now"): branches added to the
+    # branches added to the
     # shipped protected list (protected() below); a protective key
     [protected_branches          => 'str',  '',                        'list'],
-    # owner 2026-10-26 (GSD re-entry per session; review of the first build): loop skills, beside
+    # GSD re-entry per session: loop skills, beside
     # the shipped list (lib/gsd.pm %DRIVERS) and the skills whose own text runs gsd-tools, that a
     # session re-enters when it invoked them
     [driver_skills               => 'str',  '',                        'list'],
-    # SESSION-RESTART D1 (owner 19:08, 2026-10-27): `on` = move a session onto a newly installed
+    # restart on update: `on` = move a session onto a newly installed
     # Claude Code at a compaction boundary; `shadow` = log the verdict only; `off` = never. A
     # consent key (settings file only); any other value reads as off with a note.
     [restart_on_update           => 'str',  'off',                     'enum'],
@@ -153,21 +153,21 @@ our %SECTION = (
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
 our %EXPORT = map { $_->[0] => $_->[3] } @KEYS;
-# D-72 (0.1.6): a key left out of the manifest's userConfig, so the configure dialog and /config
+# 0.1.6: a key left out of the manifest's userConfig, so the configure dialog and /config
 # do not offer it, because it does nothing yet: otel_log_path has no reader. The helper still
 # reads it from the settings file; the onboarding view skips it, and the status values list it
 # only once set. restart_on_update stays in /config (a picker over on, shadow and off): shadow
 # logs what a restart would do, the only trial data this version gathers.
 our %HIDDEN = map { $_ => 1 } qw(otel_log_path);
 # The values an enum key takes, its manifest `options` (the configure dialog's picker), and
-# exports as is (W-BETA D); any other value exports as `other`.
+# exports as is; any other value exports as `other`.
 our %ENUM = (watcher => [qw(true false)], handoff_turn => [qw(true false)], relaunch_auto => [qw(on shadow off)],
              unattended_prod_reads => [qw(true false)], precompact_turn => [qw(true false)], idle_handoff_turn => [qw(true false)], idle_compact => [qw(true false)],
              idle_handoff_near_limit => [qw(run skip-spend skip)],
              idle_digest => [qw(submit return off)],
              resume_proceed => [qw(true false)], restart_on_update => [qw(on shadow off)]);
-# D-72 (0.1.6; owner 2026-11-08: "may be replaced with true/false", with a screen that shows the
-# description): the seven on/off keys take "true" or "false", a userConfig string with those two
+# 0.1.6: the seven on/off keys take "true" or "false" (shown with their
+# description), a userConfig string with those two
 # options, so /config opens a picker with the description (a boolean flips in place there). In the
 # plugin each still runs as its word before 0.1.6: %SWITCH gives [the word true reads as, the word
 # false reads as]. The words a release before 0.1.6 stored keep their meaning: either word (and
@@ -178,23 +178,23 @@ our %SWITCH = (handoff_turn => [qw(halt off)], precompact_turn => [qw(model code
                unattended_prod_reads => [qw(allow forbid)], idle_handoff_turn => [qw(auto off)], idle_compact => [qw(auto off)],
                resume_proceed => [qw(auto confirm)]);
 
-# DP-3: keys that let the plugin act without asking. Read from the settings file only, and
+# Keys that let the plugin act without asking. Read from the settings file only, and
 # given their %SAFE value when the settings folder is not the account's ~/.claude (CR-F34).
-# queue_cmd is one (Q-ADAPTER QA-B1, QU-02: an injected flag would run a program), and so is
-# unattended_prod_reads (S-SETTINGS B).
-# restart_on_update is one (SESSION-RESTART D1): it lets the plugin end and restart a session.
+# queue_cmd is one (an injected flag would run a program), and so is
+# unattended_prod_reads.
+# restart_on_update is one: it lets the plugin end and restart a session.
 our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unattended_prod_reads queue_cmd restart_on_update);
-# Protective keys (S-SETTINGS B, MOD-SPEC §2.6): they can only make the plugin ask or withhold
+# Protective keys: they can only make the plugin ask or withhold
 # more. Flags and env are ignored with the same note; the value comes from the config dir's
 # settings file, and a foreign config dir does not reset it (that would weaken protection).
-# protected_branches is one (owner xxxxxxxx-29): a flag or env value that replaced the file's
+# protected_branches is one: a flag or env value that replaced the file's
 # list would drop the user's own entries.
 our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules protected_branches);
-# Tighten-only keys (S-SETTINGS E3): every source counts and the strictest value wins, so a flag
+# Tighten-only keys: every source counts and the strictest value wins, so a flag
 # or env can make the plugin stricter, never looser than the settings file. Values from loose to
 # strict.
 our %TIGHTEN = (resume_proceed => [qw(auto confirm)]);
-# Owner xxxxxxxx-13 (2026-10-26, "Off + common words"; SPEC-DELTAS IA-1 / AT-IA-01): an
+# Off plus common words (AT-IA-01): an
 # idle_handoff_turn value of false, no, none, disabled or 0 reads as off; true, yes, 1 or on as
 # auto; any other value reads as $IDLE_INVALID with a note (/status), the value with no extra
 # plugin action, as for the other keys. The same lists and value as config.ts IDLE_OFF_WORDS,
@@ -237,7 +237,7 @@ our %FLAG_ALIAS = (
     'root' => 'handoff_root', 'log-dir' => 'log_dir', 'disposable-root' => 'disposable_root',
     'keep-days' => 'disposable_keep_days', 'quota-mb' => 'evidence_quota_mb',
     # consent and protective keys: every subcommand takes the flag and ignores it with the note
-    # `<key>: settings file only` (DP-3, DP-17 / E-C-6), never a usage error
+    # `<key>: settings file only`, never a usage error
     'repo-roots' => 'repo_roots', 'relaunch-auto' => 'relaunch_auto', 'relaunch-allow' => 'relaunch_allow',
     'unattended-prod-reads' => 'unattended_prod_reads', 'prod-patterns' => 'prod_patterns', 'queue-cmd' => 'queue_cmd',
     'secret-extra-rules' => 'secret_extra_rules', 'protected-branches' => 'protected_branches',
@@ -261,12 +261,12 @@ sub _coerce {
     # A number as the plugin's Number() reads one (`.5`, `5.`, a sign, an exponent, blanks around, `0x10`).
     return _decimal($v) if $t eq 'num';
     if ($t eq 'dir' || $t eq 'file') { return util::expand_tilde(util::to_bytes("$v")) }
-    return util::text("$v");    # a text value is characters (§2.6); paths above stay bytes (SR 1.1)
+    return util::text("$v");    # a text value is characters; paths above stay bytes
 }
 
 sub config_dir { return $ENV{CLAUDE_CONFIG_DIR} && $ENV{CLAUDE_CONFIG_DIR} ne '' ? util::expand_tilde($ENV{CLAUDE_CONFIG_DIR}) : util::home() . '/.claude' }
 
-# CR-F34 (DP-3, provisional): the consent keys come from ~/.claude/settings.json only,
+# CR-F34: the consent keys come from ~/.claude/settings.json only,
 # where ~ is the account's home from the user database (getpwuid), not $HOME. A command
 # the model runs can set CLAUDE_CONFIG_DIR and HOME, so a settings file they name cannot
 # grant consent: when the settings folder is another folder than the account's ~/.claude,
@@ -277,7 +277,7 @@ sub config_dir { return $ENV{CLAUDE_CONFIG_DIR} && $ENV{CLAUDE_CONFIG_DIR} ne ''
 # $TEST_CONSENT_MARK at its root; only there and with STORE_TEST_MODE=1 is the consent
 # folder $HOME/.claude (each case runs in a fresh HOME). The shipped plugin has no such
 # file, so env alone cannot move the consent folder.
-# Owner 2026-10-27 20:38 (SESSION-RESTART §9 Q1 (a)): a settings folder whose settings.json
+# Same file: a settings folder whose settings.json
 # is the account's ~/.claude/settings.json (a symlink to it, or a hard link: the same file
 # by its real path or its device and inode) counts as that folder for every consent key: it is
 # the same bytes, so no new trust. Another file there still gives the safe values.
@@ -307,7 +307,7 @@ sub config_dir_other {
 }
 
 # config_dir_foreign() -> 1 when the consent keys take their safe values: another settings folder
-# whose settings.json is not the consent folder's own (owner 2026-10-27 20:38).
+# whose settings.json is not the consent folder's own.
 sub config_dir_foreign {
     return 0 unless config_dir_other();
     my $cd = config_dir();
@@ -331,7 +331,7 @@ sub same_settings_file {
     return (@x && @y && $x[0] == $y[0] && $x[1] == $y[1]) ? 1 : 0;
 }
 
-# The plugin's names before its rename (NM-2; rename-order ruling xxxxxxxx-32, 2026-10-23): a
+# The plugin's names before its rename (rename order): a
 # `pluginConfigs` key `<former name>@<marketplace>` holds options this plugin never reads, and
 # /status says so. The stale-name gate allows a former name on this declaration line only.
 our @FORMER_NAMES = ('compactinue');
@@ -357,7 +357,7 @@ sub former_name_keys {
 }
 
 # inline_key() -> `<name>@inline` when CLAUDE_PLUGIN_ROOT is set and load_source reads it as a
-# --plugin-dir load (E-14), else undef.
+# --plugin-dir load, else undef.
 sub inline_key {
     my $pr = $ENV{CLAUDE_PLUGIN_ROOT};
     return undef unless defined $pr && $pr ne '';
@@ -380,7 +380,7 @@ sub inline_key {
 #                marketplace was pointed at another folder (the next release's) is still that
 #                install
 #   config       another folder under <config>/plugins/: no install, not inline for the options
-#                key either (E-14); mkt inline
+#                key either; mkt inline
 #   inline       a --plugin-dir load: any other folder, and any folder but a cache or synced one
 #                when CLAUDE_PLUGIN_DATA is the plugin's own .../data/<name>-inline (Claude Code's
 #                data folder for <name>@inline, under <config>/plugins or the folder
@@ -478,7 +478,7 @@ sub _settings_file_options {
 }
 
 # options_key(pluginConfigs hash) -> (key or undef, [candidates]): the plugin's key in
-# pluginConfigs (E-14): `<name>@inline` for a --plugin-dir load (inline_key); otherwise the
+# pluginConfigs: `<name>@inline` for a --plugin-dir load (inline_key); otherwise the
 # single key whose part before `@` is the brand. Several such keys:
 # (undef, [them]), ambiguous.
 sub options_key {
@@ -549,7 +549,7 @@ sub config_key_info {
 }
 
 # resolve(\%flags) -> {values => {key => v}, source => {key => flag|env|settings|default},
-#   notes => [..], ambiguous => 0|1, config_key => key-or-undef, legacy => {key => note} (D-72),
+#   notes => [..], ambiguous => 0|1, config_key => key-or-undef, legacy => {key => note},
 #   defaults => {key => the default used: the manifest's, else the @KEYS fallback, as written}}
 sub resolve {
     my ($flags) = @_;
@@ -579,7 +579,7 @@ sub resolve {
         elsif (!$file_only && !$no_flag && !_unset($env)) { ($v, $s) = ($env, 'env') }
         elsif (!$ambiguous && ref $opts eq 'HASH' && !_unset($opts->{$key})) { ($v, $s) = ($opts->{$key}, 'settings') }
         else { ($v, $s) = ($default, 'default') }
-        # ON-5 (0.1.2): only the settings file holds JSON values. An array of strings or numbers
+        # 0.1.2: only the settings file holds JSON values. An array of strings or numbers
         # for a `;` list key reads as its entries joined with `;` (a protective list written as an
         # array still adds its entries); any other array or object is invalid: the default.
         if (ref $v eq 'ARRAY' && ($EXPORT{$key} // '') eq 'list' && !grep { !defined || ref } @$v) {
@@ -599,7 +599,7 @@ sub resolve {
         $src{$key} = $s;
         $def{$key} = $default;
     }
-    # D-72 (0.1.6): a %SWITCH key's value as the plugin runs it, its word (switch_read). An old
+    # 0.1.6: a %SWITCH key's value as the plugin runs it, its word (switch_read). An old
     # form from a flag or the environment gets a note here; one saved in the settings file gets
     # the migrate warning (value_warnings) instead. An unknown word stays for the key's own rule.
     # %legacy: the keys with an old form in a source read for them (the settings file, and a flag
@@ -622,7 +622,7 @@ sub resolve {
             if $old && ($src{$key} eq 'flag' || $src{$key} eq 'env');
         $val{$key} = $w;
     }
-    # Tighten-only keys (S-SETTINGS E3): the strictest valid value of flag, env, settings file
+    # Tighten-only keys: the strictest valid value of flag, env, settings file
     # and default wins; an invalid value counts as unset (with a note). A %SWITCH key's values
     # read as switch_read reads them, and its notes name them true or false.
     for my $key (sort keys %TIGHTEN) {
@@ -649,15 +649,15 @@ sub resolve {
         push @notes, "$key: the stricter " . $say->($best) . " ($bsrc) is used" if defined $bsrc && $bsrc ne ($src{$key} // '') && $src{$key} ne 'default';
         ($val{$key}, $src{$key}) = ($best, $bsrc // 'default');
     }
-    # idle D3 (IA-1, as config.ts reads it): trimmed and case-folded; true, false, the old auto and
-    # off, and the common words (@IDLE_OFF_WORDS, @IDLE_AUTO_WORDS, owner xxxxxxxx-13) read as off or
+    # idle_handoff_turn (as config.ts reads it): trimmed and case-folded; true, false, the old auto and
+    # off, and the common words (@IDLE_OFF_WORDS, @IDLE_AUTO_WORDS) read as off or
     # auto (switch_read, above); any other value is $IDLE_INVALID with a note. idle_compact
-    # (IDLE-COMPACT-SPEC §5) reads the same way.
+    # reads the same way.
     for my $key (qw(idle_handoff_turn idle_compact)) {
         my $x = trim(lc($val{$key} // 'auto'));
         if ($x eq '') {
             # Blank once trimmed (spaces, a tab) is unset, as config.ts unset() reads it: the
-            # default, no note (review r2: /status said off while the hooks ran auto).
+            # default, no note (/status said off while the hooks ran auto).
             my $d = ref $uc->{$key} eq 'HASH' && exists $uc->{$key}{default} ? $uc->{$key}{default} : (grep { $_->[0] eq $key } @KEYS)[0]->[2];
             ($x) = switch_read($key, $d // 'true');
             $x //= 'auto';
@@ -669,7 +669,7 @@ sub resolve {
         }
         $val{$key} = $x;
     }
-    # idle_handoff_near_limit (owner 2026-10-30, as config.ts reads it): trimmed and case-folded;
+    # idle_handoff_near_limit (as config.ts reads it): trimmed and case-folded;
     # run, skip-spend or skip, else the default run with a note. A blank value is unset: the default.
     {
         my $x = trim(lc($val{idle_handoff_near_limit} // 'run'));
@@ -677,7 +677,7 @@ sub resolve {
         if ($x !~ /\A(?:run|skip-spend|skip)\z/) { push @notes, 'idle_handoff_near_limit: not run, skip-spend or skip, run used'; $x = 'run' }
         $val{idle_handoff_near_limit} = $x;
     }
-    # restart_on_update (SESSION-RESTART D1): trimmed and case-folded; off, shadow or on, else
+    # restart_on_update: trimmed and case-folded; off, shadow or on, else
     # off with a note (never the value). A blank value is unset: the default.
     {
         my $x = trim(lc($val{restart_on_update} // 'off'));
@@ -685,7 +685,7 @@ sub resolve {
         if ($x !~ /\A(?:off|shadow|on)\z/) { push @notes, 'restart_on_update: not off, shadow or on, off used'; $x = 'off' }
         $val{restart_on_update} = $x;
     }
-    # SK-1 / SK-2: an invalid ticket_pattern or secret_extra_rules entry is noted (never echoed).
+    # an invalid ticket_pattern or secret_extra_rules entry is noted (never echoed).
     my $tr = ticket_re({ values => \%val });
     push @notes, 'ticket_pattern: invalid, the default is used' if $tr->{invalid};
     my $sx = secret_extra({ values => \%val });
@@ -694,7 +694,7 @@ sub resolve {
              config_key => ($ambiguous ? undef : $ckey), defaults => \%def, legacy => \%legacy };
 }
 
-# ---------------------------------------------------------------- SK-7 helpers (2026-10-23)
+# ---------------------------------------------------------------- number key helpers
 # The whole-number keys: the number keys the mod's config.ts rounds down (Math.floor) before its
 # clamp (bounded(), handoffTokens() and max_auto_continues_per_hour in parseOptions), as the
 # watcher's rules.pm does for handoff_turn_max_tokens. whole(key, number) -> the number as the
@@ -709,7 +709,7 @@ sub whole {
 }
 
 # num_clamped(key[, resolved]) -> (value, clamped 0|1): a number key within the manifest's
-# min/max (S-SETTINGS E4-E6: handoff_reuse_window_min 0-60, evidence_total_max_mb 10-500,
+# min/max (handoff_reuse_window_min 0-60, evidence_total_max_mb 10-500,
 # watch_quota_mb 0-10000); unset or not a number gives the @KEYS fallback. A number reads as the
 # plugin's `Number()` reads a decimal (config.ts `num`): a sign, `.5`, `5.`, an exponent and
 # surrounding blanks are accepted, and an unsigned 0x, 0o or 0b integer (keep_warm_hours `.5` is 0.5
@@ -760,9 +760,9 @@ sub _current {
     return eval { resolve({}) } // { values => {} };
 }
 
-# ticket_pattern (SK-1, S-SETTINGS E1): one ticket rule for the bucket (bucket.pm), the skills
+# ticket_pattern: one ticket rule for the bucket (bucket.pm), the skills
 # (gitfacts::ticket) and the queue lane slug. ticket_re([resolved]) -> {re, custom 0|1, invalid
-# 0|1}: the user's pattern when it is at most 200 characters, compiles and keeps the Dev-7
+# 0|1}: the user's pattern when it is at most 200 characters, compiles and keeps the pattern
 # limits (no `(?{`, `(??{`, `(*`), else the shipped default (invalid 1). ticket(text[, resolved,
 # default_only]) -> the id (group 1 when the pattern has one, else the whole match) when it
 # matches \A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z, else undef (no `..` or `/` in a bucket path).
@@ -797,9 +797,9 @@ sub ticket {
     return $id =~ $TICKET_ID ? $id : undef;
 }
 
-# secret_extra_rules (SK-2, S-SETTINGS E2): `;` list of HARD:<re>, WARN:<re>, NAME:<glob>
+# secret_extra_rules: `;` list of HARD:<re>, WARN:<re>, NAME:<glob>
 # (`\x3b` for a literal `;` in a glob; a regex reads it as `;` itself). At most 32 entries; a
-# regex at most 200 characters, compiling, within the Dev-7 limits; a glob one name with * and ?.
+# regex at most 200 characters, compiling, within the pattern limits; a glob one name with * and ?.
 # Additive only: the shipped rules and their exceptions always apply, so a user rule can only
 # withhold more. Ids user-hard-<n>, user-warn-<n>, user-name-<n> (n = 1-based position); rows
 # never carry the pattern. secret_extra([resolved]) -> {rules => [{id, class, re, at}],
@@ -877,8 +877,8 @@ sub glob_re {
     return qr/$rx/s;
 }
 
-# list(value) -> entries of a `;`-separated list key (REVIEW B-5, escalation E-B-1:
-# the encoding of `deny_class_patterns` until probe P-D12-2), trimmed, empty ones dropped.
+# list(value) -> entries of a `;`-separated list key (the encoding of
+# `deny_class_patterns`), trimmed, empty ones dropped.
 sub list {
     my ($v) = @_;
     return () unless defined $v && !ref $v;
@@ -887,7 +887,7 @@ sub list {
 
 # trim(text) -> text without leading and trailing white space. Two anchored substitutions, as
 # s/^\s+|\s+$//g tries \s+$ from every space of an inner run: 40,000 spaces inside a value
-# took 0.5 s, 400,000 took 43 s, before any length cap (U-06 review).
+# took 0.5 s, 400,000 took 43 s, before any length cap (U-06).
 sub trim {
     my ($s) = @_;
     return $s unless defined $s;
@@ -905,8 +905,8 @@ sub limits {
     return ($lo, $hi);
 }
 
-# repo_roots(resolved) -> {roots => [real paths], stale => [entries], invalid => [entries]}
-# (D-12 §1.5.4): each entry is absolute after `~` expansion; at most 64 entries; a missing
+# repo_roots(resolved) -> {roots => [real paths], stale => [entries], invalid => [entries]}:
+# each entry is absolute after `~` expansion; at most 64 entries; a missing
 # or non-directory entry is stale; entries are compared by real path.
 our $REPO_ROOTS_MAX = 64;
 sub repo_roots {
@@ -926,11 +926,11 @@ sub repo_roots {
 
 # relaunch(resolved) -> {auto => on|shadow|off, allow => [qr], quiet_s => n,
 #   allow_active => 1, invalid => [{key, value}], clamped => [{key, configured, used}]}
-# (Dev-1 config keys): another relaunch_auto value -> off; a relaunch_allow pattern that
+# (relaunch config keys): another relaunch_auto value -> off; a relaunch_allow pattern that
 # does not start with ^ or that pattern_ok refuses (over 200 chars, an eval group or verb, a
 # wildcard property, not compiling) is dropped; at most 32;
 # relaunch_quiet_s clamped to the manifest's min/max (30-3600). `allow_active` is 1: the
-# allow list takes effect (owner Q-J1-1, 2026-10-22 03:10; S-SETTINGS C). A match makes class
+# allow list takes effect. A match makes class
 # `local` only for a single command with no shell chaining (skills' jobs.pm checks that).
 our $ALLOW_MAX = 32;
 our $ALLOW_LEN = 200;
@@ -966,17 +966,17 @@ sub relaunch_allowed {
     return defined userre::first('relaunch_allow', \@e, [$cmd], 'skip') ? 1 : 0;
 }
 
-# ---------------------------------------------------------------- production (S-SETTINGS B)
+# ---------------------------------------------------------------- production
 # prod(resolved) -> {reads => forbid|allow, classes => [{id, re}], user => n, invalid => [{key, index?, value}]}
 # `unattended_prod_reads` (consent key, file only): trimmed and case-folded, `false` (`forbid`) or
 # `true` (`allow`), anything else `forbid` plus an invalid entry. The production classes are the shipped ones
 # (handoff-spec `prod_classes`, id `prod-token`), then `prod_patterns` (protective, file only)
 # as `user-prod-<n>` (n = 1-based position in the setting): at most 32, each at most 200 chars,
-# compiling, within the Dev-7 limits (no `(?{`, `(??{`, `(*`); no `^` is required. A dropped
+# compiling, within the pattern limits (no `(?{`, `(??{`, `(*`); no `^` is required. A dropped
 # pattern is an invalid entry {key: prod_patterns, index: n}; rows never carry the pattern.
 our $PROD_MAX = 32;
 our $PROD_LEN = 200;
-# Used only when the spec asset has no `prod_classes` (an asset older than T-TEXT E2): the same
+# Used only when the spec asset has no `prod_classes` (an older asset): the same
 # literal as the handoff-spec block, so a missing key never makes the plugin ask less.
 our @PROD_FALLBACK = ({ id => 'prod-token', re => '(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)' });
 
@@ -984,7 +984,7 @@ our @PROD_FALLBACK = ({ id => 'prod-token', re => '(^|[^A-Za-z0-9])([Pp][Rr][Oo]
 # wildcard property, or not compiling). The pattern compiles here, in the helper, with no time
 # bound, so nothing that runs while it compiles may be the user's: perl 5.30 and later match a
 # wildcard property (\p{name=/.../}, \P{gc:/.../}) against every value of the property while
-# the pattern compiles, and a 35-character one ran past 20 s (U-06 review). Any \p{ or \P{ whose
+# the pattern compiles, and a 35-character one ran past 20 s (U-06). Any \p{ or \P{ whose
 # value starts with a punctuation character after = or : is refused.
 our $WILDCARD_RE = qr/\\[pP]\s*\{[^}]*?[=:]\s*[^\w\s}]/;
 sub wildcard_prop { my ($p) = @_; return (defined $p && !ref $p && $p =~ $WILDCARD_RE) ? 1 : 0 }
@@ -1000,7 +1000,7 @@ sub prod {
     my ($r) = @_;
     my $v = $r->{values} || {};
     my (@invalid, @classes);
-    # D-72: true or false, or a word before 0.1.6 (switch_read); anything else forbid
+    # true or false, or a word before 0.1.6 (switch_read); anything else forbid
     my ($reads) = switch_read('unattended_prod_reads', $v->{unattended_prod_reads} // 'false');
     if (!defined $reads) { push @invalid, { key => 'unattended_prod_reads', value => $v->{unattended_prod_reads} }; $reads = 'forbid' }
     my @shipped = spec::has('prod_classes') ? spec::list('prod_classes') : @PROD_FALLBACK;
@@ -1043,8 +1043,8 @@ sub prod_class {
     return defined $ship ? ($c[$ship]{id} // 'prod') : undef;
 }
 
-# ---------------------------------------------------------------- protected branches (owner xxxxxxxx-29)
-# protected_branches (owner xxxxxxxx-29, 2026-10-23: "add the add-only setting now"; protective,
+# ---------------------------------------------------------------- protected branches
+# protected_branches (protective,
 # %NO_FLAG): a `;` list of branch names or globs ADDED to the shipped protected list (the spec's
 # protected_branch_re and the remote's default branch, which every caller still checks first and
 # on its own), so no entry can remove a shipped one: there is no exclusion form. A glob has `*`
@@ -1109,7 +1109,7 @@ sub protected_user {
     return defined $lin ? $g[$lin]{id} : undef;
 }
 
-# ---------------------------------------------------------------- export (W-BETA D)
+# ---------------------------------------------------------------- export
 # export_view([resolved]) -> ordered object {key => exported value} for every key whose class is
 # not `drop`: num/bool as is; enum the value when it is one of the key's values, else `other`;
 # path `unset` (empty), `default`, `custom-in-home` or `custom` (never the path); list the
@@ -1151,8 +1151,8 @@ sub export_view {
 }
 
 # ---------------------------------------------------------------- visible defaults (0.1.2)
-# The ten keys `settings reset --all` leaves (OPEN-2 of the visible-defaults spec, its
-# recommendation): the six consent keys, the three protective lists and resume_proceed. Named on
+# The ten keys `settings reset --all` leaves: the six consent keys, the three protective
+# lists and resume_proceed. Named on
 # its own a consent key is still refused (the writer never writes one, lib/settings_write.pm), and
 # a protective list or resume_proceed is removed only when that loosens nothing, with what its
 # default does (%RESET_EFFECT).
@@ -1265,13 +1265,13 @@ sub value_warnings {
     }
     for my $w (grep { $_->{saved_empty} } @$rows) {
         # a consent key is never written by the plugin (lib/settings_write.pm), a reset included
-        # a %HIDDEN key is not in the manifest (D-72): no /config row, nothing passed to the hooks
+        # a %HIDDEN key is not in the manifest: no /config row, nothing passed to the hooks
         my $h = $HIDDEN{ $w->{key} };
         push @l, "warning: $w->{key}: saved empty, the plugin uses the default; " . ($h ? '' : 'Claude Code passes "" to the hooks; ') . 'clear it with '
                  . ($FILE_ONLY{ $w->{key} } ? '/config or by hand (a consent key: the plugin never writes it)'
                     : defined $store ? '! ' . util::text($store) . " settings reset $w->{key} --apply" : "a settings reset of $w->{key}");
     }
-    # D-72: values saved in a form from before 0.1.6, which Claude Code reads as unset
+    # values saved in a form from before 0.1.6, which Claude Code reads as unset
     my @all = old_values($o);
     my @old = grep { defined $_->{to} } @all;
     my @u = map { $_->{key} } grep { !defined $_->{to} } @all;
@@ -1287,7 +1287,7 @@ sub value_warnings {
     return @l;
 }
 
-# old_values([options_source]) -> ({key, to, consent}…) in @KEYS order (D-72, read-only): the saved
+# old_values([options_source]) -> ({key, to, consent}…) in @KEYS order (read-only): the saved
 # options that Claude Code reads as unset, being none of the key's manifest options as written. `to`
 # is the form to save when the plugin reads the value as one of them (a %SWITCH key's old word or a
 # JSON true or false, an option in another case or with spaces around it), else undef (a word the
@@ -1369,7 +1369,7 @@ sub view {
         inline => jsonc::bool(defined $inline), config_dir_foreign => jsonc::bool($foreign), write_refused => $refused,
         sections => \@sections, settings => jsonc::obj(map { my $s = $_; map { $_ => $rows{$_} } @{ $by{ $s->[0] } || [] } } @SECTIONS, ['other']),
         unsectioned => \@unsectioned, notes => $r->{notes},
-        # D-72: the keys saved in a form from before 0.1.6 (old_values), for `settings migrate`
+        # the keys saved in a form from before 0.1.6 (old_values), for `settings migrate`
         old_form => [ map { $_->{key} } grep { defined $_->{to} } old_values() ]);
 }
 

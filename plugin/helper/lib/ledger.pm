@@ -1,6 +1,6 @@
 package ledger;
-# lib/ledger.pm: the stable ledger, helper side (0.1.5, E-1; usage review "the helper copies U/D/X
-# lines from the previous copy and lints the difference; ids unique across a chain"). Owner: WP-core.
+# lib/ledger.pm: the stable ledger, helper side (0.1.5: the helper copies U/D/X lines from the
+# previous copy and lints the difference; ids unique across a chain).
 # Pure text functions, no I/O: publish (skills::core seam) and the summary copies (copies.pm) call
 # them with the spec literals they read themselves; the watcher reads a copy's carried lines with
 # line_ids (watch::shape::uncarried). Text is characters.

@@ -1,19 +1,19 @@
 package evidence;
-# lib/evidence.pm: one automatic evidence copy (MOD-SPEC §10; S-6, S-9, S-10).
-# Owner: WP-core. Caps 10 MB per file (bigger -> ref-only with bytes, sha256, mtime and
+# lib/evidence.pm: one automatic evidence copy.
+# Caps 10 MB per file (bigger -> ref-only with bytes, sha256, mtime and
 # <= 40 head/tail lines of text, redacted) and evidence_total_max_mb per compaction (a file
-# past it -> withheld, rules over-total, SK-5); dedupe by
+# past it -> withheld, rules over-total); dedupe by
 # sha256 across buckets through <watch>/evidence-index.tsv (O_APPEND rows); the
 # secret gate decides copy / redacted copy / withheld; agent output in tasks/*.output is
-# always withheld (BD-4); a shell or monitor job's tasks/*.output -> a redacted
+# always withheld; a shell or monitor job's tasks/*.output -> a redacted
 # head/tail excerpt of <= 80 lines. Directories 0700, files 0600.
 use strict;
 use warnings;
 use utf8;
 
 our $FILE_MAX = 10 * 1024 * 1024;
-our $TOTAL_MAX = 50 * 1024 * 1024;    # the evidence_total_max_mb fallback (SK-5)
-# SK-5 (owner xxxxxxxx-14, S-SETTINGS E5): the total from evidence_total_max_mb, clamped 10-500 MB.
+our $TOTAL_MAX = 50 * 1024 * 1024;    # the evidence_total_max_mb fallback
+# The total from evidence_total_max_mb, clamped 10-500 MB.
 sub total_max { my ($mb) = eval { settings::num_clamped("evidence_total_max_mb") }; return defined $mb ? $mb * 1024 * 1024 : $TOTAL_MAX }
 
 sub _index_lookup {
@@ -37,7 +37,7 @@ sub _is_text {
 
 sub _excerpt {
     my ($raw, $n) = @_;
-    # text from here on (§2.6): each line decoded once, a line that is not UTF-8 reads as Latin-1
+    # text from here on: each line decoded once, a line that is not UTF-8 reads as Latin-1
     my @l = map { util::text($_) } split /\n/, $raw, -1;
     pop @l if @l && $l[-1] eq '';
     return ($raw, scalar @l) if @l <= 2 * $n;
@@ -81,7 +81,7 @@ sub copy {
     if (!-e $src || !-f _) { return { %row, status => 'missing' } }
     my @st = stat $src;
     @row{qw(bytes mtime)} = ($st[7], util::iso($st[9]));
-    # BD-4 (C-STORE D6, MOD-SPEC §10): agent output is always withheld, whatever form the
+    # Agent output is always withheld, whatever form the
     # tasks/<id>.output takes; only a shell or monitor job's own output gets the excerpt
     if ($src =~ m{/tasks/[^/]+\.output\z} && (my $det = agent_output($src))) {
         _manifest($dest_dir, %row, copy => '-', scan => 'withheld', mode => '-', meaning => 'agent output') if $mf;
@@ -99,7 +99,7 @@ sub copy {
     util::mkdir_p($dest_dir);
     my $base = util::basename($src);
     my $is_task = $src =~ m{/tasks/[^/]+\.output$} ? 1 : 0;
-    # SK-5 (S-SETTINGS E5): a file within the per-file cap that would take this run past the
+    # A file within the per-file cap that would take this run past the
     # total (evidence_total_max_mb) is withheld, rules over-total: no copy and no excerpt; the
     # row keeps bytes, sha256 and mtime, and the file stays where it is.
     if (!$is_task && $row{bytes} <= $fmax && $$used + $row{bytes} > $tmax) {
@@ -152,7 +152,7 @@ sub copy {
     return { %row, status => 'copied', copy => $dst };
 }
 
-# agent_output(path of a tasks/<id>.output) -> the BD-4 detector that fires (a, b, c) or undef:
+# agent_output(path of a tasks/<id>.output) -> the agent-output detector that fires (a, b, c) or undef:
 # (a) its real path is a transcript or session JSONL (the never-copy gate, PRIV-02); (b) this
 # session's sidecar or job record lists task <id> with a type other than shell or monitor;
 # (c) its first non-empty line parses as a transcript row (a JSON object with type and

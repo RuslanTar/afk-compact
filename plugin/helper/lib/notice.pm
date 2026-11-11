@@ -1,6 +1,6 @@
 package notice;
-# lib/notice.pm: the first-run notice of the watcher (W-BETA A; WATCHER-SPEC §8 item 8).
-# Owner: WP-core. The text is fixed in the spec asset (`notice` object: id, version, text) and
+# lib/notice.pm: the first-run notice of the watcher.
+# The text is fixed in the spec asset (`notice` object: id, version, text) and
 # carries no user content; the id names the version (watcher-1), so a version bump shows the
 # notice again. The marker <watch>/notice/<id>.shown is made by exclusive create: one `show`
 # per install (per config dir, since <watch> lives under it). `status` prints the notice line

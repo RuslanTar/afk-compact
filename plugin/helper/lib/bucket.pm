@@ -1,13 +1,13 @@
 package bucket;
-# lib/bucket.pm: bucket choice (MOD-SPEC §7). Owner: WP-core.
+# lib/bucket.pm: bucket choice.
 #   session pin <root>/.sessions/<sid>.json -> predecessor's pin via
 #   <root>/.sessions/<sid>.lineage.json (one hop) -> branch ticket
-#   (ticket_pattern setting, default [A-Z][A-Z0-9]+-[0-9]+; SK-1) -> topic (skills' --topic; the handoff SKILL uses it only
+#   (ticket_pattern setting, default [A-Z][A-Z0-9]+-[0-9]+) -> topic (skills' --topic; the handoff SKILL uses it only
 #   "without a session pin or a ticket in the branch") -> general. Never asks; never
 #   writes a pin.
 # A pin's `bucket` is a path relative to <root> (`<repo>/<topic>`) or an absolute
-# path under <root> (the pin format is WP-skills'; see the WP-core report).
-# STATE-ROOT: a pin or lineage file is read from the effective root, else from the legacy root
+# path under <root> (the pin format is the skill side's).
+# Legacy root: a pin or lineage file is read from the effective root, else from the legacy root
 # (rc::read_roots; a session that started before 0.1.2 keeps its bucket). A legacy pin's bucket
 # is taken relative to the legacy root, and the bucket path is always under the effective root.
 use strict;
@@ -25,7 +25,7 @@ sub _pin_bucket {
     return undef unless defined $b && !ref $b && $b ne '';
     # bytes, as the root it is compared with and joined to: the pin is JSON read as characters,
     # so a non-ASCII bucket made the copy path a character string and its root folder encoded
-    # twice (RF-4: every compaction copy after /handoff went to a second, double-encoded root)
+    # twice (every compaction copy after /handoff went to a second, double-encoded root)
     $b = util::expand_tilde(util::fsb($b));
     if ($b =~ m{^/}) {
         my $c = util::clean_path($b);
@@ -74,7 +74,7 @@ sub resolve {
         if (defined $prev && $prev ne 'unknown' && defined(my $pb = _pin_of($prev))) {
             ($rel, $source) = ($pb, 'pin-lineage');
         } elsif (defined $where->{branch} && defined(my $tk = settings::ticket($where->{branch}))) {
-            # SK-1 (S-SETTINGS E1): the ticket_pattern setting; the id rule keeps `..` and `/` out
+            # the ticket_pattern setting; the id rule keeps `..` and `/` out
             ($rel, $source) = ("$repo/$tk", 'branch');
         } elsif (defined $topic && slug($topic) ne '') {
             ($rel, $source) = ("$repo/" . slug($topic), 'topic');

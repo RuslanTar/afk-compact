@@ -1,8 +1,8 @@
 package spec;
 # lib/spec.pm: the spec literals (assets/handoff-spec.json, extracted by tools/build
-# from the ```json spec-literals block of assets/handoff-spec.md; BUILD-PLAN §3.4).
+# from the ```json spec-literals block of assets/handoff-spec.md).
 # The helper reads headings, marker grammar, verdicts and the secret rule set only
-# from here; nothing below hard-codes a heading or a regex. Owner: WP-core.
+# from here; nothing below hard-codes a heading or a regex.
 use strict;
 use warnings;
 use utf8;
@@ -72,7 +72,7 @@ sub secret_rules {
 }
 
 # Deny-listed file names, matched against the basename. `deny_names` sits beside or
-# inside `secret_rules` (BUILD-PLAN §3.4 "plus deny_names"): a list of regexes, or the
+# inside `secret_rules`: a list of regexes, or the
 # spec-literals form {globs: [...], except_globs: [...]} (`*` and `?` within one name).
 my ($DENY, $DENY_EXCEPT);
 sub _glob_re {

@@ -1,6 +1,6 @@
 package sweep;
-# lib/sweep.pm: the automatic evidence sweep (MOD-SPEC §10, §5.3 step 5; OD-9).
-# Owner: WP-core. Scope: temp paths the mod recorded this session
+# lib/sweep.pm: the automatic evidence sweep.
+# Scope: temp paths the mod recorded this session
 # (<watch>/<sid>/paths.jsonl), else temp paths found in the last 5 MB of the
 # transcript; plus in-flight outputs from the sidecar. Destination
 # <disposable_root>/<YYYY-MM-DD>/<stem>-evidence/ (never <bucket>/evidence/).

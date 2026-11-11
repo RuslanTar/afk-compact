@@ -1,11 +1,11 @@
 package settings_reset;
 # lib/settings_reset.pm: what `settings reset` asks the settings writer for (0.1.2 visible
-# defaults, spec Behaviour 4). Owner: WP-core. The plan, the checks, the edit and the write are
+# defaults). The plan, the checks, the edit and the write are
 # lib/settings_write.pm's, the one writer of the user's settings file: a reset is a removal of
 # the named members of the plugin's options, refused for a consent key (on every path) and for a
 # protective list or resume_proceed when the removal loosens it.
-# --all leaves %settings::RESET_KEEP (the consent and protective keys and resume_proceed; OPEN-2,
-# the spec's recommendation) and keys the plugin does not know.
+# --all leaves %settings::RESET_KEEP (the consent and protective keys and resume_proceed)
+# and keys the plugin does not know.
 use strict;
 use warnings;
 use utf8;

@@ -1,5 +1,5 @@
 package sha;
-# lib/sha.pm: sha256 (ROOT-RULINGS R-1). Owner: WP-core.
+# lib/sha.pm: sha256.
 # Order: Digest::SHA when it loads; else, for files, `sha256sum` / `shasum -a 256`;
 # else the embedded pure-Perl SHA-256 (files up to 8 MiB). Text always has an
 # answer (embedded). hex256_file returns undef when no route works ("unavailable").

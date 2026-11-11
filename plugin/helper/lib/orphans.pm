@@ -1,6 +1,5 @@
 package orphans;
-# lib/orphans.pm: the stash index and the cross-session finish (MOD-SPEC §5.8 case 4,
-# RRP-05). Owner: WP-core.
+# lib/orphans.pm: the stash index and the cross-session finish.
 #   <watch>/.orphans/<sid>        empty marker, made before any stash of <sid> is written
 #                                 (PostCompact here, the mod after-step through $.fs.write);
 #                                 unlinked by <sid>'s own reconcile once pending/ holds no

@@ -1,7 +1,6 @@
 package nonce;
-# lib/nonce.pm: per-compaction nonce (MOD-SPEC §2.2): 8 lowercase hex from
+# lib/nonce.pm: per-compaction nonce: 8 lowercase hex from
 # /dev/urandom, redrawn while <watch>/<sid>/dispatch/<nonce>.json exists.
-# Owner: WP-core.
 use strict;
 use warnings;
 use utf8;

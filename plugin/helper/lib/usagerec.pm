@@ -1,5 +1,5 @@
 package usagerec;
-# lib/usagerec.pm: the shared usage record (0.1.8, D-83). Owner: WP-core.
+# lib/usagerec.pm: the shared usage record (0.1.8).
 # The latest usage reading each session on this machine saw, per window kind and source, in one
 # small file of the plugin's own state at a fixed place no option moves (as cachestate.pm's):
 # ${XDG_STATE_HOME:-~/.local/state}/<plugin>/usage.v1.json (0600). An entry is
@@ -18,7 +18,7 @@ package usagerec;
 # that session's `plugin` entry of the same kind (dated() here; the mod: limits.ts recordReadings),
 # and one with no such entry is no reading.
 # Writers read the file, merge their entries (one per sid8, src and kind; the later `at` wins),
-# drop those that no longer count (kept(): D-88, a window's share only grows until its reset, so an
+# drop those that no longer count (kept(): a window's share only grows until its reset, so an
 # entry stays until its `resets_at`, however old; one with none only $FRESH_S after it was last
 # read or seen), keep at most $MAX_ENTRIES, a session's entries together (the sessions last read or
 # seen first), never dropping for room the session and kind whose entry is the latest of a window
@@ -88,7 +88,7 @@ sub read_all {
 
 sub _key { my ($e) = @_; return join("\0", @$e{qw(sid8 src kind)}) }
 
-# kept(entries, now) -> [entry...]: those that still count at `now` (D-88): an entry with a reset
+# kept(entries, now) -> [entry...]: those that still count at `now`: an entry with a reset
 # time until it, one without for $FRESH_S after it was last read or seen
 sub kept {
     my ($all, $now) = @_;

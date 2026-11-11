@@ -1,6 +1,6 @@
 package gsd;
-# lib/gsd.pm: the GSD position and the active driver of THIS session (OD-8, S-13; owner
-# 2026-10-26 21:37, GSD re-entry per session). Owner: WP-core. Read-only: never writes STATE.md
+# lib/gsd.pm: the GSD position and the active driver of THIS session (GSD re-entry per
+# session). Read-only: never writes STATE.md
 # or anything under .planning/.
 #
 # What a session works with is decided by its own transcript (its main rows; the file starts
@@ -36,16 +36,16 @@ package gsd;
 # write under workstreams/<name>/) or by its driver's own `--ws`, whose folder exists under a GSD
 # root the session touched (the row's cwd, `--cwd`, `--repo`, a state-file write's root; GSD's own
 # walk: up to the first folder holding .git, never $HOME). `--ws` on any other skill names nothing
-# (a handoff or catch-up skill only looked at it); the shared .planning/active-workstream pointer
+# (a handoff or resume skill only looked at it); the shared .planning/active-workstream pointer
 # never names one. With none named the session works flat.
-# A loop skill is one of %DRIVERS, one the owner lists in the `driver_skills` setting, or a skill
+# A loop skill is one of %DRIVERS, one the user lists in the `driver_skills` setting, or a skill
 # that is no GSD command but whose own text, as Claude Code loaded it into this session right after
 # the invocation, runs gsd-tools in its code (a fenced block or a code span: a loop that drives GSD
 # work). This plugin's own skills, other GSD commands and /loop, /goal are never one. A listed loop
 # chained into a typed GSD command with `and`/`then` (`/gsd-resume-work --ws X and /<loop> <args>`)
 # counts as invoked there, with its own arguments; an unlisted chained skill only through its own
 # invocation.
-# The driver (root ruling R1 of 2026-10-27) is the OUTERMOST loop this session invoked since its
+# The driver is the OUTERMOST loop this session invoked since its
 # last /clear: a loop the model invokes through the Skill tool (or the user stacks after it in the
 # same message) while the driver's own context holds (below) is that driver's own step
 # (gsd-autonomous or gsd-manager running gsd-execute-phase), never a new driver, unless the driver
@@ -54,7 +54,7 @@ package gsd;
 # hint (`later step: …`), never the driver. The same loop invoked again, a loop the user types, or
 # another loop the model invokes once the context ended (a superpowers loop, a GSD loop for
 # another workstream) takes over.
-# Whether it is Active (owner ruling 2026-10-27 20:57, binding): the imperative `Active driver:`
+# Whether it is Active: the imperative `Active driver:`
 # line only while the loop is CLEARLY LIVE at the cut, else the `Was driving` hint. Its own context
 # opens at its invocation (or re-invocation) and holds while nothing but the loop runs; the first of
 # these ends it for good (only invoking the loop again opens it again):
@@ -93,8 +93,8 @@ package gsd;
 #     after that loop's `phase.complete`, a re-plan, a custom step hook: unclear), and a GSD command
 #     or a gsd-tools run for a workstream not the driver's.
 # Live at the cut is then: its context holds and a turn of its own runs (one of its steps is
-# mid-turn), or an agent, workflow or teammate it launched in its context still runs (root call
-# 2026-10-28 on the owner's ruling: only those keep it live past its turn's end). A turn of its own
+# mid-turn), or an agent, workflow or teammate it launched in its context still runs (only
+# those keep it live past its turn's end). A turn of its own
 # is the one its invocation runs in, or one that the notification of background work opens while
 # its context holds (an agent's or workflow's task notification, a hand-back, its teammate's
 # message, a teammate's idle, shutdown or termination notice, also one Claude Code queued while a
@@ -109,7 +109,7 @@ package gsd;
 # work either). A background Bash command, a Monitor, a CronCreate task or a ScheduleWakeup may
 # outlive the loop, only watch or only wait (a server it left running while it waits for the
 # person, a stall watch, a loop asleep until its wake-up): at a turn end the hint names it, never
-# an Active line (owner 20:57: a false imperative is the defect, a quiet but live loop shown as the
+# an Active line (a false imperative is the defect, a quiet but live loop shown as the
 # hint is accepted).
 # Background work is the loop's when it launched it in its own context (never in a turn of this
 # plugin's own): live are an Agent or Workflow until a task notification names its tool call or
@@ -175,7 +175,7 @@ our %DRIVERS = map { $_ => 1 } qw(gsd-autonomous gsd-execute-phase gsd-manager
 # A listed loop that runs one phase: its own phase.complete ends it, and so does any GSD command the
 # model invokes after it (one of its own gates, its auto-advance, which GSD runs only after that
 # phase.complete, a re-plan, a custom step hook, or the session moving on: the transcript does not
-# tell them apart, and ambiguity is the hint; root call 2026-10-28: a gate gives the hint).
+# tell them apart, and ambiguity is the hint; a gate gives the hint).
 our %STEP = map { $_ => 1 } qw(gsd-execute-phase);
 # Listed loops that run no other loop: another loop invoked after one of them takes over (R1).
 our %LEAF = map { $_ => 1 } qw(gsd-execute-phase superpowers:executing-plans superpowers:subagent-driven-development);
@@ -428,7 +428,7 @@ sub _start {
         # R1 once that context ended (a prompt, a pause asked or written, a stop): a GSD loop for the
         # driver's workstream (or naming none) is still its step (gsd-manager's typed choice, then
         # its gsd-execute-phase), named in the hint so the session sees which step it was in; never
-        # the driver, never Active (owner 20:57). After a pause whose files are written, only while
+        # the driver, never Active. After a pause whose files are written, only while
         # no prompt came since (the loop going on past its own pause: `then other work`).
         my $pend = ($D->{mode} eq 'paused' && (!$D->{pause}{done} || !$D->{pause}{prompted})) ? 1 : 0;
         my $ws = _wsn($e->{ws});
@@ -458,7 +458,7 @@ sub _start {
     }
 }
 
-# The driver's own context ends (owner 2026-10-27 20:57: Active only while the loop is clearly
+# The driver's own context ends (Active only while the loop is clearly
 # live): from here on it is at most a `Was driving` hint, until the loop is invoked again. why: the
 # first such event, its time, then tail.
 sub _kill {
@@ -499,13 +499,13 @@ sub _new_work {
 }
 
 # The driver's background work at time ts: (live, loose). live: an agent, workflow or teammate it
-# launched still runs (owner 2026-10-27 20:57: "a background task, agent or workflow it started is
-# still running"; root call 2026-10-28: an agent, teammate or workflow, never a shell alone). loose:
+# launched still runs (a background agent, teammate or workflow it started keeps it live, never
+# a shell alone). loose:
 # what else of its own still runs (a background command, a Monitor, persistent or one that times out
 # before its time is up, a scheduled task, a ScheduleWakeup before it is due): it may outlive the
 # loop, only watch or only wait (a server left running while the loop waits for the person, a stall
-# watch, a loop asleep until its wake-up), so it never keeps the driver Active (owner 20:57:
-# ambiguity is the hint).
+# watch, a loop asleep until its wake-up), so it never keeps the driver Active (ambiguity is the
+# hint).
 sub _running {
     my ($st, $D, $ts) = @_;
     my $bg = $st->{bg};
@@ -549,7 +549,7 @@ sub _opened {
 }
 
 # A prompt (a person's row or typed command; mid: one Claude Code delivers inside the running
-# turn): the driver's context ends (owner 20:57: a later prompt of any kind gives the hint).
+# turn): the driver's context ends (a later prompt of any kind gives the hint).
 sub _prompt {
     my ($st, $ts, $why, $mid) = @_;
     delete $st->{look};
@@ -625,7 +625,7 @@ sub _drv_cmd {
         $D->{mode} = 'ended' if $STEP{ $D->{e}{name} };
     } elsif ($STEP{ $D->{e}{name} }) {
         # one of its own gates, its auto-advance, a re-plan, a custom step hook, the session moving
-        # on: unclear (root call 2026-10-28: a gate gives the hint, never Active)
+        # on: unclear (a gate gives the hint, never Active)
         _kill($D, 'another GSD command followed', $e->{ts});
     }
 }
@@ -680,7 +680,7 @@ sub _last_phase {
 # variable: `node $G query phase.complete 3`, `node "$GSD_TOOLS" …`; a flag before the verb:
 # `gsd_run --cwd X query phase.complete 3`; a quoted or variable phase): a single-phase loop's phase
 # was marked complete; a bounded gsd-autonomous run's last phase was, when one names it or a phase
-# that cannot be read. Its text counts quoted or not (owner 20:57: ambiguity is the hint; a false
+# that cannot be read. Its text counts quoted or not (ambiguity is the hint; a false
 # hint is accepted, a false imperative is not).
 sub _pc_text {
     my ($st, $c, $ts) = @_;
@@ -898,7 +898,7 @@ sub _invoked {
     if ($via eq 'typed' && $name eq 'clear') { %$st = (); return }
     delete $st->{last};
     my $typed = ($via eq 'typed' && !$stacked) ? 1 : 0;
-    # A command a person typed is a prompt (owner 20:57: a later prompt of any kind), a status look,
+    # A command a person typed is a prompt (a later prompt of any kind), a status look,
     # a pause and this plugin's own skills too; of Claude Code's own commands only those that start
     # a turn (/loop, /goal, …), not a local one (/compact, /model, …).
     if ($BUILTIN{$name}) {
@@ -946,7 +946,7 @@ sub _invoked {
     return if $NOT_WORK{$name};
     if (_is_loop($st, $name)) { _start($st, \%e) }
     elsif ($name !~ /\Agsd-/) { $st->{last} = { %e } }    # its skill text comes next (_skill_text)
-    # The owner's form `/gsd-resume-work --ws X and /<loop> <args>`: the first skill chained with
+    # The chained form `/gsd-resume-work --ws X and /<loop> <args>`: the first skill chained with
     # `and` or `then` on the same line into a typed GSD command that names a workstream, with its
     # own arguments; it drives only when it is a loop already (listed, or its text was seen). A
     # skill on a line of its own, after the first, or after a GSD command without a workstream is
@@ -1068,11 +1068,11 @@ sub _row {
                 my $read = _read_run($b);
                 # A read in a session with no GSD work so far and no driver open (a plain ask: "what
                 # phase is the payments workstream at?") is a look: no GSD use of the session's own,
-                # no workstream of its own (owner 21:37: a plain ask gets no GSD line).
+                # no workstream of its own (a plain ask gets no GSD line).
                 my $Dp = $st->{drv};
                 my $peek = ($read && !$st->{gsd} && !($Dp && ($Dp->{mode} // '') ne 'ended')) ? 1 : 0;
                 # A read of another workstream than the one the session's own GSD work named only
-                # looks at it (owner 21:37: workstream A gets only A's --ws): it names nothing and
+                # looks at it (workstream A gets only A's --ws): it names nothing and
                 # moves no GSD root of the session's.
                 my ($own) = grep { !$_->{look} } reverse @{ $st->{ws} || [] };
                 if (!$peek && $read && defined $b->{ws} && $own && _wsn($b->{ws}) ne _wsn($own->{name})) {
@@ -1428,7 +1428,7 @@ sub _human {
 # A queued_command attachment on a main row (j): what Claude Code delivers inside the running turn,
 # never as a user row. A notification closes the background work it names (and is no stop: a task
 # notification, a teammate's idle, shutdown or termination notice, or the message of the loop's own
-# agent or teammate). Anything else ends the loop's context (owner 20:57): a prompt a person typed
+# agent or teammate). Anything else ends the loop's context: a prompt a person typed
 # meanwhile ("stop after this wave"; origin human, or none in older versions, read as a user row's
 # text is; with the prose /gsd-pause-work a prompt may name), another session's message, an
 # auto-continuation, a coordinator's correction, one with no text that is not a person's. This
@@ -1759,7 +1759,7 @@ sub _state_text {
     return @p ? join(' · ', @p) : 'no position recorded';
 }
 
-# The listed driver names: %DRIVERS plus the owner's `driver_skills` setting (`;`-separated).
+# The listed driver names: %DRIVERS plus the user's `driver_skills` setting (`;`-separated).
 sub driver_names {
     my %d = %DRIVERS;
     my $v = eval { rc::val('driver_skills') };
@@ -1915,9 +1915,9 @@ sub session {
         if ($mode eq 'active' && $e{hidden} && ($e{more} // 1)) {
             ($mode, $why) = ('hint', 'its arguments are not shown, and its re-enter command keeps only part of them');
         }
-        # Owner 2026-10-27 20:57: Active only while the loop is clearly live at the cut: its own
+        # Active only while the loop is clearly live at the cut: its own
         # context holds and a turn of its own runs (one of its steps mid-turn), or an agent,
-        # workflow or teammate it launched still runs (root call 2026-10-28). Anything else is the
+        # workflow or teammate it launched still runs. Anything else is the
         # hint (a turn ended, an interruption, a pause, a prompt of any kind, another session's
         # turn, ambiguity).
         if ($mode eq 'active' && !$D->{lv}) {

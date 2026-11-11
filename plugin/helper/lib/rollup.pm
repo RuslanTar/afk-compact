@@ -1,7 +1,6 @@
 package rollup;
-# lib/rollup.pm: one rollup row per compaction in <watch>/<sid>/compactions.jsonl
-# (MOD-SPEC §2.5 table), keyed (session_id, actor, compaction_seq, nonce).
-# Owner: WP-core.
+# lib/rollup.pm: one rollup row per compaction in <watch>/<sid>/compactions.jsonl,
+# keyed (session_id, actor, compaction_seq, nonce).
 use strict;
 use warnings;
 use utf8;
@@ -11,24 +10,24 @@ our @FIELDS = qw(session_id actor compaction_seq nonce id6 join trigger midturn 
                  instructions_bytes summary_chars shape_class pre_tokens post_tokens duration_ms precomputed
                  copy copy_path resume checkpoint_ms evidence nudged continued halt
                  proof proof_lag_ms settle_waited_ms acuity acuity_floor);
-# proof P1 | P3 | none, proof_lag_ms, settle_waited_ms: BD-3 window logging (T-TEXT E5, MOD-SPEC
-# §5.4); acuity (the summary's Acuity word or -) and acuity_floor (from the dispatch's
-# checkpoint facts, else -): T-TEXT E6. idle, idle_source, idle_gap_s: IC-1 D1 (idle_facts below).
+# proof P1 | P3 | none, proof_lag_ms, settle_waited_ms: window logging; acuity (the summary's
+# Acuity word or -) and acuity_floor (from the dispatch's
+# checkpoint facts, else -). idle, idle_source, idle_gap_s: idle_facts below.
 # Enum values and numbers only.
 
 sub write {
     my (%f) = @_;
     my @pairs = map { ($_ => $f{$_}) } @FIELDS;
-    # ts: the compaction's own time when the row is written later (reconcile, F2-1)
+    # ts: the compaction's own time when the row is written later (reconcile)
     return rc::emit('compaction', \@pairs, stream => 'compactions', actor => $f{actor}, ts => $f{ts});
 }
 
-# resume_state(sid_dir, nonce, scope, channel) -> the rollup `resume` value (MOD-SPEC §2.5,
-# P5-FOLD A2, XR-26). The claim file <watch>/<sid>/resume-claimed/<nonce> decides first,
+# resume_state(sid_dir, nonce, scope, channel) -> the rollup `resume` value.
+# The claim file <watch>/<sid>/resume-claimed/<nonce> decides first,
 # whatever the actor: present -> `delivered:<channel>` (on the classic path SessionStart
 # claims before PostCompact), or the claim's own `dropped:session-end`. No claim: a subagent
 # on the classic path -> `undelivered` (its block would have come through SessionStart); a
-# subagent on the mod path -> `none-subagent` (no block is built, §6); main -> `pending` (the
+# subagent on the mod path -> `none-subagent` (no block is built); main -> `pending` (the
 # mod's logOutcome row settles it); scope unknown -> undef.
 sub resume_state {
     my ($sid_dir, $nonce, $scope, $channel) = @_;
@@ -44,7 +43,7 @@ sub resume_state {
 }
 
 # rows(sid_dir) -> the compaction rows, each joined by nonce with the first compaction_boundary
-# row for it (PKG-RUNTIME E.2): a null rollup size takes the boundary value; a non-null one is
+# row for it: a null rollup size takes the boundary value; a non-null one is
 # never replaced, and a disagreement sets join_conflict 1 on the row (0 when joined and equal).
 our @JOIN = qw(pre_tokens post_tokens duration_ms precomputed);
 our @JOIN_IDLE = qw(idle idle_source idle_gap_s);
@@ -70,7 +69,7 @@ sub rows {
             $conflict = 1 if $x ne $y;
         }
         $r->{join_conflict} = $conflict;
-        # IC-1 D1: the idle decision reconcile makes once the boundary row exists; the
+        # the idle decision reconcile makes once the boundary row exists; the
         # PostCompact row says `unknown` (null source) until then
         for my $k (@JOIN_IDLE) {
             next unless exists $bd->{$k};
@@ -81,11 +80,11 @@ sub rows {
 }
 
 # idle_facts(drec, native) -> (idle, idle_source, idle_gap_s, mismatch) for a main compaction
-# whose boundary row was read (IC-1 D1, MOD-SPEC §2.5 idle rule). mod = the mod record's `idle`
+# whose boundary row was read. mod = the mod record's `idle`
 # (a classic or missing record: unknown); native = 'notice' | 'return' | undef (the first native
 # idle row after the boundary). idle = mod OR native; idle_source both | mod | notice | return |
 # none; mismatch 1 when the mod said true or false and the native row disagrees. An idle
-# `mod-self` record is the plugin's own idle compaction (owner 2026-10-27, while agents run):
+# `mod-self` record is the plugin's own idle compaction (also while agents run):
 # Claude Code writes no idle notice for it, so no native row is no mismatch.
 sub idle_facts {
     my ($drec, $native) = @_;
@@ -98,7 +97,7 @@ sub idle_facts {
     return (jsonc::bool($mod || $nat), $src, $gap, $mism);
 }
 
-# acuity_floor(sid_dir, nonce) -> the floor from the dispatch's checkpoint facts (T-TEXT E6):
+# acuity_floor(sid_dir, nonce) -> the floor from the dispatch's checkpoint facts:
 # the checkpoint's own acuity_floor when present; else unstable when git reports an operation
 # in progress, watch when the inventory lists a running or pending job, else stable; - when the
 # dispatch ran no checkpoint.

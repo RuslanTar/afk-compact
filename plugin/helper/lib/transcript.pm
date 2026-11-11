@@ -1,5 +1,5 @@
 package transcript;
-# lib/transcript.pm: read-only transcript facts, parsed by key (TF Q3 §1a). Owner: WP-core.
+# lib/transcript.pm: read-only transcript facts, parsed by key.
 # Only ids, counts, flags and timestamps leave this module; text is read in memory.
 use strict;
 use warnings;
@@ -18,7 +18,7 @@ sub boundary {
              version => ((defined $j->{version} && !ref $j->{version}) ? $j->{version} : undef) };
 }
 
-# The native idle-compaction notices (IC-1 D1): a system row whose content starts with one of
+# The native idle-compaction notices: a system row whose content starts with one of
 # these prefixes, after a main boundary row, marks that compaction as idle. The prefixes come
 # from canary-baseline.json c8.idle_prefixes (tools/canary-baseline, C8 counts them in the
 # binary); the literals are the fallback for a baseline without them. Only the prefix is
@@ -61,7 +61,7 @@ our @ENGINE_TRAILERS = (
 );
 
 # summary_facts(line) -> {n => marker nonce | undef, h => normalized-body sha256} for an
-# isCompactSummary user row, else undef. In memory only: no text leaves (C-STORE D5 step 1).
+# isCompactSummary user row, else undef. In memory only: no text leaves (fill step 1).
 sub summary_facts {
     my ($line) = @_;
     return undef unless index($line, 'isCompactSummary') >= 0;
@@ -77,7 +77,7 @@ sub summary_facts {
 }
 
 # version(path) -> the Claude Code version of the newest row that has one in the last 64 KB
-# (PKG-RUNTIME D.2 source 3), or undef
+# (the third version source), or undef
 sub version {
     my ($path) = @_;
     return undef unless defined $path && -f $path;
@@ -130,25 +130,25 @@ sub last_prompt_epoch {
     return $best;
 }
 
-# AP-4 (spec §15 approval-quote, SPEC-DELTAS §3.1 (c)). quotes_found(path, [{quote, targets =>
+# Spec §15 approval-quote. quotes_found(path, [{quote, targets =>
 # [identity…], action}…], sid, since => epoch [, origins => \@kinds]) -> [1|0…] in the order
 # given, or undef when the transcript cannot be read (no file, unreadable) or the session's id
 # or start is unknown (see "Own rows only" below). One pass, in memory; no text is stored,
 # logged or returned. With `origins`, $kinds[i] is set for each quote found to the class word of
 # the row that held it (the row's origin kind of @HUMAN_ORIGINS, `none` for a typed row without
-# one, `dialog` for a dialog answer); owner xxxxxxxx-12 "Count, log origin": the approvals_carry
+# one, `dialog` for a dialog answer); the approvals_carry
 # row counts them, never any text. A quote counts when it occurs, white space folded, in a
 # human-typed user row: type user, not isMeta / isCompactSummary / isSidechain, no tool result,
 # origin kind absent or a person's (@HUMAN_ORIGINS), and not a notification, command-output or
 # reminder text. A quote of $SHORT_WORDS words or more counts as whole words in the message
-# (REVIEW-NIGHT-3 R3-04: "push to main" is not in "push to maintenance"). A shorter quote must
+# ("push to main" is not in "push to maintenance"). A shorter quote must
 # be the whole message (case, end dots and exclamation marks aside: "yes", "Yes!"; never a "yes"
 # inside "yes, but not now" or an "ok" inside "token"), and the assistant text since the
 # previous human row must name one of its targets (the identity before ` @ `, or that
 # identity's last word): it directly answers that message.
 #
-# Matching item (owner xxxxxxxx-06 "Matching item", NIGHT-REVIEW 2.7, R3-04): a short quote may
-# also be one whole numbered line of a message (the owner answers in numbered lists: "1. publish
+# Matching item: a short quote may
+# also be one whole numbered line of a message (people often answer in numbered lists: "1. publish
 # yourself." as line 1 of a 3-line reply), with the same "assistant text names a target" rule.
 # The whole-message rule above applies only when neither the message nor the quote starts with
 # an item number; a numbered reply, one line or several, goes through these rules. An unnumbered
@@ -173,16 +173,16 @@ sub last_prompt_epoch {
 # before it starts a new list; a numbered line indented more than the list's first item is part
 # of the current item (a sub-list). A list inside a code block is never the closing list.
 #
-# Owner-ruled quote sources (owner xxxxxxxx-09 "Quote src", 2026-10-26: all four kept as built,
-# no longer provisional): Q-1 code checks each quote against the user's own rows at all (O-3);
+# Quote sources (all four kept as built):
+# Q-1 code checks each quote against the user's own rows at all (O-3);
 # Q-2 a message that holds an approval line (`U-n: approval`) or a moved approval's re-ask item
 # was pasted, so none of its words count ($PASTED); Q-3 rows stamped with another session's id do not count ("Own rows only"
 # below); Q-4 quotes match whole words only. SDK-origin rows (`claude -p`, Agent SDK hosts) count
-# as the user's words (owner xxxxxxxx-12 "Count, log origin"; their count is logged, see above).
+# as the user's words (their count is logged, see above).
 # Only the last $QUOTE_SCAN_MAX bytes are read; a quote not found in a longer file is undef for
 # that quote (not checked, never a miss).
 #
-# Dialog answers (NR-14, owner xxxxxxxx-23 "Dialogs count", xxxxxxxx-20): the user's answer in
+# Dialog answers: the user's answer in
 # an AskUserQuestion dialog counts as their words. The result row must answer a tool_use named
 # exactly $ASK_TOOL in a main (not isSidechain) assistant row, by its tool_use_id, and pass the
 # same row rules as a typed message (not isSidechain / isMeta / isCompactSummary, no other
@@ -203,8 +203,8 @@ sub last_prompt_epoch {
 # row's uuid, a dialog whose tool_use_id another tool's call reuses before the result, and any
 # other tool's output or any tool_use input.
 #
-# Own rows only (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"; REVIEW-NIGHT-3
-# R3-03): every row a quote, a short quote's assistant context, a dialog's ask or its result is
+# Own rows only (forks re-ask): every row a quote, a short quote's assistant context, a dialog's
+# ask or its result is
 # read from must have been written by this session after it started: no other session's id, no
 # forkedFrom, and a timestamp at or after `since` (sessions::own_since: the session's first
 # per-process record). Claude Code 2.1.309 writes the history it copies into a new session with
@@ -214,7 +214,7 @@ sub last_prompt_epoch {
 # `since` or no sid nothing can be shown to be own, so the result is undef (not checked, never a
 # miss). Target ids are matched as whole tokens: `MR !1` is not in `MR !12`.
 #
-# Coarse start (sessions::own_start, `coarse => 1`; review of bcdaca6): a record without
+# Coarse start (sessions::own_start, `coarse => 1`): a record without
 # milliseconds names only the second the session started in. Rows at or after `until` are own
 # by time. A row stamped in [since, until) is own only when it is a typed user row (the launch
 # prompt; never a dialog answer or an assistant row) that comes, in file order, after a main
@@ -231,7 +231,7 @@ our $ASK_TOOL = 'AskUserQuestion';
 our $ASK_KEEP = 256;                  # dialogs awaiting their answer, at most
 my $NOTES_ONLY = '(notes only)';      # the answer value of a question with a note and no option
 my $NOT_TYPED = qr/\A\s*<(?:task-notification|local-command-stdout|local-command-stderr|bash-stdout|bash-stderr|system-reminder|local-command-caveat)\b/;
-# Q-2 also covers the re-ask item publish writes for a moved approval (0.1.3 APPROVALS,
+# Q-2 also covers the re-ask item publish writes for a moved approval (0.1.3,
 # skills::approvals::move_lines: `words recorded as the user's:` before the words, `as written:`
 # for a line that did not parse, `(was U-<k>; not carried:` after them): those words failed the
 # quote check, so a message pasting them must not make them count.
@@ -310,7 +310,7 @@ sub _lists {
 # message is the short quote and either (a) a numbered item of the assistant text names a target,
 # the closing list has exactly one such item and the line's number is that item's, or (b) no
 # numbered item of the assistant text names a target and the line holds an outward verb of the
-# action or a target id (owner xxxxxxxx-06; see "Matching item" above). The caller has checked
+# action or a target id (see "Matching item" above). The caller has checked
 # that the assistant text names a target.
 sub _matching_item {
     my ($msg, $q, $asst) = @_;
@@ -585,12 +585,12 @@ sub quotes_found {
         $q[$i]{averbs} = _verbs($asks->[$i]{action});
     }
     my $origins = ref $o{origins} eq 'ARRAY' ? $o{origins} : undef;
-    # `why` (0.1.3 APPROVALS, the reason publish writes for a moved line): for each quote not
+    # `why` (0.1.3, the reason publish writes for a moved line): for each quote not
     # found, `copy`, `claim` or `pasted` when its words are only in a row that does not count for
     # that reason, by the same rules otherwise (_why_near; the first one seen stays), else undef
     # (the plain rule: not typed by the user, or a short quote that is no whole message answering a
     # message naming a target): a typed row or a dialog (its ask and its answer) of a copy or from
-    # before a claim (_why_of), an own answer to a dialog a copy asked (`copy`, 0.1.4 A-8), or an
+    # before a claim (_why_of), an own answer to a dialog a copy asked (`copy`, 0.1.4), or an
     # own message or dialog answer that was pasted ($PASTED).
     # `start`: the session's own start when `since` is a successor's claim
     # (skills::core::quotes_found); rows before it are copies, rows after it and before `since`
@@ -641,7 +641,7 @@ sub quotes_found {
                     $any_asst = substr($any_asst, -$ASSISTANT_KEEP) if length($any_asst) > $ASSISTANT_KEEP;
                 }
                 # Only this session's own assistant rows name a short quote's target or ask a
-                # dialog: a copied question is the parent's (owner xxxxxxxx-27 revised).
+                # dialog: a copied question is the parent's.
                 if (!$j->{isSidechain} && _own_row($j, $sid, $until)) {
                     if ($need_asst) {
                         $asst .= "\n" . _chars(_row_text($j));
@@ -650,7 +650,7 @@ sub quotes_found {
                     _dialogs_asked($j, \%asked, \@asked_order);
                 } elsif ($why && !$j->{isSidechain} && defined(my $xc = _why_of($j, $sid, $start, $since))) {
                     _dialogs_asked($j, \%xasked, \@xorder);
-                    # Which part asked it (0.1.4 A-8: an own answer to a copied question).
+                    # Which part asked it (0.1.4: an own answer to a copied question).
                     for my $it (ref $j->{message} eq 'HASH' && ref $j->{message}{content} eq 'ARRAY' ? @{ $j->{message}{content} } : ()) {
                         my $d = ref $it eq 'HASH' && defined $it->{id} && !ref $it->{id} ? $xasked{ $it->{id} } : undef;
                         $d->{why} = $xc if $d;
@@ -661,7 +661,7 @@ sub quotes_found {
         }
         next unless index($line, '"user"') >= 0;
         if (index($line, '"tool_use_id"') >= 0) {
-            # A tool result: only the user's answer in an AskUserQuestion dialog counts (NR-14).
+            # A tool result: only the user's answer in an AskUserQuestion dialog counts.
             next unless %asked || %xasked;
             $j //= eval { jsonc::decode($line) };
             if (!_own_user_row($j, $sid, $until)) {
@@ -679,7 +679,7 @@ sub quotes_found {
             my $ok = ref $j->{origin} eq 'HASH' ? $j->{origin}{kind} : undef;
             next if defined $ok && !$human{$ok};
             my @pa;
-            # `why` (0.1.4 A-8): an own answer to a dialog asked in a copied part never counts (only
+            # `why` (0.1.4): an own answer to a dialog asked in a copied part never counts (only
             # an own question's dialog does); a quote found only there is labelled `copy`, by the
             # same test as a copy's own rows (a pasted one `pasted`).
             if ($why && %xasked) {
@@ -739,7 +739,7 @@ sub quotes_found {
             if ($q[$i]{short}) {
                 next unless grep { $asst =~ $_ } @{ $q[$i]{ids} };
                 # The whole message when neither it nor the quote is numbered, else one whole
-                # numbered line of it that answers the matching item (owner xxxxxxxx-06).
+                # numbered line of it that answers the matching item.
                 if ($ft !~ $ITEM_RE && !defined $q[$i]{qnum}) { next unless $fw eq $q[$i]{whole} }
                 else { next unless $q[$i]{wbody} ne '' && _matching_item($t, $q[$i], $asst) }
             } else {
@@ -815,7 +815,7 @@ sub user_quote_found {
     return $r->[0];
 }
 
-# Denied calls (0.1.2 AC-2, mitigation 1 of the classifier incident): a tool call of this
+# Denied calls (0.1.2, after a classifier incident): a tool call of this
 # session, its subagents and workflow agents included, whose result Claude Code wrote as a
 # permission denial. `classifier`: the auto-mode classifier refused it; `rule`: a deny rule, a
 # denied directory, a built-in safety check or the permission mode did; `user`: the user rejected
@@ -823,14 +823,14 @@ sub user_quote_found {
 # The structured decision Claude Code writes on the tool result's row (`permissionDecision`:
 # {decision accept|reject, source, reasonType}) is read when present; the text patterns below are
 # the fallback for versions without it. A rule's text quotes the command, which may span lines (a
-# heredoc commit message chained with a push; review finding 3).
+# heredoc commit message chained with a push).
 our @DENIED = (
     [ classifier => qr/\A\s*Permission for this action (?:was|has been) denied by (?:the )?(?:Claude Code )?auto[- ]mode classifier/ ],
     [ rule       => qr/\A\s*Permission to use \S+ (?:[\s\S]*? )?has been denied/ ],
     [ rule       => qr/\A\s*(?:<tool_use_error>\s*)?File is in a directory that is denied by your permission settings/ ],
     [ rule       => qr/\A\s*Permission for this command was denied by a built-in Claude Code safety check/ ],
     [ rule       => qr/\A\s*Claude requested permissions to write to [\s\S]+?, but you haven't granted it yet/ ],
-    # Review 3 finding 4: refusal texts of Claude Code versions without permissionDecision.
+    # Refusal texts of Claude Code versions without permissionDecision.
     [ rule       => qr/\A\s*Claude requested permissions to edit [\s\S]+? which is a sensitive file/ ],
     [ rule       => qr/\A\s*This command requires approval/ ],
     [ rule       => qr/\A\s*This (?:Bash )?command contains multiple operations\. The following parts? requires? approval/ ],
@@ -998,7 +998,7 @@ sub subagent_files {
     return \@out;
 }
 
-# Temp paths cited in the last 5 MB of a transcript (sweep scope, OD-9).
+# Temp paths cited in the last 5 MB of a transcript (sweep scope).
 # 0.1.3 hook speed: no match spans a delimiter, so the tail is read one delimiter-free word at a
 # time (a streaming match: no list of every word, so memory stays at the tail's size) and only
 # the words that hold an anchor are matched, the tasks/*.output form from the word's start (\A)

@@ -1,5 +1,5 @@
 package ctx;
-# lib/ctx.pm: plugin facts for this process (root, brand, version). Owner: WP-core.
+# lib/ctx.pm: plugin facts for this process (root, brand, version).
 # The brand comes from <plugin root>/.claude-plugin/plugin.json `name`; fallback:
 # the launcher's basename minus `-store` (STORE_LAUNCHER, set by the launcher).
 # Code holds no literal plugin name.
@@ -29,8 +29,8 @@ sub root    { $ROOT }
 sub brand   { $BRAND }
 sub version { $VERSION }
 
-# The launcher folder: one constant here, in tools/build and in the mod's deps.ts (PKG-RUNTIME
-# A.1; the AT-PK-01 gate finds any other spelling).
+# The launcher folder: one constant here, in tools/build and in the mod's deps.ts (the
+# AT-PK-01 gate finds any other spelling).
 our $LAUNCHER_DIR = 'scripts';
 sub launcher { return "$ROOT/$LAUNCHER_DIR/" . $BRAND . '-store' }
 
@@ -46,7 +46,7 @@ sub store_word {
 }
 
 # store_cmd() -> the word that starts every helper command the plugin writes for the model or
-# the user: the absolute launcher path, quoted (PKG-RUNTIME A.1); undef when no quoting can
+# the user: the absolute launcher path, quoted; undef when no quoting can
 # hold it.
 sub store_cmd { return store_word(launcher()) }
 sub asset_path { return "$ROOT/assets/$_[0]" }

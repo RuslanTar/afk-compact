@@ -1,7 +1,7 @@
 package handoff_turn;
-# lib/handoff_turn.pm: the handoff-turn store (D-18 §9.1, B8; DP-6 / REVIEW B-18: one core
+# lib/handoff_turn.pm: the handoff-turn store (one core
 # lib, called by `handoff-turn`, `handoff-state` and the skills' `begin` and `publish`).
-# Owner: WP-core. Files under <watch>/<sid>/handoff-turn/, each by exclusive create, never
+# Files under <watch>/<sid>/handoff-turn/, each by exclusive create, never
 # rewritten or removed:
 #   <ht>.json        {v, ht, session_id, reason, max_calls, max_tokens, opened_at}
 #                    (`handoff-turn open`, run by the mod before it submits the turn)
@@ -9,16 +9,16 @@ package handoff_turn;
 #   <ht>.published   the handoff path, written by `publish` before its rename (mark_published)
 #   <ht>.superseded  the nonce of a native compaction that ran during the turn (the race);
 #                    `<ht>.json` stays write-once, so superseded_by lives in this twin file
-#   <ht>.closed      why the mod closed the ht (cancelled | ended; `handoff-turn close`,
-#                    CR-F17/F25): begin no longer binds it (open_for_begin)
+#   <ht>.closed      why the mod closed the ht (cancelled | ended; `handoff-turn close`):
+#                    begin no longer binds it (open_for_begin)
 # A second handoff for one ht cannot happen: bind_stage returns the existing stage
 # (`resumed`), mark_published refuses with the existing path.
 use strict;
 use warnings;
 use utf8;
 
-# precompact: the OD-4 pre-compaction turn (MOD-SPEC §9.3, S-SETTINGS D); idle: the pre-idle
-# handoff turn (§9.4, IC-1 D5)
+# precompact: the pre-compaction turn; idle: the pre-idle
+# handoff turn
 our %REASONS = map { $_ => 1 } qw(2-nonok thrash cap continue-off precompact idle);
 our $OPEN_MAX_AGE_S = 3600;
 our %CLOSE_WHY = map { $_ => 1 } qw(cancelled ended);
@@ -55,7 +55,7 @@ sub record {
 }
 
 # open_for_begin(sid_dir) -> the newest ht with a record, no .published, no .closed and
-# opened at most 60 minutes ago, or undef (begin binds it; the model never types an ht, HK-06)
+# opened at most 60 minutes ago, or undef (begin binds it; the model never types an ht)
 sub open_for_begin {
     my ($sid_dir) = @_;
     my $now = util::now();
@@ -95,7 +95,7 @@ sub mark_published {
     return (0, _read_line($f) // $path);
 }
 
-# close_ht(sid_dir, ht, why) -> 1 created | 0 exists (CR-F17/F25: the mod closes an ht
+# close_ht(sid_dir, ht, why) -> 1 created | 0 exists (the mod closes an ht
 # whose turn it cancelled after the open, or that ended, so a later manual handoff in the
 # hour does not bind it)
 sub close_ht {
@@ -132,8 +132,8 @@ sub finish_command {
         $slug = 'handoff' if $slug eq '';
     }
     my $status = (defined $meta->{status} && !ref $meta->{status} && $meta->{status} =~ /\A(in-progress|blocked|completed)\z/) ? $meta->{status} : 'in-progress';
-    # The command starts with the token <store> (XR-03 (1), DP-31 (1)): the resume context
-    # defines it once in its first line as the quoted launcher word (PKG-RUNTIME A.1), so the
+    # The command starts with the token <store>: the resume context
+    # defines it once in its first line as the quoted launcher word, so the
     # word is not repeated here. None when no quoting holds the launcher path: then <store>
     # cannot be defined either.
     return undef unless defined ctx::store_cmd();
@@ -142,7 +142,7 @@ sub finish_command {
 
 # published_ok(sid_dir, ht, path) -> 1 when the claimed handoff is in place: a regular file
 # (not a link) whose last non-empty line is a sentinel of the spec grammar, with the nonce
-# of the stage bound to this ht when that stage records one (CR-F9: publish claims before
+# of the stage bound to this ht when that stage records one (publish claims before
 # it links the file into place, and a failed link leaves the claim naming a missing or
 # foreign file). Without a readable spec the regular file alone counts.
 sub published_ok {

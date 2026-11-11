@@ -1,5 +1,5 @@
 package cachestate;
-# lib/cachestate.pm: the prompt cache's state for a status line (0.1.7, D-81). Owner: WP-core.
+# lib/cachestate.pm: the prompt cache's state for a status line (0.1.7).
 # `cache` (cmd/cache.pl, read-only) reports whether the session's prompt cache is warm: from
 # Claude Code's own status-line `prompt_cache` (2.1.312+, --stdin), else from the transcript's last
 # main `api-request` line (its timestamp and cache TTL), with the plugin's keep-warm on top. The
@@ -13,7 +13,7 @@ package cachestate;
 # again) and SessionEnd (on_end). A write reads the file, changes it and renames
 # a temp file over it; two processes of one session (a reload) may race: the last writer wins and
 # the next row heals it. Nothing is written inside a git work tree or a .planning folder (the
-# walk of MOD-SPEC §1.2, no git call).
+# unsafe-root walk, no git call).
 # SessionStart also keeps a launcher shim with a stable path, ${XDG_STATE_HOME:-~/.local/state}/
 # <plugin>/bin/ and the launcher's own file name (keep_shim): a two-line #!/bin/sh exec of this
 # plugin copy's launcher, for status lines; never to a --plugin-dir load.

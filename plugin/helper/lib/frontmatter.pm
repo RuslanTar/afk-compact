@@ -1,5 +1,5 @@
 package frontmatter;
-# lib/frontmatter.pm: YAML-subset frontmatter for copies and handoffs. Owner: WP-core.
+# lib/frontmatter.pm: YAML-subset frontmatter for copies and handoffs.
 #   write(\@pairs) -> "---\n<key>: <value>\n...---\n", UTF-8 bytes (undef and '' values omitted;
 #     plain scalars when safe, else JSON-quoted strings, which YAML reads too;
 #     hashes and arrays as JSON flow values)

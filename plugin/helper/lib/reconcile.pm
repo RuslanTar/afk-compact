@@ -1,7 +1,6 @@
 package reconcile;
-# lib/reconcile.pm: the reconciler at a main turn end (MOD-SPEC §5.4; classic Stop, <= 2 s).
-# Owner: WP-core.
-#   - P3 scope proof (ROOT-RULINGS F2-1, live probe S-21): the main compact_boundary row
+# lib/reconcile.pm: the reconciler at a main turn end (classic Stop, <= 2 s).
+#   - P3 scope proof (live probe S-21): the main compact_boundary row
 #     is written after PostCompact, so P3 is evaluated here. Each new main boundary row
 #     is matched to the PostCompact just before it (a proven main one first); each new
 #     subagent boundary row to an unmatched PostCompact before it (a proven subagent one
@@ -17,14 +16,14 @@ package reconcile;
 #     PreCompact and no `precomputed` -> `order_anomaly`
 #   - an undelivered main resume block -> `resume_undelivered` (an idle block still waiting on
 #     disk for the next turn is not undelivered yet: step 4)
-#   - a save that returned EXISTS sha-differs settles its stash once (RRP-04, MOD-SPEC §5.8):
+#   - a save that returned EXISTS sha-differs settles its stash once:
 #     `stash_dropped` (redundant) or `stash_kept` (a redacted *.mismatch.md keep)
-#   - final mode (SessionEnd, the cross-session finish): no SETTLE_S wait (RRP-05)
+#   - final mode (SessionEnd, the cross-session finish): no SETTLE_S wait
 #   - the stash index marker <watch>/.orphans/<sid> goes once pending/ holds no stash
-#   - idle (IC-1 D1): the first native idle row after a main boundary row (prefix only) and the
+#   - idle: the first native idle row after a main boundary row (prefix only) and the
 #     mod record's `idle` give the rollup idle, idle_source, idle_gap_s (on the compaction_boundary
 #     row, or on a rollup row written here); a disagreement -> one `idle_mismatch {nonce}`
-# No rule here looks at a stash's age or file time (RRP-05 "no age limit"); SETTLE_S is the
+# No rule here looks at a stash's age or file time (no age limit); SETTLE_S is the
 # wait for a boundary row, measured from the PostCompact time in the stash meta.
 # Every row is written once (reconcile reads the rows it wrote before).
 #
@@ -46,7 +45,7 @@ our $SETTLE_S = 10;                 # an unproven PostCompact younger than this 
 our $MAIN_WINDOW_S = 600;           # a main boundary row at most this long after its PostCompact
 our $SUB_WINDOW_S = 120;            # a subagent boundary row at most this long after its PostCompact
 our $TOL_S = 2;                     # subagent rows: slack around a PostCompact's time
-our $BESIDE_S = 5;                  # a subagent row this far past TOL_S beside a main match: not main (BD-3)
+our $BESIDE_S = 5;                  # a subagent row this far past TOL_S beside a main match: not main
 our $CB_BEFORE_S = 10;              # a main boundary row's compaction rollup row: at most this long before it
 our $CB_AFTER_S = 30;               # ... and at most this long after it
 # 0.1.3 hook speed: a main-proven save is swept right after it (sweep::run claims swept/<id6>,
@@ -121,14 +120,14 @@ sub _ingest_classic {
             my $rel = $mism ? '' : ($r->{rel_path} // '');
             $st->{copied}{ $r->{id6} } = $rel if defined $r->{id6};
             $st->{copied}{ 'n:' . $r->{nonce} } = $rel if defined $r->{nonce};
-            # a subagent copy not named by agent (MOD-SPEC §5.9): a fill candidate even when its
+            # a subagent copy not named by agent: a fill candidate even when its
             # PostCompact is no longer pending (id6, time and nonce only; _fill checks the file)
             if (defined $r->{id6} && !ref $r->{id6} && ($r->{slot} // '') eq 'subagents' && $rel ne ''
                 && util::basename($rel) !~ /_[0-9a-z]{8}-a/ && !$st->{fill}{ $r->{id6} }) {
                 my $e = util::parse_iso($r->{ts} // '');
                 $st->{subc}{ $r->{id6} } = { e => $e, (defined $r->{nonce} && !ref $r->{nonce} ? (nonce => $r->{nonce}) : ()) } if defined $e;
             }
-            # the copy a mismatch row names (MOD-SPEC §5.8): a stash still beside it is settled once
+            # the copy a mismatch row names: a stash still beside it is settled once
             if ($mism && defined $r->{rel_path} && !ref $r->{rel_path}) {
                 $st->{mism}{ $r->{id6} } = $r->{rel_path} if defined $r->{id6};
                 $st->{mism}{ 'n:' . $r->{nonce} } = $r->{rel_path} if defined $r->{nonce};
@@ -148,7 +147,7 @@ sub _ingest_rolls {
     for my $l (@$lines) {
         my $r = eval { jsonc::decode($l) };
         next unless ref $r eq 'HASH';
-        # the boundary sizes appended for a nonce (PKG-RUNTIME E.2) are no rollup row of their own
+        # the boundary sizes appended for a nonce are no rollup row of their own
         if (($r->{ev} // 'compaction') eq 'compaction_boundary') { $st->{cbn}{ $r->{nonce} } = 1 if defined $r->{nonce}; next }
         next unless ($r->{ev} // 'compaction') eq 'compaction';
         push @{ $st->{rolls_l} }, { id6 => $r->{id6}, nonce => $r->{nonce}, e => util::parse_iso($r->{ts} // '') // 0,
@@ -162,13 +161,13 @@ sub _ingest_bounds {
     my ($lines, $to_end) = _new_lines($path, $fst);
     my %seen = map { (($_->{u} // '') => 1) } @$list;
     for my $l (@$lines) {
-        # IC-1 D1: the first system row after a main boundary row that starts with a native idle
+        # The first system row after a main boundary row that starts with a native idle
         # prefix marks that compaction (ni = notice | return); later ones are not read
         if (!defined $agent && @$list && !defined $list->[-1]{ni} && defined(my $k = transcript::idle_notice($l))) {
             $list->[-1]{ni} = $k;
             next;
         }
-        # An agent file's summary row after a boundary (MOD-SPEC §5.9 step 1): its marker nonce
+        # An agent file's summary row after a boundary (fill step 1): its marker nonce
         # and normalized-body sha only, on the newest boundary of that agent that has none yet
         # (a boundary read in an earlier chunk is carried in the saved state).
         if (defined $agent && (my $sf = transcript::summary_facts($l))) {
@@ -184,7 +183,7 @@ sub _ingest_bounds {
     return $to_end;
 }
 
-# ---------------------------------------------------------------- fill (MOD-SPEC §5.9)
+# ---------------------------------------------------------------- fill
 # A PostCompact whose copy may be a sub-unknown one: proven sub (P2, or P3 at this reconcile)
 # with no agent id from P1.
 sub _fill_cand { my ($it) = @_; return !defined $it->{agent} && ($it->{scope} eq 'sub' || ($it->{p3} // '') eq 'sub') ? 1 : 0 }
@@ -218,7 +217,7 @@ sub _fill {
         if (!$bd) {
             next unless $subs_end;    # an agent file not read to its end may still hold the row
             # candidates: every agent with a free boundary row inside the copy's window, the P3
-            # window of _match [e - TOL_S, e + SUB_WINDOW_S] (C-STORE D5 (c)); a fill only when
+            # window of _match [e - TOL_S, e + SUB_WINDOW_S]; a fill only when
             # there is exactly one agent (its earliest row in the window)
             my @in = grep { $free->($_) && defined $_->{a} && $_->{e} >= $it->{e} - $TOL_S && $_->{e} - $it->{e} <= $SUB_WINDOW_S } @sb;
             my %ag = map { ($_->{a} => 1) } @in;
@@ -265,7 +264,7 @@ sub _pool {
     return [sort { $a->{e} <=> $b->{e} || $a->{id6} cmp $b->{id6} } @pool];
 }
 
-# ---------------------------------------------------------------- P3 (F2-1)
+# ---------------------------------------------------------------- P3
 # Match boundary rows to PostCompacts; sets $it->{mb} (main row) / $it->{sb} (subagent row)
 # and $it->{p3} = main | sub | undef for each pool item.
 sub _match {
@@ -295,7 +294,7 @@ sub _match {
     for my $it (@$pool) {
         if ($it->{sb}) { $it->{p3} = 'sub'; next }
         next unless $it->{mb};
-        # main = P3-main with no subagent signal (MOD-SPEC §2.4): a subagent row beside it -> both
+        # main = P3-main with no subagent signal: a subagent row beside it -> both
         my $beside = grep { !defined $_->{by} && $_->{e} >= $it->{e} - $TOL_S && $_->{e} <= $it->{e} + $TOL_S + $BESIDE_S } @sb;
         $it->{p3} = $beside ? undef : 'main';
     }
@@ -305,7 +304,7 @@ sub _match {
 # run(transcript => P, cwd => C, budget_ms => 2000, cutoff => epoch, final => 0|1)
 #   -> {late, unresolved, precompute_not_reused, order_anomaly, undelivered, saved, kept, dropped,
 #       waits, busy (the lock was held: nothing ran)}
-# final (MOD-SPEC §5.4 "Final mode": SessionEnd, and the cross-session finish): P3 first, then
+# final (final mode: SessionEnd, and the cross-session finish): P3 first, then
 # every stash still unproven once the transcripts are read to their end is saved as
 # unattributed at once (the SETTLE_S wait is waived); a stash whose transcripts were not
 # read to their end within the budget stays for the next run.
@@ -336,7 +335,7 @@ sub run_locked {
 
 sub _counts { return { map { ($_ => 0) } qw(late unresolved precompute_not_reused order_anomaly undelivered saved kept dropped attributed waited) } }
 
-# A save that returned EXISTS sha-differs: the stash is settled once (RRP-04, MOD-SPEC §5.8).
+# A save that returned EXISTS sha-differs: the stash is settled once.
 sub _settle {
     my ($n, $path, $save, $scan) = @_;
     my $r = copies::settle_mismatch(path => $path, save => $save, scan => $scan) // return;
@@ -391,7 +390,7 @@ sub _run {
     my $root_ok = rc::root_ok('handoff_root');
 
     # A stash whose summary a copy already holds (same normalized body) is dropped (F2-7).
-    # A copy row that said mismatch (rel '') leaves the stash to be settled once (§5.8).
+    # A copy row that said mismatch (rel '') leaves the stash to be settled once.
     my $drop_if_held = sub {
         my ($f, $rel, $text) = @_;
         return unless defined $text;
@@ -417,7 +416,7 @@ sub _run {
     # 0. P3 for the PostCompacts not yet done
     my $pool = _pool($sid_dir, $st);
     # fill candidates from this session's subagents/ copy rows whose PostCompact is not in the
-    # pool (C-STORE D5: the fill goes by the agent rows, not by what is still pending); kept
+    # pool (the fill goes by the agent rows, not by what is still pending); kept
     # until decided or MAIN_WINDOW_S old
     my %inpool = map { ($_->{id6} => 1) } @$pool;
     my @subc;
@@ -446,7 +445,7 @@ sub _run {
         my ($scope, $agent, $proof);
         if (($it->{p3} // '') eq 'main') { ($scope, $proof) = ('main', 'p3-main') }
         # P3-sub: the agent only from P1 (the meta); a time match names no agent: the copy is
-        # sub-unknown and the fill below decides (MOD-SPEC §5.3 step 3, §5.9)
+        # sub-unknown and the fill below decides
         elsif (($it->{p3} // '') eq 'sub') { ($scope, $agent, $proof) = ('sub', $it->{agent}, 'p3-sub') }
         elsif ($main_end && $subs_end && ($a{final} || $now - $it->{e} >= $SETTLE_S)) { ($scope, $proof) = ('unknown', 'none') }
         else { next }    # its boundary row may still come: the next Stop decides
@@ -454,7 +453,7 @@ sub _run {
         _save_deferred($it, $text, $scope, $agent, $proof, \%a, $left, $copied, $f, $n);
     }
 
-    # 1. stashes without a copy. Not while handoff_root is refused (MOD-SPEC §1.2): every
+    # 1. stashes without a copy. Not while handoff_root is refused: every
     # save would be refused again and log another failed copy row at each Stop; the
     # stashes wait for a later Stop with a safe root (the refusal row is once per session).
     my @pending = $root_ok ? util::list_dir("$sid_dir/pending") : ();
@@ -484,7 +483,7 @@ sub _run {
         }
         my $s = detect::scan($text);
         my $mn = $nonce // $m{nonce} // ($m{stale} ? undef : $s->{nonce});
-        # P1 (MOD-SPEC §2.4): the record of the nonce in the mod stash name or the summary marker
+        # P1: the record of the nonce in the mod stash name or the summary marker
         my $p1 = defined $mn ? $disp{$mn} : undef;
         my $drec = $p1 // (defined $m{deferred} ? $disp{ $m{deferred} } : undef);
         # a deferred stash is named under its pending mod dispatch (as the after-step would
@@ -520,7 +519,7 @@ sub _run {
         $copied->{"n:$mn"} = $save->{rel} if defined $mn;
         rc::emit('copy_late', [nonce => $mn, id6 => $save->{id6}, rel_path => $save->{rel}]);
         $logged->{"copy_late:" . ($mn // $save->{id6})} = 1;
-        # Main-proven: sweep (MOD-SPEC §5.3 step 5), as step 0 does (RR-S21-04). The
+        # Main-proven: sweep, as step 0 does (RR-S21-04). The
         # swept/<id6> claim (the nonce's first 6, as the mod's after-step claims it) keeps a
         # compaction from being swept twice.
         my $sweep;
@@ -532,7 +531,7 @@ sub _run {
         my $tot = $sweep ? $sweep->{totals} : undef;
         my @rolled = grep { (($_->{id6} // '') eq $id6) || (defined $mn && ($_->{nonce} // '') eq $mn) } @{ $st->{rolls_l} };
         my $rolled = scalar @rolled;
-        # CORE-20 (C-STORE incidental 1, DP-31 (4)): the rollup row PostCompact wrote names the
+        # CORE-20: the rollup row PostCompact wrote names the
         # deferred dispatch's actor; when the slot this save took differs, a copy_attributed row
         # says where the copy is and whose it is (readers take it over the rollup row; data only).
         if ($rolled) {
@@ -568,10 +567,10 @@ sub _run {
         }
     }
 
-    # compaction sizes on the mod path (PKG-RUNTIME E.2, MOD-SPEC §5.4): a main boundary row
+    # compaction sizes on the mod path: a main boundary row
     # matched to a nonce that already has a rollup row gets one compaction_boundary row, once
     # per nonce, append-only (readers join it by nonce; nothing is rewritten)
-    # 0.1.4 (W-18): the real store never got one of these rows: a boundary row's timestamp comes
+    # 0.1.4: the real store never got one of these rows: a boundary row's timestamp comes
     # 0.6 to 3.6 s before its PostCompact (57 of 57 compactions of the 0.1.2/0.1.3 log), so P3
     # (_match) never gave a main boundary its `by`, and a pool item matched later was already done
     # (no longer in the pool). A main boundary now finds its compaction's rollup row itself: by the
@@ -624,7 +623,7 @@ sub _run {
         $st->{cbn}{$nn} = 1;
     }
 
-    # fill: sub-unknown copies get their agent (MOD-SPEC §5.9)
+    # fill: sub-unknown copies get their agent
     _fill($st, [@$pool, @subc], $n, $subs_end, $left) if $root_ok && $left->();
 
     # done: a PostCompact whose summary is copied and whose rows are matched (or too old to be);
@@ -655,7 +654,7 @@ sub _run {
                 next;
             }
             next if $logged->{"compaction_unresolved:$nn"} || exists $copied->{"n:$nn"} || $post{$nn};
-            # DP-29 (E-M-15): the mod closed this dispatch because a native compaction ran first
+            # DP-29: the mod closed this dispatch because a native compaction ran first
             # (compacted {skip: native-ran}): an outcome, not an unresolved compaction; so is a
             # call Claude Code rejected as headless (compact_rejected {error_class: headless}),
             # and a headless `/compact` the host cannot run (compact_command {error_class:
@@ -695,7 +694,7 @@ sub _run {
         }
     }
 
-    # 4. undelivered main resume blocks. An idle compaction's block (MOD-SPEC §3.4 idle exception:
+    # 4. undelivered main resume blocks. An idle compaction's block (the idle exception:
     # its dispatch is idle with resume_pref prompt.context) waits on disk for the next turn, which
     # may be the first turn of the next process of this session id (resume-persist): while it still
     # waits it is not undelivered, in final mode too (SessionEnd, the cross-session finish), and a
@@ -715,12 +714,12 @@ sub _run {
     my $acc = grep { defined $_->{by} } @{ $st->{bounds} };
     if ($acc != scope::stored_count($sid_dir)) { eval { scope::set_count($sid_dir, $acc, { sid => $sid, actor => 'main' }) } }
     _save($sid_dir, $st);
-    # the stash index: this session's marker goes once pending/ holds no stash (§5.8)
+    # the stash index: this session's marker goes once pending/ holds no stash
     orphans::unmark($sid, $sid_dir);
     return $n;
 }
 
-# BD-3 window logging (T-TEXT E5): proof, proof_lag_ms (the matched boundary row's time minus the
+# Window logging: proof, proof_lag_ms (the matched boundary row's time minus the
 # PostCompact stash time; null when unproven), settle_waited_ms (how long the stash waited for
 # this decision; null when PostCompact itself decided or the stash has no PostCompact time)
 sub _bd3 {
@@ -733,14 +732,14 @@ sub _bd3 {
     return (proof => $a{proof}, proof_lag_ms => $lag, settle_waited_ms => $wait);
 }
 
-# IC-1 D1: (idle, idle_source, idle_gap_s) pairs for a main compaction whose boundary row was
+# (idle, idle_source, idle_gap_s) pairs for a main compaction whose boundary row was
 # read, and one idle_mismatch {nonce} row when the mod record and the native row disagree.
 sub _idle {
     my ($logged, $drec, $bd, $nonce) = @_;
     my ($idle, $src, $gap, $mism) = rollup::idle_facts($drec, $bd->{ni});
     my $key = 'idle_mismatch:' . ($nonce // $bd->{u} // '');
     if ($mism && !$logged->{$key}++) { rc::emit('idle_mismatch', [nonce => $nonce]) }
-    # ID-2 (2026-10-23): a "Compacted while idle" boundary that no plugin dispatch shaped
+    # A "Compacted while idle" boundary that no plugin dispatch shaped
     # (native idle compaction ran on its own); the watcher raises A-29 from it.
     if (defined $bd->{ni} && !$drec && defined $bd->{u} && !$logged->{ 'idle_unshaped:' . $bd->{u} }++) {
         rc::emit('idle_unshaped', [boundary_uuid => $bd->{u}]);
@@ -765,7 +764,7 @@ sub _idle_waits {
 
 # Nonces the mod closed with compacted {skip: native-ran} (DP-29) or {skip: user-first} (a
 # person's turn or prompt came after the record was written), whose call Claude Code
-# rejected as headless (compact_rejected {error_class: headless}, 2026-10-27 headless probe), or
+# rejected as headless (compact_rejected {error_class: headless}), or
 # whose headless `/compact` the host cannot run (compact_command {error_class: no-command or
 # input-ended}), read from the mod stream (the same rows postcompact::_mod_closed reads; only
 # these close an unresolved check: another rejection or failure stays unresolved).
@@ -782,7 +781,7 @@ sub _native_ran {
     return \%c;
 }
 
-# Save a stash PostCompact deferred for want of scope proof, as P3 decided (F2-1).
+# Save a stash PostCompact deferred for want of scope proof, as P3 decided.
 sub _save_deferred {
     my ($it, $text, $scope, $agent, $proof, $args, $left, $copied, $f, $n) = @_;
     my $sid = rc::sid();

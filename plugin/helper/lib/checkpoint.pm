@@ -1,5 +1,5 @@
 package checkpoint;
-# lib/checkpoint.pm: the pre-compaction checkpoint (MOD-SPEC §10). Owner: WP-core.
+# lib/checkpoint.pm: the pre-compaction checkpoint.
 # Budget 10 s total; git 2 s, GSD 1.5 s (this session's transcript, lib/gsd.pm), queue <= 5 s;
 # a timed-out step reads
 # `not measured (timeout)`. Never asks the model, never writes STATE.md, repo files
@@ -105,7 +105,7 @@ sub run {
         evidence_map   => [@emap[0 .. ($#emap > 7 ? 7 : $#emap)]],
         checkpoint_ms  => jsonc::obj(map { ($_ => $ms{$_} // 0) } qw(inventory git gsd lane evidence total)),
         timeouts       => \@timeouts,
-        # S-SETTINGS B: the helper's own reading of the consent key (settings file only, safe
+        # the helper's own reading of the consent key (settings file only, safe
         # forbid under a foreign config dir); the mod keeps [prod-allow] only when this says allow
         consent        => jsonc::obj(unattended_prod_reads => _prod_reads()),
     };
