@@ -571,14 +571,42 @@ export function endedRows(remeasure: string, ended: ReadonlySet<string>): string
 }
 
 /**
- * The units of this session running now: its agents (the same set as idle.ts `agentsRunning`)
- * and the background tasks `remeasure` lists as running, less every task a notification of this
- * idle episode reported ended (AWAY-DIGEST §2.1 interim rule until probe P-AD-1: a background
- * result's own turn counts its task as ended, whatever the agent list or the sidecar still says).
+ * The agents of this session at work, one set for keep-warm's open jobs (keepwarm.ts `openJobs`),
+ * plugin idle compaction's running agents (idle.ts `agentsRunning`) and the digest's units
+ * (`runningUnits`): the agent loops whose turn runs in this load and the listed subagents and
+ * teammates at work (D-82: an idle teammate, which waits for a message, is none). When the agent
+ * list cannot be read (`$.agent.list()` throws), the teammates the last main Stop of this session
+ * listed count, as before D-82 (an idle one cannot be told from one at work then); `sid` the
+ * session's id, read when not given.
+ */
+export async function agentIds(d: Deps, sid?: string): Promise<Set<string>> {
+  const ids = new Set<string>(d.state.agentTurns)
+  const working = await d.agentsWorking()
+  for (const id of working ?? []) ids.add(id)
+  const bg = d.state.bgTasks
+  if (working === undefined && bg?.teams !== undefined && bg.teams.length > 0) {
+    let s = sid
+    if (s === undefined) {
+      try {
+        s = await d.sessionId()
+      } catch {
+        s = undefined
+      }
+    }
+    if (bg.sid === s) for (const id of bg.teams) ids.add(id)
+  }
+  return ids
+}
+
+/**
+ * The units of this session running now: its agents (`agentIds`, as idle.ts `agentsRunning` and
+ * keep-warm read them) and the background tasks `remeasure` lists as running, less every task a
+ * notification of this idle episode reported ended (AWAY-DIGEST §2.1 interim rule until probe
+ * P-AD-1: a background result's own turn counts its task as ended, whatever the agent list or the
+ * sidecar still says).
  */
 export async function runningUnits(d: Deps, remeasure: string | undefined, ended: ReadonlySet<string>): Promise<number> {
-  const ids = new Set<string>(d.state.agentTurns)
-  for (const id of (await d.agentsWorking()) ?? []) ids.add(id)
+  const ids = await agentIds(d)
   for (const id of measuredRunning(remeasure)) ids.add(id)
   for (const id of ended) ids.delete(id)
   return ids.size

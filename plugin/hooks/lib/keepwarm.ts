@@ -77,7 +77,7 @@ import type { Due } from './idle'
 import { compactedSince } from './compact'
 import { prefixRead } from './deps'
 import { IDLE_CACHE_MS, IDLE_TICK_MS, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, limitFields, oneHourCache, releaseHeld, scaleOf } from './idle'
-import { notifiedTasks } from './lane'
+import { agentIds, notifiedTasks } from './lane'
 import type { LimitNote, UsageFields } from './limits'
 import { judge, limitCtx, noteOf, readingsNow, tierFields } from './limits'
 import { log } from './log'
@@ -194,11 +194,8 @@ export function noteEndedTasks(s: Deps['state'], kind: string, text: string): vo
  * before D-82 (it cannot tell an idle one from one at work).
  */
 export async function openJobs(d: Deps, sid: string, shells = true): Promise<number> {
-  const ids = new Set<string>(d.state.agentTurns)
-  const working = await d.agentsWorking()
-  for (const id of working ?? []) ids.add(id)
+  const ids = await agentIds(d, sid)
   const bg = d.state.bgTasks
-  if (working === undefined && bg?.sid === sid) for (const id of bg.teams ?? []) ids.add(id)
   if (bg?.sid === sid) for (const id of bg.ids) if (shells || !bg.shells.includes(id)) ids.add(id)
   for (const id of d.state.endedTasks) ids.delete(id)
   return ids.size

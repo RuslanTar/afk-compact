@@ -53,7 +53,7 @@ import { compactedSince, dispatchExists } from './compact'
 import { effective } from './config'
 import { cacheTtlOf } from './deps'
 import { forkMissed, keepWarmHolds, resultJobOpen } from './keepwarm'
-import { laneAtCheck } from './lane'
+import { agentIds, laneAtCheck } from './lane'
 import type { LimitNote, Reading, UsageFields, Verdict } from './limits'
 import { judge, limitCtx, noteOf, readingsNow, tierFields } from './limits'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
@@ -782,12 +782,11 @@ async function usageOrNone(d: Deps): Promise<Use> {
  * The agents of this session at work (owner xxxxxxxx-38; the 2026-10-27 idle compaction): the
  * listed subagents and teammates at work (D-82: an idle teammate, which waits for a message, is
  * no running agent), with the agent loops whose turn is running in this load (a workflow's agents
- * are not listed). Keep-warm's open jobs and the lane's Basis count read agents the same way.
+ * are not listed); with no agent list to read, the Stop list's teammates. Keep-warm's open jobs
+ * and the lane's Basis count read agents the same way (lane.ts `agentIds`).
  */
-export async function agentsRunning(d: Deps): Promise<number> {
-  const ids = new Set<string>(d.state.agentTurns)
-  for (const id of (await d.agentsWorking()) ?? []) ids.add(id)
-  return ids.size
+export async function agentsRunning(d: Deps, sid?: string): Promise<number> {
+  return (await agentIds(d, sid)).size
 }
 
 /**
@@ -839,7 +838,7 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
   if (isBusy(d.state) || d.state.nativeCompacting > 0) return 'busy'
   if (atLoad && present(d.state, now)) return 'present'
   const u = await usageOrNone(d)
-  const agents = await agentsRunning(d)
+  const agents = await agentsRunning(d, sid)
   const gap = end === null ? null : Math.round(((await d.now()) - end) / 1000)
   if (u?.tokens !== undefined && u.tokens >= NATIVE_IDLE_FLOOR) {
     const served = await d.servedHint()
@@ -1076,7 +1075,7 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
     g = { why: 'error' }
   }
   if ('why' in g) return skip(g.why, 'windows' in g ? g.windows : undefined, 'rule' in g ? g.rule : undefined, 'usage' in g ? g.usage : undefined)
-  const agents = await agentsRunning(d)
+  const agents = await agentsRunning(d, sid)
   const gapS = secs(now - (rec.end ?? now))
   out.done = true
   await log(d, sid, 'idle_compact', {
