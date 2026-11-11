@@ -361,3 +361,30 @@ test('D88-07 (D-88): a session\'s reading with no reset time beside its own read
   const v = judge([r('seven_day', 99, 'plugin', 20, R), r('seven_day', 40, 'statusline', 5)], { ...C, job: false })
   expect([v.ok, v.rule, v.usage.usage_n]).toEqual([false, 'cap', { seven_day: 1 }])
 })
+
+test('D88-15 (D-88, review 3): own windows of unknown time (a plugin reload in the idle gap: the engine still reports the last response\'s windows, the load has not stamped them): the session\'s own record entries are read beside them, dated, so a lower share from another session read earlier does not decide; with no own entry the live share stands, being the larger (the share only grows until the reset)', async () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const R = (NOW + 3 * DAY) / 1000
+  let rec: Record<string, unknown>[] = []
+  const d = {
+    state: newState('l'), helper: '/p/helper', sessionId: async () => sid,
+    run: async () => ({ ok: true, exitCode: 0, stdout: JSON.stringify({ readings: rec }) + '\n', error: '' }),
+  } as unknown as Deps
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 99, resets_at: R, at: (NOW - 50 * MIN) / 1000, src: 'plugin', sid8: '5e55a001', ...o })
+  const live = [w('seven_day', 99, NOW + 3 * DAY)]
+  rec = [e({}), e({ sid8: '5e55a002', pct: 40, at: (NOW - 70 * MIN) / 1000 })]
+  const rs = await readingsNow(d, sid, live)
+  expect(rs.map(x => [x.src, x.percentUsed, x.at])).toEqual([['plugin', 99, undefined], ['plugin', 99, NOW - 50 * MIN], ['peer', 40, NOW - 70 * MIN]])
+  expect(judge(rs, { ...C, job: false, usageAt: undefined })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'], usage: { usage_age_s: { seven_day: 3000 }, usage_n: { seven_day: 1 } } })
+  rec = [e({ sid8: '5e55a002', pct: 40, at: (NOW - 70 * MIN) / 1000 })]
+  expect(judge(await readingsNow(d, sid, live), { ...C, job: false, usageAt: undefined })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'] })
+  // A live share below a dated one of the same window was read before it: the dated one decides.
+  rec = [e({ sid8: '5e55a002', at: (NOW - 70 * MIN) / 1000 })]
+  expect(judge(await readingsNow(d, sid, [w('seven_day', 30, NOW + 3 * DAY)]), { ...C, job: false, usageAt: undefined })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'] })
+})
+
+test('D88-16 (D-88, review 3): a reading dated more than a minute ahead (a clock that stepped back) has no known time, so it is not the latest of its window over a larger share: the own 99 read a minute ago and another session\'s 40 dated 4 min ahead stop (cap); one dated 30 s ahead is read as now, the latest: it runs', () => {
+  const R = NOW + 3 * DAY
+  expect(judge([r('seven_day', 99, 'plugin', 1, R), r('seven_day', 40, 'peer', -4, R)], { ...C, job: false })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'] })
+  expect(judge([r('seven_day', 99, 'plugin', 1, R), r('seven_day', 40, 'peer', -0.5, R)], { ...C, job: false })).toMatchObject({ ok: true, rule: '90', windows: ['seven_day:40'] })
+})

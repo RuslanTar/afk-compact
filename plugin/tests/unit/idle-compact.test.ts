@@ -2405,6 +2405,20 @@ test('D88-13 (D-88): the same adopted record with only another session\'s entry 
   expect(selfCompacts(w)).toBe(1)
 })
 
+test('D88-17 (D-88, review 3): an adopted compaction record after a plugin reload: the engine still reports seven_day 99 (resets in 3 days) but the load has not stamped it; the session\'s own record entry 99 read 50 min before and another session\'s 40 read 70 min before, the same window: the own entry is the latest: [near-limit, compact] (rule cap, its age logged)', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, {}, adoptedRecord(probe))
+  const R = Math.floor(T0 / 1000) + 3 * 86400
+  w.rateLimits = [{ kind: 'seven_day', percentUsed: 99, resetsAt: new Date(R * 1000).toISOString() } as never]
+  w.tokens = undefined
+  w.usageEntries = [entry(w, 'seven_day', 99, 'plugin', SID_A.slice(0, 8), 50 * 60, R), entry(w, 'seven_day', 40, 'plugin', '5e55a002', 70 * 60, R)]
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(skips(w)).toEqual([['near-limit', 'compact']])
+  expect(w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.rule, r.windows, r.usage_src, (r.usage_age_s as Record<string, number>).seven_day])).toEqual([['cap', ['seven_day:99'], ['seven_day:plugin'], 3600]])
+  expect(selfCompacts(w)).toBe(0)
+})
+
 test('D88-14 (D-88, idle_handoff_near_limit skip): the adopted 49-min turn record (armed at 30), no reading yet, the session\'s own record entry seven_day 99 read 45 min before (resets in 3 days): [near-limit, turn], no submit', { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip' } }, async ($, on) => {
   const w = world(on, {}, adoptedTurn('1h'))
   w.rateLimits = []
