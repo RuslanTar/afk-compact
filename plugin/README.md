@@ -415,14 +415,14 @@ cache 1h warm 42m left ↻3/7
 
 `↻3/7` is the third request of at most seven in this idle gap (`keep_warm_hours` × 60 − 1 minutes, divided by 50 and rounded down: 7 at the default 6 hours; a late or retried request can leave it at 6). A cold cache reads `cache 1h cold (expired 12m ago)`, `cache cold (compacted)` or `cache cold (keep-warm ping missed)` (a keep-warm request that did not read the conversation from the cache: the session's next request then misses it too). Before the session's first response there is nothing to read, and the command prints nothing.
 
-The command is `cache --stdin`, called through a fixed path that the plugin keeps pointing at its installed copy, `~/.local/state/afk-compact/bin/afk-compact-store` (`$XDG_STATE_HOME/afk-compact/bin/` when Claude Code's environment sets `XDG_STATE_HOME`); the first session of an installed copy writes it, and a `--plugin-dir` run never changes it. It reads Claude Code's own cache figures from the status line's input (Claude Code 2.1.312 and later; else the session's transcript) and the plugin's keep-warm record, writes nothing and exits 0 (on a host whose perl the helper cannot run it prints `REFUSED: helper-runtime`, as every command does). Neither that path nor the keep-warm record is written inside a git work tree, such as a dotfiles repository at your home folder; set `XDG_STATE_HOME` outside it then. The details are in `assets/cache-contract.md` in the plugin folder.
+The command is `cache --stdin`, called through a fixed path that the plugin keeps pointing at its installed copy, `~/.local/state/afk-compact/bin/afk-compact-store` (`$XDG_STATE_HOME/afk-compact/bin/` when Claude Code's environment sets `XDG_STATE_HOME`); the first session of an installed copy writes it, and a `--plugin-dir` run never changes it. It reads Claude Code's own cache figures from the status line's input (Claude Code 2.1.312 and later; else the session's transcript) and the plugin's keep-warm record, writes nothing (unless you add `--note-usage`, below) and exits 0 (on a host whose perl the helper cannot run it prints `REFUSED: helper-runtime`, as every command does). Neither that path nor the keep-warm record is written inside a git work tree, such as a dotfiles repository at your home folder; set `XDG_STATE_HOME` outside it then. The details are in `assets/cache-contract.md` in the plugin folder.
 
 **A plain status line.** Claude Code runs one status line command and shows its output as the whole line, so this replaces the status line you have now. In `~/.claude/settings.json`:
 
 ```json
 "statusLine": {
   "type": "command",
-  "command": "~/.local/state/afk-compact/bin/afk-compact-store cache --stdin",
+  "command": "~/.local/state/afk-compact/bin/afk-compact-store cache --stdin --note-usage",
   "refreshInterval": 30
 }
 ```
@@ -433,11 +433,13 @@ To keep your own line, call both from one script and print them together, for ex
 #!/bin/sh
 in=$(cat)
 mine=$(printf '%s' "$in" | ~/bin/my-statusline)
-cache=$(printf '%s' "$in" | ~/.local/state/afk-compact/bin/afk-compact-store cache --stdin)
+cache=$(printf '%s' "$in" | ~/.local/state/afk-compact/bin/afk-compact-store cache --stdin --note-usage)
 printf '%s  %s\n' "$mine" "$cache"
 ```
 
-**ccstatusline.** Add a Custom Command widget with the command `~/.local/state/afk-compact/bin/afk-compact-store cache --stdin` (ccstatusline passes Claude Code's JSON on to it; write the full path where `~` is not expanded), or in its settings file: `{"type": "custom-command", "commandPath": "~/.local/state/afk-compact/bin/afk-compact-store cache --stdin", "timeout": 1000, "preserveColors": false}`.
+**ccstatusline.** Add a Custom Command widget with the command `~/.local/state/afk-compact/bin/afk-compact-store cache --stdin --note-usage` (ccstatusline passes Claude Code's JSON on to it; write the full path where `~` is not expanded), or in its settings file: `{"type": "custom-command", "commandPath": "~/.local/state/afk-compact/bin/afk-compact-store cache --stdin --note-usage", "timeout": 1000, "preserveColors": false}`.
+
+**`--note-usage`.** With it, the command also records the usage limits the status line shows (the five-hour and seven-day shares and their reset times) in one small file of the plugin's, `~/.local/state/afk-compact/usage.v1.json`, where each session's hooks record their own readings too. It writes no account or conversation data, and leave it out to keep the command read-only: the plugin works the same without a status line.
 
 **Your own format.** `cache --stdin --json` prints one JSON object (`state`, `seconds_left`, `keep_warm.n`, `keep_warm.max`, …). With `jq`, which not every system has: `… cache --stdin --json | jq -r '"\(.state) \(.seconds_left // "")"'`. A script can also ask about a session by its id, `cache --sid <session id> --json`, which reads the plugin's own record of it and its transcript.
 
@@ -623,6 +625,7 @@ The client id comes from the question, so the same question is not queued twice;
 | `~/.local/state/afk-compact/handoffs/.sessions/` | Session pins, `/clear` lineage, one small record per session start and end (`by-pid/`; once a day a session's records of ended processes over a week old are pruned, never its first one, one of a process that still runs, or any while a stash of it waits), and one per plugin version a Claude Code process loads (`loads/`, with a hash of the machine id; pruned once a day, keeping the records of processes that still run and another machine's for 7 days; a large prune drained from `loads-drop/` in batches) | hooks and skills |
 | `~/.local/state/afk-compact/handoffs/.watch/` (`log_dir`) | Logs and per-compaction records (see [Watcher](#watcher)) | hooks, mod, helper |
 | `~/.local/state/afk-compact/cache/` (fixed: no option moves it) | One small file per session for the [status line](#the-cache-state-in-your-status-line)'s `cache` command: the transcript path, the keep-warm gap, the last compaction and the session's end; those of sessions that ended, or with no recorded end were not written, more than 7 days ago are deleted only by `prune --apply` | helper (with each keep-warm or compaction log row), SessionStart and SessionEnd hooks |
+| `~/.local/state/afk-compact/usage.v1.json` (fixed) | The latest usage reading each session on this machine saw: per window kind, its share, its reset time, when it was read, where from (the plugin or the status line's `--note-usage`) and the first 8 characters of the session id; entries read more than an hour ago are dropped at the next write | mod (through the helper's `usage`), status line (`cache --note-usage`) |
 | `~/.local/state/afk-compact/bin/afk-compact-store` (fixed) | A two-line script that runs the installed copy's helper, for status lines; left in place by an uninstall | SessionStart hook of an installed copy |
 | `~/.claude/handoffs/` (the default before 0.1.2) | Read only, while `handoff_root` is unset or set to the default: nothing is moved or copied there, and nothing new is written there but the work folder of a handoff run begun before the update (see [Known limits of the move](#the-handoff-and-evidence-folders-moved-in-012)) | none |
 | `~/.local/state/afk-compact/disposable/<YYYY-MM-DD>/` | Automatic evidence copies, one folder per compaction, each with a `MANIFEST.tsv`; disposable items of a handoff | evidence sweep after a compaction; `/afk-compact:handoff`; deleted only by `prune --apply` |

@@ -23,6 +23,22 @@ export async function logPaths(d: Deps, sid: string, lines: readonly string[]): 
   return call(d, ['log', '--sid', sid, '--stream', 'paths', '--stdin'], HELPER_MS, lines.join('\n') + '\n')
 }
 
+/**
+ * `usage --sid S [--stdin]` (D-83, limits.ts): the shared usage record's entries, after adding this
+ * session's own reading (`own`: `{at, windows}` in epoch seconds) when given; undefined when the
+ * call failed or its reply did not parse.
+ */
+export async function usageRecord(d: Deps, sid: string, own?: unknown): Promise<unknown[] | undefined> {
+  const r = own === undefined ? await call(d, ['usage', '--sid', sid]) : await call(d, ['usage', '--sid', sid, '--stdin'], HELPER_MS, JSON.stringify(own) + '\n')
+  if (!r.ok) return undefined
+  try {
+    const j = JSON.parse(r.stdout.trim()) as { readings?: unknown }
+    return Array.isArray(j.readings) ? j.readings : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** A short class for a failed call, for rows (never the stderr text). */
 export function failClass(r: RunResult): string {
   return r.exitCode === null ? 'rejected' : 'exit-' + String(r.exitCode)

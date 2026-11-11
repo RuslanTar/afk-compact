@@ -18,6 +18,7 @@
 // - any other window stops at 90%.
 // Each rule name goes on the row of the skip or stop it decided (`rule`).
 import type { Deps, Usage } from './deps'
+import { usageRecord } from './helper'
 import { limitWindows } from './idle'
 
 /** The share every window stops at unless the band rule below lets a plan window go on. */
@@ -152,4 +153,37 @@ export async function tierFields(d: Deps): Promise<{ plan?: string; tier?: strin
   } catch {
     return {}
   }
+}
+
+/**
+ * D-83: the session's own reading goes to the shared usage record (helper `usage`, lib/usagerec.pm:
+ * one small file per machine, each session's latest reading per window kind and source) when it
+ * changed, or once this long after it was last written unchanged, so the other sessions on the
+ * machine read it while it is fresh.
+ */
+export const USAGE_NOTE_MS = 5 * 60000
+
+/** A reading's windows as the record's entries: the share, and the reset in epoch seconds (null: none). */
+export function recordWindows(limits: readonly Limit[]): { kind: string; pct: number; resets_at: number | null }[] {
+  return limits.filter(l => l.kind !== '' && Number.isFinite(l.percentUsed)).map(l => ({ kind: l.kind, pct: l.percentUsed, resets_at: l.resetsAt === undefined ? null : Math.floor(l.resetsAt / 1000) }))
+}
+
+/**
+ * D-83: Claude Code refreshed the session's usage reading at `at` (a response, `session.measure`):
+ * written to the shared record when it changed or the last write is `USAGE_NOTE_MS` old. A failed
+ * read or write writes nothing (the next refresh tries again).
+ */
+export async function noteUsage(d: Deps, at: number): Promise<void> {
+  let w: ReturnType<typeof recordWindows>
+  try {
+    w = recordWindows((await d.usage()).rateLimits)
+  } catch {
+    return
+  }
+  if (w.length === 0) return
+  const key = w.map(x => `${x.kind}:${x.pct}:${x.resets_at ?? ''}`).join(',')
+  const n = d.state.usageNote
+  if (n !== undefined && n.key === key && at - n.at < USAGE_NOTE_MS) return
+  d.state.usageNote = { key, at }
+  await usageRecord(d, await d.sessionId(), { at: at / 1000, windows: w })
 }

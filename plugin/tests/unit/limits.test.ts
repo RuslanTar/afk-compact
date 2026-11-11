@@ -3,7 +3,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { Deps } from '../../hooks/lib/deps'
 import type { LimitCtx } from '../../hooks/lib/limits'
-import { LIMIT_DELTAS_KEY, LIMIT_FRESH_MS, PLAN_CAPS, planShares, readDeltas, recordDeltas, resetOf, verdictOf, windowRule } from '../../hooks/lib/limits'
+import { LIMIT_DELTAS_KEY, LIMIT_FRESH_MS, PLAN_CAPS, USAGE_NOTE_MS, noteUsage, planShares, readDeltas, recordDeltas, resetOf, verdictOf, windowRule } from '../../hooks/lib/limits'
 import { newState } from '../../hooks/lib/deps'
 import { resultJobOpen } from '../../hooks/lib/keepwarm'
 
@@ -82,4 +82,32 @@ test('AT-LM-06 (design TESTS 12): a job read that throws counts as no job open: 
   const job = await resultJobOpen(d, 'sid-1')
   expect(job).toBe(false)
   expect(verdictOf([w('five_hour', 93)], { ...C, job })).toEqual({ ok: false, band: false, rule: 'no-job', windows: ['five_hour:93'] })
+})
+
+test('AT-LM-07 (D-83): noteUsage writes the own reading to the shared record (helper usage --stdin, epoch seconds), again only once it changed or 5 min passed; no window, no write', async () => {
+  const sent: { argv: readonly string[]; stdin?: string }[] = []
+  let limits = [w('five_hour', 44, NOW + 60 * MIN), w('seven_day', 21), w('', 3)]
+  const d = {
+    state: newState('l'), helper: '/p/helper',
+    usage: async () => ({ tokens: 1, window: 2, rateLimits: limits }),
+    sessionId: async () => '5e55a001-0c0f-4f1e-9a00-00000000a001',
+    run: async (argv: readonly string[], _ms: number, stdin?: string) => {
+      sent.push({ argv, stdin })
+      return { ok: true, exitCode: 0, stdout: '{"readings":[]}\n', error: '' }
+    },
+  } as unknown as Deps
+  await noteUsage(d, NOW)
+  expect(sent.map(x => [x.argv.slice(1), JSON.parse(x.stdin ?? 'null')])).toEqual([[['usage', '--sid', '5e55a001-0c0f-4f1e-9a00-00000000a001', '--stdin'], {
+    at: NOW / 1000, windows: [{ kind: 'five_hour', pct: 44, resets_at: Math.floor((NOW + 60 * MIN) / 1000) }, { kind: 'seven_day', pct: 21, resets_at: null }],
+  }]])
+  await noteUsage(d, NOW + USAGE_NOTE_MS - 1)
+  expect(sent.length).toBe(1)
+  await noteUsage(d, NOW + USAGE_NOTE_MS)
+  expect(sent.length).toBe(2)
+  limits = [w('five_hour', 45, NOW + 60 * MIN), w('seven_day', 21)]
+  await noteUsage(d, NOW + USAGE_NOTE_MS + 1)
+  expect(sent.length).toBe(3)
+  limits = []
+  await noteUsage(d, NOW + 99 * MIN)
+  expect(sent.length).toBe(3)
 })

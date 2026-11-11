@@ -16,6 +16,7 @@ import { ASK_TOOL, nudgeText, recordPaths, trackPaths } from './lib/nudge'
 import { cancelIdle, cancelIdleTimer, resumeIdle } from './lib/idle'
 import { cancelKeepWarmTimer, noteBackground, noteEndedTasks, resumeKeepWarm } from './lib/keepwarm'
 import { startsWork } from './lib/lane'
+import { noteUsage } from './lib/limits'
 import { againFor, againLost, againSent, blockName, contextBlock, contextPassedOn, laneAgentStarted, laneNoteLost, laneRecheck, laneWorkStarted, passedBlockFor, passedLost, pendingNotified } from './lib/resume'
 import { shadowOwnerHandoff, shadowSelfHandoff, shadowStep, shadowTurnEnd } from './lib/shadow'
 import { noteMode, onAttach, onCommandRun, onWorktreeTool, restartInterrupt } from './lib/restart'
@@ -120,8 +121,9 @@ export const register: Register = (on, options) => {
     } catch {
       // no share for this turn (handoff_turn_end logs null)
     }
-    // D-80: a main response refreshed the usage windows (limits.ts reads how fresh they are).
-    if (e.agentId === undefined) stampUsage($, state)
+    // D-80: a main response refreshed the usage windows (limits.ts reads how fresh they are); D-83:
+    // the reading goes to the shared usage record when it changed (limits.ts `noteUsage`).
+    if (e.agentId === undefined) stampUsage($, state, options)
     return r
   }).catch(async function* ($, e, next) {
     return yield* next(e)
@@ -131,7 +133,7 @@ export const register: Register = (on, options) => {
   // point, a keep-warm ping's response too): the usage windows are fresh now. Observe only.
   on('session.measure', async ($, e, next) => {
     const r = await next(e)
-    stampUsage($, state)
+    stampUsage($, state, options)
     return r
   }).catch(($, e, next) => next(e))
 
@@ -357,12 +359,20 @@ export const register: Register = (on, options) => {
 }
 
 /**
- * D-80: the usage reading is fresh now (limits.ts reads how fresh it is). Called after a step's or
- * a measure's `next`: nothing there may throw, or the hook's `.catch` would run `next` again.
+ * D-80: the usage reading is fresh now (limits.ts reads how fresh it is); D-83: it goes to the shared
+ * usage record when it changed (`noteUsage`, in the background). Called after a step's or a
+ * measure's `next`: nothing there may throw, or the hook's `.catch` would run `next` again.
  */
-function stampUsage($: EngineInterface, state: LoadState): void {
+function stampUsage($: EngineInterface, state: LoadState, options: Parameters<Register>[1]): void {
   try {
-    void $.clock.now().then(t => { state.usageAt = t }, () => undefined)
+    void $.clock.now().then(t => {
+      state.usageAt = t
+      try {
+        void noteUsage(realDeps($, options, state), t).catch(() => undefined)
+      } catch {
+        // not written: the next refresh writes it
+      }
+    }, () => undefined)
   } catch {
     // the stamp stays the last one
   }

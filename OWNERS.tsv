@@ -63,6 +63,8 @@ plugin/helper/cmd/{handoff-turn,handoff-state,queue-add}.*	core
 plugin/helper/cmd/queue.*	core
 # 0.1.7 D-81: `cache`, the status line's read-only cache state (lib/cachestate.pm, assets/cache-contract.md).
 plugin/helper/cmd/cache.*	core
+# 0.1.8 D-83: `usage`, the shared usage record the mod reads and writes (lib/usagerec.pm).
+plugin/helper/cmd/usage.*	core
 # The local shadow trial (TRIAL-DUAL-HANDOFF, P-DH-MEAS/P-DH-SAVE): two read/save commands beside lib/trial.pm.
 plugin/helper/cmd/{trial-measure,trial-save}.*	core
 # Restart on update (SESSION-RESTART §8.1, lane RS-A): the helper's restart command.

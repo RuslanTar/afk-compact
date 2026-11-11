@@ -4,14 +4,15 @@
 `<store> cache` says whether a session's prompt cache is warm, for a status line or a script of your own. This file is its whole contract. `<store>` is `${XDG_STATE_HOME:-~/.local/state}/afk-compact/bin/afk-compact-store`, a two-line `#!/bin/sh` file that runs the installed plugin's helper (below), or `"<plugin folder>/scripts/afk-compact-store"` itself.
 
 ```
-<store> cache [--sid <session id>] [--stdin] [--json]
+<store> cache [--sid <session id>] [--stdin] [--json] [--note-usage]
 ```
 
 - `--stdin` reads the JSON object Claude Code sends a status line command on stdin (`session_id`, `prompt_cache`, `transcript_path`; at most 1 MiB).
 - `--sid` names the session; without `--stdin` the command reads only the plugin's own record of it and the transcript that record names. With both, the two ids must be the same, else the state is `unknown` (`bad-sid`).
 - `--json` prints the object below; without it, one plain line.
+- `--note-usage` (with `--stdin`) also records the input's `rate_limits` in the plugin's shared usage record ([below](#the-usage-record)). It changes nothing in the output.
 
-It exits 0 whatever it reads (a usage error says so on stderr), writes nothing, and reads at most the plugin's small state file and the last 2 MiB of the transcript. Only where the helper cannot run at all does it fail like every other command: without perl 5.28 or later it prints `REFUSED: helper-runtime` and exits 3, and a damaged plugin copy exits 70 with the reason on stderr. It loads none of the plugin's settings, so no option changes what it reads.
+It exits 0 whatever it reads (a usage error says so on stderr), writes nothing but the usage record when `--note-usage` asks for it, and reads at most the plugin's small state file and the last 2 MiB of the transcript. Only where the helper cannot run at all does it fail like every other command: without perl 5.28 or later it prints `REFUSED: helper-runtime` and exits 3, and a damaged plugin copy exits 70 with the reason on stderr. It loads none of the plugin's settings, so no option changes what it reads.
 
 ## The plain line
 
@@ -53,6 +54,10 @@ A later version may add keys to `v1`; ignore the ones you do not know. A change 
 2. **The plugin's keep-warm ping** counts only when it started after that request. A ping that read the cache makes `last` a `keep_warm` one and, on the one-hour tier, moves `expires_at` to its start plus one hour. Claude Code 2.1.319 already does the same in `prompt_cache` (a fork of the main conversation that reads the cache moves `expires_at` to its start plus the TTL, and is not counted as a request); the plugin takes the later of the two, so a version that does not still reads warm. On the five-minute tier it changes `last` but not `expires_at`. A later ping of the same idle gap that failed (an API error, an abort) changes neither. A ping that did not read the conversation (`fork-miss`) reads as cold: in such cases the next main request missed the cache too (17 of 17 measured).
 3. **A compaction** after the last request (the plugin's `compacted` row of the main session, written once the compaction ran; a skipped one does not count, nor the `idle_compact` row written before plugin idle compaction is tried) reads as cold, `compacted`, until the next request.
 4. Otherwise the cache is warm until `expires_at`, then cold, `expired`. `caching_observed: false` in `prompt_cache` reads as unknown, `caching-off`.
+
+## The usage record
+
+With `--note-usage`, `cache` adds the status line's usage readings (`rate_limits`: `five_hour`, `seven_day`, a gateway's `spend_limit`, each with `used_percentage` and `resets_at`) to `${XDG_STATE_HOME:-~/.local/state}/afk-compact/usage.v1.json` (0600), one small file for the machine. The plugin's own hooks add each session's reading there too. Each entry holds a window kind, its share, its reset time, when it was read, its source (`statusline` or `plugin`) and the first 8 characters of the session id: no account, no token, no conversation text. An entry is replaced only by a later reading of the same session, source and kind; entries read more than an hour ago are dropped at the next write. The plugin works the same without it: the status line's readings are one more source, never a required one. Its fields are internal and may change.
 
 ## The files
 
