@@ -1,7 +1,7 @@
 proto=1
 state=go
 token=@TOKEN@
-sid=00000000-0000-4000-8000-000000000000
+sid=5c3d7e1f-1111-4222-8333-444455556666
 nonce=0123456789abcdef
 at=@FUTURE@
 exiting_at=@FUTUREMS@

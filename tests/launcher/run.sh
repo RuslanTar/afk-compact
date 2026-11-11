@@ -1,5 +1,5 @@
 #!/bin/sh
-# tests/launcher/run.sh: the restart launcher's acceptance cases (SESSION-RESTART spec §7.1,
+# tests/launcher/run.sh: the restart launcher's acceptance cases (README.md here,
 # AT-RS-30..40 and 43) for plugin/scripts/<brand>-claude, with a stub claude and hand-written
 # launch notes (tests/launcher/notes), under every POSIX shell found.
 #
@@ -135,7 +135,7 @@ fi
 envname=$(printf '%s' "$brand" | tr 'abcdefghijklmnopqrstuvwxyz-' 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_')_LAUNCH
 host=$(uname -s)
 uid=$(id -u)
-SID=00000000-0000-4000-8000-000000000000
+SID=5c3d7e1f-1111-4222-8333-444455556666
 quick=
 only=
 shells=
@@ -754,7 +754,7 @@ case_31a() {
   want_val 2 used yes
   want_val 2 note no
   want_lj 2 "\"relaunches\":1"
-  want_err "$brand: restarting session xxxxxxxx on Claude Code 2.1.312 in 3 s (Ctrl+C stops it)"
+  want_err "$brand: restarting session 5c3d7e1f on Claude Code 2.1.312 in 3 s (Ctrl+C stops it)"
   want_no_last_refusal
   end_case
 }
@@ -920,7 +920,7 @@ case_33d() {
     want_argv 2 --verbose --resume "$SID" --allow-dangerously-skip-permissions \
       --model "claude-opus-5-5[1m]" --effort high --permission-mode bypassPermissions
     # The countdown names a relaunch into bypass.
-    want_err "$brand: restarting session xxxxxxxx on Claude Code 2.1.312 in 3 s, permission mode bypassPermissions (Ctrl+C stops it)"
+    want_err "$brand: restarting session 5c3d7e1f on Claude Code 2.1.312 in 3 s, permission mode bypassPermissions (Ctrl+C stops it)"
     : >"$C/scenario"
   done
   rm -f "$C/runs" "$C/err" "$C"/run*.lj
