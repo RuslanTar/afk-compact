@@ -2,6 +2,7 @@ node_modules/
 .types/
 plugin/.claude-plugin/types/
 tmp/
+.DS_Store
 
-# private design notes, never tracked (owner ruling 2026-10-23, work home)
+# private design notes, never tracked
 .planning/
