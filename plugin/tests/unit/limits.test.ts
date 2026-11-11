@@ -191,11 +191,26 @@ test('AT-LM-13 (D-83, review): the session\'s own status line entry is the live 
   const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
   const own = NOW - 54 * MIN
   const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 95, resets_at: null, at: (NOW - 30000) / 1000, src: 'statusline', sid8: '5e55a001', ...o })
-  expect(recordReadings([e({}), e({ sid8: '5e55a002' })], sid, own).map(x => [x.src, x.at])).toEqual([['statusline', own], ['peer', NOW - 30000]])
+  expect(recordReadings([e({})], sid, own).map(x => [x.src, x.at])).toEqual([['statusline', own]])
   expect(recordReadings([e({ at: (own - MIN) / 1000 })], sid, own).map(x => x.at)).toEqual([own - MIN])
-  expect(recordReadings([e({})], sid).map(x => x.at)).toEqual([NOW - 30000])
+  // Without the live reading's time, the session's own plugin entry dates it; with neither, it is no reading.
+  expect(recordReadings([e({ src: 'plugin', at: own / 1000 }), e({})], sid).map(x => x.at)).toEqual([own])
+  expect(recordReadings([e({})], sid)).toEqual([])
   const v = judge([...ownReadings([w('seven_day', 95)], own), ...recordReadings([e({})], sid, own)], { ...C, job: false, usageAt: own })
   expect([v.ok, v.rule, v.usage.usage_n, v.usage.usage_age_s]).toEqual([true, 'no-fresh', { seven_day: 0 }, { seven_day: 54 * 60 }])
+})
+
+test('AT-LM-15 (D-83, review 2): another session\'s status line entry is never newer than that session\'s plugin entry of the same kind, and one with none is no reading: an entry evicted or pruned from the record and shown again (dated now) over a reading 50 min old reads 50 min old (no-fresh, not a skip)', () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const own = NOW - 55 * MIN - 30000
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 95, resets_at: null, at: (NOW - 30000) / 1000, src: 'statusline', sid8: '5e55a002', ...o })
+  const peerAt = NOW - 50 * MIN
+  const rec = [e({}), e({ src: 'plugin', at: peerAt / 1000 }), e({ kind: 'five_hour', pct: 12 }), e({ sid8: '5e55a003' })]
+  expect(recordReadings(rec, sid, own).map(x => [x.kind, x.sid8, x.at])).toEqual([['seven_day', '5e55a002', peerAt], ['seven_day', '5e55a002', peerAt]])
+  // A status line entry older than the plugin entry keeps its own time; one that shows another share is dated no later than it.
+  expect(recordReadings([e({ at: (peerAt - MIN) / 1000, pct: 97 }), e({ src: 'plugin', at: peerAt / 1000 })], sid, own).map(x => [x.percentUsed, x.at])).toEqual([[97, peerAt - MIN], [95, peerAt]])
+  const v = judge([...ownReadings([w('seven_day', 95)], own), ...recordReadings(rec, sid, own)], { ...C, job: false, usageAt: own })
+  expect([v.ok, v.rule, v.usage.usage_n]).toEqual([true, 'no-fresh', { seven_day: 0 }])
 })
 
 test('AT-LM-14 (D-83, review): a failed record write is not counted as written: the next refresh writes the unchanged reading again at once (noteUsage and readingsNow)', async () => {

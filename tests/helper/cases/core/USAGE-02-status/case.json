@@ -1,11 +1,11 @@
 {
  "id": "USAGE-02-status",
- "note": "0.1.8 D-83: `status --sid` shows the session's last usage reading from the shared record: per window kind the newest of its own entries (plugin or status line), its share, source and age, then how many readings other sessions on this machine left in the last 10 minutes; a session with no entry says so. Read only.",
+ "note": "0.1.8 D-83: `status --sid` shows the session's last usage reading from the shared record: per window kind the newest of its own entries (plugin or status line; a status line's entry dated no later than the session's plugin entry of that kind and left out with none, the plugin's on a tie: USAGE-04), its share, source and age, then how many readings other sessions on this machine left in the last 10 minutes (once per session and kind); a session with no entry says so. Read only.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
   {
-   "name": "the newest own entry per kind, with source and age; two fresh peer readings",
+   "name": "the newest own entry per kind, with source and age (the status line's 45 is dated as the plugin's 44, which wins the tie); one fresh peer reading (5e55a003's status line entry has no plugin entry: no reading)",
    "setup": [
     {
      "write": "$HOME/.local/state/$BRAND/usage.v1.json",
@@ -73,7 +73,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^usage: five_hour 45% \\(status line, 30s ago\\) · seven_day 21% \\(plugin, 15m ago\\); other sessions on this machine: 2 readings in the last 10 min$"
+     "^usage: five_hour 44% \\(plugin, 2m ago\\) · seven_day 21% \\(plugin, 15m ago\\); other sessions on this machine: 1 reading in the last 10 min$"
     ]
    }
   },
@@ -87,7 +87,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^usage: no reading of this session in the last hour; other sessions on this machine: 4 readings in the last 10 min$"
+     "^usage: no reading of this session in the last hour; other sessions on this machine: 2 readings in the last 10 min$"
     ]
    }
   }

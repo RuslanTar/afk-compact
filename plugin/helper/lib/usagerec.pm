@@ -10,15 +10,19 @@ package usagerec;
 # sends a status line (cmd/cache.pl --note-usage). No account id, no secret, no content. Claude Code
 # fills both from one in-process object (the last API response's headers), so the two sources of
 # one session are one reading at two times; only another session's reading is independent.
-# A status line gets that reading without the time Claude Code took it and shows it again every
-# few seconds, so a `statusline` entry's `at` is when the status line first showed that share and
-# reset: an unchanged one keeps it (an idle session's 50-minute-old reading never reads as fresh)
-# and only moves `seen`, the last time the status line showed it.
+# A status line gets that reading without the time Claude Code took it and shows it again while it
+# is on screen, so a `statusline` entry's `at` is when a status line first showed that share and
+# reset: an unchanged one keeps it and only moves `seen`, the last time the status line showed it.
+# That first time is known only while the entry stays in the record (one dropped and shown again is
+# dated anew), so readers never date a `statusline` entry newer than its session's own refresh:
+# that session's `plugin` entry of the same kind (dated() here; the mod: limits.ts recordReadings),
+# and one with no such entry is no reading.
 # Writers read the file, merge their entries (one per sid8, src and kind; the later `at` wins),
-# drop those not read or seen for $KEEP_S, keep the $MAX_ENTRIES last seen and rename a temp file
-# over it (cachestate::_put: never inside a git work tree or a .planning folder, so with the state
-# folder in one there is no record). Two writers at once: the last one wins, and the lost entry
-# comes back at that session's next write.
+# drop those not read or seen for $KEEP_S, keep at most $MAX_ENTRIES, a session's entries
+# together (the sessions last read or seen first), and rename a temp file over it
+# (cachestate::_put: never inside a git work tree or a .planning folder, so with the state folder
+# in one there is no record). Two writers at once: the last one wins, and the lost entry comes
+# back at that session's next write.
 use strict;
 use warnings;
 use utf8;
@@ -27,7 +31,7 @@ our $KEEP_S = 3600;
 our $MAX_ENTRIES = 64;
 our $MAX_BYTES = 65536;
 # A statusline entry with the same share and reset as the one kept moves its `seen` only this
-# much later (a status line runs every few seconds).
+# much later (a status line with a short refreshInterval runs every few seconds).
 our $SAME_S = 60;
 our %SRC = map { $_ => 1 } qw(plugin statusline);
 
@@ -95,13 +99,34 @@ sub note {
         }
         $ch = 1;
     }
-    my @keep = sort { _last($b) <=> _last($a) || _key($a) cmp _key($b) } grep { $now - _last($_) <= $KEEP_S } values %at;
+    my @live = grep { $now - _last($_) <= $KEEP_S } values %at;
+    my %grp;
+    for my $e (@live) { $grp{ $e->{sid8} } = _last($e) if !defined $grp{ $e->{sid8} } || _last($e) > $grp{ $e->{sid8} } }
+    my @keep = sort { $grp{ $b->{sid8} } <=> $grp{ $a->{sid8} } || $a->{sid8} cmp $b->{sid8} || _last($b) <=> _last($a) || _key($a) cmp _key($b) } @live;
     splice(@keep, $MAX_ENTRIES) if @keep > $MAX_ENTRIES;
     $ch = 1 if @keep != @$all;
     return \@keep unless $ch;
     my $f = file();
     cachestate::_put($f, jsonc::encode_bytes({ schema => schema(), updated_at => _t($now), readings => \@keep }) . "\n", 0600) if defined $f;
     return \@keep;
+}
+
+# dated([entry...]) -> [entry...]: the entries as readings: a `statusline` entry dated no later than
+# its session's `plugin` entry of the same kind, and left out with none (see the header)
+sub dated {
+    my ($all) = @_;
+    my %pat;
+    for my $e (grep { $_->{src} eq 'plugin' } @$all) {
+        my $k = "$e->{sid8}\0$e->{kind}";
+        $pat{$k} = $e->{at} if !defined $pat{$k} || $e->{at} > $pat{$k};
+    }
+    my @out;
+    for my $e (@$all) {
+        if ($e->{src} ne 'statusline') { push @out, $e; next }
+        my $cap = $pat{"$e->{sid8}\0$e->{kind}"} // next;
+        push @out, { %$e, at => ($e->{at} < $cap ? $e->{at} : $cap) };
+    }
+    return \@out;
 }
 
 # from_statusline(input, now) -> [entry...]: the rate_limits of a status line's JSON

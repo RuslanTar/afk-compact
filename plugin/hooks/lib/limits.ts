@@ -24,8 +24,9 @@
 // machine (the shared usage record, helper `usage`; Claude Code fills the first two from one
 // in-process reading, so only another session's is independent: one reading per session counts,
 // its newest), and only those refreshed in the last 10 minutes. A status line gets that reading
-// without its time: the record dates it from when the status line first showed it, and the
-// session's own is never newer than its live reading (`usageAt`). A window kind stops the action
+// without its time: the record dates it from when a status line first showed it, and it never
+// counts as newer than that session's own refresh (this session: its live reading, `usageAt`;
+// another: its `plugin` entry of that kind; none: no reading). A window kind stops the action
 // only when every fresh reading of it does; one that does not lets it run (`split`); with no fresh
 // reading of a kind, it never stops (`no-fresh`: an old reading may be another account's, or
 // before a reset). A fresh reading whose reset is more than an hour from the other readings' of
@@ -224,13 +225,25 @@ export function resetOf(limits: readonly Limit[], c: LimitCtx): number | undefin
 /**
  * D-83: the shared usage record's entries as readings (helper `usage`: times and resets in epoch
  * seconds): this session's status line's (`statusline`) and every other session's (`peer`); this
- * session's own `plugin` entries are left out (the live reading stands for them). The status
- * line's is the live reading shown again (one object in Claude Code), so it is never read as newer
- * than the live reading's refresh (`ownAt`, epoch ms, when known). An entry out of form is dropped.
+ * session's own `plugin` entries are left out (the live reading stands for them). A status line's
+ * entry is its session's reading shown again (one object in Claude Code), and its `at` is only when
+ * a status line first showed it (an entry dropped from the record comes back dated anew), so it is
+ * never newer than that session's own refresh: this session's live reading (`ownAt`, epoch ms) or,
+ * for another session or without `ownAt`, that session's `plugin` entry of the same kind; with
+ * neither it is no reading. An entry out of form is dropped.
  */
 export function recordReadings(entries: readonly unknown[], sid: string, ownAt?: number): Reading[] {
   const own = sid.slice(0, 8)
   const out: Reading[] = []
+  const plugAt = new Map<string, number>()
+  for (const x of entries) {
+    if (typeof x !== 'object' || x === null) continue
+    const { kind, at, src, sid8 } = x as Record<string, unknown>
+    if (src === 'plugin' && typeof kind === 'string' && typeof sid8 === 'string' && typeof at === 'number' && Number.isFinite(at)) {
+      const k = `${sid8}\u0000${kind}`
+      plugAt.set(k, Math.max(at * 1000, plugAt.get(k) ?? -Infinity))
+    }
+  }
   for (const x of entries) {
     if (typeof x !== 'object' || x === null) continue
     const e = x as Record<string, unknown>
@@ -240,7 +253,12 @@ export function recordReadings(entries: readonly unknown[], sid: string, ownAt?:
     if ((src !== 'plugin' && src !== 'statusline') || typeof sid8 !== 'string' || sid8 === '') continue
     if (sid8 === own && src === 'plugin') continue
     const resetsAt = typeof r === 'number' && Number.isFinite(r) ? r * 1000 : undefined
-    const t = sid8 === own && ownAt !== undefined ? Math.min(at * 1000, ownAt) : at * 1000
+    let t = at * 1000
+    if (src === 'statusline') {
+      const cap = sid8 === own && ownAt !== undefined ? ownAt : plugAt.get(`${sid8}\u0000${kind}`)
+      if (cap === undefined) continue
+      t = Math.min(t, cap)
+    }
     out.push({ kind, percentUsed: pct, ...(resetsAt !== undefined ? { resetsAt } : {}), at: t, ...(sid8 === own ? { src: 'statusline' as const } : { src: 'peer' as const, sid8 }) })
   }
   return out

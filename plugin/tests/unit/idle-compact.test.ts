@@ -1741,7 +1741,7 @@ test('D83-03 (D-83): own seven_day at 95 (fresh), another session on the machine
 
 test('D83-04 (D-83): own seven_day at 95 and every other fresh reading at or over 90 (a peer at 96, a stale peer at 40 left out): [near-limit, compact]', { options: ON }, async ($, on) => {
   const w = world(on)
-  await timerWith($, w, [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }], w => [entry(w, 'seven_day', 96, 'statusline', '5e55a002'), entry(w, 'seven_day', 40, 'plugin', '5e55a003', 11 * 60)])
+  await timerWith($, w, [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }], w => [entry(w, 'seven_day', 96, 'plugin', '5e55a002'), entry(w, 'seven_day', 96, 'statusline', '5e55a002', 10), entry(w, 'seven_day', 40, 'plugin', '5e55a003', 11 * 60)])
   expect(w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.kind, r.windows, r.usage_n])).toEqual([['compact', ['five_hour:12', 'seven_day:95'], { five_hour: 1, seven_day: 2 }]])
   expect(selfCompacts(w)).toBe(0)
 })
@@ -1769,6 +1769,20 @@ test('D83-06 (D-83, review): the own reading 54 min old, the session\'s status l
   await w.advance(MIN)
   expect(skips(w)).toEqual([])
   expect(ic(w).map(r => [r.rule, r.usage_src, r.usage_n, (r.usage_age_s as Record<string, number>).seven_day])).toEqual([['no-fresh', ['five_hour:plugin', 'seven_day:plugin'], { five_hour: 0, seven_day: 0 }, 3240]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('D83-08 (D-83, review 2): the own reading 54 min old; another session idle 50 min at 95, whose status line entry was dropped from the record and shown again (dated 30 s ago): it is never newer than that session\'s plugin entry, so no fresh reading: the compaction runs (rule no-fresh)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  w.rateLimits = [{ kind: 'seven_day', percentUsed: 95 }]
+  await w.measure($)
+  await w.advance(53 * MIN)
+  w.usageEntries = [entry(w, 'seven_day', 95, 'plugin', '5e55a002', 50 * 60), entry(w, 'seven_day', 95, 'statusline', '5e55a002'), entry(w, 'seven_day', 95, 'statusline', '5e55a003')]
+  await w.advance(MIN)
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.rule, r.usage_n])).toEqual([['no-fresh', { seven_day: 0 }]])
   expect(selfCompacts(w)).toBe(1)
 })
 
