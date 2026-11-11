@@ -298,7 +298,7 @@ export function noteMode(d: Pick<Deps, 'state'>, e: { permission_mode?: unknown;
   if (cur === undefined || at >= cur.at) d.state.modeSeen = { mode: m, at }
 }
 
-/** The permission modes by their internal names (R6: the CLI spells `default` as `manual`). */
+/** The permission modes by their internal names (the CLI spells `default` as `manual`). */
 export const MODES: readonly string[] = ['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan']
 
 /**

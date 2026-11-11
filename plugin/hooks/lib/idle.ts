@@ -31,7 +31,7 @@
 // Every timer re-reads the wall clock at least once a minute (ticks), so a computer that
 // wakes before the due fires on time; one that wakes after it meets the lapsed bound.
 // One `idle_mode {native, plugin_turn, plugin_compact, compact_min?, served_hint?, cache_s?}` row
-// whenever that policy changes for a session id; `served_hint` (2b) is Claude Code's cached server
+// whenever that policy changes for a session id; `served_hint` is Claude Code's cached server
 // mode, logged only, never used to decide. The due is persisted (`idle_due:<sid>`) with the
 // load that holds it: a fire checks once that it still holds it (G1), and every clear writes
 // a short-lived tombstone, so a missing record reads as a lost write (`due-missing`), never as a
@@ -463,7 +463,7 @@ type Policy = { native: NativeIdle; turnOn: boolean; compactOn: boolean; env: Id
 /**
  * The policy, with one `idle_mode` row when its
  * tuple differs from the last one this load wrote for this session id (so a `/clear` in the same
- * load gets its own). The served hint (2b) is read only where it could matter (the check), and
+ * load gets its own). The served hint is read only where it could matter (the check), and
  * only logged.
  */
 async function policy(d: Deps, sid: string): Promise<Policy> {
