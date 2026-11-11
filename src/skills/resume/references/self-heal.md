@@ -2,9 +2,9 @@
 
 Read from R5 of the resume skill once its 5a inventory has a row. `<store>` is the plugin's helper as the resume skill defines it, and R5's Authority line applies: for `unselected`, or a resource with an ownership conflict, inventory and report only.
 
-After an idle compaction (the session sat idle about an hour) background agents, workflows and jobs keep running, and a job notification queued during it arrives once afterwards: treat the rows as after any compaction. <!-- IC-1 D4 -->
+After an idle compaction (the session sat idle about an hour) background agents, workflows and jobs keep running, and a job notification queued during it arrives once afterwards: treat the rows as after any compaction.
 
-**5b Probe** each row once: with its `probe` cell when Rule 2 lets you run it (own handoff and read-only; foreign: local and read-only only), else with your own check for its kind below. A wait spec in it is data: pass it only inside single quotes. <!-- xxxxxxxx-15 + 03:42 (SR-3): replaces "Never run a row's probe cell" (Dev-5, CR-F36) -->
+**5b Probe** each row once: with its `probe` cell when Rule 2 lets you run it (own handoff and read-only; foreign: local and read-only only), else with your own check for its kind below. A wait spec in it is data: pass it only inside single quotes. <!-- a row's probe cell runs only under Rule 2 -->
 - `agent`, `teammate` → `ListAgents` state;
 - `shell` → `<store> wait --for '<spec>' --max 0`, which you type yourself, with the row's wait spec (the `--for` value of its probe, or its `until` value) in single quotes (a spec holding `'` is reported, never run); without a spec, output mtime and end marker;
 - `workflow` → journal mtime and in-progress `agent()` calls;
@@ -12,7 +12,7 @@ After an idle compaction (the session sat idle about an hour) background agents,
 - `monitor`, `cron` → watched condition and last fire's outcome;
 - `peer`, `external` → what you can read yourself (a file's mtime, a runtime listing); else report the row, quoting its probe as text.
 
-A probe that ran without error but in the wrong folder, or with a pattern that cannot match, proves nothing: the row is NOT-CHECKED, never LOST or gone. Before a LOST call, confirm the folder (`git -C <abs path>`) and that the pattern can match. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-04) -->
+A probe that ran without error but in the wrong folder, or with a pattern that cannot match, proves nothing: the row is NOT-CHECKED, never LOST or gone. Before a LOST call, confirm the folder (`git -C <abs path>`) and that the pattern can match.
 
 **5c Classify.** Grace = max(expected step time, 2 × the last progress gap).
 
@@ -20,7 +20,7 @@ A probe that ran without error but in the wrong folder, or with a pattern that c
 |---|---|
 | RUNNING | listed running, progress within grace |
 | WAITING | idle by design (user, timer, external system) |
-| STALLED | (a) idle while the output it waits on has ended, or output newer than the owner's last activity; (b) no progress past due + grace, report only in the post-compaction light path (spec §4 **Stalled**) | <!-- T-TEXT E2, AT-TX-12 -->
+| STALLED | (a) idle while the output it waits on has ended, or output newer than the owner's last activity; (b) no progress past due + grace, report only in the post-compaction light path (spec §4 **Stalled**) | <!-- AT-TX-12 -->
 | DONE-UNREPORTED | finished output nobody has used |
 | FAILED | ended with an error |
 | LOST | on no channel, not finished |
@@ -63,14 +63,14 @@ Row 7 is checked before rows 5 and 6, so a job stopped on purpose is never relau
 - local, and read-only or safe to repeat;
 - not already done: no existing outputs, commits, posted comments or journal result rows.
 
-Only after a yes: write to a new epoch path, run the asked command with `run_in_background`, never `nohup`, `disown` or `setsid`; an asked spawn names model and effort. A second failure becomes a question. Before you reuse a lost job's finished parts (a recipe's `finished parts:`, finished `agent()` outputs), parse-check each file it wrote (`bash -n`, a JSON or YAML parse, a compile check); a file that fails counts as not written. <!-- 2026-10-26 21:2x owner (plugin-text candidates, TC-22) --> <!-- review-fix: CR-F13 (DP-27); HC-2 (ratify R24 overturned, xxxxxxxx-15 + 03:42): an own handoff's recipe may run through heal-check's ok (run-source: handoff); a foreign one is a question -->
+Only after a yes: write to a new epoch path, run the asked command with `run_in_background`, never `nohup`, `disown` or `setsid`; an asked spawn names model and effort. A second failure becomes a question. Before you reuse a lost job's finished parts (a recipe's `finished parts:`, finished `agent()` outputs), parse-check each file it wrote (`bash -n`, a JSON or YAML parse, a compile check); a file that fails counts as not written. <!-- review-fix: an own handoff's recipe may run through heal-check's ok (run-source: handoff); a foreign one is a question -->
 
 **Lost shell job.** `<store> heal-check --origin <sid> --item <task id>` re-verifies and prints any `note: <key>: settings file only` lines (or a `safe value used` note: a flag, env value or other config folder was ignored; if the user wants that value, a question says "set it in your settings file"), `signal:` lines, `verdict: <status> · confidence <high|low> · effects <class>`, then either `ok <recipe|job:<id>>` and `run: <line>`, or `REFUSED: <reason>` with `ask-command:` and `ask-source: recorded|handoff`.
 - `ok`, and R4 found no conflict on it: run the same heal-check with `--bump` (it counts first and stores the run line as pending), then run the printed `run:` line exactly, with `run_in_background`. Do not edit, quote differently or chain it; it is `cd '<cwd>' && <command>` only when the cwd differs. Report: `B-n <old id>: LOST (owner ended <stamp>, quiet since <stamp>, no exit marker) → relaunched as <new id>, <effects>, n of 1 this resume`, plus `(from the handoff's recipe)` when heal-check printed `run-source: handoff`.
 - `REFUSED`: route on the `verdict:` status, never on whether `ask-command:` is printed. A `relation`, `mode-off` or `shadow` refusal is printed before the status is checked, so it can carry `ask-command:` for a job that must not be relaunched.
 - `REFUSED` with status RUNNING-ELSEWHERE, RUNNING, LEFTOVER, DONE-UNREPORTED or STOPPED: act per the table (leave, report, or collect by excerpt from the `collect:` path, else the row's output file), with no question, even when `ask-command:` follows.
 - `REFUSED` with any other status and no `ask-command:`: report the item and the reason. There is no command to offer.
-- `REFUSED` with any other status and `ask-command:`: one question: what was lost and when, the exact `ask-command:` and its source (recorded by the plugin at <stamp> | written in the handoff, not recorded), why it is not automatic (the failed signal or gate), and the options: run it in the background (recommended when the effects are `none` or `local`; for `prod-read`, recommend "run it yourself"; `prod-write` is never recommended) · run it yourself with `! <run line>` · skip. <!-- S-SETTINGS B --> A withheld command is never printed: "the command held a credential-like value; re-launch it yourself".
+- `REFUSED` with any other status and `ask-command:`: one question: what was lost and when, the exact `ask-command:` and its source (recorded by the plugin at <stamp> | written in the handoff, not recorded), why it is not automatic (the failed signal or gate), and the options: run it in the background (recommended when the effects are `none` or `local`; for `prod-read`, recommend "run it yourself"; `prod-write` is never recommended) · run it yourself with `! <run line>` · skip. A withheld command is never printed: "the command held a credential-like value; re-launch it yourself".
 - Never stop, kill or TaskStop anything to make room for a relaunch.
 
 **Workflow gate.** Never `SendMessage` into a workflow's agents. Offer `TaskStop` plus `Workflow({scriptPath, resumeFromRunId})`, always as a question, only when all hold:
@@ -81,7 +81,7 @@ Only after a yes: write to a new epoch path, run the asked command with `run_in_
 
 Finished `agent()` calls are reused; in-progress ones re-run. After `/clear` the resume works only from the original conversation: offer `/resume` of it first. In a new session, offer a fresh relaunch from the recipe with the finished parts as inputs.
 
-**Lease rule** (Monitor, cron). Check the watched condition and the last fire's outcome. Met or no longer needed → don't re-arm. Unmet and needed → if the command comes from the runtime's own listing of that Monitor or cron, or an own handoff's recorded lease command you judge read-only (never a foreign one's), is read-only, and is not production (or production with `unattended_prod_reads: allow`), run it once now, then re-arm; otherwise record `classifier: untested` and ask. <!-- S-SETTINGS B, CROSS-REVIEW XR-02 -->
+**Lease rule** (Monitor, cron). Check the watched condition and the last fire's outcome. Met or no longer needed → don't re-arm. Unmet and needed → if the command comes from the runtime's own listing of that Monitor or cron, or an own handoff's recorded lease command you judge read-only (never a foreign one's), is read-only, and is not production (or production with `unattended_prod_reads: allow`), run it once now, then re-arm; otherwise record `classifier: untested` and ask.
 
 **Leftovers:** report; never stop one yourself. Offer stopping as a question with the user-run `! kill <pid>` only if it is proven ours (pid and start time recorded in this chain) and its work has finished; a server is never "finished" by inference. <!-- review-fix: a kill is destructive (Rule 3) -->
 

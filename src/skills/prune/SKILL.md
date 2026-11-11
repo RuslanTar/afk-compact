@@ -5,9 +5,9 @@ argument-hint: "[--days N] [--min-mb N] [--root DIR]"
 ---
 
 # Prune
-<!-- 0.1.6 PRUNE (owner 2026-11-08: a handoff folder should not hold a lot of data, and a later clean-up must not delete the small handoff files). No disable-model-invocation and no allowed-tools until PR-2 row P-156 is reviewed, as for report and settings; the description says "only when the user asks" instead. -->
+<!-- 0.1.6: a handoff folder should not hold a lot of data, and a later clean-up must not delete the small handoff files. No disable-model-invocation and no allowed-tools yet, as for report and settings; the description says "only when the user asks" instead. -->
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..`; use that root. If that has `${` too or no helper is there, say so and stop. <!-- CW-1 (Cowork check 2026-10-26), as in the status skill -->
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..`; use that root. If that has `${` too or no helper is there, say so and stop. <!-- Cowork fallback, as in the status skill -->
 
 The helper is the only way you delete here. Never delete, move or edit a file in the plugin's folders with any other tool. Add the user's arguments to each call when they gave any (for example `--days 30`), except `--apply` and `--plan`.
 

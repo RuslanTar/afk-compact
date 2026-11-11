@@ -1,4 +1,4 @@
-# Question queue (read only when the queue is on) <!-- Q-ADAPTER QA-4 / QA-T2 (owner xxxxxxxx-11: setting-driven, one text); ≤1,600 B (AT-QA-06). REVIEW-NIGHT NR-18: the resume SKILL's queue and lane lines live here, so nothing about them reaches the model when the queue is off (the -11 card) -->
+# Question queue (read only when the queue is on) <!-- setting-driven, one text; ≤1,600 B (AT-QA-06). The resume skill's queue and lane lines live here, so nothing about them reaches the model when the queue is off -->
 
 ## Handoff
 
