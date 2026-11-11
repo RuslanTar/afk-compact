@@ -65,7 +65,8 @@
 //   reads in the store still has its fire, and the hand-over a taker.
 // Rows: `keep_warm_start {jobs, gap_s, hours, windows}` (`windows`: the usage windows read; 0 means
 // the near-limit guard is skipped), one `keep_warm_ping {n, result, cache_read, cache_creation,
-// since_s, gap_s, ms, status?}` per ping, one `keep_warm_stop {why, pings, gap_s, handover, windows?}`
+// since_s, gap_s, ms, status?}` per ping, one `keep_warm_wait {n, gap_s, next_s, windows, rule}` per
+// wait for a usage window's reset (D-80; `next_s`: the seconds to the ping then), one `keep_warm_stop {why, pings, gap_s, handover, windows?}`
 // per gap that warmed or that `no-idle-path` refused before warming (`windows` on a `near-limit`
 // stop: each window as `kind:percent`, idle.ts `limitWindows`). The ping state lives in this load;
 // the idle record it holds stays in the store (idle.ts `holdIdle`), so a load that adopts it after
@@ -325,6 +326,12 @@ async function step(d: Deps, kw: KeepWarm, gen: number): Promise<void> {
   }
 }
 
+/**
+ * D-80: no stop, the next ping waits for the usage windows that stop it to reset (`wait`, at that
+ * moment); the windows, the rule and their readings (D-83) go on its `keep_warm_wait` row.
+ */
+type Wait = { wait: number; windows: string[]; rule: string; usage: UsageFields }
+
 /** A stop's reason, and what its row and its hand-over carry beside it (`stop`). */
 type Block = { why: string; handover: boolean } & StopExtra
 
@@ -336,7 +343,7 @@ type Block = { why: string; handover: boolean } & StopExtra
  * `idle_handoff_min_tokens` up (D-79). `wait` (D-80): no stop, the next ping waits for the usage
  * windows that stop it to reset, at that moment.
  */
-async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wait: number } | undefined> {
+async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | Wait | undefined> {
   const s = d.state
   const env = await d.idleEnv()
   const scale = scaleOf(env)
@@ -368,7 +375,7 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
   // deadline), the ping waits for the reset instead of spending the last points. None reported (or
   // no reading): this guard is skipped.
   const limits = u?.rateLimits ?? []
-  let wait: number | undefined
+  let wait: Wait | undefined
   kw.note = undefined
   if (limits.length > 0) {
     // D-83: every reading of the windows, the session's own and the shared record's (limits.ts `judge`).
@@ -378,7 +385,7 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
     if (!v.ok || v.band) {
       const reset = v.reset
       const bound = Math.min(kw.warm + KEEP_WARM_LATEST_MS * scale, kw.deferred !== undefined ? heldDeadline(kw.deferred, kw.warm, scale) : Infinity)
-      if (reset !== undefined && reset + retryMs(scale) <= bound) wait = reset + retryMs(scale)
+      if (reset !== undefined && reset + retryMs(scale) <= bound) wait = { wait: reset + retryMs(scale), windows: v.windows, rule: v.rule, usage: v.usage }
       else return { why: 'near-limit', handover: true, windows: v.windows, rule: v.rule, usage: v.usage, ...(v.band ? { job: true } : {}) }
     }
   }
@@ -395,7 +402,7 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
   if (!d.cfg.triggers || ((kw.incoming ?? kw.deferred) === undefined && !(await idleArmed(d, kw.sid)))) {
     return { why: 'no-idle-path', handover: true }
   }
-  return wait !== undefined ? { wait } : undefined
+  return wait
 }
 
 /**
@@ -605,6 +612,12 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     if (kw.phase === 'armed' && !(await begin(d, kw, now))) return
     if (kw.phase !== 'warming' || !ours()) return
     kw.next = b.wait
+    // 0.1.8: the row says when the next ping is due, so the cache state (`cache`, helper
+    // lib/cachestate.pm) shows the reset wait, not 50 minutes after the last warm request.
+    await log(d, kw.sid, 'keep_warm_wait', {
+      n: kw.pings, gap_s: secs(now - kw.start), next_s: secs(kw.next - now), windows: b.windows, rule: b.rule, ...(await tierFields(d)), ...b.usage,
+    })
+    if (!ours()) return
     if (kw.deferred !== undefined && (await heldHere(d, kw.sid)) !== undefined && ours()) {
       await holdIdle(d, kw.deferred, { due: kw.next, warm: kw.warm, start: kw.start, pings: kw.pings })
     }

@@ -2308,6 +2308,8 @@ test('AT-KW-59 (D-80): five_hour at 93 resets at 105 min, before the ping\'s 58-
   await until(w, t0, 105)
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([])
+  // 0.1.8: the wait's row says when the ping is due (the cache state's next_due_at reads it).
+  expect(w.rowsOf('keep_warm_wait').map(r => [r.n, r.gap_s, r.next_s, r.windows, r.rule])).toEqual([[1, 6000, 360, ['five_hour:93', 'seven_day:30'], 'no-delta']])
   await until(w, t0, 107)
   expect(f.at).toEqual([50, 106])
   expect(pings(w)).toEqual([['warm', 1], ['warm', 2]])

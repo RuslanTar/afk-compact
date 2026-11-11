@@ -246,6 +246,9 @@ our %SCHEMA = (
                         cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int',
                         # D-83 (0.1.8): a reading at the limit that did not stop the ping
                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word', windows => [list => 'window'], %USAGE },
+    # 0.1.8: the next ping waits for a usage window's reset (D-80): when it is due (next_s from the row)
+    keep_warm_wait => { n => 'int', gap_s => 'num', next_s => 'num', windows => [list => 'window'], rule => [enum => @LIMIT_RULE],
+                        plan => 'word', tier => 'word', %USAGE },
     keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed fork-miss no-jobs ttl-5m prefix-changed
                                              near-limit cutoff off error held-elsewhere reload nothing-to-fork deadline
                                              no-idle-path)],
