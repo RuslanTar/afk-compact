@@ -222,6 +222,8 @@ for (const c of [
     if (c.stop) await stopHook($, { background_tasks: c.stop })
     await w.turnEnd($)
     f.t0 = w.clock.now()
+    await until(w, f.t0, 45)
+    await w.measure($)
     await until(w, f.t0, 120)
     expect(f.at).toEqual([])
     expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_ping').length, w.rowsOf('keep_warm_stop').length]).toEqual([0, 0, 0])
@@ -298,6 +300,8 @@ test('AT-KW-11: a usage window reaches 90% between pings: stop near-limit, the d
   f.t0 = t0
   await until(w, t0, 60)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 90 }, { kind: 'seven_day', percentUsed: 30 }]
+  await until(w, t0, 95)
+  await w.measure($)
   await until(w, t0, 100)
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([['near-limit', true, 1]])
@@ -313,6 +317,8 @@ test('D76-07 (D-76): the near-limit stop row and the handed-back compaction\'s n
   f.t0 = t0
   await until(w, t0, 60)
   w.rateLimits = [{ kind: 'seven_day', percentUsed: 92.7 }, { kind: 'five_hour', percentUsed: 30 }]
+  await until(w, t0, 95)
+  await w.measure($)
   await until(w, t0, 100)
   expect(w.rowsOf('keep_warm_stop').map(r => [r.why, r.windows])).toEqual([['near-limit', ['seven_day:92', 'five_hour:30']]])
   const rows = w.rowsOf('handoff_skipped').filter(r => r.reason === 'idle')
@@ -1128,6 +1134,8 @@ test('AT-KW-40 (REV3-2): the first ping\'s warming start finds the gap off (the 
   await w.advance(61000)
   w.tokens = 260000
   await w.turnEnd($)
+  await until(w, t0, 45)
+  await w.measure($)
   await until(w, t0, 50.5)
   release()
   await w.settle()
@@ -1270,6 +1278,8 @@ test('AT-KW-44 (REV3-2): the 49-min fire\'s checks find a window at 92% while th
   await w.advance(59000)
   w.tokens = 260000
   await w.turnEnd($)
+  await until(w, t0, 45)
+  await w.measure($)
   await until(w, t0, 50.5)
   expect(f.at).toEqual([50])
   release()
@@ -2019,6 +2029,19 @@ test('AT-KW-56 (D-82): the agent list cannot be read: the Stop list\'s teammate 
   expect(w.rowsOf('keep_warm_start').map(r => r.jobs)).toEqual([2])
 })
 
+test('AT-KW-56 (D-82, 0.1.8): the agent list cannot be read, keep-warm off, native on: the 55.5-min check counts the Stop list\'s teammates as running agents too (idle_silent and idle_compact agents 2), as keep-warm does', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {
+  const w = world(on, {})
+  w.agents = undefined
+  await w.start($)
+  await w.userTurn($)
+  w.tokens = 260000
+  await stopHook($, { background_tasks: TEAMMATE_ROWS })
+  await w.turnEnd($)
+  await until(w, w.clock.now(), 60)
+  expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([2])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 2]])
+})
+
 // `waiting` (Claude Code 2.1.319) is an agent held by background work it owns (its own shell,
 // Monitor or Agent call), whose result is still to come, or a teammate on a plan approval: at work.
 for (const type of ['general-purpose', 'teammate']) {
@@ -2190,8 +2213,19 @@ test('AT-KW-58 (D-80): an agent open, five_hour at 93 (fresh, measured change 2)
   expect(selfCompacts(w)).toBe(1)
 })
 
+test('D83-01 (D-83): the band stop row, the idle_compact row and the compacted row name each window\'s source and age (the own reading, measured 5 min before)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  await bandGap($, on, w, [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }])
+  const src = ['five_hour:plugin', 'seven_day:plugin']
+  const age = { five_hour: 300, seven_day: 300 }
+  expect(w.rowsOf('keep_warm_stop').map(r => [r.rule, r.usage_src, r.usage_age_s])).toEqual([['band', src, age]])
+  expect(ic(w).map(r => [r.rule, r.usage_src, r.usage_age_s])).toEqual([['band', src, age]])
+  expect(w.rowsOf('compacted').map(r => [r.pct_before, r.usage_src, r.usage_age_s_before])).toEqual([[{ five_hour: 93, seven_day: 30 }, src, age]])
+  expect(Object.keys(w.rowsOf('compacted')[0]?.usage_age_s_after as object)).toEqual(['five_hour', 'seven_day'])
+})
+
 for (const c of [
-  { name: 'a stale reading (refreshed 40 min before)', rule: 'stale', freshAt: 60, limits: [{ kind: 'five_hour', percentUsed: 93 }], deltas: { five_hour: [2] } },
   { name: 'no compaction change measured yet', rule: 'no-delta', limits: [{ kind: 'five_hour', percentUsed: 93 }], deltas: {} },
   { name: 'a change of 4 points at 95', rule: 'delta', limits: [{ kind: 'five_hour', percentUsed: 95 }], deltas: { five_hour: [4] } },
   { name: 'seven_day at 96 (its cap is 95)', rule: 'cap', limits: [{ kind: 'five_hour', percentUsed: 20 }, { kind: 'seven_day', percentUsed: 96 }], deltas: { seven_day: [0] } },
@@ -2200,13 +2234,22 @@ for (const c of [
   test(`AT-KW-58 (D-80): an agent open, ${c.name}: stop near-limit (rule ${c.rule}), the handed-back compaction skips near-limit with it`, { options: ON }, async ($, on) => {
     const w = world(on)
     w.storeSet('limit_deltas', c.deltas)
-    const f = await bandGap($, on, w, c.limits, c.freshAt)
+    const f = await bandGap($, on, w, c.limits)
     expect(f.at).toEqual([50])
     expect(nearStops(w)).toEqual([['near-limit', true, c.rule]])
     expect(nearSkips(w)).toEqual([['compact', c.rule]])
     expect(selfCompacts(w)).toBe(0)
   })
 }
+
+test('D83-08 (D-83): an agent open, five_hour at 93 read 40 min before the ping (nothing refreshed it): no fresh reading, no stop: the ping goes, its row names the rule no-fresh and the reading\'s age', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  const f = await bandGap($, on, w, [{ kind: 'five_hour', percentUsed: 93 }], 60)
+  expect(f.at).toEqual([50, 100])
+  expect(nearStops(w)).toEqual([])
+  expect(w.rowsOf('keep_warm_ping').map(r => [r.result, r.rule, r.windows, (r.usage_age_s as Record<string, number> | undefined)?.five_hour])).toEqual([['warm', undefined, undefined, undefined], ['warm', 'no-fresh', ['five_hour:93'], 2400]])
+})
 
 test('AT-KW-58 (D-80, D-79): vetoed, 150K, an agent open, five_hour at 93 fresh before the 49-min turn (change 2): no ping; the turn goes back as a job\'s hand-over, plugin idle compaction runs (rule band), no idle handoff turn', { options: MIN100K }, async ($, on) => {
   const w = world(on)
@@ -2273,9 +2316,13 @@ test('AT-KW-59 (D-80): five_hour at 93 resets at 105 min, before the ping\'s 58-
   f.t0 = t0
   await until(w, t0, 60)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 93, resetsAt: new Date(t0 + 105 * MIN).toISOString() } as never, { kind: 'seven_day', percentUsed: 30 }]
+  await until(w, t0, 95)
+  await w.measure($)
   await until(w, t0, 105)
   expect(f.at).toEqual([50])
   expect(stops(w)).toEqual([])
+  // 0.1.8: the wait's row says when the ping is due (the cache state's next_due_at reads it).
+  expect(w.rowsOf('keep_warm_wait').map(r => [r.n, r.gap_s, r.next_s, r.windows, r.rule])).toEqual([[1, 6000, 360, ['five_hour:93', 'seven_day:30'], 'no-delta']])
   await until(w, t0, 107)
   expect(f.at).toEqual([50, 106])
   expect(pings(w)).toEqual([['warm', 1], ['warm', 2]])
@@ -2284,7 +2331,7 @@ test('AT-KW-59 (D-80): five_hour at 93 resets at 105 min, before the ping\'s 58-
   expect(selfCompacts(w)).toBe(1)
 })
 
-test('AT-KW-59 (D-80): five_hour at 93 resets at 110 min, past the held compaction\'s 58-min bound (108): stop near-limit at 100 (rule stale: nothing refreshed the reading), no wait', { options: ON }, async ($, on) => {
+test('AT-KW-59 (D-80): five_hour at 93 resets at 110 min, past the held compaction\'s 58-min bound (108): stop near-limit at 100 (rule no-delta: no compaction change measured), no wait', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w)
   await w.start($)
@@ -2292,9 +2339,11 @@ test('AT-KW-59 (D-80): five_hour at 93 resets at 110 min, past the held compacti
   f.t0 = t0
   await until(w, t0, 60)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 93, resetsAt: new Date(t0 + 110 * MIN).toISOString() } as never]
+  await until(w, t0, 95)
+  await w.measure($)
   await until(w, t0, 120)
   expect(f.at).toEqual([50])
-  expect(nearStops(w)).toEqual([['near-limit', true, 'stale']])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'no-delta']])
 })
 
 test('AT-KW-60 (D-80): native on, keep-warm off, agents running, five_hour at 95, fresh at the 55.5-min check, change 1: plugin idle compaction runs in the band', { options: { ...ON, keep_warm_hours: 0 } }, async ($, on) => {

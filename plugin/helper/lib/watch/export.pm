@@ -62,6 +62,8 @@ my %RX = (
     # D-76: a usage window as a near-limit row names it, `kind:percent` (Claude Code's window kind
     # or `arm`, a whole percent or `unknown`)
     window  => qr/\A[a-z][a-z0-9_]{0,31}:(?:[0-9]{1,4}|unknown)\z/,
+    # D-83: where a usage window's reading came from, `kind:source` (`plugin`, `statusline`, `peer`)
+    wsrc    => qr/\A[a-z][a-z0-9_]{0,31}:(?:plugin|statusline|peer)\z/,
 );
 
 sub _is_num {

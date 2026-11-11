@@ -270,7 +270,7 @@ sub store_lines {
     push @out, prod_lines();
     push @out, protected_lines();
     push @out, regex_lines($classic);
-    push @out, idle_lines($headless, $mod), keep_warm_lines($headless, $sid, $mod), settings_keys_line(), values_lines();
+    push @out, idle_lines($headless, $mod), keep_warm_lines($headless, $sid, $mod), usage_lines($sid), settings_keys_line(), values_lines();
     # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`. Without a
     # session id that outcome is not read, so `on` says so (CW-1 review 2)
@@ -951,6 +951,35 @@ sub keep_warm_lines {
     $why = 'other' unless defined $why && !ref $why && $why =~ /\A[a-z0-9-]{1,24}\z/;
     return ("$on · this gap: not warming (the last warmed gap: $n, stopped: $why)") if $state eq 'stopped';
     return ("$on · this gap: not warming");
+}
+
+# D-83 (0.1.8): the session's last usage reading, from the shared usage record (lib/usagerec.pm,
+# dated as the plugin's decisions date it: a status line's entry never newer than its session's
+# plugin entry): per window kind its share, where it came from (the plugin or the status line's
+# --note-usage; the plugin's on a tie) and how old it is, then how many window readings other
+# sessions on this machine left in the last 10 minutes (one per session and kind). Read only; one line.
+sub usage_lines {
+    my ($sid) = @_;
+    my $s8 = usagerec::sid8($sid);
+    my $all = eval { usagerec::dated(usagerec::read_all()) } || [];
+    my $now = util::now();
+    my (%mine, %peer);
+    for my $e (@$all) {
+        if (defined $s8 && $e->{sid8} eq $s8) {
+            my $o = $mine{ $e->{kind} };
+            $mine{ $e->{kind} } = $e if !$o || $e->{at} > $o->{at} || ($e->{at} == $o->{at} && $e->{src} eq 'plugin');
+        }
+        elsif ($now - $e->{at} <= 600) { $peer{"$e->{sid8}\0$e->{kind}"} = 1 }
+    }
+    my $peers = keys %peer;
+    my $ago = sub { my $x = $_[0] < 0 ? 0 : int($_[0]); return $x < 60 ? "${x}s" : $x < 3600 ? int($x / 60) . 'm' : int($x / 3600) . 'h' };
+    my @w = map {
+        my $e = $mine{$_};
+        sprintf('%s %s%% (%s, %s ago)', $_, int($e->{pct}), $e->{src} eq 'statusline' ? 'status line' : 'plugin', $ago->($now - $e->{at}))
+    } sort keys %mine;
+    my $l = 'usage: ' . (@w ? join(' · ', @w) : defined $s8 ? 'no reading of this session in the last hour' : 'unknown (no session id)');
+    $l .= "; other sessions on this machine: $peers reading" . ($peers == 1 ? '' : 's') . ' in the last 10 min' if $peers;
+    return ($l);
 }
 
 # SK-7 (owner xxxxxxxx-12/-13/-14): the six 2026-10-23 keys as values the user can check, never

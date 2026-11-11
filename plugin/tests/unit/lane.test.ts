@@ -127,6 +127,17 @@ test('runningUnits (D-82): the Basis count reads agents at work: an idle teammat
   expect(await runningUnits(d, m, new Set())).toBe(1)
 })
 
+test('runningUnits (D-82, 0.1.8): the agent list cannot be read: the Stop list\'s teammates of this session count, as keep-warm counts them; another session\'s Stop list none', async () => {
+  const state = newState('l')
+  state.bgTasks = { sid: SID_A, ids: ['t0g9x159q', 't0g9x160r', 'b1'], shells: ['b1'], teams: ['t0g9x159q', 't0g9x160r'] }
+  let sid = SID_A
+  const d = { state, agentsWorking: async () => undefined, sessionId: async () => sid } as unknown as Deps
+  expect(await runningUnits(d, undefined, new Set())).toBe(2)
+  expect(await runningUnits(d, undefined, new Set(['t0g9x160r']))).toBe(1)
+  sid = 'other'
+  expect(await runningUnits(d, undefined, new Set())).toBe(0)
+})
+
 test('measuredRunning, notifiedTasks, startsWork: the units a measure lists, the tasks a notification ends, the calls that start work', () => {
   const m = 'Git: x\nIn flight (sidecar 2026-10-21 14:00 +0300):\n  b1 · shell · running\n  b2 · shell · completed\n  a1 · subagent · running\n' +
     '  w1 · workflow · pending · output /tmp/w1 (exists)\n  m1 · monitor · running\n  c1 · cron · scheduled\nEvidence (automatic copies):\n  x · y · running\n'

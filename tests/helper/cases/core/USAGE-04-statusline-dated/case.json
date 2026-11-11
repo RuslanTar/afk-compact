@@ -1,0 +1,675 @@
+{
+ "id": "USAGE-04-statusline-dated",
+ "note": "0.1.8 D-83 (review 2 of the usage lane): a status line's entry is dated from when a status line first showed it only while it stays in the record; one evicted (64 entries) or pruned (an hour) and shown again comes back dated now. So the record keeps a session's entries together (evicting the sessions read or shown longest ago first, never one session's plugin entry alone), and its readers (status here; the mod's limits.ts recordReadings for every near-limit decision) never date a status line's entry newer than its session's plugin entry of the same kind, and leave one with no such entry out. status counts other sessions' fresh readings once per session and kind.",
+ "now": "2026-11-09T12:51:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "a full record (64): session 5e55a0a1 read seven_day 95 at 12:00 and its status line still shows it (seen 12:50:50); 31 sessions shown 12:50:10-40; a new session's status line writes two more",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794228650,
+      "readings": [
+       {
+        "kind": "seven_day",
+        "pct": 95,
+        "resets_at": 1794492000,
+        "at": 1794225600,
+        "src": "plugin",
+        "sid8": "5e55a0a1"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 95,
+        "resets_at": 1794492000,
+        "at": 1794225600,
+        "src": "statusline",
+        "sid8": "5e55a0a1",
+        "seen": 1794228650
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228610,
+        "src": "statusline",
+        "sid8": "5e55b010"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228610,
+        "src": "statusline",
+        "sid8": "5e55b010"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228611,
+        "src": "statusline",
+        "sid8": "5e55b011"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228611,
+        "src": "statusline",
+        "sid8": "5e55b011"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228612,
+        "src": "statusline",
+        "sid8": "5e55b012"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228612,
+        "src": "statusline",
+        "sid8": "5e55b012"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228613,
+        "src": "statusline",
+        "sid8": "5e55b013"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228613,
+        "src": "statusline",
+        "sid8": "5e55b013"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228614,
+        "src": "statusline",
+        "sid8": "5e55b014"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228614,
+        "src": "statusline",
+        "sid8": "5e55b014"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228615,
+        "src": "statusline",
+        "sid8": "5e55b015"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228615,
+        "src": "statusline",
+        "sid8": "5e55b015"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228616,
+        "src": "statusline",
+        "sid8": "5e55b016"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228616,
+        "src": "statusline",
+        "sid8": "5e55b016"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228617,
+        "src": "statusline",
+        "sid8": "5e55b017"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228617,
+        "src": "statusline",
+        "sid8": "5e55b017"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228618,
+        "src": "statusline",
+        "sid8": "5e55b018"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228618,
+        "src": "statusline",
+        "sid8": "5e55b018"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228619,
+        "src": "statusline",
+        "sid8": "5e55b019"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228619,
+        "src": "statusline",
+        "sid8": "5e55b019"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228620,
+        "src": "statusline",
+        "sid8": "5e55b020"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228620,
+        "src": "statusline",
+        "sid8": "5e55b020"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228621,
+        "src": "statusline",
+        "sid8": "5e55b021"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228621,
+        "src": "statusline",
+        "sid8": "5e55b021"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228622,
+        "src": "statusline",
+        "sid8": "5e55b022"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228622,
+        "src": "statusline",
+        "sid8": "5e55b022"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228623,
+        "src": "statusline",
+        "sid8": "5e55b023"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228623,
+        "src": "statusline",
+        "sid8": "5e55b023"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228624,
+        "src": "statusline",
+        "sid8": "5e55b024"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228624,
+        "src": "statusline",
+        "sid8": "5e55b024"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228625,
+        "src": "statusline",
+        "sid8": "5e55b025"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228625,
+        "src": "statusline",
+        "sid8": "5e55b025"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228626,
+        "src": "statusline",
+        "sid8": "5e55b026"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228626,
+        "src": "statusline",
+        "sid8": "5e55b026"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228627,
+        "src": "statusline",
+        "sid8": "5e55b027"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228627,
+        "src": "statusline",
+        "sid8": "5e55b027"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228628,
+        "src": "statusline",
+        "sid8": "5e55b028"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228628,
+        "src": "statusline",
+        "sid8": "5e55b028"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228629,
+        "src": "statusline",
+        "sid8": "5e55b029"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228629,
+        "src": "statusline",
+        "sid8": "5e55b029"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228630,
+        "src": "statusline",
+        "sid8": "5e55b030"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228630,
+        "src": "statusline",
+        "sid8": "5e55b030"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228631,
+        "src": "statusline",
+        "sid8": "5e55b031"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228631,
+        "src": "statusline",
+        "sid8": "5e55b031"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228632,
+        "src": "statusline",
+        "sid8": "5e55b032"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228632,
+        "src": "statusline",
+        "sid8": "5e55b032"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228633,
+        "src": "statusline",
+        "sid8": "5e55b033"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228633,
+        "src": "statusline",
+        "sid8": "5e55b033"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228634,
+        "src": "statusline",
+        "sid8": "5e55b034"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228634,
+        "src": "statusline",
+        "sid8": "5e55b034"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228635,
+        "src": "statusline",
+        "sid8": "5e55b035"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228635,
+        "src": "statusline",
+        "sid8": "5e55b035"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228636,
+        "src": "statusline",
+        "sid8": "5e55b036"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228636,
+        "src": "statusline",
+        "sid8": "5e55b036"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228637,
+        "src": "statusline",
+        "sid8": "5e55b037"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228637,
+        "src": "statusline",
+        "sid8": "5e55b037"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228638,
+        "src": "statusline",
+        "sid8": "5e55b038"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228638,
+        "src": "statusline",
+        "sid8": "5e55b038"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228639,
+        "src": "statusline",
+        "sid8": "5e55b039"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228639,
+        "src": "statusline",
+        "sid8": "5e55b039"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794492000,
+        "at": 1794228640,
+        "src": "statusline",
+        "sid8": "5e55b040"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 30,
+        "resets_at": 1794492000,
+        "at": 1794228640,
+        "src": "statusline",
+        "sid8": "5e55b040"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--note-usage"
+   ],
+   "stdin_json": {
+    "session_id": "5e55c001-0000-4000-8000-0000000000c1",
+    "rate_limits": {
+     "five_hour": {
+      "used_percentage": 20,
+      "resets_at": 1794492000
+     },
+     "seven_day": {
+      "used_percentage": 30,
+      "resets_at": 1794492000
+     }
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "the session shown longest ago (5e55b010) goes whole; 5e55a0a1 keeps its plugin entry beside its status line one",
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 64
+     },
+     "readings.0.sid8": "5e55c001",
+     "readings.2.sid8": "5e55a0a1",
+     "readings.2.src": "statusline",
+     "readings.3.sid8": "5e55a0a1",
+     "readings.3.src": "plugin",
+     "readings.3.at": 1794225600,
+     "readings.4.sid8": "5e55b040",
+     "readings.63.sid8": "5e55b011"
+    }
+   }
+  },
+  {
+   "name": "status of another session: 5e55a0a1's status line entry reads as old as its plugin entry (12:00); the 31 status-line-only sessions have no plugin entry, so no reading",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^usage: no reading of this session in the last hour$"
+    ]
+   }
+  },
+  {
+   "name": "session 5e55a0b2 read seven_day 95 at 12:11:30 (plugin), its status line not run for over an hour; 5e55a0c3 read five_hour 10 at 13:01:00; 5e55a0b2's status line shows 95 again at 13:01:30",
+   "now": "2026-11-09T13:01:30Z",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794229260,
+      "readings": [
+       {
+        "kind": "five_hour",
+        "pct": 10,
+        "resets_at": 1794492000,
+        "at": 1794229260,
+        "src": "plugin",
+        "sid8": "5e55a0c3"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 95,
+        "resets_at": 1794492000,
+        "at": 1794226290,
+        "src": "plugin",
+        "sid8": "5e55a0b2"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--note-usage"
+   ],
+   "stdin_json": {
+    "session_id": "5e55a0b2-0000-4000-8000-0000000000b2",
+    "rate_limits": {
+     "seven_day": {
+      "used_percentage": 95,
+      "resets_at": 1794492000
+     }
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "the record holds it dated 13:01:30 (first shown, as far as it knows)",
+   "now": "2026-11-09T13:01:30Z",
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 3
+     },
+     "readings.0.sid8": "5e55a0b2",
+     "readings.0.src": "statusline",
+     "readings.0.at": 1794229290
+    }
+   }
+  },
+  {
+   "name": "status of another session: 5e55a0b2's reading counts from 12:11:30 (50 min: not recent); only 5e55a0c3's is",
+   "now": "2026-11-09T13:01:30Z",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^usage: no reading of this session in the last hour; other sessions on this machine: 1 reading in the last 10 min$"
+    ]
+   }
+  }
+ ]
+}

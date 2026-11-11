@@ -242,6 +242,7 @@ for (const mode of ['run', 'skip-spend', 'skip'] as const) {
     await humanTurn($, w)
     await w.advance(55 * MIN)
     w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+    await w.measure($)
     await w.advance(MIN)
     expect(w.rowsOf('idle_silent').length).toBe(1)
     expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
@@ -455,6 +456,7 @@ for (const [name, limits] of [
     await humanTurn($, w)
     await w.advance(53 * MIN)
     w.rateLimits = [...limits]
+    await w.measure($)
     await w.advance(MIN)
     expect(skips(w)).toEqual([['near-limit', 'compact']])
     expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
@@ -1056,15 +1058,16 @@ test('AT-IC-C30: a record adopted by a fresh process (no rate-limit or token rea
   expect(selfCompacts(w)).toBe(1)
 })
 
-test('AT-IC-C30 (G12): a record adopted by a fresh process, armed at a 95% window, with no rate-limit reading yet: the record\'s share decides, [near-limit, compact]', { options: ON }, async ($, on) => {
+test('AT-IC-C30 (G12, D-83): a record adopted by a fresh process, armed at a 95% window, with no rate-limit reading yet: the record\'s share was read at its turn end, so it is no fresh reading and decides nothing: the compaction runs (rule no-fresh on its row)', { options: ON }, async ($, on) => {
   const probe = new World()
   const w = world(on, {}, adoptedRecord(probe, { pct: 95 }))
   w.rateLimits = []
   w.tokens = undefined
   await w.start($)
   await w.advance(10 * MIN)
-  expect(skips(w)).toEqual([['near-limit', 'compact']])
-  expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.rule, r.windows, r.usage_src])).toEqual([['no-fresh', ['arm:95'], ['arm:plugin']]])
+  expect(selfCompacts(w)).toBe(1)
 })
 
 /** A 49-min turn record another process armed 39 min before T0 (due T0 + 10 min), with what it read at arm. */
@@ -1096,25 +1099,26 @@ test('AT-IC-C30 (turn; §9.2): the same record with no ttl recorded (an older bu
   expect(w.submits.length).toBe(0)
 })
 
-// Owner xxxxxxxx (2026-10-30): with no rate-limit reading the record's share decides, and only
-// idle_handoff_near_limit `skip` skips the turn at 90% or more.
+// Owner xxxxxxxx (2026-10-30): with no rate-limit reading the record's share is the reading, and
+// only idle_handoff_near_limit `skip` checks it; D-83: read at the record's turn end (49 min
+// before), it is no fresh reading, so it skips nothing under `skip` either.
 for (const mode of ['run', 'skip'] as const) {
-  test(`AT-IC-C30 (turn, G12): the adopted 49-min turn record armed at a 95% window, no reading yet, idle_handoff_near_limit ${mode}: ${mode === 'run' ? 'the turn runs (or no-asset)' : '[near-limit, turn]'}`, { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: mode } }, async ($, on) => {
+  test(`AT-IC-C30 (turn, G12, D-83): the adopted 49-min turn record armed at a 95% window, no reading yet, idle_handoff_near_limit ${mode}: the turn runs (or no-asset)`, { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: mode } }, async ($, on) => {
     const w = world(on, {}, adoptedTurn('1h', 95))
     w.rateLimits = []
     w.tokens = undefined
     await w.start($)
     await w.advance(10 * MIN)
-    if (mode === 'skip') expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'turn']]])
-    else if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
+    if (IDLE) expect([w.submits.length, skips(w)]).toEqual([1, []])
     else expect(skips(w)).toEqual([['no-asset', 'turn']])
   })
 }
 
-// 0.1.2: under `skip-spend` the record's spend share (`spct`) decides, not its highest share: a
-// record armed at a 95% plan window runs the turn; one armed at a 95% spend limit skips it; one an
-// older build armed (no `spct`) reads as no spend limit, so the turn runs.
-for (const c of [{ name: 'a 95% plan window, no spend limit', spct: null, skip: false }, { name: 'a 95% spend limit', spct: 95, skip: true }, { name: 'no spct (an older build)', spct: undefined, skip: false }]) {
+// 0.1.2: under `skip-spend` the record's spend share (`spct`) is the reading, not its highest
+// share: a record armed at a 95% plan window runs the turn; one an older build armed (no `spct`)
+// reads as no spend limit, so the turn runs; D-83: one armed at a 95% spend limit 49 min before
+// is no fresh reading, so it runs too.
+for (const c of [{ name: 'a 95% plan window, no spend limit', spct: null, skip: false }, { name: 'a 95% spend limit', spct: 95, skip: false }, { name: 'no spct (an older build)', spct: undefined, skip: false }]) {
   test(`AT-IC-C30 (turn, G12, skip-spend): the adopted 49-min turn record armed at ${c.name}, no reading yet: ${c.skip ? '[near-limit, turn]' : 'the turn runs (or no-asset)'}`, { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
     const rec = adoptedTurn('1h', 95, c.spct ?? undefined)
     if (c.spct === null) (rec[KEY] as Record<string, unknown>).spct = null
@@ -1690,8 +1694,104 @@ test('D-3: a finished lane under the floor still meets the other limits (idle_ha
   const w = world(on)
   await episodeAfterResult($, w, FINISHED, 150000)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }]
-  await w.advance(49 * MIN)
+  await w.advance(44 * MIN)
+  await w.measure($)
+  await w.advance(5 * MIN)
   expect(skips(w)).toEqual([['near-limit', 'turn']])
+})
+
+test('D83-02 (D-83): the idle handoff turn\'s near-limit skip (idle_handoff_near_limit skip) names the window\'s source and age', { options: { ...ON, idle_handoff_near_limit: 'skip' } }, async ($, on) => {
+  const w = world(on)
+  await episodeAfterResult($, w, FINISHED, 150000)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }]
+  await w.advance(44 * MIN)
+  await w.measure($)
+  await w.advance(5 * MIN)
+  expect(w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.rule, r.windows, r.usage_src, r.usage_age_s]))
+    .toEqual([['option-skip', ['five_hour:95'], ['five_hour:plugin'], { five_hour: 300 }]])
+})
+
+// ---- D-83 (owner U-60: "what can be more important than creating a handoff and compacting?
+// reading cold cache seems to be more expensive"): every near-limit decision reads the session's
+// own reading, its status line's and the other sessions' on this machine (the shared usage record),
+// fresh ones only, and skips only when every fresh reading of a kind is at or over its limit.
+
+/** A record entry (the fake helper `usage`): a reading `ago` seconds before now, times in epoch seconds. */
+const entry = (w: World, kind: string, pct: number, src: string, sid8: string, ago = 30, resets: number | null = null) =>
+  ({ kind, pct, resets_at: resets, at: Math.floor(w.clock.now() / 1000) - ago, src, sid8 })
+
+/** The compaction timer's fire (54 min) with the own windows `own`, fresh (measured at 53 min), and the record's `entries` read then. */
+async function timerWith($: Engine, w: World, own: World['rateLimits'], entries: (w: World) => Record<string, unknown>[]): Promise<void> {
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(53 * MIN)
+  w.rateLimits = own
+  await w.measure($)
+  w.usageEntries = entries(w)
+  await w.advance(MIN)
+}
+
+test('D83-03 (D-83): own seven_day at 95 (fresh), another session on the machine at 40 (fresh): the readings disagree, so plugin idle compaction runs (rule split; the peer\'s reading named, 2 fresh readings)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await timerWith($, w, [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }], w => [entry(w, 'seven_day', 40, 'plugin', '5e55a002')])
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.rule, r.windows, r.usage_src, r.usage_n])).toEqual([['split', ['five_hour:12', 'seven_day:40'], ['five_hour:plugin', 'seven_day:peer'], { five_hour: 1, seven_day: 2 }]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('D83-04 (D-83): own seven_day at 95 and every other fresh reading at or over 90 (a peer at 96, a stale peer at 40 left out): [near-limit, compact]', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await timerWith($, w, [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }], w => [entry(w, 'seven_day', 96, 'plugin', '5e55a002'), entry(w, 'seven_day', 96, 'statusline', '5e55a002', 10), entry(w, 'seven_day', 40, 'plugin', '5e55a003', 11 * 60)])
+  expect(w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.kind, r.windows, r.usage_n])).toEqual([['compact', ['five_hour:12', 'seven_day:95'], { five_hour: 1, seven_day: 2 }]])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('D83-05 (D-83): own seven_day at 95 read 54 min before (nothing refreshed it), no other reading: no fresh reading, so no skip on usage: the compaction runs (rule no-fresh, the reading\'s age logged)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+  await w.measure($)
+  await w.advance(54 * MIN)
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.rule, r.windows, r.usage_src, r.usage_n, (r.usage_age_s as Record<string, number>).seven_day])).toEqual([['no-fresh', ['five_hour:12', 'seven_day:95'], ['five_hour:plugin', 'seven_day:plugin'], { five_hour: 0, seven_day: 0 }, 3240]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('D83-06 (D-83, review): the own reading 54 min old, the session\'s status line entry 30 s old at 95 (cache --note-usage shows the same in-memory reading again): it is never newer than the own reading, so no fresh reading: the compaction runs (rule no-fresh, age 54 min)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+  await w.measure($)
+  await w.advance(53 * MIN)
+  w.usageEntries = [entry(w, 'seven_day', 95, 'statusline', SID_A.slice(0, 8)), entry(w, 'five_hour', 12, 'statusline', SID_A.slice(0, 8))]
+  await w.advance(MIN)
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.rule, r.usage_src, r.usage_n, (r.usage_age_s as Record<string, number>).seven_day])).toEqual([['no-fresh', ['five_hour:plugin', 'seven_day:plugin'], { five_hour: 0, seven_day: 0 }, 3240]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('D83-08 (D-83, review 2): the own reading 54 min old; another session idle 50 min at 95, whose status line entry was dropped from the record and shown again (dated 30 s ago): it is never newer than that session\'s plugin entry, so no fresh reading: the compaction runs (rule no-fresh)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  await w.start($)
+  await humanTurn($, w)
+  w.rateLimits = [{ kind: 'seven_day', percentUsed: 95 }]
+  await w.measure($)
+  await w.advance(53 * MIN)
+  w.usageEntries = [entry(w, 'seven_day', 95, 'plugin', '5e55a002', 50 * 60), entry(w, 'seven_day', 95, 'statusline', '5e55a002'), entry(w, 'seven_day', 95, 'statusline', '5e55a003')]
+  await w.advance(MIN)
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.rule, r.usage_n])).toEqual([['no-fresh', { seven_day: 0 }]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('D83-07 (D-83): a fresh peer reading whose reset is 5 h from the own one\'s (another account behind a proxy) is still a reading, marked an anomaly: split, the compaction runs', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const R = Math.floor(T0 / 1000) + 3 * 3600
+  await timerWith($, w, [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95, resetsAt: new Date(R * 1000).toISOString() } as never], w => [entry(w, 'seven_day', 41, 'plugin', '5e55a002', 30, R + 5 * 3600)])
+  expect(ic(w).map(r => [r.rule, r.usage_anomaly])).toEqual([['split', ['seven_day:plugin', 'seven_day:peer']]])
+  expect(selfCompacts(w)).toBe(1)
 })
 
 // ---- Lane B: the 55.5-min check's compaction runs behind the guards of the `compact` timer (D4),
@@ -1741,6 +1841,7 @@ for (const c of [
     await humanTurn($, w)
     await w.advance(55 * MIN)
     await c.at55(w, $)
+    await w.measure($)
     await w.advance(MIN)
     expect(w.rowsOf('idle_silent').length).toBe(1)
     expect(skips(w)).toEqual([[c.why, 'check']])
@@ -1857,6 +1958,7 @@ for (const c of [{ spend: 95, plan: 12, skip: true }, { spend: 50, plan: 95, ski
     await humanTurn($, w)
     await w.advance(55 * MIN)
     w.rateLimits = [{ kind: 'five_hour', percentUsed: c.plan }, { kind: 'spend_limit', percentUsed: c.spend }]
+    await w.measure($)
     await w.advance(MIN)
     expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
     if (c.skip) expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
@@ -1886,6 +1988,7 @@ for (const mode of ['run', 'skip-spend', 'skip'] as const) {
     const compacts = w.compacts.length
     await w.advance(55 * MIN)
     w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+    await w.measure($)
     await w.advance(MIN)
     expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
     if (mode === 'skip') expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
@@ -1913,6 +2016,7 @@ test('AT-IC-C45 (NL-2, skip-spend): no agents, halt for two bad summaries, a spe
   const compacts = w.compacts.length
   await w.advance(55 * MIN)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: 95 }]
+  await w.measure($)
   await w.advance(MIN)
   expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
   expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'check']]])
@@ -1932,6 +2036,7 @@ for (const c of [{ reason: 'cap', agents: false }, { reason: 'thrash', agents: t
     await w.turnEnd($)
     await w.advance(55 * MIN)
     w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+    await w.measure($)
     await w.advance(MIN)
     expect([skips(w), ic(w).length, selfCompacts(w), w.submits.length]).toEqual([[['near-limit', 'check']], 0, 0, 0])
   })
@@ -1950,6 +2055,7 @@ test('AT-IC-C45 (NL-2): no halt, no agents, a window at 95% at the check, idle_h
   const compacts = w.compacts.length
   await w.advance(55 * MIN)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+  await w.measure($)
   await w.advance(MIN)
   expect(w.rowsOf('halt').length).toBe(0)
   expect([ic(w).length, w.compacts.length - compacts]).toEqual([0, 0])
@@ -2166,6 +2272,7 @@ test('D76-01 (compact): a seven-day window at 95% at the timer: the near-limit r
   await humanTurn($, w)
   await w.advance(53 * MIN)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }]
+  await w.measure($)
   await w.advance(MIN)
   expect(nearRows(w)).toEqual([['near-limit', 'compact', ['five_hour:12', 'seven_day:95']]])
 })
@@ -2176,6 +2283,7 @@ test('D76-02 (turn, skip): a seven-day window at 94.6% before a five-hour one at
   await humanTurn($, w)
   await w.advance(48 * MIN)
   w.rateLimits = [{ kind: 'seven_day', percentUsed: 94.6 }, { kind: 'five_hour', percentUsed: 40.9 }]
+  await w.measure($)
   await w.advance(2 * MIN)
   expect(nearRows(w)).toEqual([['near-limit', 'turn', ['seven_day:94', 'five_hour:40']]])
 })
@@ -2187,27 +2295,30 @@ test('D76-03 (check): native on, a spend limit at 95% at the 55.5-min check: the
   await humanTurn($, w)
   await w.advance(55 * MIN)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'spend_limit', percentUsed: 95 }]
+  await w.measure($)
   await w.advance(MIN)
   expect(nearRows(w)).toEqual([['near-limit', 'check', ['five_hour:12', 'spend_limit:95']]])
 })
 
-test('D76-04 (compact, arm): an adopted record armed at 95%, no reading yet: the row names the arm-time reading, arm:95', { options: ON }, async ($, on) => {
+test('D76-04 (compact, arm; D-83): an adopted record armed at 95%, no reading yet: the compaction\'s row names the arm-time reading, arm:95, with its age (no fresh reading: rule no-fresh)', { options: ON }, async ($, on) => {
   const probe = new World()
   const w = world(on, {}, adoptedRecord(probe, { pct: 95.5 }))
   w.rateLimits = []
   w.tokens = undefined
   await w.start($)
   await w.advance(10 * MIN)
-  expect(nearRows(w)).toEqual([['near-limit', 'compact', ['arm:95']]])
+  expect(nearRows(w)).toEqual([])
+  expect(ic(w).map(r => [r.rule, r.windows, Object.keys(r.usage_age_s as object)])).toEqual([['no-fresh', ['arm:95'], ['arm']]])
 })
 
-test('D76-05 (turn, skip-spend, arm): an adopted turn record armed at a 30% top share and a 95% spend share: the spend share decided, arm:95', { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
+test('D76-05 (turn, skip-spend, arm; D-83): an adopted turn record armed at a 30% top share and a 95% spend share: the spend share is the reading, arm:95, 49 min old: no skip, the turn\'s start row names it (rule no-fresh)', { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
   const w = world(on, {}, adoptedTurn('1h', 30, 95))
   w.rateLimits = []
   w.tokens = undefined
   await w.start($)
   await w.advance(10 * MIN)
-  expect(nearRows(w)).toEqual([['near-limit', 'turn', ['arm:95']]])
+  expect(nearRows(w)).toEqual([])
+  if (IDLE) expect(w.rowsOf('handoff_turn_open').length + w.submits.length).toBeGreaterThan(0)
 })
 
 test('D76-06: a skip row for any other reason has no windows field', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {

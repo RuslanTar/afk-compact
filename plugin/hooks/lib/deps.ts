@@ -622,6 +622,11 @@ export type LoadState = {
    * end of a main request (its response's headers carry it) or a `session.measure` event.
    */
   usageAt: number | undefined
+  /**
+   * D-83 (limits.ts `noteUsage`): the reading this load last wrote to the shared usage record, as
+   * a key of its windows, and when (a reading written again only once it changed or grew old).
+   */
+  usageNote: { key: string; at: number } | undefined
 }
 
 /**
@@ -833,6 +838,7 @@ export function newState(loadId: string): LoadState {
     bgTasks: undefined,
     endedTasks: new Set(),
     usageAt: undefined,
+    usageNote: undefined,
   }
 }
 

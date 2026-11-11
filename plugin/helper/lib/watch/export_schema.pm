@@ -20,6 +20,7 @@ package watch::export_schema;
 #                       `other`; an MCP server name is the user's own word and never exported
 #   rule                an alert rule id (A-NN), else dropped
 #   window              a usage window as `kind:percent` (D-76: `seven_day:94`, `arm:95`), else dropped
+#   wsrc                a usage window's source as `kind:source` (D-83: `five_hour:peer`), else dropped
 #   [list => CLASS]     an array; each item through CLASS (items that fail are dropped)
 #   [counts => CLASS]   an object {key: number}; keys through CLASS (word by default), values num
 #   [obj => {...}]      a nested object with its own field classes
@@ -51,8 +52,11 @@ my @SKIP_WHY = qw(user-turn headroom compacted asks-user cap no-asset open-faile
                   lapsed present newer-turn due-missing prefix-changed adopted-cold input-ended compact-off
                   compaction-off error keep-warm fork-miss);
 my @IDLE_SRC = qw(mod notice return both none);
-# D-80 (0.1.7, hooks/lib/limits.ts): the usage-limit rule a near-limit row or a band compaction went by
-my @LIMIT_RULE = qw(band 90 spend-90 other-90 cap no-job stale no-delta delta arm-90 option-skip option-skip-spend);
+# D-80 (0.1.7, hooks/lib/limits.ts): the usage-limit rule a near-limit row or a band compaction went by;
+# D-83 (0.1.8): why a reading at the limit did not stop an action (split, no-fresh)
+my @LIMIT_RULE = qw(band 90 spend-90 other-90 cap no-job stale no-delta delta arm-90 option-skip option-skip-spend split no-fresh);
+# D-83 (0.1.8): a decision's readings: each window's source and age, the fresh readings per kind, the anomalies
+my %USAGE = (usage_src => [list => 'wsrc'], usage_age_s => [counts => 'word'], usage_n => [counts => 'word'], usage_anomaly => [list => 'wsrc']);
 # core writes idle as a JSON bool once reconcile settled it (compaction_boundary, rollup), and
 # `unknown` before (needs/core-to-watch.md §6)
 my $IDLE = [or => 'bool', 'unknown'];
@@ -126,6 +130,8 @@ our %SCHEMA = (
         nonce => 'nonce', skip => 'word', tokens_before => 'num', tokens_after => 'num', usage_present => 'bool',
         ms => 'num', t0 => 'num', ht => 'hash', handoff_ht => 'hash',
         pct_before => [counts => 'word'], pct_after => [counts => 'word'],
+        # D-83 (0.1.8): the source of those readings and their ages in seconds, by kind
+        usage_src => [list => 'wsrc'], usage_age_s_before => [counts => 'word'], usage_age_s_after => [counts => 'word'],
     },
     postcompact => {
         trigger => [enum => qw(auto manual)], nonce_found => 'nonce', scope_found => [enum => qw(main sub manual)],
@@ -206,10 +212,11 @@ our %SCHEMA = (
     handoff_turn_open => { ht => 'hash', reason => [enum => @HT_REASON], max_calls => 'int', max_tokens => 'num' },
     # IDLE-COMPACT-SPEC §2.3 (lane B): the idle timer's kind, and how late a late fire was; D-76
     # (0.1.6): a near-limit skip's usage windows (none on older rows); D-80 (0.1.7): its rule and the
-    # plan words Claude Code's environment had
+    # plan words Claude Code's environment had; D-83 (0.1.8): each window's source and age
     handoff_skipped => { why => [enum => @SKIP_WHY], reason => [enum => qw(idle precompact)], ht => 'hash',
                          kind => [enum => qw(turn check compact)], late_s => 'num', windows => [list => 'window'],
-                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word' },
+                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
+                         %USAGE },
     # IA-3 / IA-6 (idle D3, 2026-10-23): the pair at each change in a load; owner xxxxxxxx-17:
     # `check` (native on or unreadable: the 55.5-min outcome check) and the served mode Claude Code
     # cached (2b, a hint only, never used to decide)
@@ -224,7 +231,8 @@ our %SCHEMA = (
     # owner 2026-10-27 ("Compact (Recommended)"): at that check, with agents running, the plugin
     # compacts the session itself (its dispatch, compacted or compact_rejected rows follow)
     idle_compact => { gap_s => 'num', tokens => 'num', agents => 'int', at => [enum => qw(check timer)], late_s => 'num', adopted => 'bool',
-                      rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word' },
+                      rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
+                      windows => [list => 'window'], %USAGE },
     # IDLE-COMPACT-SPEC D7 (lane A): the plugin's idle compaction failed twice in a row and is off
     # for the load (`queued`: lane B1's D8).
     idle_compact_off => { why => [enum => qw(failed queued)], fails => 'int' },
@@ -235,12 +243,18 @@ our %SCHEMA = (
     # (one stop row, why no-idle-path, pings 0, with no start row before it)
     keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int' },
     keep_warm_ping => { n => 'int', result => [enum => qw(warm fork-miss nothing-to-fork api-error aborted error)], cache_read => 'num',
-                        cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int' },
+                        cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int',
+                        # D-83 (0.1.8): a reading at the limit that did not stop the ping
+                        rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word', windows => [list => 'window'], %USAGE },
+    # 0.1.8: the next ping waits for a usage window's reset (D-80): when it is due (next_s from the row)
+    keep_warm_wait => { n => 'int', gap_s => 'num', next_s => 'num', windows => [list => 'window'], rule => [enum => @LIMIT_RULE],
+                        plan => 'word', tier => 'word', %USAGE },
     keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed fork-miss no-jobs ttl-5m prefix-changed
                                              near-limit cutoff off error held-elsewhere reload nothing-to-fork deadline
                                              no-idle-path)],
                         pings => 'int', gap_s => 'num', handover => 'bool', windows => [list => 'window'],
-                        rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word' },
+                        rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
+                        %USAGE },
     # away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-05/-06/-09): the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents
     # and the measure's running background tasks, at which step), and the digest turn submitted
@@ -252,7 +266,9 @@ our %SCHEMA = (
                        result => [enum => qw(submitted skipped:return skipped:off skipped:running skipped:taken skipped:session-changed skipped:busy
                                             skipped:halt skipped:headless skipped:disabled skipped:cap skipped:claimed skipped:submit-failed)] },
     handoff_turn_start => { ht => 'hash', reason => [enum => @HT_REASON], turn_id => 'hash', t0 => 'num', gap_s => 'num',
-                            max_calls => 'int', max_tokens => 'num', model => 'model' },
+                            max_calls => 'int', max_tokens => 'num', model => 'model',
+                            # D-83 (0.1.8): an idle turn a reading at the limit did not stop
+                            rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word', windows => [list => 'window'], %USAGE },
     handoff_turn_end => {
         handoff_turn => [pre => [@HT_END], [qw(failed)]], handoff_ht => 'hash', handoff_tokens => 'num',
         handoff_calls => 'int', handoff_result_chars => 'int', handoff_ms => 'num', handoff_headroom => 'num',

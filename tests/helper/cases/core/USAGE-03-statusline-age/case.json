@@ -1,0 +1,208 @@
+{
+ "id": "USAGE-03-statusline-age",
+ "note": "0.1.8 D-83 (review of the usage lane): a status line gets the session's usage reading without the time Claude Code took it and shows it again while it is on screen, so `cache --stdin --note-usage` dates a status line's entry from when it first showed that share and reset: the same reading shown again keeps its `at` and moves only `seen` (at most once a minute), so an idle session's old reading keeps its first time while its entry stays in the record (readers also cap it by the session's plugin entry: USAGE-04), and an entry still shown is kept past the hour (`seen` counts for the hour) without being dated anew. A changed share is a new reading, dated now.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "the status line shows seven_day 95 at 12:00",
+   "now": "2026-11-09T12:00:00Z",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--note-usage"
+   ],
+   "stdin_json": {
+    "session_id": "5e55a002-0000-4000-8000-0000000000b2",
+    "rate_limits": {
+     "seven_day": {
+      "used_percentage": 95,
+      "resets_at": 1794492000
+     }
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "dated 12:00, no seen yet",
+   "now": "2026-11-09T12:00:00Z",
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 1
+     },
+     "readings.0.at": 1794225600,
+     "readings.0.src": "statusline",
+     "readings.0.seen": {
+      "null": true
+     }
+    }
+   }
+  },
+  {
+   "name": "the same reading shown again 30 s later",
+   "now": "2026-11-09T12:00:30Z",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--note-usage"
+   ],
+   "stdin_json": {
+    "session_id": "5e55a002-0000-4000-8000-0000000000b2",
+    "rate_limits": {
+     "seven_day": {
+      "used_percentage": 95,
+      "resets_at": 1794492000
+     }
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "nothing moves within a minute",
+   "now": "2026-11-09T12:00:30Z",
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings.0.at": 1794225600,
+     "readings.0.seen": {
+      "null": true
+     }
+    }
+   }
+  },
+  {
+   "name": "the same reading shown again at 12:55 (no response since)",
+   "now": "2026-11-09T12:55:00Z",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--note-usage"
+   ],
+   "stdin_json": {
+    "session_id": "5e55a002-0000-4000-8000-0000000000b2",
+    "rate_limits": {
+     "seven_day": {
+      "used_percentage": 95,
+      "resets_at": 1794492000
+     }
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "still dated 12:00; seen 12:55",
+   "now": "2026-11-09T12:55:00Z",
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 1
+     },
+     "readings.0.at": 1794225600,
+     "readings.0.seen": 1794228900
+    }
+   }
+  },
+  {
+   "name": "the same reading shown again at 13:05, over an hour after it was first shown",
+   "now": "2026-11-09T13:05:00Z",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--note-usage"
+   ],
+   "stdin_json": {
+    "session_id": "5e55a002-0000-4000-8000-0000000000b2",
+    "rate_limits": {
+     "seven_day": {
+      "used_percentage": 95,
+      "resets_at": 1794492000
+     }
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "kept (seen 10 min ago), still dated 12:00",
+   "now": "2026-11-09T13:05:00Z",
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 1
+     },
+     "readings.0.at": 1794225600,
+     "readings.0.seen": 1794229500
+    }
+   }
+  },
+  {
+   "name": "a changed share at 13:06",
+   "now": "2026-11-09T13:06:00Z",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--note-usage"
+   ],
+   "stdin_json": {
+    "session_id": "5e55a002-0000-4000-8000-0000000000b2",
+    "rate_limits": {
+     "seven_day": {
+      "used_percentage": 96,
+      "resets_at": 1794492000
+     }
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "a new reading, dated 13:06",
+   "now": "2026-11-09T13:06:00Z",
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 1
+     },
+     "readings.0.pct": 96,
+     "readings.0.at": 1794229560,
+     "readings.0.seen": {
+      "null": true
+     }
+    }
+   }
+  }
+ ]
+}

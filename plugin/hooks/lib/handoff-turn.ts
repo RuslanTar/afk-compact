@@ -18,7 +18,8 @@ import { log } from './log'
 import { drawNonce } from './nonce'
 import { HOUR_MS, clearHalt } from './cont'
 import { storeRuntime } from './resume'
-import { IDLE_MIN_TEXT, gapSeconds, markIdlePublished, submitDropped } from './idle'
+import { IDLE_MIN_TEXT, gapSeconds, limitFields, markIdlePublished, submitDropped } from './idle'
+import type { LimitNote, UsageFields } from './limits'
 import { shadowPluginSide, shadowPrepM2, shadowPresent, shadowStartM2 } from './shadow'
 
 /** Why a cycle will not auto-continue (the `handoff-turn open --reason` values of a last cycle). */
@@ -124,6 +125,8 @@ export type HandoffTurn = {
   firstReadShare?: number | null
   /** `@idle_min@` of a pre-idle turn: 49, or 55 when the 55.5-min outcome check runs it (owner xxxxxxxx-17). */
   idleMin?: string
+  /** D-83: an idle turn's limit note (a reading at the limit that did not stop it), for its start row. */
+  limit?: LimitNote
   /**
    * The shadow trial's forks fired for this planned turn (TRIAL-DUAL-HANDOFF §4.1): kept on the
    * turn, not its ht, so a re-run after a dropped submit (a new ht) fires nothing more.
@@ -176,9 +179,9 @@ export async function handoffPossible(d: Deps, sid: string): Promise<boolean> {
  * One `handoff_skipped` row; an optional turn's row also names its reason (`precompact`, `idle`).
  * An idle timer's row also names its kind (`turn`, `check`, `compact`) and, when it fired late,
  * by how many seconds (`late_s`); a `near-limit` row the windows read (`windows`, D-76: idle.ts
- * `limitWindows`).
+ * `limitWindows`) and each one's source and age (`usage_src`, `usage_age_s`, D-83).
  */
-export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number; windows?: string[]; rule?: string; plan?: string; tier?: string } = {}): Promise<void> {
+export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number; windows?: string[]; rule?: string; plan?: string; tier?: string } & Partial<UsageFields> = {}): Promise<void> {
   await log(d, sid, 'handoff_skipped', {
     why, ht, ...(reason !== undefined && !isHalt(reason) ? { reason } : {}),
     ...(extra.kind !== undefined ? { kind: extra.kind } : {}), ...(extra.late_s !== undefined ? { late_s: extra.late_s } : {}),
@@ -186,6 +189,9 @@ export async function skipped(d: Deps, sid: string, why: string, ht: string | nu
     // D-80: a near-limit skip's rule (limits.ts) and the plan words Claude Code's environment had.
     ...(extra.rule !== undefined ? { rule: extra.rule } : {}), ...(extra.plan !== undefined ? { plan: extra.plan } : {}),
     ...(extra.tier !== undefined ? { tier: extra.tier } : {}),
+    // D-83: each window's source and age (limits.ts `usageFields`).
+    ...(extra.usage_src !== undefined ? { usage_src: extra.usage_src } : {}), ...(extra.usage_age_s !== undefined ? { usage_age_s: extra.usage_age_s } : {}),
+    ...(extra.usage_n !== undefined ? { usage_n: extra.usage_n } : {}), ...(extra.usage_anomaly !== undefined ? { usage_anomaly: extra.usage_anomaly } : {}),
   })
 }
 
@@ -391,7 +397,7 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
     if (h.reason === 'precompact') s.precompactRan = true
     await log(d, sid, 'handoff_turn_start', {
       ht: h.ht, reason: h.reason, turn_id: turnId, t0: h.t0, max_calls: h.maxCalls, max_tokens: h.allowance,
-      ...(h.reason === 'idle' ? { gap_s: await gapSeconds(d) } : {}),
+      ...(h.reason === 'idle' ? { gap_s: await gapSeconds(d), ...(await limitFields(d, h.limit)) } : {}),
       // MG-4: the session's model this turn runs on (recorded only; the submit names none).
       model: (await d.model()) ?? null,
     })

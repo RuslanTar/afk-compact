@@ -22,7 +22,8 @@ use warnings;
 use utf8;
 use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 
-# keepwarm.ts: the next ping 50 min after the last warm request; none later than 58 min.
+# keepwarm.ts: the next ping 50 min after the last warm request (or, 0.1.8, when a keep_warm_wait
+# row says: a wait for a usage window's reset); none later than 58 min.
 our $PING_S = 50 * 60;
 our $LATEST_S = 58 * 60;
 our %TTL_S = ('1h' => 3600, '5m' => 300);
@@ -36,7 +37,7 @@ our $PRUNE_DAYS = 7;
 # the mod rows note_rows reads (keepwarm.ts; boundary.ts and compact.ts write `compacted` once the
 # compaction ran or was skipped). Not idle.ts's `idle_compact`: it comes before the attempt, which
 # may then be skipped or never run, and a compaction that runs writes its own `compacted` row.
-our %ROWS = map { $_ => 1 } qw(keep_warm_start keep_warm_ping keep_warm_stop compacted);
+our %ROWS = map { $_ => 1 } qw(keep_warm_start keep_warm_ping keep_warm_wait keep_warm_stop compacted);
 
 sub schema       { return ctx::brand() . '-cache/v1' }
 sub state_schema { return ctx::brand() . '-cache-state/v1' }
@@ -180,10 +181,21 @@ sub _apply {
         my $res = !ref $r->{result} && defined $r->{result} && $r->{result} =~ /\A[a-z-]{1,40}\z/ ? $r->{result} : 'error';
         @$kw{qw(n result last_at)} = (_num($r->{n}) // $kw->{n} // 0, $res, _t($t));
         $kw->{warm_at} = _t($start) if $res eq 'warm';
+        # a warm ping sets the next due itself (50 min after it): a reset wait before it is over
+        delete $kw->{next_at} if $res eq 'warm';
         # the gap's last warm ping and last fork-miss, kept apart from the latest ping: a warm ping's
         # cache outlives a later ping that failed (api-error, aborted, error, nothing-to-fork)
         $kw->{warm_ping} = [_t($start), _t($t)] if $res eq 'warm';
         $kw->{miss_ping} = [_t($start), _t($t)] if $res eq 'fork-miss';
+        return 1;
+    }
+    if ($ev eq 'keep_warm_wait') {
+        # 0.1.8: the next ping waits for a usage window's reset: due next_s after the row
+        my $gs = $t - $gap;
+        return $ch unless $kw && _same_gap($kw, $gs);
+        my $n = _num($r->{next_s});
+        return $ch unless defined $n && $n >= 0;
+        @$kw{qw(next_at last_at)} = (_t($t + $n), _t($t));
         return 1;
     }
     # keep_warm_stop (one with no start before it, `no-idle-path`, is a gap of its own)
@@ -446,6 +458,9 @@ sub _with_kw {
     my $started = _num($kw->{started_at});
     my $stop = ref $kw->{stop} eq 'HASH' ? $kw->{stop} : undef;
     my $warm = _num($kw->{warm_at}) // _num($kw->{gap_start});
+    # 0.1.8: the next ping is the reset wait's when a keep_warm_wait row set one after the last warm request
+    my $next = _num($kw->{next_at});
+    $next = undef unless defined $next && defined $warm && $next > $warm;
     # warming runs from its start row to its stop row; a gap whose stop never came (a crash) ends at
     # the 58-minute bound of its last warm request, at the cutoff, at the session's end, or at a main
     # request after its last row
@@ -454,7 +469,7 @@ sub _with_kw {
                  && !(defined $main_at && $main_at > (_num($kw->{last_at}) // $started)) ? 1 : 0;
     $r->{keep_warm} = {
         active => jsonc::bool($active), n => _num($kw->{n}) // 0, max => $max, hours => $hours,
-        gap_started_at => _int(_num($kw->{gap_start})), next_due_at => ($active ? int($warm + $PING_S) : undef),
+        gap_started_at => _int(_num($kw->{gap_start})), next_due_at => ($active ? int($next // $warm + $PING_S) : undef),
         last_result => (defined $kw->{result} && !ref $kw->{result} ? $kw->{result} : undef),
         stop => ($stop ? { why => $stop->{why}, pings => _num($stop->{pings}) // 0, at => _int(_num($stop->{at})) } : undef),
     };

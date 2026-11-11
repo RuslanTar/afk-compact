@@ -148,6 +148,13 @@ export class World {
    * `five_hour` or `seven_day` window shows the one-hour cache (D15); a window without a kind is none.
    */
   rateLimits: { kind?: string; percentUsed: number }[] = []
+  /**
+   * D-83: the entries the fake `usage` helper answers with (the shared usage record: other sessions'
+   * and status-line readings, `{kind, pct, resets_at, at, src, sid8}` with times in epoch seconds),
+   * and the own readings the mod sent it (`usage --stdin`), in order.
+   */
+  usageEntries: Record<string, unknown>[] = []
+  usageNotes: { at: number; windows: { kind: string; pct: number; resets_at: number | null }[] }[] = []
   /** Environment variables the plugin reads beside HOME (`$.env.get`), read when asked. */
   env: Record<string, string> = {}
   /** `$.session.model()` (MG-4); undefined: the call rejects. */
@@ -422,6 +429,12 @@ export class World {
     await s.result
   }
 
+  /** The engine measured the session now (D-80, D-83: the usage reading is fresh from this moment). */
+  async measure($: Engine): Promise<void> {
+    await $.session.measure({ context: { tokens: this.tokens, window: this.window }, rateLimits: this.rateLimits, changed: ['rateLimits'] } as never)
+    await this.settle()
+  }
+
   /** One main tool call; returns its result as the model would read it. */
   async tool($: Engine, agentId?: string): Promise<{ context?: readonly string[]; deny?: string }> {
     const e = { tool: 'Bash', command: 'ls', ...(agentId ? { agentId } : {}) }
@@ -547,6 +560,9 @@ export class World {
         this.files.set(path, JSON.stringify({ nonce, channel: flag('--channel'), resume_pref: flag('--resume-pref'), actor: flag('--actor') }))
         return ok('ok\n')
       }
+      case 'usage':
+        if (stdin !== undefined) this.usageNotes.push(JSON.parse(stdin) as World['usageNotes'][number])
+        return ok(JSON.stringify({ schema: BRAND.name + '-usage/v1', now: Math.floor(this.clock.now() / 1000), readings: this.usageEntries }) + '\n')
       case 'prev-copy':
         return ok(this.prevCopy + '\n')
       case 'checkpoint':

@@ -1,0 +1,71 @@
+{
+ "id": "CACHE-07-reset-wait",
+ "note": "0.1.8 (carried 0.1.7 nit): while keep-warm waits for a usage window's reset (D-80: the ping comes just after it), its keep_warm_wait row names when the ping is due (next_s); `cache` reports that as keep_warm.next_due_at instead of 50 min after the last warm request. A later warm ping sets the next due from itself again.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "start, a warm ping at 11:10, a wait row at 12:00 (the ping due at 12:05)",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:10:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 2}\n{\"v\": 1, \"ts\": \"2026-11-09T11:10:05.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 5000}\n{\"v\": 1, \"ts\": \"2026-11-09T12:00:00.000Z\", \"ev\": \"keep_warm_wait\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"gap_s\": 6000, \"next_s\": 300, \"windows\": [\"five_hour:93\", \"seven_day:30\"], \"rule\": \"no-delta\"}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "next_due_at is the reset wait's, not the warm ping's + 50 min (12:00)",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": true,
+     "keep_warm.n": 1,
+     "keep_warm.next_due_at": 1794225900,
+     "keep_warm.last_result": "warm"
+    }
+   }
+  },
+  {
+   "name": "the ping after the reset: warm again",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T12:05:05.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 2, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3300, \"gap_s\": 6300, \"ms\": 5000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "next_due_at 50 min after that ping",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": true,
+     "keep_warm.n": 2,
+     "keep_warm.next_due_at": 1794228900
+    }
+   }
+  }
+ ]
+}

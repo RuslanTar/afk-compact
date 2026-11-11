@@ -582,6 +582,7 @@ for (const c of SKIPS) {
     await w.turnEnd($, 'Done.', c.aborted ? 'aborted' : 'answer')
     await w.advance(48 * MIN)
     c.setup?.(w)
+    await w.measure($)
     await w.advance(1 * MIN)
     expect(idleSkips(w)).toEqual([c.why])
     expect(w.submits.length).toBe(0)
@@ -641,6 +642,7 @@ for (const mode of ['run', 'skip-spend', 'skip'] as const) {
       await w.turnEnd($, 'Done.')
       await w.advance(48 * MIN)
       w.rateLimits = c.limits
+      await w.measure($)
       await w.advance(1 * MIN)
       if (skip) {
         expect(idleSkips(w)).toEqual(['near-limit'])

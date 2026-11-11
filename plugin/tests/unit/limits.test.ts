@@ -3,7 +3,8 @@
 import { expect, test } from 'claude-code/testing'
 import type { Deps } from '../../hooks/lib/deps'
 import type { LimitCtx } from '../../hooks/lib/limits'
-import { LIMIT_DELTAS_KEY, LIMIT_FRESH_MS, PLAN_CAPS, planShares, readDeltas, recordDeltas, resetOf, verdictOf, windowRule } from '../../hooks/lib/limits'
+import type { Reading } from '../../hooks/lib/limits'
+import { LIMIT_DELTAS_KEY, LIMIT_FRESH_MS, PLAN_CAPS, USAGE_NOTE_MS, judge, noteUsage, ownReadings, planShares, readDeltas, readingsNow, recordDeltas, recordReadings, resetOf, usageFields, verdictOf, windowRule } from '../../hooks/lib/limits'
 import { newState } from '../../hooks/lib/deps'
 import { resultJobOpen } from '../../hooks/lib/keepwarm'
 
@@ -11,17 +12,19 @@ const NOW = 1792580712000
 const MIN = 60000
 const C: LimitCtx = { job: true, usageAt: NOW - 5 * MIN, now: NOW, deltas: { five_hour: [1, 2], seven_day: [1] } }
 const w = (kind: string, percentUsed: number, resetsAt?: number) => ({ kind, percentUsed, ...(resetsAt !== undefined ? { resetsAt } : {}) })
+/** D-83: the own reading's source and age (`C.usageAt`: 5 min) of these window kinds. */
+const U = (...kinds: string[]) => ({ usage_src: kinds.map(k => `${k}:plugin`), usage_age_s: Object.fromEntries(kinds.map(k => [k, 300])), usage_n: Object.fromEntries(kinds.map(k => [k, 1])) })
 
 test('AT-LM-01: below 90 every window is ok; the caps are 98 (five_hour) and 95 (seven_day)', () => {
   expect(PLAN_CAPS).toEqual({ five_hour: 98, seven_day: 95 })
   expect(LIMIT_FRESH_MS).toBe(10 * MIN)
-  expect(verdictOf([w('five_hour', 89.9), w('seven_day', 40), w('spend_limit', 89)], C)).toEqual({ ok: true, band: false, rule: '90', windows: ['five_hour:89', 'seven_day:40', 'spend_limit:89'] })
-  expect(verdictOf([], C)).toEqual({ ok: true, band: false, rule: '90', windows: [] })
+  expect(verdictOf([w('five_hour', 89.9), w('seven_day', 40), w('spend_limit', 89)], C)).toEqual({ ok: true, band: false, rule: '90', windows: ['five_hour:89', 'seven_day:40', 'spend_limit:89'], usage: U('five_hour', 'seven_day', 'spend_limit') })
+  expect(verdictOf([], C)).toEqual({ ok: true, band: false, rule: '90', windows: [], usage: U() })
 })
 
 test('AT-LM-02: a plan window above 90 runs on in the band only with a job open, a fresh reading and a measured change that fits below the cap', () => {
   // 93 + 2 + 1 < 98
-  expect(verdictOf([w('five_hour', 93), w('seven_day', 40)], C)).toEqual({ ok: true, band: true, rule: 'band', windows: ['five_hour:93', 'seven_day:40'] })
+  expect(verdictOf([w('five_hour', 93), w('seven_day', 40)], C)).toEqual({ ok: true, band: true, rule: 'band', windows: ['five_hour:93', 'seven_day:40'], usage: U('five_hour', 'seven_day') })
   expect(windowRule(w('five_hour', 93), { ...C, job: false })).toBe('no-job')
   expect(windowRule(w('five_hour', 93), { ...C, usageAt: NOW - 11 * MIN })).toBe('stale')
   expect(windowRule(w('five_hour', 93), { ...C, usageAt: undefined })).toBe('stale')
@@ -47,7 +50,7 @@ test('AT-LM-03: seven_day stops at its own cap 95; spend_limit and an unknown wi
   expect(windowRule(w('', 91), C)).toBe('other-90')
   expect(windowRule(w('five_hour', NaN), C)).toBe('cap')
   // The first stopping window decides, though another is in the band.
-  expect(verdictOf([w('five_hour', 93), w('spend_limit', 91)], C)).toEqual({ ok: false, band: false, rule: 'spend-90', windows: ['five_hour:93', 'spend_limit:91'] })
+  expect(verdictOf([w('five_hour', 93), w('spend_limit', 91)], C)).toEqual({ ok: false, band: false, rule: 'spend-90', windows: ['five_hour:93', 'spend_limit:91'], usage: U('five_hour', 'spend_limit') })
 })
 
 test('AT-LM-04: a window whose reset time passed counts for nothing; resetOf is the latest reset of the windows that stop or hold, plan windows only', () => {
@@ -81,5 +84,152 @@ test('AT-LM-06 (design TESTS 12): a job read that throws counts as no job open: 
   const d = { state: newState('l'), agentsWorking: async () => { throw new Error('no agent list') } } as unknown as Deps
   const job = await resultJobOpen(d, 'sid-1')
   expect(job).toBe(false)
-  expect(verdictOf([w('five_hour', 93)], { ...C, job })).toEqual({ ok: false, band: false, rule: 'no-job', windows: ['five_hour:93'] })
+  expect(verdictOf([w('five_hour', 93)], { ...C, job })).toEqual({ ok: false, band: false, rule: 'no-job', windows: ['five_hour:93'], usage: U('five_hour') })
+})
+
+test('AT-LM-07 (D-83): noteUsage writes the own reading to the shared record (helper usage --stdin, epoch seconds), again only once it changed or 5 min passed; no window, no write', async () => {
+  const sent: { argv: readonly string[]; stdin?: string }[] = []
+  let limits = [w('five_hour', 44, NOW + 60 * MIN), w('seven_day', 21), w('', 3)]
+  const d = {
+    state: newState('l'), helper: '/p/helper',
+    usage: async () => ({ tokens: 1, window: 2, rateLimits: limits }),
+    sessionId: async () => '5e55a001-0c0f-4f1e-9a00-00000000a001',
+    run: async (argv: readonly string[], _ms: number, stdin?: string) => {
+      sent.push({ argv, stdin })
+      return { ok: true, exitCode: 0, stdout: '{"readings":[]}\n', error: '' }
+    },
+  } as unknown as Deps
+  await noteUsage(d, NOW)
+  expect(sent.map(x => [x.argv.slice(1), JSON.parse(x.stdin ?? 'null')])).toEqual([[['usage', '--sid', '5e55a001-0c0f-4f1e-9a00-00000000a001', '--stdin'], {
+    at: NOW / 1000, windows: [{ kind: 'five_hour', pct: 44, resets_at: Math.floor((NOW + 60 * MIN) / 1000) }, { kind: 'seven_day', pct: 21, resets_at: null }],
+  }]])
+  await noteUsage(d, NOW + USAGE_NOTE_MS - 1)
+  expect(sent.length).toBe(1)
+  await noteUsage(d, NOW + USAGE_NOTE_MS)
+  expect(sent.length).toBe(2)
+  limits = [w('five_hour', 45, NOW + 60 * MIN), w('seven_day', 21)]
+  await noteUsage(d, NOW + USAGE_NOTE_MS + 1)
+  expect(sent.length).toBe(3)
+  limits = []
+  await noteUsage(d, NOW + 99 * MIN)
+  expect(sent.length).toBe(3)
+})
+
+test('AT-LM-08 (D-83): usageFields names each window\'s source (kind:source, in order) and its age in whole seconds; a window with no known time has no age, one with no kind reads unknown', () => {
+  const rs = [...ownReadings([w('five_hour', 44), w('', 3)], NOW - 61499), { ...w('seven_day', 21), at: undefined, src: 'peer' as const }]
+  expect(usageFields(rs, NOW)).toEqual({ usage_src: ['five_hour:plugin', 'unknown:plugin', 'seven_day:peer'], usage_age_s: { five_hour: 61, unknown: 61 } })
+  expect(verdictOf([w('five_hour', 93)], { ...C, job: false }).usage).toEqual(U('five_hour'))
+  expect(verdictOf([w('five_hour', 93)], { ...C, usageAt: undefined }).usage).toEqual({ usage_src: ['five_hour:plugin'], usage_age_s: {}, usage_n: { five_hour: 0 } })
+})
+
+/** D-83: a reading of `src` (a peer's under `sid8`), read `ago` minutes before NOW. */
+const r = (kind: string, pct: number, src: Reading['src'], ago: number, resetsAt?: number, sid8 = 'aaaaaaaa'): Reading =>
+  ({ kind, percentUsed: pct, ...(resetsAt !== undefined ? { resetsAt } : {}), at: NOW - ago * MIN, src, ...(src === 'peer' ? { sid8 } : {}) })
+
+test('AT-LM-09 (D-83): the trust rule: a kind stops only when every fresh reading of it does; one under the limit lets it run (split); with no fresh reading it never stops (no-fresh); one reading per session, its newest', () => {
+  const c = { ...C, job: false }
+  // Own 95 fresh, a peer 40 fresh: split, the peer's reading is the one named.
+  const v1 = judge([r('five_hour', 20, 'plugin', 1), r('seven_day', 95, 'plugin', 1), r('seven_day', 40, 'peer', 3)], c)
+  expect([v1.ok, v1.rule, v1.windows, v1.usage]).toEqual([true, 'split', ['five_hour:20', 'seven_day:40'], { usage_src: ['five_hour:plugin', 'seven_day:peer'], usage_age_s: { five_hour: 60, seven_day: 180 }, usage_n: { five_hour: 1, seven_day: 2 } }])
+  // Every fresh reading at or over: the kind stops, with the own reading's rule.
+  const v2 = judge([r('seven_day', 93, 'plugin', 1), r('seven_day', 96, 'peer', 2), r('seven_day', 10, 'peer', 30, undefined, 'bbbbbbbb')], c)
+  expect([v2.ok, v2.rule, v2.windows, v2.usage.usage_n]).toEqual([false, 'no-job', ['seven_day:93'], { seven_day: 2 }])
+  // Nothing fresh: no stop, rule no-fresh (an old reading at the limit), or 90 (none at it).
+  expect([judge([r('seven_day', 95, 'plugin', 11), r('seven_day', 99, 'peer', 50)], c).ok, judge([r('seven_day', 95, 'plugin', 11)], c).rule]).toEqual([true, 'no-fresh'])
+  expect(judge([r('seven_day', 50, 'plugin', 11)], c).rule).toBe('90')
+  // The session's own plugin and status-line readings are one: the newest counts (a stale 95, a fresh 40: ok).
+  expect(judge([r('seven_day', 95, 'plugin', 20), r('seven_day', 40, 'statusline', 1)], c).rule).toBe('90')
+  expect(judge([r('seven_day', 40, 'plugin', 20), r('seven_day', 95, 'statusline', 1)], c).ok).toBe(false)
+  // A peer's two sources likewise: its newest only.
+  expect(judge([r('seven_day', 95, 'plugin', 1), r('seven_day', 40, 'peer', 9), r('seven_day', 96, 'peer', 1)], c).ok).toBe(false)
+  // A reading whose window has reset counts for nothing.
+  expect(judge([r('seven_day', 95, 'plugin', 1), r('seven_day', 40, 'peer', 1, NOW - 1)], c).ok).toBe(false)
+  // A spend limit keeps its 90 stop, by the same trust rule.
+  expect([judge([r('spend_limit', 91, 'plugin', 1), r('spend_limit', 89, 'peer', 1)], c).rule, judge([r('spend_limit', 91, 'plugin', 1)], c).rule]).toEqual(['split', 'spend-90'])
+})
+
+test('AT-LM-10 (D-83): the band holds when no fresh reading is under 90 and one is in the band; its reset is the latest of the readings that hold; a reading whose reset is over an hour from the others\' is an anomaly, still counted', () => {
+  const R = NOW + 30 * MIN
+  const v = judge([r('five_hour', 93, 'plugin', 1, R), r('five_hour', 99, 'peer', 2, R + 20 * MIN)], C)
+  expect([v.ok, v.band, v.rule, v.reset, v.usage.usage_anomaly]).toEqual([true, true, 'band', R + 20 * MIN, undefined])
+  const a = judge([r('seven_day', 95, 'plugin', 1, R), r('seven_day', 40, 'peer', 2, R + 5 * 60 * MIN), r('seven_day', 41, 'peer', 2, R + 10 * MIN, 'cccccccc')], { ...C, job: false })
+  expect([a.ok, a.rule, a.usage.usage_anomaly]).toEqual([true, 'split', ['seven_day:peer']])
+  // Two readings that differ: both are marked (neither can be told the odd one).
+  expect(judge([r('seven_day', 95, 'plugin', 1, R), r('seven_day', 40, 'peer', 2, R + 3 * 60 * MIN)], C).usage.usage_anomaly).toEqual(['seven_day:plugin', 'seven_day:peer'])
+  expect(resetOf([w('five_hour', 99, R)], C)).toBe(R)
+})
+
+test('AT-LM-11 (D-83): recordReadings: the session\'s own plugin entries are left out, its status line\'s are its own, every other session\'s a peer\'s; seconds become ms; an entry out of form is dropped', () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 40, resets_at: 1794492000, at: 1794225600.5, src: 'plugin', sid8: '5e55a002', ...o })
+  expect(recordReadings([e({ sid8: '5e55a001' }), e({ sid8: '5e55a001', src: 'statusline' }), e({}), e({ resets_at: null, src: 'statusline' }), e({ pct: 'x' }), e({ kind: '' }), e({ src: 'other' }), e({ at: null }), null, 7], sid)).toEqual([
+    { kind: 'seven_day', percentUsed: 40, resetsAt: 1794492000000, at: 1794225600500, src: 'statusline' },
+    { kind: 'seven_day', percentUsed: 40, resetsAt: 1794492000000, at: 1794225600500, src: 'peer', sid8: '5e55a002' },
+    { kind: 'seven_day', percentUsed: 40, at: 1794225600500, src: 'peer', sid8: '5e55a002' },
+  ])
+})
+
+test('AT-LM-12 (D-83): readingsNow writes the own reading and reads the record in one helper call; with no own window it calls nothing; a failed call leaves the own reading', async () => {
+  const sent: (readonly string[])[] = []
+  let reply = { ok: true, exitCode: 0, stdout: JSON.stringify({ readings: [{ kind: 'seven_day', pct: 40, resets_at: null, at: NOW / 1000 - 60, src: 'plugin', sid8: '5e55a002' }] }) + '\n', error: '' }
+  const state = newState('l')
+  state.usageAt = NOW - MIN
+  const d = {
+    state, helper: '/p/helper', sessionId: async () => 'x',
+    run: async (argv: readonly string[]) => { sent.push(argv.slice(1)); return reply },
+  } as unknown as Deps
+  const rs = await readingsNow(d, '5e55a001-0c0f-4f1e-9a00-00000000a001', [w('seven_day', 95)])
+  expect(rs.map(x => [x.kind, x.percentUsed, x.src, x.at])).toEqual([['seven_day', 95, 'plugin', NOW - MIN], ['seven_day', 40, 'peer', NOW - MIN]])
+  expect(sent).toEqual([['usage', '--sid', '5e55a001-0c0f-4f1e-9a00-00000000a001', '--stdin']])
+  expect(await readingsNow(d, 's', [])).toEqual([])
+  expect(sent.length).toBe(1)
+  reply = { ok: false, exitCode: 64, stdout: '', error: '' }
+  expect((await readingsNow(d, 's', [w('seven_day', 95)])).map(x => x.src)).toEqual(['plugin'])
+})
+
+test('AT-LM-13 (D-83, review): the session\'s own status line entry is the live reading shown again, so it is never newer than the live reading\'s refresh: a status line run 30 s ago over a reading 54 min old reads 54 min old (no-fresh, not a skip)', () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const own = NOW - 54 * MIN
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 95, resets_at: null, at: (NOW - 30000) / 1000, src: 'statusline', sid8: '5e55a001', ...o })
+  expect(recordReadings([e({})], sid, own).map(x => [x.src, x.at])).toEqual([['statusline', own]])
+  expect(recordReadings([e({ at: (own - MIN) / 1000 })], sid, own).map(x => x.at)).toEqual([own - MIN])
+  // Without the live reading's time, the session's own plugin entry dates it; with neither, it is no reading.
+  expect(recordReadings([e({ src: 'plugin', at: own / 1000 }), e({})], sid).map(x => x.at)).toEqual([own])
+  expect(recordReadings([e({})], sid)).toEqual([])
+  const v = judge([...ownReadings([w('seven_day', 95)], own), ...recordReadings([e({})], sid, own)], { ...C, job: false, usageAt: own })
+  expect([v.ok, v.rule, v.usage.usage_n, v.usage.usage_age_s]).toEqual([true, 'no-fresh', { seven_day: 0 }, { seven_day: 54 * 60 }])
+})
+
+test('AT-LM-15 (D-83, review 2): another session\'s status line entry is never newer than that session\'s plugin entry of the same kind, and one with none is no reading: an entry evicted or pruned from the record and shown again (dated now) over a reading 50 min old reads 50 min old (no-fresh, not a skip)', () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const own = NOW - 55 * MIN - 30000
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 95, resets_at: null, at: (NOW - 30000) / 1000, src: 'statusline', sid8: '5e55a002', ...o })
+  const peerAt = NOW - 50 * MIN
+  const rec = [e({}), e({ src: 'plugin', at: peerAt / 1000 }), e({ kind: 'five_hour', pct: 12 }), e({ sid8: '5e55a003' })]
+  expect(recordReadings(rec, sid, own).map(x => [x.kind, x.sid8, x.at])).toEqual([['seven_day', '5e55a002', peerAt], ['seven_day', '5e55a002', peerAt]])
+  // A status line entry older than the plugin entry keeps its own time; one that shows another share is dated no later than it.
+  expect(recordReadings([e({ at: (peerAt - MIN) / 1000, pct: 97 }), e({ src: 'plugin', at: peerAt / 1000 })], sid, own).map(x => [x.percentUsed, x.at])).toEqual([[97, peerAt - MIN], [95, peerAt]])
+  const v = judge([...ownReadings([w('seven_day', 95)], own), ...recordReadings(rec, sid, own)], { ...C, job: false, usageAt: own })
+  expect([v.ok, v.rule, v.usage.usage_n]).toEqual([true, 'no-fresh', { seven_day: 0 }])
+})
+
+test('AT-LM-14 (D-83, review): a failed record write is not counted as written: the next refresh writes the unchanged reading again at once (noteUsage and readingsNow)', async () => {
+  let ok = false
+  let calls = 0
+  const d = {
+    state: newState('l'), helper: '/p/helper',
+    usage: async () => ({ tokens: 1, window: 2, rateLimits: [w('seven_day', 21)] }),
+    sessionId: async () => '5e55a001-0c0f-4f1e-9a00-00000000a001',
+    run: async () => { calls++; return ok ? { ok: true, exitCode: 0, stdout: '{"readings":[]}\n', error: '' } : { ok: false, exitCode: 64, stdout: '', error: '' } },
+  } as unknown as Deps
+  await noteUsage(d, NOW)
+  expect([calls, d.state.usageNote]).toEqual([1, undefined])
+  d.state.usageAt = NOW
+  await readingsNow(d, '5e55a001-0c0f-4f1e-9a00-00000000a001', [w('seven_day', 21)])
+  expect([calls, d.state.usageNote]).toEqual([2, undefined])
+  ok = true
+  await noteUsage(d, NOW + 1000)
+  expect([calls, d.state.usageNote?.at]).toEqual([3, NOW + 1000])
+  await noteUsage(d, NOW + 2000)
+  expect(calls).toBe(3)
 })

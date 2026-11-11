@@ -65,7 +65,8 @@
 //   reads in the store still has its fire, and the hand-over a taker.
 // Rows: `keep_warm_start {jobs, gap_s, hours, windows}` (`windows`: the usage windows read; 0 means
 // the near-limit guard is skipped), one `keep_warm_ping {n, result, cache_read, cache_creation,
-// since_s, gap_s, ms, status?}` per ping, one `keep_warm_stop {why, pings, gap_s, handover, windows?}`
+// since_s, gap_s, ms, status?}` per ping, one `keep_warm_wait {n, gap_s, next_s, windows, rule}` per
+// wait for a usage window's reset (D-80; `next_s`: the seconds to the ping then), one `keep_warm_stop {why, pings, gap_s, handover, windows?}`
 // per gap that warmed or that `no-idle-path` refused before warming (`windows` on a `near-limit`
 // stop: each window as `kind:percent`, idle.ts `limitWindows`). The ping state lives in this load;
 // the idle record it holds stays in the store (idle.ts `holdIdle`), so a load that adopts it after
@@ -75,9 +76,10 @@ import type { Deps, RequestUsage } from './deps'
 import type { Due } from './idle'
 import { compactedSince } from './compact'
 import { prefixRead } from './deps'
-import { IDLE_CACHE_MS, IDLE_TICK_MS, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, oneHourCache, releaseHeld, scaleOf } from './idle'
-import { notifiedTasks } from './lane'
-import { limitCtx, resetOf, tierFields, verdictOf } from './limits'
+import { IDLE_CACHE_MS, IDLE_TICK_MS, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, limitFields, oneHourCache, releaseHeld, scaleOf } from './idle'
+import { agentIds, notifiedTasks } from './lane'
+import type { LimitNote, UsageFields } from './limits'
+import { judge, limitCtx, noteOf, readingsNow, tierFields } from './limits'
 import { log } from './log'
 
 /** The next ping, after the start of the last cache-refreshing request (a share of the cache hour, D10-scaled). */
@@ -143,6 +145,8 @@ export type KeepWarm = {
    * hand-over (a warm compaction from `idle_handoff_min_tokens` up), as at a stop of a warming gap.
    */
   bandJob?: boolean
+  /** D-83: the last check's limit note (a reading at the limit that did not stop the ping), for its row. */
+  note?: LimitNote
 }
 
 /**
@@ -190,11 +194,8 @@ export function noteEndedTasks(s: Deps['state'], kind: string, text: string): vo
  * before D-82 (it cannot tell an idle one from one at work).
  */
 export async function openJobs(d: Deps, sid: string, shells = true): Promise<number> {
-  const ids = new Set<string>(d.state.agentTurns)
-  const working = await d.agentsWorking()
-  for (const id of working ?? []) ids.add(id)
+  const ids = await agentIds(d, sid)
   const bg = d.state.bgTasks
-  if (working === undefined && bg?.sid === sid) for (const id of bg.teams ?? []) ids.add(id)
   if (bg?.sid === sid) for (const id of bg.ids) if (shells || !bg.shells.includes(id)) ids.add(id)
   for (const id of d.state.endedTasks) ids.delete(id)
   return ids.size
@@ -322,6 +323,12 @@ async function step(d: Deps, kw: KeepWarm, gen: number): Promise<void> {
   }
 }
 
+/**
+ * D-80: no stop, the next ping waits for the usage windows that stop it to reset (`wait`, at that
+ * moment); the windows, the rule and their readings (D-83) go on its `keep_warm_wait` row.
+ */
+type Wait = { wait: number; windows: string[]; rule: string; usage: UsageFields }
+
 /** A stop's reason, and what its row and its hand-over carry beside it (`stop`). */
 type Block = { why: string; handover: boolean } & StopExtra
 
@@ -333,7 +340,7 @@ type Block = { why: string; handover: boolean } & StopExtra
  * `idle_handoff_min_tokens` up (D-79). `wait` (D-80): no stop, the next ping waits for the usage
  * windows that stop it to reset, at that moment.
  */
-async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wait: number } | undefined> {
+async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | Wait | undefined> {
   const s = d.state
   const env = await d.idleEnv()
   const scale = scaleOf(env)
@@ -365,15 +372,18 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
   // deadline), the ping waits for the reset instead of spending the last points. None reported (or
   // no reading): this guard is skipped.
   const limits = u?.rateLimits ?? []
-  let wait: number | undefined
+  let wait: Wait | undefined
+  kw.note = undefined
   if (limits.length > 0) {
+    // D-83: every reading of the windows, the session's own and the shared record's (limits.ts `judge`).
     const c = await limitCtx(d, await resultJobOpen(d, kw.sid), now)
-    const v = verdictOf(limits, c)
+    const v = judge(await readingsNow(d, kw.sid, limits), c)
+    kw.note = noteOf(v)
     if (!v.ok || v.band) {
-      const reset = resetOf(limits, c)
+      const reset = v.reset
       const bound = Math.min(kw.warm + KEEP_WARM_LATEST_MS * scale, kw.deferred !== undefined ? heldDeadline(kw.deferred, kw.warm, scale) : Infinity)
-      if (reset !== undefined && reset + retryMs(scale) <= bound) wait = reset + retryMs(scale)
-      else return { why: 'near-limit', handover: true, windows: v.windows, rule: v.rule, ...(v.band ? { job: true } : {}) }
+      if (reset !== undefined && reset + retryMs(scale) <= bound) wait = { wait: reset + retryMs(scale), windows: v.windows, rule: v.rule, usage: v.usage }
+      else return { why: 'near-limit', handover: true, windows: v.windows, rule: v.rule, usage: v.usage, ...(v.band ? { job: true } : {}) }
     }
   }
   // D-79: the hand-over compacts from idle_handoff_min_tokens up only with a job whose result turn is
@@ -389,7 +399,7 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
   if (!d.cfg.triggers || ((kw.incoming ?? kw.deferred) === undefined && !(await idleArmed(d, kw.sid)))) {
     return { why: 'no-idle-path', handover: true }
   }
-  return wait !== undefined ? { wait } : undefined
+  return wait
 }
 
 /**
@@ -502,8 +512,11 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
   return true
 }
 
-/** A stop row's extra fields (`windows`, `rule`: a near-limit stop's, D-76, D-80) and a hand-over's job flag (D-79). */
-type StopExtra = { windows?: string[]; rule?: string; job?: boolean }
+/**
+ * A stop row's extra fields (`windows`, `rule`: a near-limit stop's, D-76, D-80; `usage`: its
+ * windows' source and age, D-83) and a hand-over's job flag (D-79).
+ */
+type StopExtra = { windows?: string[]; rule?: string; usage?: UsageFields; job?: boolean }
 
 /**
  * Warming ends for this gap: one `keep_warm_stop` row (only for a gap that warmed), and, with
@@ -525,7 +538,7 @@ async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: 
   if (kw.startRow) await kw.startRow.catch(() => undefined)
   await log(d, kw.sid, 'keep_warm_stop', {
     why, pings: kw.pings, gap_s: secs(now - kw.start), handover: back || (keep && rec !== undefined), ...(x.windows !== undefined ? { windows: x.windows } : {}),
-    ...(x.rule !== undefined ? { rule: x.rule, ...(await tierFields(d)) } : {}),
+    ...(x.rule !== undefined ? { rule: x.rule, ...(await tierFields(d)) } : {}), ...x.usage,
   })
   if (back && rec) {
     s.keepWarmSpent = true
@@ -596,6 +609,12 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     if (kw.phase === 'armed' && !(await begin(d, kw, now))) return
     if (kw.phase !== 'warming' || !ours()) return
     kw.next = b.wait
+    // 0.1.8: the row says when the next ping is due, so the cache state (`cache`, helper
+    // lib/cachestate.pm) shows the reset wait, not 50 minutes after the last warm request.
+    await log(d, kw.sid, 'keep_warm_wait', {
+      n: kw.pings, gap_s: secs(now - kw.start), next_s: secs(kw.next - now), windows: b.windows, rule: b.rule, ...(await tierFields(d)), ...b.usage,
+    })
+    if (!ours()) return
     if (kw.deferred !== undefined && (await heldHere(d, kw.sid)) !== undefined && ours()) {
       await holdIdle(d, kw.deferred, { due: kw.next, warm: kw.warm, start: kw.start, pings: kw.pings })
     }
@@ -636,6 +655,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   await log(d, kw.sid, 'keep_warm_ping', {
     n: kw.pings, result: o.result, cache_read: o.read, cache_creation: o.created,
     since_s: secs(since), gap_s: secs(now - kw.start), ms: t1 - now, ...(o.status !== undefined ? { status: o.status } : {}),
+    ...(await limitFields(d, kw.note)),
   })
   // Disturbed during the row (a prompt entering and still pending): no next step here, nor a retry
   // or a stop; the prompt's turn, or `resumeKeepWarm` once a hook drops it, takes the gap on.
