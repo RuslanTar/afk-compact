@@ -107,7 +107,7 @@ After a Claude Code update, `/{{plugin}}:status` may say a check is due and offe
 claude plugin uninstall {{plugin}}
 ```
 
-Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them. It also leaves `~/.local/state/{{plugin}}/bin/{{plugin}}-store`, the fixed path a [status line](#the-cache-state-in-your-status-line) calls, which keeps running the old copy of the plugin until Claude Code deletes that folder, then fails: delete it and remove the call from your status line.
+Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them. It also leaves `~/.local/state/{{plugin}}/bin/{{plugin}}-store`, the fixed path a [status line](#the-cache-state-in-your-status-line) calls, which keeps running the old copy of the plugin: a copy in Claude Code's plugin cache until Claude Code deletes that folder, then it fails; a copy read in place from a local folder marketplace for as long as that folder exists, since Claude Code never deletes it. Delete it and remove the call from your status line.
 
 ## Skills
 
