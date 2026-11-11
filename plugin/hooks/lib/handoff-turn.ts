@@ -176,9 +176,9 @@ export async function handoffPossible(d: Deps, sid: string): Promise<boolean> {
  * One `handoff_skipped` row; an optional turn's row also names its reason (`precompact`, `idle`).
  * An idle timer's row also names its kind (`turn`, `check`, `compact`) and, when it fired late,
  * by how many seconds (`late_s`); a `near-limit` row the windows read (`windows`, D-76: idle.ts
- * `limitWindows`).
+ * `limitWindows`) and each one's source and age (`usage_src`, `usage_age_s`, D-83).
  */
-export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number; windows?: string[]; rule?: string; plan?: string; tier?: string } = {}): Promise<void> {
+export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number; windows?: string[]; rule?: string; plan?: string; tier?: string; usage_src?: string[]; usage_age_s?: Record<string, number> } = {}): Promise<void> {
   await log(d, sid, 'handoff_skipped', {
     why, ht, ...(reason !== undefined && !isHalt(reason) ? { reason } : {}),
     ...(extra.kind !== undefined ? { kind: extra.kind } : {}), ...(extra.late_s !== undefined ? { late_s: extra.late_s } : {}),
@@ -186,6 +186,8 @@ export async function skipped(d: Deps, sid: string, why: string, ht: string | nu
     // D-80: a near-limit skip's rule (limits.ts) and the plan words Claude Code's environment had.
     ...(extra.rule !== undefined ? { rule: extra.rule } : {}), ...(extra.plan !== undefined ? { plan: extra.plan } : {}),
     ...(extra.tier !== undefined ? { tier: extra.tier } : {}),
+    // D-83: each window's source and age (limits.ts `usageFields`).
+    ...(extra.usage_src !== undefined ? { usage_src: extra.usage_src } : {}), ...(extra.usage_age_s !== undefined ? { usage_age_s: extra.usage_age_s } : {}),
   })
 }
 

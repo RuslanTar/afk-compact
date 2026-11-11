@@ -18,7 +18,7 @@ import { armIdle } from './idle'
 import { armKeepWarm } from './keepwarm'
 import { commandClass, isHuman, pluginCompactOff, rejectClass, rejectText, userFirst } from './deps'
 import { compactOff, log, markHeadless, skipClass } from './log'
-import { planShares, recordDeltas } from './limits'
+import { ownReadings, planShares, recordDeltas, usageFields } from './limits'
 import type { Limit } from './limits'
 import { drawNonce } from './nonce'
 import { turnQuestion } from './question'
@@ -394,6 +394,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
     const shadow = ah ? undefined : await shadowPrepM3(d, sid, { kind: idle ? 'm3-idle' : 'm3-plugin', nonce, trigger: 'plugin' })
     // D-80: the usage windows before the compaction, for its change (limits.ts `recordDeltas`).
     const before = await limitsNow(d)
+    const beforeAt = s.usageAt
     // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
     // (or reused) to the compaction's answer (DP-30 (4)). Read before the check below, so no
     // await sits between that check and the call.
@@ -413,7 +414,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
       await nativeRan(d, sid, withRecord, 'user-first')
       return { ran: false, why: 'busy' }
     }
-    const run: SelfRun = { nonce, pref, t0, before, ...(prodConsent !== undefined ? { prodConsent } : {}), ...(ah ? { ah } : {}), ...(idle ? { idle } : {}) }
+    const run: SelfRun = { nonce, pref, t0, before, beforeAt, ...(prodConsent !== undefined ? { prodConsent } : {}), ...(ah ? { ah } : {}), ...(idle ? { idle } : {}) }
     // Headless: `$.session.compact` always rejects there; the compaction runs as `/compact`.
     if (s.headless) {
       const result = await commandCompact(d, sid, run, text)
@@ -463,6 +464,8 @@ type SelfRun = {
   idle?: NonNullable<BoundaryOpts['idle']>
   /** D-80: the usage windows read right before the compaction (none: not read, as on the headless path). */
   before?: Limit[]
+  /** D-83: when that reading was last refreshed (`LoadState.usageAt` then), for its age. */
+  beforeAt?: number
 }
 
 /** The usage windows now, or undefined when the reading fails. */
@@ -492,10 +495,17 @@ async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactR
   const limitsAfter = run.before !== undefined ? await limitsNow(d) : undefined
   const pb = planShares(run.before)
   const pa = planShares(limitsAfter)
+  const t1 = await d.now()
+  // D-83: the source of both readings (the session's own) and their ages, by plan window kind.
+  const plan = (l: Limit[] | undefined): Limit[] => (l ?? []).filter(x => x.kind in pb || x.kind in pa)
+  const ub = usageFields(ownReadings(plan(run.before), run.beforeAt), run.t0)
+  const ua = usageFields(ownReadings(plan(limitsAfter), s.usageAt), t1)
   await log(d, sid, 'compacted', {
     nonce, skip: null, tokens_before: r.tokensBefore ?? null, tokens_after: r.tokensAfter ?? null,
-    usage_present: r.usage !== undefined, ms: (await d.now()) - run.t0, ...ht,
-    ...(Object.keys(pb).length > 0 || Object.keys(pa).length > 0 ? { pct_before: pb, pct_after: pa } : {}),
+    usage_present: r.usage !== undefined, ms: t1 - run.t0, ...ht,
+    ...(Object.keys(pb).length > 0 || Object.keys(pa).length > 0
+      ? { pct_before: pb, pct_after: pa, usage_src: [...new Set([...ub.usage_src, ...ua.usage_src])], usage_age_s_before: ub.usage_age_s, usage_age_s_after: ua.usage_age_s }
+      : {}),
   })
   if (run.before !== undefined) await recordDeltas(d, run.before, limitsAfter)
   await cacheRows(d, sid, nonce, r, true, 'main')

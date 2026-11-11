@@ -77,6 +77,7 @@ import { compactedSince } from './compact'
 import { prefixRead } from './deps'
 import { IDLE_CACHE_MS, IDLE_TICK_MS, handOverIdle, heldDeadline, heldHere, holdIdle, idleArmed, isBusy, oneHourCache, releaseHeld, scaleOf } from './idle'
 import { notifiedTasks } from './lane'
+import type { UsageFields } from './limits'
 import { limitCtx, resetOf, tierFields, verdictOf } from './limits'
 import { log } from './log'
 
@@ -373,7 +374,7 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | { wa
       const reset = resetOf(limits, c)
       const bound = Math.min(kw.warm + KEEP_WARM_LATEST_MS * scale, kw.deferred !== undefined ? heldDeadline(kw.deferred, kw.warm, scale) : Infinity)
       if (reset !== undefined && reset + retryMs(scale) <= bound) wait = reset + retryMs(scale)
-      else return { why: 'near-limit', handover: true, windows: v.windows, rule: v.rule, ...(v.band ? { job: true } : {}) }
+      else return { why: 'near-limit', handover: true, windows: v.windows, rule: v.rule, usage: v.usage, ...(v.band ? { job: true } : {}) }
     }
   }
   // D-79: the hand-over compacts from idle_handoff_min_tokens up only with a job whose result turn is
@@ -502,8 +503,11 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
   return true
 }
 
-/** A stop row's extra fields (`windows`, `rule`: a near-limit stop's, D-76, D-80) and a hand-over's job flag (D-79). */
-type StopExtra = { windows?: string[]; rule?: string; job?: boolean }
+/**
+ * A stop row's extra fields (`windows`, `rule`: a near-limit stop's, D-76, D-80; `usage`: its
+ * windows' source and age, D-83) and a hand-over's job flag (D-79).
+ */
+type StopExtra = { windows?: string[]; rule?: string; usage?: UsageFields; job?: boolean }
 
 /**
  * Warming ends for this gap: one `keep_warm_stop` row (only for a gap that warmed), and, with
@@ -525,7 +529,7 @@ async function stop(d: Deps, kw: KeepWarm, why: string, handover: boolean, now: 
   if (kw.startRow) await kw.startRow.catch(() => undefined)
   await log(d, kw.sid, 'keep_warm_stop', {
     why, pings: kw.pings, gap_s: secs(now - kw.start), handover: back || (keep && rec !== undefined), ...(x.windows !== undefined ? { windows: x.windows } : {}),
-    ...(x.rule !== undefined ? { rule: x.rule, ...(await tierFields(d)) } : {}),
+    ...(x.rule !== undefined ? { rule: x.rule, ...(await tierFields(d)) } : {}), ...x.usage,
   })
   if (back && rec) {
     s.keepWarmSpent = true

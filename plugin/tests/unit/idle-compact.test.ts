@@ -1694,6 +1694,17 @@ test('D-3: a finished lane under the floor still meets the other limits (idle_ha
   expect(skips(w)).toEqual([['near-limit', 'turn']])
 })
 
+test('D83-02 (D-83): the idle handoff turn\'s near-limit skip (idle_handoff_near_limit skip) names the window\'s source and age', { options: { ...ON, idle_handoff_near_limit: 'skip' } }, async ($, on) => {
+  const w = world(on)
+  await episodeAfterResult($, w, FINISHED, 150000)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }]
+  await w.advance(44 * MIN)
+  await w.measure($)
+  await w.advance(5 * MIN)
+  expect(w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.rule, r.windows, r.usage_src, r.usage_age_s]))
+    .toEqual([['option-skip', ['five_hour:95'], ['five_hour:plugin'], { five_hour: 300 }]])
+})
+
 // ---- Lane B: the 55.5-min check's compaction runs behind the guards of the `compact` timer (D4),
 // also with no agent running when Claude Code stayed silent (owner Q2, 18:54); the check is armed
 // for the turn or for that compaction; ticks (D12).

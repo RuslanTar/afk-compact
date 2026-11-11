@@ -121,9 +121,10 @@ export const register: Register = (on, options) => {
     } catch {
       // no share for this turn (handoff_turn_end logs null)
     }
-    // D-80: a main response refreshed the usage windows (limits.ts reads how fresh they are); D-83:
+    // D-80: a response refreshed the usage windows (limits.ts reads how fresh they are); D-83: a
+    // subagent's too (Claude Code applies every response's usage headers to the one reading), and
     // the reading goes to the shared usage record when it changed (limits.ts `noteUsage`).
-    if (e.agentId === undefined) stampUsage($, state, options)
+    stampUsage($, state, options)
     return r
   }).catch(async function* ($, e, next) {
     return yield* next(e)

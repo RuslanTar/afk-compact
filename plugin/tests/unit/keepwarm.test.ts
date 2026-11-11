@@ -2190,6 +2190,18 @@ test('AT-KW-58 (D-80): an agent open, five_hour at 93 (fresh, measured change 2)
   expect(selfCompacts(w)).toBe(1)
 })
 
+test('D83-01 (D-83): the band stop row, the idle_compact row and the compacted row name each window\'s source and age (the own reading, measured 5 min before)', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  await bandGap($, on, w, [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }])
+  const src = ['five_hour:plugin', 'seven_day:plugin']
+  const age = { five_hour: 300, seven_day: 300 }
+  expect(w.rowsOf('keep_warm_stop').map(r => [r.rule, r.usage_src, r.usage_age_s])).toEqual([['band', src, age]])
+  expect(ic(w).map(r => [r.rule, r.usage_src, r.usage_age_s])).toEqual([['band', src, age]])
+  expect(w.rowsOf('compacted').map(r => [r.pct_before, r.usage_src, r.usage_age_s_before])).toEqual([[{ five_hour: 93, seven_day: 30 }, src, age]])
+  expect(Object.keys(w.rowsOf('compacted')[0]?.usage_age_s_after as object)).toEqual(['five_hour', 'seven_day'])
+})
+
 for (const c of [
   { name: 'a stale reading (refreshed 40 min before)', rule: 'stale', freshAt: 60, limits: [{ kind: 'five_hour', percentUsed: 93 }], deltas: { five_hour: [2] } },
   { name: 'no compaction change measured yet', rule: 'no-delta', limits: [{ kind: 'five_hour', percentUsed: 93 }], deltas: {} },

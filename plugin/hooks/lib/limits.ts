@@ -16,7 +16,8 @@
 //   point, stays below the cap (none measured yet: 90%). A window whose reset time has passed has reset: its old reading
 //   counts for nothing.
 // - any other window stops at 90%.
-// Each rule name goes on the row of the skip or stop it decided (`rule`).
+// Each rule name goes on the row of the skip or stop it decided (`rule`), and (D-83) where each
+// window's reading came from and how old it was (`usage_src`, `usage_age_s`).
 import type { Deps, Usage } from './deps'
 import { usageRecord } from './helper'
 import { limitWindows } from './idle'
@@ -37,6 +38,33 @@ const SPEND = 'spend_limit'
 
 export type Limit = Usage['rateLimits'][number]
 
+/**
+ * D-83: where a reading came from: the session's own `$.session.usage()` (`plugin`), this session's
+ * status line (`statusline`), or another session on this machine (`peer`), the last two through
+ * the shared usage record.
+ */
+export type Src = 'plugin' | 'statusline' | 'peer'
+/** D-83: one window as read, with when (epoch ms; undefined: not known) and where from. */
+export type Reading = Limit & { at: number | undefined; src: Src }
+/**
+ * D-83: what a row that used a reading logs beside its `windows`: each window's source as
+ * `kind:source`, in the same order, and its age in whole seconds by kind (none for a window whose
+ * time is not known). Content-free.
+ */
+export type UsageFields = { usage_src: string[]; usage_age_s: Record<string, number> }
+
+/** The session's own windows as readings, read at `at` (`LoadState.usageAt`). */
+export function ownReadings(limits: readonly Limit[], at: number | undefined): Reading[] {
+  return limits.map(l => ({ ...l, at, src: 'plugin' as const }))
+}
+
+/** D-83: the `usage_src` and `usage_age_s` of these readings at `now`. */
+export function usageFields(rs: readonly Reading[], now: number): UsageFields {
+  const age: Record<string, number> = {}
+  for (const r of rs) if (r.at !== undefined) age[r.kind || 'unknown'] = Math.max(0, Math.round((now - r.at) / 1000))
+  return { usage_src: rs.map(r => `${r.kind || 'unknown'}:${r.src}`), usage_age_s: age }
+}
+
 /** What the band rule reads beside the windows. */
 export type LimitCtx = { job: boolean; usageAt: number | undefined; now: number; deltas: Readonly<Record<string, readonly number[]>> }
 
@@ -44,9 +72,9 @@ export type LimitCtx = { job: boolean; usageAt: number | undefined; now: number;
  * `ok`: nothing stops the action; `band`: a plan window is above 90% and the band rule lets it go
  * on; `rule`: the rule that decided (`band`, `90`, or the first stopping window's: `spend-90`,
  * `other-90`, `cap`, `no-job`, `stale`, `no-delta`, `delta`); `windows`: every window as the row
- * names it (idle.ts `limitWindows`).
+ * names it (idle.ts `limitWindows`); `usage`: each window's source and age (D-83).
  */
-export type Verdict = { ok: boolean; band: boolean; rule: string; windows: string[] }
+export type Verdict = { ok: boolean; band: boolean; rule: string; windows: string[]; usage: UsageFields }
 
 /** The windows that have not reset by `now` (a past `resetsAt`: the reading is of an ended window). */
 export function liveWindows(limits: readonly Limit[], now: number): Limit[] {
@@ -71,11 +99,12 @@ export function windowRule(l: Limit, c: LimitCtx): string {
 /** The verdict over every window reported (none: ok, rule `90`). */
 export function verdictOf(limits: readonly Limit[], c: LimitCtx): Verdict {
   const windows = limitWindows([...limits])
+  const usage = usageFields(ownReadings(limits, c.usageAt), c.now)
   const rules = liveWindows(limits, c.now).map(l => windowRule(l, c))
   const stop = rules.find(r => r !== 'ok' && r !== 'band')
-  if (stop !== undefined) return { ok: false, band: false, rule: stop, windows }
+  if (stop !== undefined) return { ok: false, band: false, rule: stop, windows, usage }
   const band = rules.includes('band')
-  return { ok: true, band, rule: band ? 'band' : '90', windows }
+  return { ok: true, band, rule: band ? 'band' : '90', windows, usage }
 }
 
 /**

@@ -429,6 +429,12 @@ export class World {
     await s.result
   }
 
+  /** The engine measured the session now (D-80, D-83: the usage reading is fresh from this moment). */
+  async measure($: Engine): Promise<void> {
+    await $.session.measure({ context: { tokens: this.tokens, window: this.window }, rateLimits: this.rateLimits, changed: ['rateLimits'] } as never)
+    await this.settle()
+  }
+
   /** One main tool call; returns its result as the model would read it. */
   async tool($: Engine, agentId?: string): Promise<{ context?: readonly string[]; deny?: string }> {
     const e = { tool: 'Bash', command: 'ls', ...(agentId ? { agentId } : {}) }

@@ -1,0 +1,95 @@
+{
+ "id": "USAGE-02-status",
+ "note": "0.1.8 D-83: `status --sid` shows the session's last usage reading from the shared record: per window kind the newest of its own entries (plugin or status line), its share, source and age, then how many readings other sessions on this machine left in the last 10 minutes; a session with no entry says so. Read only.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "the newest own entry per kind, with source and age; two fresh peer readings",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225570,
+      "readings": [
+       {
+        "kind": "five_hour",
+        "pct": 44,
+        "resets_at": 1794240000,
+        "at": 1794225480,
+        "src": "plugin",
+        "sid8": "$SID8"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 45,
+        "resets_at": 1794240000,
+        "at": 1794225570,
+        "src": "statusline",
+        "sid8": "$SID8"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 21,
+        "resets_at": 1794240000,
+        "at": 1794224700,
+        "src": "plugin",
+        "sid8": "$SID8"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 61,
+        "resets_at": 1794240000,
+        "at": 1794225300,
+        "src": "plugin",
+        "sid8": "5e55a002"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 96,
+        "resets_at": 1794240000,
+        "at": 1794225500,
+        "src": "statusline",
+        "sid8": "5e55a003"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 99,
+        "resets_at": 1794240000,
+        "at": 1794224000,
+        "src": "plugin",
+        "sid8": "5e55a004"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^usage: five_hour 45% \\(status line, 30s ago\\) · seven_day 21% \\(plugin, 15m ago\\); other sessions on this machine: 2 readings in the last 10 min$"
+    ]
+   }
+  },
+  {
+   "name": "a session with no entry",
+   "argv": [
+    "status",
+    "--sid",
+    "5e55a009-0000-4000-8000-0000000000f9"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^usage: no reading of this session recorded yet; other sessions on this machine: 4 readings in the last 10 min$"
+    ]
+   }
+  }
+ ]
+}
