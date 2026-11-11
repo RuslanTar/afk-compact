@@ -1,9 +1,9 @@
 #!/usr/bin/python3
-"""tools/gates: grep gates over built output (AT-P-05, BT-01, BT-08; BUILD-PLAN §4 X-gates, X-name).
+"""tools/gates: grep gates over built output (AT-P-05, BT-01, BT-08; tools/check X-gates, X-name).
 
 Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only GATE] [--no-pending]
   TARGET        a folder (scanned recursively) or a file, e.g. plugin and README.md
-  --names FILE  the competitor-name list, kept outside the repo (E-7); missing = FAIL
+  --names FILE  the competitor-name list, kept outside the repo; missing = FAIL
   --brand NAME  the expected plugin name for the stale-name gate (default: brand.json name)
   --no-git-log  skip the attribution gate over `git log --format=%B`
   --only GATE   report only one gate (names, user-path, markers, attribution, stale-name, npm,
@@ -17,61 +17,62 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   names        every list entry, case-insensitive, as a whole token (letters, digits, `_`, `-`
-               do not continue it); generic words are kept off the list by its curator (E-7)
+               do not continue it); generic words are kept off the list by its curator. An
+               entry written `*name` matches anywhere in a word instead (for a former name that
+               may sit inside a longer word: `name-research`, `names`)
   user-path    `/Users/`, `/home/`, this machine's login name (case-sensitive whole token),
                the git user.email, and the name of the folder that holds the repo
   markers      `<!--` and `{{`
   attribution  `Co-Authored-By`, `Generated with`, `noreply@anthropic.com`, `claude.ai/code`
                in files and in every commit message reachable from HEAD
   stale-name   BT-01: `⟪X v1`, `⟪/X n=`, `/X:handoff|resume|status|settings`, `X-store`, `X:handoff skill`
-               and manifest names have X equal to the brand; no other A-1 candidate
-               (`compactseam`, `wheelover`, `hold-thread`), no `compact-handoff` and not the
-               name before the rename (`compactinue`, NM-2), matched case-insensitively anywhere
-               in a word (`compact-handoff-research`, `compactseams`, `wheelover2` and
-               `compactinue-store` count). Markers written as `\\uXXXX` escapes (the generated
+               and manifest names have X equal to the brand; no other candidate name
+               (`compactseam`, `wheelover`, `hold-thread`) and not the name before the rename
+               (`compactinue`), matched case-insensitively anywhere in a word (`compactseams`,
+               `wheelover2` and `compactinue-store` count); other former names go in the
+               --names list as `*name` entries. Markers written as `\\uXXXX` escapes (the generated
                fixture modules, which hold foreign test markers on purpose) are not read;
                the BT-02 drill regenerates those modules under the new name instead. The
                pre-rename name on the `our @FORMER_NAMES = (…);` line of a folder target's
-               helper/lib/settings.pm is not a hit (rename order xxxxxxxx-32: /status warns
-               about options saved under it); anywhere else it is
+               helper/lib/settings.pm is not a hit (/status warns about options saved under
+               it); anywhere else it is
   npm          BT-06: no `package.json`, `package-lock.json`, `npm-shrinkwrap.json`,
                `yarn.lock`, `pnpm-lock.yaml` or `node_modules/` anywhere inside a folder target
                (an npm manifest in a plugin makes Claude Code run npm install on users' machines)
   skill-desc   BT-09 / AT-S-01: every skills/<name>/SKILL.md inside a folder target starts
                `---\n`, its `description` (quotes removed) is at most 150 characters, and the
                skill's trigger phrase (SKILL_TRIGGERS) sits in its first 50, case-insensitive
-  Text gates of the 2026-10-21 rulings, over the skills/ and assets/ of a folder target (src
-  or plugin) and over any README.md:
-  wait-text    AT-W-01 (Dev-7): no `blocking read`, no "wait for a/the ... notification", no
+  Text gates over the skills/ and assets/ of a folder target (src or plugin) and over any
+  README.md:
+  wait-text    AT-W-01: no `blocking read`, no "wait for a/the ... notification", no
                bare `sleep N`; a foreground or bounded wait not negated in its own clause names
                `<x>-store wait` or `<store> wait` on its line; skills/resume/SKILL.md has the
                main rule (a "notification wakes you" line naming `run_in_background`)
-  asset-bytes  AT-W-02 (Dev-7): assets/resume-context.txt and subagent-instructions.txt, every
+  asset-bytes  AT-W-02: assets/resume-context.txt and subagent-instructions.txt, every
                tag line kept, comments and @tokens@ removed, within ASSET_BYTES (resume-context:
-               soft since RP-3, passing as ADVISORY with a reason in tools/budget-reasons.json)
-  skill-budget AT-SK-01 (RV-25, REVIEW B-7): the handoff SKILL's Budget line sums to its
+               soft, passing as ADVISORY with a reason in tools/budget-reasons.json)
+  skill-budget AT-SK-01: the handoff SKILL's Budget line sums to its
                `hard cap N`; no "one Edit per LINT line" unless negated; N equals the spec's
                `call_cap` and `(Step 5, ≤M)` its `recipe_cap` (spec-literals of assets/handoff-spec.md)
-  write-first  AT-SK-03 (RV-31): no SKILL.md says "before your final message"
-  self-heal    AT-J-13 (Dev-1): skills/resume/references/self-heal.md holds the decision table
+  write-first  AT-SK-03: no SKILL.md says "before your final message"
+  self-heal    AT-J-13: skills/resume/references/self-heal.md holds the decision table
                (rows 1, 2a, 2b, 2c, 3-7 in order), the self-heal file or the resume SKILL holds
                "foreign handoff's recipe is never relaunched", and the resume SKILL.md is at most
-               RESUME_SKILL_MAX bytes (over it ADVISORY with a logged reason, up to its size,
-               NR-12 provisional); self-heal.md never uses the old unconditional probe
+               RESUME_SKILL_MAX bytes (over it ADVISORY with a logged reason, up to its size);
+               self-heal.md never uses the old unconditional probe
                wording (HEAL_FORBIDDEN) and holds HEAL_REQUIRED ("when Rule 2 lets you run it"),
-               and every resume-context.txt line "3." holds RESUME_STEP3_NEEDS (CR-F36, CR-F27;
-               SR-3/SR-9 of 2026-10-23)
-  config-defaults AT-WD-02 (D-9, D-8): .claude-plugin/plugin.json userConfig `watcher` defaults
-               to `true` (shadow, D-72), `disposable_keep_days` to 0, and no other key is named like
+               and every resume-context.txt line "3." holds RESUME_STEP3_NEEDS
+  config-defaults AT-WD-02: .claude-plugin/plugin.json userConfig `watcher` defaults
+               to `true` (shadow), `disposable_keep_days` to 0, and no other key is named like
                `*keep_days*` (no automatic pruning of `.watch` by default); RULED_DEFAULTS (the
-               owner-ruled defaults of 2026-10-23) are in the manifest with those values
-  launcher     AT-PK-01 (PKG-RUNTIME A.1, Q-R1) over a built plugin folder: no top-level `bin/`;
+               chosen defaults) are in the manifest with those values
+  launcher     AT-PK-01 over a built plugin folder: no top-level `bin/`;
                the launcher is `scripts/<brand>-store`, mode 0755; the 8 hooks.json commands
                are `"${CLAUDE_PLUGIN_ROOT}/scripts/<brand>-store" hook <Event>`; no file names
                the launcher in another folder (`/<dir>/<brand>-store`; the status line's shim
                `<state>/<brand>/bin/<brand>-store` is not one), says "on the Bash PATH"
                or calls it bare (`<brand>-store <subcommand>`, no folder before it)
-  BLD-05 content gates (build round 9, switched on with the wp/text merge):
+  Content gates:
   template-shape AT-TX-01: template §5 keeps Rule and What, no Caps/Where/Secret gate/Manifest
                or Blocking/Advisory bullet; §6 and §7 are short pointers with a `Why:` sentence;
                §8's heading unchanged
@@ -79,18 +80,18 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                for every `lint_ids` id and no other key
   section-caps SC-01 (0.1.2 handoff-lint): template §2's section caps equal the spec's
                section_caps, none missing or extra, and its `sum about N.NK` is their sum
-  xref         AT-TX-05 (T-TEXT E8): every `template §N[.M]`, `template rule N` (and `rule N`
+  xref         AT-TX-05: every `template §N[.M]`, `template rule N` (and `rule N`
                inside the template), `spec §N`, handoff `Step N[.M]`/`Steps N–M` and resume
                `R<n>`/`5a`-`5d` resolves, and its target's first word equals the recorded map
   no-args-inline AT-TX-06, AT-WB-15: no `$ARGUMENTS` in a shipped SKILL, reference or asset
   readback     AT-TX-07: resume R8 report block has no `*`-marked line; the read-back sentence
-  no-run-text  AT-TX-08 / AT-SR-10 (SR-9, 2026-10-23): no skill or asset says NO_RUN_FORBIDDEN (the
+  no-run-text  AT-TX-08 / AT-SR-10: no skill or asset says NO_RUN_FORBIDDEN (the
                old never-run wording, or foreign text inline in a `risk --cmd '…'` call); the
                resume SKILL, resume-context line 1. and handoff Step 2 hold their check-then-act
-               rules; COMMAND_TEXT_NEEDS: the foreign-command tag rule in all six texts
-               (REVIEW-NIGHT NR-02), AT-SR-01 in full (Rule 2's ask list, stops 5-6; NR-03,
-               NR-08, NR-15), the `resume_proceed: confirm` line (AT-CK-08, AT-CK-13) and
-               the CW-1 plugin-root and session-id fallbacks of the four helper skills
+               rules; COMMAND_TEXT_NEEDS: the foreign-command tag rule in all six texts,
+               AT-SR-01 in full (Rule 2's ask list, stops 5-6), the `resume_proceed: confirm`
+               line (AT-CK-08, AT-CK-13) and the plugin-root and session-id fallbacks of the
+               four helper skills
   stalled-def  AT-TX-12: spec §4 **Stalled** (a) words in resume-context and the self-heal row
   prod-reads   AT-PR-06: no "unless a `U-` item allows"; R7, R9 stop 2 and the lease line name
                `unattended_prod_reads`
@@ -98,7 +99,7 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                scripts/ launcher; no bare `<brand>-store <cmd>` in skills, spec, template or the
                mod texts (resume-context, handoff-turn, nudge; AT-PK-03); resume-context line 1
                says `<store> = @store@` when it uses `<store>`, the other two never write it; no
-               `allowed-tools`/`disable-model-invocation` frontmatter (P-156)
+               `allowed-tools`/`disable-model-invocation` frontmatter
   ic-desc      AT-IC-11: resume description without `/clear`/`break`; handoff one unchanged
   clear-life   CL-01 (0.1.6, live probes on 2.1.319): no text says background work dies or is lost
                on `/clear`; the spec's `dies_on` names no `/clear`; the handoff gate line and
@@ -106,14 +107,14 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                original conversation; CL-02: no text says "Move to background and exit" keeps
                all of it (Claude Code's exit handoff takes only shells, agents and workflows)
   nudge-folder AT-TX-13: nudge step 3 current-folder fallback and `Dirty in <folder git ran in>:`
-  BLD-05 end-of-round gates over a built plugin folder (build round 9, after the last merge):
+  Gates over a built plugin folder:
   config-defaults (also) AT-CAP-02: settings.pm @KEYS fallbacks, config.ts DEFAULTS,
                watch/ctx.pm %DEFAULTS, paths.pm $DEFAULT_ROOT and $DEFAULT_DISPOSABLE and the launcher's
                hroot equal the manifest defaults (handoff_root ~/.local/state/<name>/handoffs and
-               disposable_root ~/.local/state/<name>/disposable, STATE-ROOT); manifest and @KEYS list the
-               same keys (but settings.pm %HIDDEN, D-72: not in the manifest); AT-IA-01: settings.pm and
+               disposable_root ~/.local/state/<name>/disposable); manifest and @KEYS list the
+               same keys (but settings.pm %HIDDEN: not in the manifest); AT-IA-01: settings.pm and
                config.ts hold the same idle off/auto words and the same value for any other word;
-               D-72: settings.pm %SWITCH equals config.ts SWITCH, and each of its keys has the
+               settings.pm %SWITCH equals config.ts SWITCH, and each of its keys has the
                manifest options ["true", "false"] (an on/off key's word stands for its default in
                config.ts DEFAULTS and watch/ctx.pm %DEFAULTS)
   config-defaults (also) VD-01 (0.1.2 visible defaults): every non-boolean userConfig title ends
@@ -126,34 +127,34 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   no-network   AT-WB-11 (static): report.pl and every helper module it loads name no
                IO::Socket, LWP, HTTP::Tiny or Net::
   export-schema AT-WB-01 (static): every `ev` the helper and mod code write has a
-               watch/export_schema.pm entry (the WATCHER §6.3 list half is a watch case)
+               watch/export_schema.pm entry (the list half is a watch case)
   report-skill AT-WB-15: description "Only when the user asks", only `<store> report` calls, no
                `$ARGUMENTS`, no bare launcher, no log reads, REVEAL/COPY lines not run; AT-RS-01:
-               the dry run, the one dialog (a separate yes for summaries and for handoffs, RS-5)
+               the dry run, the one dialog (a separate yes for summaries and for handoffs)
                and the each-kind-only-after-its-yes rule
   no-age-rule  AT-ST-06: no file-time test in reconcile.pm, copies.pm, postcompact.pm
   perl-utf8    AT-P5-06: a helper .pm/.pl with non-ASCII on a code line needs `use utf8`
-  Gates of the 2026-10-23 owner rulings:
+  Approval, model, queue, risk and flag gates:
   approvals    AP-11 (scoped approval carry): the template's `## Approvals` (skeleton and §4.2
                block), resume Rule 3 "explicit gate", resume-context step 4 "Measured facts list
                it as checked", spec §12 "explicit gates", `## Approvals` in sections_main, and no
                "approvals never carry" or "Approvals (verified)" anywhere; GATE_LIST_NEEDS: one
                explicit-gate list with the production write in every text, a carried approval
-               naming a production read covers it under forbid (owner xxxxxxxx-28; the old
-               absolute wording banned), the effect-absent check (REVIEW-NIGHT NR-01, NR-21)
-  model-pin    MG-1 (ratify R4): no compact, submit or command call under hooks/ passes a model,
+               naming a production read covers it under forbid (the old absolute wording
+               banned), the effect-absent check
+  model-pin    MG-1: no compact, submit or command call under hooks/ passes a model,
                effort, fallback model or agent; no userConfig key names a model
   queue-text   AT-QA-06: assets/queue.md (## Handoff, ## Resume, ≤1,600 B, the R8 `Queue:` line);
                the skills keep only the pointer lines (the resume SKILL names no queue or lane
-               duty elsewhere, REVIEW-NIGHT NR-18)
-  risk-corpus  AT-SR-09, F half (REVIEW-NIGHT NR-03/04/05): the spec's risk literals classify every
+               duty elsewhere)
+  risk-corpus  AT-SR-09, F half: the spec's risk literals classify every
                row of tests/fixtures/risk/corpus.tsv as it says (risk_reference: each pipeline
                segment read-only or a test/build verb, and no risk, outward, production or HARD
                secret pattern)
-  store-flags  TG-01 (REVIEW-NIGHT, NR-09): every `<store> <command> --flag` in the skills, assets
+  store-flags  TG-01: every `<store> <command> --flag` in the skills, assets
                and README is a command in helper/main.pl and a flag its parser takes (cmd/<command>.pl
                and the module functions it calls, read statically)
-  planning     work home (ruling xxxxxxxx-36): no path with a `.planning` component in the git
+  planning     private notes: no path with a `.planning` component in the git
                index of the repository the tool sits in, and (unless --no-git-log) none added by a
                commit reachable from HEAD; skipped when the tree is not the top of its own work tree
   PENDING lists hits that wait for text not written yet (another WP's later step); they print as
@@ -169,14 +170,14 @@ B = r"(?<![A-Za-z0-9_-])"
 E = r"(?![A-Za-z0-9_-])"
 ATTRIBUTION = re.compile(r"Co-Authored-By|Generated with|noreply@anthropic\.com|claude\.ai/code", re.I)
 MARKERS = re.compile(r"<!--|\{\{")
-OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compact-handoff", "compactinue"]
-# Rename order (ruling xxxxxxxx-32, 2026-10-23): /status warns about options saved under the name
+OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compactinue"]
+# /status warns about options saved under the name
 # before the rename, so the helper declares that name once. Only the pre-rename name, only on the
 # declaration line of helper/lib/settings.pm inside a folder target, is not a stale-name hit.
 FORMER_NAME_FILE = "/helper/lib/settings.pm"
 FORMER_NAME_DECL = re.compile(r"^our @FORMER_NAMES = \('[a-z0-9-]+'(?:, '[a-z0-9-]+')*\);$")
 FORMER_NAMES_ALLOWED = {"compactinue"}
-# Work home (ruling xxxxxxxx-36, 2026-10-23): the private work notes live in a git-ignored
+# Private notes: the private work notes live in a git-ignored
 # `.planning/` folder and are never tracked; a path with that component in the index fails, and
 # so does one added by a commit reachable from HEAD (when the git log gates run).
 PLANNING_DIR = ".planning"
@@ -191,7 +192,7 @@ NPM_DIRS = {"node_modules"}
 SKIP_DIRS = {".git", "node_modules", ".types"}
 # BT-09: the phrase a user says for each skill (AT-S-01 names "handoff status" for status).
 SKILL_TRIGGERS = {"handoff": "handoff", "resume": "resume", "status": "handoff status",
-                  # W-BETA C (TXT-10): "Only when the user asks for a ... report"
+                  # "Only when the user asks for a ... report"
                   "report": "report",
                   # 0.1.2 onboarding: the settings flow ("only when the user asks")
                   "settings": "settings",
@@ -263,7 +264,7 @@ COMMA_JOINER = re.compile(r"\s*(?:so|and)\b", re.I)
 VERBS = r"(?:wait|block|keep|run|use|poll|check|stop|start|let|leave|stay|watch|read|call|sleep|hold|tail|go|do)"
 COMMA_IMPERATIVE = re.compile(r"\s*" + VERBS + r"\b", re.I)
 DANGLING_NEGATION = re.compile(r"\b(?:never|not|no)\s*$", re.I)
-# DP-30 (3): a comma inside a negated verb list does not start a clause ("Never poll, block or
+# A comma inside a negated verb list does not start a clause ("Never poll, block or
 # wait in the foreground", "Never poll, wait in the foreground or sleep"). A list = a negation
 # and one word before the first comma, single words between the commas, and an or/nor that
 # closes it: right before the match, or right after it in front of a verb. "Never poll, wait in
@@ -275,10 +276,9 @@ LIST_NEXT = re.compile(r"^\s*,?\s*(?:or|nor)\s+" + VERBS + r"\b", re.I)
 STORE_WAIT = re.compile(r"(?:[\w{}@<>-]+-store|<store>) wait\b")
 MAIN_RULE = re.compile(r"notification wakes you", re.I)
 # AT-W-02: bytes of the full render (every tag line kept); resume = the resume protocol's 3,000
-# (compaction-rem-6, 2026-10-22; was DP-8's 2,500), subagent = the classic +fallback budget
-# (compaction DESIGN-NOTES §1, tools/assemble). RP-3 (owner 2026-10-23, ratify xxxxxxxx#R3
-# overturned): the resume-context limit is soft: over it the gate passes only with a logged
-# reason in tools/budget-reasons.json (ASSET_SOFT names its key), up to the size it names.
+# (it was 2,500), subagent = the classic +fallback budget (tools/assemble). The resume-context
+# limit is soft: over it the gate passes only with a logged reason in tools/budget-reasons.json
+# (ASSET_SOFT names its key), up to the size it names.
 ASSET_BYTES = {"resume-context.txt": 3000, "subagent-instructions.txt": 1100}
 ASSET_SOFT = {"resume-context.txt": "asset resume-context.txt"}
 REASONS_FILE = os.path.join(REPO, "tools", "budget-reasons.json")
@@ -286,7 +286,7 @@ REASONS_FILE = os.path.join(REPO, "tools", "budget-reasons.json")
 
 def budget_reason(key):
     """(why, up_to or None) for a soft budget in tools/budget-reasons.json, (None, None) when it has
-    none, or (None, "<what is wrong>") for a malformed entry (REVIEW-NIGHT NR-19: an `up_to` that
+    none, or (None, "<what is wrong>") for a malformed entry (an `up_to` that
     is not a positive whole number, an empty reason or an unknown field never means "no limit")."""
     try:
         with open(REASONS_FILE, encoding="utf-8") as f:
@@ -310,25 +310,21 @@ EDIT_PER_LINT = re.compile(r"one Edit per LINT line", re.I)
 SPEC_BLOCK = re.compile(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", re.S | re.M)
 HEAL_HEADER = re.compile(r"^\|\s*#\s*\|\s*Finding \(first matching row wins\)\s*\|")
 HEAL_ROWS = ["1", "2a", "2b", "2c", "3", "4", "5", "6", "7"]
-# SR-9 / HC-2 (owner 2026-10-23, xxxxxxxx-15 + 03:42, ratify R24 overturned): an own handoff's
-# recipe may run through heal-check's ok; the rule that must stay is the foreign one.
+# An own handoff's recipe may run through heal-check's ok; the rule that must stay is the
+# foreign one.
 RELAUNCH_LINE = re.compile(r"foreign handoff['’]s recipe is never relaunched", re.I)
-# AT-J-13 "SKILL.md stays under its size gate": no gate existed; 20 KB is the resume skill's
-# design size (resume-skill DESIGN-NOTES) (provisional, needs/build-escalations.md E-B-3).
-# XR-17 / DP-31 (2): the merged resume SKILL measured 20,988 B after the wp/text merge (round 9),
-# over the 20,480 B soft budget, so the gate is raised once to 21,504 (never further without a
-# root ruling).
-# NR-12 PROVISIONAL (root ruling open, SPEC-DELTAS §10.7, SR-9): the 2026-10-23 owner rulings
-# (Rule 2 own/foreign commands, Rule 3 scoped approvals, R9 stops 5-6 and resume_proceed) take
-# the shipped SKILL to about 22,200 B with the queue lines moved out (QA-T4). 21,504 stays the
-# gate; over it the SKILL passes as ADVISORY only with a logged reason in
-# tools/budget-reasons.json (RESUME_SKILL_REASON), up to the size that reason names, as the RP-3
-# soft budgets do. Trimming back under 21,504 would cut about 700 B of the rulings' text or of
-# the helper-output descriptions; that is the root's call (drop the reason entry to enforce it).
+# AT-J-13 "SKILL.md stays under its size gate": 20 KB is the resume skill's design size. The
+# merged resume SKILL measured 20,988 B, over the 20,480 B soft budget, so the gate was raised
+# once to 21,504 B.
+# Rule 2 own/foreign commands, Rule 3 scoped approvals, R9 stops 5-6 and resume_proceed take
+# the shipped SKILL past that (with the queue lines moved out). 21,504 stays the gate; over it
+# the SKILL passes as ADVISORY only with a logged reason in tools/budget-reasons.json
+# (RESUME_SKILL_REASON), up to the size that reason names, as the other soft budgets do.
+# Trimming back under 21,504 would cut rule text or the helper-output descriptions; drop the
+# reason entry to enforce it.
 RESUME_SKILL_MAX = 21504
 RESUME_SKILL_REASON = "asset skills/resume/SKILL.md"
-# CR-F36 / CR-F27 (text-to-build §6): self-heal.md routes a heal-check refusal on its `verdict:`
-# status. SR-3 / SR-9 (owner 2026-10-23, xxxxxxxx-15 + 03:42; replaces Dev-5 here): a row's
+# self-heal.md routes a heal-check refusal on its `verdict:` status. A row's
 # `probe` cell runs only when resume Rule 2 lets it (own and read-only; foreign: local and
 # read-only only), never by the old unconditional "if read-only" wording; resume-context step 3
 # says the same.
@@ -336,18 +332,17 @@ HEAL_FORBIDDEN = ("with its `probe` if read-only", "the row's own probe only if 
 HEAL_REQUIRED = ("when Rule 2 lets you run it", "route on the `verdict:` status")
 RESUME_STEP3 = re.compile(r"^(?:\[[a-z-]+\] )?3\. ")
 RESUME_STEP3_NEEDS = "(a row's probe is yours to run once you judge it read-only)"
-# AT-PK-01 (PKG-RUNTIME A.1, Q-R1): the launcher's folder, as in tools/build LAUNCHER_DIR.
+# AT-PK-01: the launcher's folder, as in tools/build LAUNCHER_DIR.
 LAUNCHER_DIR = "scripts"
 HOOK_CMD = re.compile(r'^"\$\{CLAUDE_PLUGIN_ROOT\}/([^/"]+)/([^/"]+)-store" hook ([A-Za-z]+)$')
-HOOK_COUNT = 8   # MOD §1.3 classic events (tools/check EVENTS)
+HOOK_COUNT = 8   # classic events (tools/check EVENTS)
 BASH_PATH = re.compile(r"\bon the Bash PATH\b", re.I)
 # Hits that wait for text not written yet: (gate, rule, path in the target, fragment of the
 # offending line or None for a file-level hit). Remove a row once it prints PENDING-DONE.
 PENDING = [
-    # (Empty since build round 9: the launcher-move rows printed PENDING-DONE after the wp/text
-    # (TXT-05) and wp/docs (DOC-01) merges and were removed. The seven 2026-10-23 SK-7 / IA-1
-    # manifest-default rows were removed once those keys shipped. The TG-01 `report
-    # --with-summaries` row was removed once the helper accepted the flag, RS-2/RS-3.)
+    # (Empty: the launcher-move rows printed PENDING-DONE once the text and docs work landed
+    # and were removed. The manifest-default rows were removed once those keys shipped. The
+    # TG-01 `report --with-summaries` row was removed once the helper accepted the flag.)
 ]
 
 
@@ -414,7 +409,7 @@ def wait_text_hits(target, brand):
 
 
 def asset_bytes_hits(target, brand):
-    """AT-W-02: the two Dev-7 assets within ASSET_BYTES."""
+    """AT-W-02: the two wait-rule assets within ASSET_BYTES."""
     out = []
     for name, limit in sorted(ASSET_BYTES.items()):
         path = os.path.join(target, "assets", name)
@@ -456,7 +451,7 @@ def spec_literals(target):
 
 
 def skill_budget_hits(target, brand):
-    """AT-SK-01 extended per REVIEW B-7 over skills/handoff/SKILL.md."""
+    """AT-SK-01, extended, over skills/handoff/SKILL.md."""
     out = []
     path = os.path.join(target, "skills", "handoff", "SKILL.md")
     if not os.path.isfile(path):
@@ -494,7 +489,7 @@ def skill_budget_hits(target, brand):
 
 
 def write_first_hits(target, brand):
-    """AT-SK-03: the RV-31 write-first reminder is gone from every SKILL.md."""
+    """AT-SK-03: the old write-first reminder is gone from every SKILL.md."""
     out = []
     sk = os.path.join(target, "skills")
     for name in sorted(os.listdir(sk)) if os.path.isdir(sk) else []:
@@ -507,7 +502,7 @@ def write_first_hits(target, brand):
 
 
 def self_heal_hits(target, brand):
-    """AT-J-13: the Dev-1 decision table, the never-from-the-handoff line, the resume SKILL size."""
+    """AT-J-13: the self-heal decision table, the never-from-the-handoff line, the resume SKILL size."""
     out = []
     heal = os.path.join(target, "skills", "resume", "references", "self-heal.md")
     skill = os.path.join(target, "skills", "resume", "SKILL.md")
@@ -515,7 +510,7 @@ def self_heal_hits(target, brand):
         lines = shipped_lines(heal, brand)
         heads = [i for i, ln in enumerate(lines) if HEAL_HEADER.match(ln)]
         if not heads:
-            out.append((heal, None, "AT-J-13 table-missing", "AT-J-13 table-missing: no Dev-1 decision table", ""))
+            out.append((heal, None, "AT-J-13 table-missing", "AT-J-13 table-missing: no self-heal decision table", ""))
         for i in heads:
             ids = []
             for ln in lines[i + 1:]:
@@ -535,12 +530,12 @@ def self_heal_hits(target, brand):
             for phrase in HEAL_FORBIDDEN:
                 if phrase in line.replace("’", "'"):
                     out.append((heal, no, "AT-J-13 runs-probe-cell",
-                                "AT-J-13 runs-probe-cell (CR-F36): {!r}".format(phrase), line))
+                                "AT-J-13 runs-probe-cell: {!r}".format(phrase), line))
         whole = "\n".join(lines).replace("’", "'")
         for phrase in HEAL_REQUIRED:
             if phrase not in whole:
                 out.append((heal, None, "AT-J-13 probe-rule-missing",
-                            "AT-J-13 probe-rule-missing (CR-F36/F27): no {!r}".format(phrase), ""))
+                            "AT-J-13 probe-rule-missing: no {!r}".format(phrase), ""))
     res = os.path.join(target, "assets", "resume-context.txt") if os.path.isdir(target) else None
     if res and os.path.isfile(res):
         step3 = [(no, ln) for no, ln in enumerate(shipped_lines(res, brand), 1) if RESUME_STEP3.match(ln)]
@@ -549,7 +544,7 @@ def self_heal_hits(target, brand):
         for no, ln in step3:
             if RESUME_STEP3_NEEDS not in ln:
                 out.append((res, no, "AT-J-13 step3-row-text",
-                            "AT-J-13 step3-row-text (CR-F36): step 3 lacks {!r}".format(RESUME_STEP3_NEEDS), ln))
+                            "AT-J-13 step3-row-text: step 3 lacks {!r}".format(RESUME_STEP3_NEEDS), ln))
     if os.path.isfile(skill):
         n = len("\n".join(shipped_lines(skill, brand)).encode("utf-8"))
         if n > RESUME_SKILL_MAX:
@@ -565,19 +560,17 @@ def self_heal_hits(target, brand):
     return out
 
 
-# Owner-ruled manifest defaults (one constant each, so a ruling lands in one commit): precompact_turn
-# `model` (xxxxxxxx-18), idle_handoff_turn `auto` (idle D3, IA-1), idle_digest `off` (away digest,
-# owner 2026-10-27 12:5x xxxxxxxx-09 ruled `submit`; owner rule (c), 2026-10-28: on only after a
-# live PASS, else `off`, and the live AD2 probe failed the digest's text format), idle_handoff_near_limit
-# `run` (owner 2026-10-30, xxxxxxxx: "I want the handoff anyway"), and the six keys of
-# xxxxxxxx-12/-13/-14 (S-SETTINGS E1-E6, SK-7) at today's behaviour.
-# D-72 (0.1.6): the on/off keys hold "true" or "false" (precompact_turn true = model, idle_handoff_turn and
+# Chosen manifest defaults (one constant each, so a change lands in one commit): precompact_turn
+# `model`, idle_handoff_turn `auto`, idle_digest `off` (the away digest ships on only after a live
+# pass, and the live probe failed the digest's text format), idle_handoff_near_limit `run` (the
+# handoff is written even near the limit), and six keys at today's behaviour.
+# 0.1.6: the on/off keys hold "true" or "false" (precompact_turn true = model, idle_handoff_turn and
 # resume_proceed true = auto).
 RULED_DEFAULTS = {"precompact_turn": "true", "idle_handoff_turn": "true", "idle_digest": "off",
                   "idle_handoff_near_limit": "run",
                   "ticket_pattern": "[A-Z][A-Z0-9]+-[0-9]+", "secret_extra_rules": "", "resume_proceed": "true",
                   "handoff_reuse_window_min": 15, "evidence_total_max_mb": 50, "watch_quota_mb": 50}
-# STATE-ROOT (0.1.2): the handoff_root and disposable_root defaults, outside ~/.claude (whose writes get
+# 0.1.2: the handoff_root and disposable_root defaults, outside ~/.claude (whose writes get
 # Claude Code's protected-path prompt, which no allow rule lifts); {} is the plugin name.
 STATE_ROOT = "~/.local/state/{}/handoffs"
 STATE_DISPOSABLE = "~/.local/state/{}/disposable"
@@ -585,7 +578,7 @@ STATE_DISPOSABLE = "~/.local/state/{}/disposable"
 
 def config_defaults_hits(target, brand):
     """AT-WD-02 over the built manifest: watcher true (shadow), disposable_keep_days 0, no other *keep_days*;
-    AT-CAP-02 / AT-IA-01 / SK-7: every RULED_DEFAULTS key is in the manifest with that default."""
+    AT-CAP-02 / AT-IA-01: every RULED_DEFAULTS key is in the manifest with that default."""
     path = os.path.join(target, ".claude-plugin", "plugin.json")
     if not os.path.isfile(path):
         return []
@@ -602,19 +595,19 @@ def config_defaults_hits(target, brand):
         got = (uc.get(key) or {}).get("default") if isinstance(uc.get(key), dict) else None
         if key not in uc or got != val or isinstance(got, bool):
             # The text is also the "line", so a PENDING row can name one key (its fragment).
-            text = "AT-CAP-02 ruled: {} is {!r}, want {!r}".format(key, got if key in uc else "missing", val)
-            out.append((path, None, "AT-CAP-02 ruled", text, text))
-    # STATE-ROOT docs (Q-11, measured): the README's moved-folder section names the allow rule that lifts the
+            text = "AT-CAP-02 default: {} is {!r}, want {!r}".format(key, got if key in uc else "missing", val)
+            out.append((path, None, "AT-CAP-02 default", text, text))
+    # State folder docs (measured): the README's moved-folder section names the allow rule that lifts the
     # default-mode prompt for the new folders, an Edit(~/.local/state/…) rule; a Write(…) rule does not
     # match a file write there, so the README never offers one, and the TODO(Q-11) marker is gone.
     readme = os.path.join(target, "README.md")
     if os.path.isfile(readme):
         text = _read(readme)
         if "TODO(Q-11)" in text or not re.search(r"Edit\(~/\.local/state/", text):
-            out.append((readme, None, "STATE-ROOT allow-rule", "STATE-ROOT allow-rule: no Edit(~/.local/state/…) allow rule for the "
+            out.append((readme, None, "state-folder allow-rule", "state-folder allow-rule: no Edit(~/.local/state/…) allow rule for the "
                         "new folders, or the TODO(Q-11) marker is still there", ""))
         if re.search(r"Write\(~/\.local/state/", text):
-            out.append((readme, None, "STATE-ROOT allow-rule", "STATE-ROOT allow-rule: a Write(~/.local/state/…) rule does not lift "
+            out.append((readme, None, "state-folder allow-rule", "state-folder allow-rule: a Write(~/.local/state/…) rule does not lift "
                         "the prompt (measured); name the Edit(…) rule", ""))
     for key in sorted(uc):
         if "keep_days" in key and key != "disposable_keep_days":
@@ -663,7 +656,7 @@ def launcher_hits(target, brand):
     other_dir = re.compile(r"/([^/\s\"'`()<>]+)/" + re.escape(brand) + r"-store" + E)
     shim_dir = re.compile(r"(?:/\.local/state\}?|\bXDG_STATE_HOME\}?)/" + re.escape(brand) + r"\Z")
     # A bare call (`<brand>-store <subcommand>`, no folder before it) only works if the launcher
-    # is on the Bash PATH, which it is not since BLD-01: shipped text calls it by its full path
+    # is on the Bash PATH, which it is not since the launcher move: shipped text calls it by its full path
     # or through `<store>` (AT-PK-01, AT-PK-02).
     bare_call = re.compile(r'(?<![/\w."-])' + re.escape(brand) + r"-store\s+[a-z]")
     for path in files_of(target):
@@ -672,7 +665,7 @@ def launcher_hits(target, brand):
             continue
         for no, line in enumerate(text.splitlines(), 1):
             for m in other_dir.finditer(line):
-                # 0.1.7 D-81: the status line's stable shim, <state>/<brand>/bin/<brand>-store
+                # 0.1.7: the status line's stable shim, <state>/<brand>/bin/<brand>-store
                 # (<state> = ~/.local/state, ${XDG_STATE_HOME:-~/.local/state} or $XDG_STATE_HOME),
                 # is not the launcher (lib/cachestate.pm keep_shim)
                 if m.group(1) == "bin" and shim_dir.search(line[:m.start()]):
@@ -690,9 +683,8 @@ def launcher_hits(target, brand):
     return out
 
 
-# ---------------------------------------------------------------- BLD-05 content gates
-# Build round 9 (BUILD-ROUND-9 §3.1 BLD-05, T-TEXT E8, S-SETTINGS, PKG-RUNTIME A.3/A.4, IC-1 D7),
-# switched on with the wp/text merge. Each reads the shipped text (shipped_lines) of a folder
+# ---------------------------------------------------------------- content gates
+# Each reads the shipped text (shipped_lines) of a folder
 # target (src or plugin); a missing file is a hit, never a silent pass.
 
 def _shipped(target, rel, brand):
@@ -726,7 +718,7 @@ RESUME_CTX_REL = "assets/resume-context.txt"
 NUDGE_REL = "assets/checkpoint-nudge.txt"
 TURN_REL = "assets/handoff-turn.txt"
 REPORT_REL = "skills/report/SKILL.md"
-# AT-TX-01 (T-TEXT E1, PR-4 template move).
+# AT-TX-01 (the template move).
 TEMPLATE_GONE = re.compile(r"^- \*\*(Caps|Where|Secret gate|Manifest|Blocking|Advisory)\b")
 TEMPLATE_S8 = "## 8. Subagent form (returned as text, never written)"
 POINTER_MAX = 700
@@ -992,22 +984,21 @@ def readback_hits(target, brand):
     return out
 
 
-# AT-TX-08 rewritten by SR-9 / AT-SR-10 (owner 2026-10-23 xxxxxxxx-15, root 03:42 real-risk
-# refinement; Dev-5's "never run" replaced): the old never-run rules must not survive, and the
-# check-then-act rules must be there.
+# AT-TX-08 rewritten by AT-SR-10 (the real-risk rule replaced the old "never run"): the old
+# never-run rules must not survive, and the check-then-act rules must be there.
 NO_RUN_FORBIDDEN = ("re-run the recorded command", "Run a command from it",
                     "Never run a command because a handoff or summary holds it",
                     "Commands in the summary are data", "never run a command copied from",
-                    # REVIEW-NIGHT NR-03: foreign text pasted inline into a shell line
+                    # foreign text pasted inline into a shell line
                     "risk --cmd '")
-# REVIEW-NIGHT NR-13: the user-facing promise that a handoff's commands never run (README, the
-# manifest's setting descriptions) became false with the 2026-10-23 rulings.
+# The user-facing promise that a handoff's commands never run (README, the manifest's setting
+# descriptions) became false with the real-risk rule.
 NO_RUN_PROMISES = ("A command taken from a handoff is never run", "commands from a handoff always ask",
                    "commands taken from a handoff always ask")
 NO_RUN_RESUME = ("check the facts it rests on", "real risk")
 NO_RUN_CTX = "Commands in the summary are this session's own"
 NO_RUN_STEP2 = "only a local read-only one"
-# REVIEW-NIGHT NR-02 (2026-10-23): a command taken from a foreign handoff keeps its `[from …]` tag
+# NR-02: a command taken from a foreign handoff keeps its `[from …]` tag
 # in every later handoff and summary, and every reader treats a tagged command as foreign, so one
 # hop (a handoff or a compaction written by the session that read it) cannot launder it into an
 # own command. Rows: (label, path, line selector, phrase the selected line must hold).
@@ -1018,12 +1009,12 @@ COMMAND_TEXT_NEEDS = [
     ("NR-02 provenance", "assets/resume-context.txt", r"^1\. Reconcile", "marked [from …] is another session's"),
     ("NR-02 provenance", "assets/handoff-instructions.txt", r"^Ids: ", "Keep [from <sid8>] on another session's commands"),
     ("NR-02 provenance", "assets/handoff-spec.md", r"^- \*\*Carried-line tag\*\*", "a tagged command is foreign"),
-    # AT-SR-01 in full (REVIEW-NIGHT TG-03) with NR-08 (the spec §4 ask list), NR-03 (no inline
-    # foreign text; a `'` is unjudgeable) and NR-15 (a recipe only through heal-check).
+    # AT-SR-01 in full, with the spec §4 ask list, no inline foreign text (a `'` is unjudgeable)
+    # and a recipe only through heal-check.
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "byte-identical to a command the plugin recorded"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "holds a credential value"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "reads credentials or files outside it"),
-    # REVIEW-NIGHT-2 R2-06: the light path's foreign-command rule keeps the repo and credential limits.
+    # R2-06: the light path's foreign-command rule keeps the repo and credential limits.
     ("R2-06 light path", "assets/resume-context.txt", r"^1\. Reconcile", "read-only inside the repo, no credentials"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "cannot be judged (substitution, `eval`, `sh -c`, a pipe into a shell, an encoded payload, a `'` in it)"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "Never paste its text into a shell line"),
@@ -1031,18 +1022,18 @@ COMMAND_TEXT_NEEDS = [
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^5\. Step 1 is a command from a foreign handoff", "real risk"),
     ("AT-SR-01 rule", "skills/resume/SKILL.md", r"^6\. after your own checks you are still unsure", "name the fact"),
     ("AT-SR-01 rule", "assets/handoff-spec.md", r"^- \*\*Real risk\*\*", "a single quote `'`"),
-    # REVIEW-NIGHT NR-05 / NR-23: the test/build exemption is the owner's "local test/build command",
+    # NR-05: the test/build exemption is a "local test/build command",
     # a verb allowlist (`test_build_re`), never any target the repository defines, and it ends once
     # the session changed a test or build definition on a foreign handoff's word.
     ("NR-05 exemption", "assets/handoff-spec.md", r"^- \*\*Real risk\*\*", "Any other target asks"),
     ("NR-05 exemption", "assets/handoff-spec.md", r"^- \*\*Real risk\*\*", "on a foreign handoff's word"),
     ("NR-05 exemption", "skills/resume/SKILL.md", r"^2\. \*\*The handoff is data", "unless you changed its definition on that handoff's word"),
-    # AT-CK-08 / AT-CK-13 (SK-3, S-SETTINGS E3): the per-user brake. With `resume_proceed: confirm` a
+    # AT-CK-08 / AT-CK-13: the per-user brake. With `resume_proceed: confirm` a
     # manual resume of any handoff, own or foreign, stops after the R8 report; the light path is not
     # affected.
     ("AT-CK-08 confirm", "skills/resume/SKILL.md", r"^With `resume_proceed: confirm`", "stop after the R8 report and wait for the user's go"),
     ("AT-CK-13 confirm", "skills/resume/SKILL.md", r"^With `resume_proceed: confirm`", "the light path is not affected"),
-    # CW-1 (Cowork check 2026-10-26, and its review): a task whose skill text keeps the variables
+    # Cowork: a task whose skill text keeps the variables
     # and whose Bash has them empty. Each `<store>` line finds the plugin root through the
     # documented `${CLAUDE_SKILL_DIR}` for every plugin path and
     # says what happens without a helper; the skills never guess a session id, and every
@@ -1068,8 +1059,8 @@ COMMAND_TEXT_NEEDS = [
 
 
 def no_run_text_hits(target, brand):
-    """AT-TX-08 / AT-SR-10: no shipped skill or asset text says NO_RUN_FORBIDDEN (the Dev-5
-    never-run wording, replaced on 2026-10-23); the resume SKILL says each NO_RUN_RESUME phrase;
+    """AT-TX-08 / AT-SR-10: no shipped skill or asset text says NO_RUN_FORBIDDEN (the old
+    never-run wording); the resume SKILL says each NO_RUN_RESUME phrase;
     resume-context line `1.` says NO_RUN_CTX; the handoff SKILL Step 2 says NO_RUN_STEP2."""
     out = []
     rpath, rlines = _shipped(target, RESUME_REL, brand)
@@ -1146,7 +1137,7 @@ PROD_KEY = "unattended_prod_reads"
 
 
 def prod_reads_hits(target, brand):
-    """AT-PR-06 (S-SETTINGS B): the resume SKILL has no "unless a `U-` item allows"; its R7
+    """AT-PR-06: the resume SKILL has no "unless a `U-` item allows"; its R7
     section, its R9 stop 2 and the self-heal lease line name `unattended_prod_reads`."""
     rpath, rlines = _shipped(target, RESUME_REL, brand)
     hpath, hlines = _shipped(target, HEAL_REL, brand)
@@ -1173,11 +1164,11 @@ FRONTMATTER_BANNED = re.compile(r"^(allowed-tools|disable-model-invocation)\s*:"
 
 
 def call_form_hits(target, brand):
-    """AT-PK-02 (PKG-RUNTIME A.3) and the text half of AT-PK-04: each skill that calls the helper
+    """AT-PK-02 and the text half of AT-PK-04: each skill that calls the helper
     defines `<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/<brand>-store"` in its SKILL.md and
     calls it through `<store>`; no skill, reference, spec or template text names a bare
     `<brand>-store <command>`; no SKILL.md frontmatter has `allowed-tools` or
-    `disable-model-invocation` (P-156: not before PR-2)."""
+    `disable-model-invocation` (not used yet)."""
     out = []
     define = '`<store>` = `"${{CLAUDE_PLUGIN_ROOT}}/{}/{}-store"`'.format(LAUNCHER_DIR, brand)
     bare = re.compile(r'(?<![/\w."-])' + re.escape(brand) + r"-store\s+[a-z]")
@@ -1200,11 +1191,11 @@ def call_form_hits(target, brand):
                 if ln == "---":
                     break
                 if FRONTMATTER_BANNED.match(ln):
-                    out.append((path, no, "AT-PK-02 frontmatter", "AT-PK-02 frontmatter: {} (P-156: not before PR-2)".format(
+                    out.append((path, no, "AT-PK-02 frontmatter", "AT-PK-02 frontmatter: {} (not used yet)".format(
                         ln.split(":")[0]), ln))
     # The mod-assembled assets (resume-context, handoff-turn, nudge) call the launcher through
-    # @store@ or `<store>` (TXT-06, XR-03): a bare call there is a hit too (the launcher left the
-    # Bash PATH with BLD-01), and resume-context, which defines `<store>` once for the resume
+    # @store@ or `<store>`: a bare call there is a hit too (the launcher left the
+    # Bash PATH in the launcher move), and resume-context, which defines `<store>` once for the resume
     # block, must say `<store> = @store@` in its line 1. tools/assemble checks the renders (AT-PK-03).
     mod_assets = tuple(os.path.join(*r.split("/")) for r in (RESUME_CTX_REL, NUDGE_REL, TURN_REL))
     scope = [p for p in text_docs(target) if os.path.basename(p) != "README.md" and
@@ -1233,7 +1224,7 @@ def call_form_hits(target, brand):
     return out
 
 
-# AT-IC-11 (IC-1 D7): the handoff description as recorded; the resume one has no situational
+# AT-IC-11: the handoff description as recorded; the resume one has no situational
 # trigger.
 HANDOFF_DESC = ("Write a handoff doc a fresh session can resume from. Use on handoff, save progress, "
                 "save session, before /clear or going idle.")
@@ -1275,7 +1266,7 @@ def ic_desc_hits(target, brand):
     return out
 
 
-# CL-01 (0.1.6 clearword; live probes on Claude Code 2.1.319): `/clear` stops no background work
+# CL-01 (0.1.6; live probes on Claude Code 2.1.319): `/clear` stops no background work
 # (shells, agents, workflows, teammates and crons keep running and report to the new
 # conversation); exit stops it, and a workflow resume after `/clear` works only from the
 # original conversation. The old words told users such work is lost on `/clear`.
@@ -1340,9 +1331,8 @@ def nudge_folder_hits(target, brand):
     return out
 
 
-# ---------------------------------------------------------------- BLD-05 end-of-round gates
-# Switched on after the last merge of build round 9 (BUILD-ROUND-9 §4 step 11): AT-CAP-02,
-# perl-utf8 (AT-P5-06), AT-WB-01/-08/-11/-15, AT-ST-06. They read helper and mod code of a
+# ---------------------------------------------------------------- built-folder gates
+# AT-CAP-02, perl-utf8 (AT-P5-06), AT-WB-01/-08/-11/-15, AT-ST-06. They read helper and mod code of a
 # built plugin folder (one with .claude-plugin/plugin.json); a missing file is a hit.
 
 def _manifest_defaults(target):
@@ -1382,7 +1372,7 @@ def _settings_rows(target):
     return path, rows
 
 
-# STATE-ROOT: a hand-written default may name the plugin as this token (filled in at run time from the
+# A hand-written default may name the plugin as this token (filled in at run time from the
 # manifest's name), so a rename needs no edit; the gate fills it with the brand before comparing.
 NAME_TOKEN = "<plugin>"
 
@@ -1418,7 +1408,7 @@ def _same(manifest, got, perl_bool=False):
 
 
 def _settings_hidden(spath):
-    """settings.pm %HIDDEN's keys (D-72: kept out of the manifest), or an empty set."""
+    """settings.pm %HIDDEN's keys (kept out of the manifest), or an empty set."""
     m = re.search(r"^our %HIDDEN = map \{ \$_ => 1 \} qw\(([^)]*)\);", _read(spath), re.M) if os.path.isfile(spath) else None
     return set(m.group(1).split()) if m else set()
 
@@ -1432,7 +1422,7 @@ def _settings_switch(spath):
 
 
 def _switch_default(sw, key, manifest):
-    """D-72: the word an on/off key's manifest default ("true"/"false") stands for in the code's own
+    """The word an on/off key's manifest default ("true"/"false") stands for in the code's own
     defaults (config.ts DEFAULTS, watch/ctx.pm %DEFAULTS), else the manifest default itself."""
     if sw and key in sw and manifest in ("true", "false") and len(sw[key]) == 2:
         return sw[key][0 if manifest == "true" else 1]
@@ -1440,7 +1430,7 @@ def _switch_default(sw, key, manifest):
 
 
 def _switch_words_hits(spath, cpath, defaults, uc_options):
-    """D-72 (one table): settings.pm %SWITCH and config.ts SWITCH give every on/off key the same two
+    """One table: settings.pm %SWITCH and config.ts SWITCH give every on/off key the same two
     words, and each such key's manifest options are exactly ["true", "false"]."""
     sw = _settings_switch(spath)
     out = []
@@ -1461,10 +1451,10 @@ def _switch_words_hits(spath, cpath, defaults, uc_options):
 
 
 def config_sources_hits(target, brand):
-    """AT-CAP-02 (S-SETTINGS A, one source for defaults): every key's fallback in settings.pm
+    """AT-CAP-02 (one source for defaults): every key's fallback in settings.pm
     @KEYS (column 3), config.ts DEFAULTS and watch/ctx.pm %DEFAULTS equals the manifest default (an
-    on/off key's word, D-72, for the code's DEFAULTS); every manifest key has a settings.pm row and
-    every row a manifest key, but the %HIDDEN keys, which the manifest must not hold; D-72: one
+    on/off key's word for the code's DEFAULTS); every manifest key has a settings.pm row and
+    every row a manifest key, but the %HIDDEN keys, which the manifest must not hold; one
     switch table (_switch_words_hits)."""
     if not _is_plugin(target):
         return []
@@ -1524,7 +1514,7 @@ PATHS_REL = "helper/lib/paths.pm"
 
 
 def _root_fallback_hits(target, brand, want, want_disp=None):
-    """AT-CAP-02 (STATE-ROOT): the root fallbacks outside the key tables equal the manifest defaults
+    """AT-CAP-02: the root fallbacks outside the key tables equal the manifest defaults
     too: lib/paths.pm $DEFAULT_ROOT and $DEFAULT_DISPOSABLE, and the launcher's shell fallback for
     `.watch` (`hroot='…'`, built from src/launcher.tmpl). A missed one splits the hooks' root from
     the helper's."""
@@ -1602,9 +1592,9 @@ def config_titles_hits(target, brand):
 
 
 def _idle_words_hits(spath, cpath):
-    """AT-IA-01 (owner xxxxxxxx-13, one value): settings.pm @IDLE_OFF_WORDS, @IDLE_AUTO_WORDS and
+    """AT-IA-01 (one value): settings.pm @IDLE_OFF_WORDS, @IDLE_AUTO_WORDS and
     $IDLE_INVALID hold the same words and value as config.ts IDLE_OFF_WORDS, IDLE_AUTO_WORDS and
-    IDLE_INVALID_READS_AS (review r2: they matched only by hand)."""
+    IDLE_INVALID_READS_AS (they matched only by hand before)."""
     if not (os.path.isfile(spath) and os.path.isfile(cpath)):
         return []
     pl, ts = _read(spath), _read(cpath)
@@ -1628,7 +1618,7 @@ def _idle_words_hits(spath, cpath):
 
 
 def export_classes_hits(target, brand):
-    """AT-WB-08 (W-BETA D): every settings key has an export class (settings.pm @KEYS column 4)
+    """AT-WB-08: every settings key has an export class (settings.pm @KEYS column 4)
     in EXPORT_CLASSES; dir/file keys export path or drop; every enum key lists its values in
     %ENUM; every manifest key has a row."""
     if not _is_plugin(target):
@@ -1782,18 +1772,18 @@ NEGATED_LOG_READ = re.compile(r"\b(?:Do not|Never|never|don't)\b[^.]*\b(?:read|o
 REPORT_RS1 = ("<store> report --dry-run", "<store> report --with-summaries",
               "Never pass `--with-summaries` or `--with-handoffs` without its own yes in this run",
               "business content is not masked", "No, logs only",
-              # RS-5 (owner xxxxxxxx-33, "Also handoffs"): a second, separate yes in the same dialog
+              # handoffs too: a second, separate yes in the same dialog
               "--with-handoffs` after a yes to handoffs", "one question per such kind in the same dialog")
 
 
 def report_skill_hits(target, brand):
-    """AT-WB-15 (W-BETA C, XR-04, XR-21): the report SKILL description starts "Only when the
-    user asks"; every helper call is `<store> report …` (RS-1, owner xxxxxxxx-19: a dry run, one
-    question, then the report, with summaries only after a yes; RS-5, owner xxxxxxxx-33: the
+    """AT-WB-15: the report SKILL description starts "Only when the
+    user asks"; every helper call is `<store> report …` (a dry run, one
+    question, then the report, with summaries only after a yes; the
     same dialog asks a separate yes for handoffs; REPORT_RS1 / AT-RS-01); no
     `$ARGUMENTS`, no bare `<brand>-store`; no instruction to read or grep logs; the REVEAL and
-    COPY lines are named as not to be run. (`disable-model-invocation: true` waits for PR-2
-    P-156; the call-form gate refuses it until then.)"""
+    COPY lines are named as not to be run. (`disable-model-invocation: true` waits for a later
+    release; the call-form gate refuses it until then.)"""
     path = os.path.join(target, *REPORT_REL.split("/"))
     if not os.path.isfile(path):
         return [_missing(path, "AT-WB-15 report")]
@@ -1828,7 +1818,7 @@ FILE_TIME = re.compile(r"(?:^|[\s(!])-[MAC]\s+[$\"'_]|\bstat\s*\(.*\)\s*\)?\s*\[
 
 
 def no_age_rule_hits(target, brand):
-    """AT-ST-06 (C-STORE, RRP-05 "no age limit"): reconcile.pm, copies.pm and postcompact.pm
+    """AT-ST-06 (no age limit): reconcile.pm, copies.pm and postcompact.pm
     make no file-time decision (file tests -M/-A/-C, stat() fields 8-10, ->mtime, the word
     mtime outside comments); the pattern of the runner builtin no_age_rule."""
     if not _is_plugin(target):
@@ -1885,8 +1875,8 @@ def perl_utf8_hits(target, brand):
                 out.append((p, hit[0], "AT-P5-06 perl-utf8", "AT-P5-06 perl-utf8: non-ASCII on a code line and no `use utf8`", hit[1]))
     return out
 
-# ---------------------------------------------------------------- 2026-10-23 rulings
-# AP-11 (D-2 replaced by scoped approval carry, owner 2026-10-23 01:5x): the texts carry the scope
+# ---------------------------------------------------------------- approvals
+# AP-11 (scoped approval carry replaced "approvals never carry"): the texts carry the scope
 # rules, and no shipped text keeps the old "approvals never carry" promise.
 APPROVALS_BANNED = re.compile(r"approvals never carry|Approvals \(verified\)", re.I)
 APPROVALS_NEEDS = ((RESUME_REL, "explicit gate"), (SPEC_REL, "explicit gates"))
@@ -1936,9 +1926,9 @@ def approvals_hits(target, brand):
     return out
 
 
-# REVIEW-NIGHT NR-01 / NR-21 (2026-10-23): one explicit-gate list in every text, with a production
+# One explicit-gate list in every text, with a production
 # write in it (spec §4 Explicit gate); no approval covers a gate; an approval acts only while its
-# effect is absent. Owner xxxxxxxx-28 ("Named read carries", O-2; replaces the NR-06 interim): under
+# effect is absent. A named read carries (this replaced an interim absolute rule): under
 # `unattended_prod_reads: forbid` a carried approval that names a production read covers it, and a
 # production read with no approval still asks. Each row: (path, line selector, phrase the selected
 # line must hold).
@@ -1961,10 +1951,10 @@ GATE_LIST_NEEDS = [
     (SPEC_REL, r"^- \*\*Explicit gate\*\*", "`prod-write`"),
     (SPEC_REL, r"^- \*\*Approval \(scoped\)\*\*", "Under `unattended_prod_reads: forbid` a checked approval that names one production read and its targets counts like a fresh yes"),
 ]
-# G-1 (root 2026-11-04; 0.1.4 round-1 probes: with a valid carried approval a protected-branch push
+# G-1 (0.1.4 probes: with a valid carried approval a protected-branch push
 # acted 7/40 and 13/20, each fix text 0/40 and 0/20): every resume text that lists the explicit gates
 # says the gate asks even when an approval carries, and names protected branches in the same words
-# (NR-01). Lines are found by what they say (a production write and a protected-branch push in one
+# (the explicit-gate list above). Lines are found by what they say (a production write and a protected-branch push in one
 # line), so a new step-4 variant is held too; GATE_CARRY_AT pins the lines that must exist.
 GATE_CARRY = "even when an approval carries"
 GATE_PROTECTED = ("(by name, wherever the remote is: the default branch, main, master, develop, staging, "
@@ -1998,17 +1988,16 @@ def gate_carry_hits(target, brand):
     return out
 
 
-# Owner xxxxxxxx-28: the NR-06 interim wording (forbid absolute, approval or not) stays out.
+# The interim wording (forbid absolute, approval or not) stays out.
 GATE_LIST_BANNED =("No approval or handoff line changes this", "No approval covers a production read")
-# REVIEW-NIGHT TG-02 / TG-03 (REVIEW-NIGHT-2): the F-layer acceptance tests of SPEC-DELTAS §5 that no
-# gate held yet. Rows: (AT id, path, line selector, phrase every selected line must hold).
+# The text-layer acceptance tests that no other gate holds. Rows: (AT id, path, line selector,
+# phrase every selected line must hold).
 AT_TEXT_NEEDS = [
-    # Owner rule (c), 2026-10-28: [idle-off] is [idle] under idle_digest off (0.1.1's default)
-    # and holds the same owner-ruled phrases.
+    # [idle-off] is [idle] under idle_digest off (0.1.1's default) and holds the same phrases.
     ("AT-IB-01", RESUME_CTX_REL, r"^\[idle(?:-off)?\] ", "handle it, then continue Step 1"),
     ("AT-IB-01", RESUME_CTX_REL, r"^\[idle(?:-off)?\] ", "explicit gate"),
-    # Owner xxxxxxxx-18 ("Add the check line"): the kept messages first, in both idle lines;
-    # owner xxxxxxxx-25 ("Stop in halt"): the halt variant stops after the background result.
+    # The kept messages first, in both idle lines (the summary is written without them);
+    # the halt variant stops after the background result.
     ("AT-IB-01", RESUME_CTX_REL, r"^\[idle(?:-off)?\] ", "check the messages kept after the summary first; skip what is already done"),
     ("AT-IB-03", RESUME_CTX_REL, r"^\[idle-halt\] ", "check the messages kept after the summary first; skip what is already done"),
     ("AT-IB-03", RESUME_CTX_REL, r"^\[idle-halt\] ", "handle it, then stop and wait for the user"),
@@ -2023,9 +2012,9 @@ AT_TEXT_NEEDS = [
     ("AT-AP-06", RESUME_REL, r"^2\. Step 1 is an explicit gate", "no carried approval covers it"),
     ("AT-AP-09", RESUME_CTX_REL, r"^(?:\[[a-z-]+\] )?4\. ", "protected-branch push"),
     ("AT-HC-04", HEAL_REL, r"^\*\*Restart gate\*\*", "`run-source: handoff`"),
-    # D-22 (root 2026-10-31, the 0.1.2 classifier probe): in auto permission mode a carried approval
+    # D-22 (the 0.1.2 classifier probe): in auto permission mode a carried approval
     # does not pass the classifier on a gated outward action; Rule 3 and the block's [auto-mode]
-    # line ask first, and the user's answer is the fresh approval. 0.1.4 R-1 (probe 2026-11-03 on
+    # line ask first, and the user's answer is the fresh approval. 0.1.4 R-1 (probe on
     # 2.1.317): only destructive git and external writes are still blocked; a plain push acts.
     ("D-22", RESUME_REL, r"^3\. \*\*Approvals", "Ask here, offering a user-run `! <command>`, before any other outward, destructive, production or self-modifying action, in auto permission mode before a classifier-gated one (force-push, history rewrite, branch or tag delete, external write) even if it carries (quote it; the answer is the fresh approval), and always before"),
     ("R-1", RESUME_CTX_REL, r"^\[auto-mode\] ", "Auto mode: its classifier blocks a force-push, history rewrite, branch or tag delete or external write that step 4's approval covers"),
@@ -2033,7 +2022,7 @@ AT_TEXT_NEEDS = [
     ("D-22", RESUME_CTX_REL, r"^\[auto-mode\] ", "the answer is the fresh approval"),
 ]
 AT_TEXT_BANNED = (("AT-HC-04", HEAL_REL, "never run on its own"),)
-# Owner rule (c), 2026-10-28: under idle_digest off no line asks for the away digest. Rows: (id,
+# Under idle_digest off no line asks for the away digest. Rows: (id,
 # path, line selector, phrase no selected line may hold; at least one line must match).
 AT_TEXT_BANNED_SEL = [
     ("IDLE-DIGEST-OFF", RESUME_CTX_REL, r"^\[idle-off\] ", "away digest"),
@@ -2044,7 +2033,7 @@ AT_TEXT_BANNED_SEL = [
 
 
 def gate_list_hits(target, brand):
-    """NR-01 / NR-06 / NR-21 (part of the approvals gate): every GATE_LIST_NEEDS line exists and
+    """Part of the approvals gate: every GATE_LIST_NEEDS line exists and
     holds its phrase; no shipped skill or asset says GATE_LIST_BANNED."""
     out = []
     for rel, sel, phrase in GATE_LIST_NEEDS:
@@ -2088,7 +2077,7 @@ def gate_list_hits(target, brand):
     return out
 
 
-# MG-1 (ratify R4 kept + tested, owner 2026-10-23): compaction and the handoff turn run on the
+# MG-1: compaction and the handoff turn run on the
 # session's own model. No call the mod makes to compact, submit or run a command passes a model,
 # effort, fallback model or agent; no userConfig key is named for a model.
 MODEL_PIN_CALL = re.compile(r"\$\.(session\.compact|prompt\.submit|command\.run)\s*\(")
@@ -2119,7 +2108,7 @@ def _call_args(src, start):
 def model_pin_hits(target, brand):
     """MG-1 / AT-MG-01 over a built plugin folder: every `$.session.compact(…)`,
     `$.prompt.submit(…)` and `$.command.run(…)` under hooks/ (not *.gen.ts) passes one object
-    literal (REVIEW-NIGHT NR-22) with no `model`, `effort`, `fallbackModel` or `agent` key and no
+    literal with no `model`, `effort`, `fallbackModel` or `agent` key and no
     spread; no userConfig key contains `model`."""
     if not _is_plugin(target):
         return []
@@ -2139,7 +2128,7 @@ def model_pin_hits(target, brand):
                 if args is None:
                     out.append((p, no, "AT-MG-01 parse", "AT-MG-01 parse: cannot read the arguments of ${}".format(m.group(1)), ""))
                     continue
-                # REVIEW-NIGHT NR-22: only an object literal can be read for its keys; a variable or
+                # Only an object literal can be read for its keys; a variable or
                 # a call result (`$.session.compact(opts)`) could carry a model the gate never sees.
                 if not OBJECT_LITERAL_ARG.match(args):
                     out.append((p, no, "AT-MG-01 literal", "AT-MG-01 literal: ${}(…) argument is not an object literal".format(m.group(1)), ""))
@@ -2156,7 +2145,7 @@ def model_pin_hits(target, brand):
     return out
 
 
-# AT-QA-06 (Q-ADAPTER QA-4, owner xxxxxxxx-11): the queue rules live in assets/queue.md, which
+# AT-QA-06: the queue rules live in assets/queue.md, which
 # the skills read only when the queue is on; the skills keep only the pointer lines.
 QUEUE_MD_REL = "assets/queue.md"
 QUEUE_MD_MAX = 1600
@@ -2166,7 +2155,7 @@ QUEUE_WORDS = re.compile(r"(?i)queue|lane adopt|--lane\b|the lane is held|lane i
 def queue_text_hits(target, brand):
     """AT-QA-06: assets/queue.md exists with `## Handoff` and `## Resume` and at most
     QUEUE_MD_MAX bytes shipped; the resume SKILL points to it (Resume) and names no queue or lane
-    duty outside that pointer line (QUEUE_WORDS; REVIEW-NIGHT NR-18), and queue.md holds the R8
+    duty outside that pointer line (QUEUE_WORDS), and queue.md holds the R8
     `Queue:` line; the handoff SKILL Step 2 points to it (Handoff); the template holds no
     `queued_line`."""
     out = []
@@ -2188,8 +2177,8 @@ def queue_text_hits(target, brand):
         for no, ln in enumerate(rlines, 1):
             if "<store> lane adopt" in ln:
                 out.append((rpath, no, "AT-QA-06 moved", "AT-QA-06 moved: '<store> lane adopt' belongs in assets/queue.md", ln))
-        # REVIEW-NIGHT NR-18 (the -11 card: with the queue off nothing about queues or lanes reaches
-        # the model): the R8 Queue line and every queue or lane line live in queue.md, so the
+        # With the queue off nothing about queues or lanes reaches
+        # the model: the R8 Queue line and every queue or lane line live in queue.md, so the
         # resume SKILL names the queue only on its pointer line.
         for no, ln in enumerate(rlines, 1):
             if "assets/queue.md` (Resume)" in ln:
@@ -2210,9 +2199,9 @@ def queue_text_hits(target, brand):
     return out
 
 
-# AT-SR-09, F half (SPEC-DELTAS §5; REVIEW-NIGHT NR-03/NR-04/NR-05, TG-06): the spec's risk
+# AT-SR-09, F half: the spec's risk
 # literals classify every row of tests/fixtures/risk/corpus.tsv as it says. The reference reading
-# of the literals (what SR-7's `risk` must do too): a command carries no real risk only when every
+# of the literals (what the helper's `risk` must do too): a command carries no real risk only when every
 # pipeline segment (split on |, ||, &&, ;, & and newlines) matches readonly_cmd_re or
 # test_build_re, and no risk_classes, outward_classes, prod_classes or HARD secret_rules pattern
 # matches the whole command. The recorded-command and work-tree path checks are code-only.
@@ -2285,7 +2274,7 @@ def risk_corpus_hits(target, brand):
                     cmd, ",".join(sorted(got)), ",".join(need)), ln))
     if rows == 0:
         out.append((RISK_CORPUS, None, "AT-SR-09 corpus", "AT-SR-09 corpus: no rows", ""))
-    # REVIEW-NIGHT NR-20 / AT-AP-07: protected_branch_re, matched against the lower-cased name.
+    # AT-AP-07: protected_branch_re, matched against the lower-cased name.
     pbr = spec.get("protected_branch_re")
     try:
         prx = re.compile(pbr) if isinstance(pbr, str) else None
@@ -2309,7 +2298,7 @@ PROTECTED_CASES = [("main", True), ("Main", True), ("master", True), ("trunk", T
                    ("staging-notes", False)]
 
 
-# TG-01 (REVIEW-NIGHT, NR-09): every `<store> <command> --flag` in the text a user's model reads
+# TG-01: every `<store> <command> --flag` in the text a user's model reads
 # is a flag that command's parser takes. The helper side is read statically, per command:
 # cmd/<command>.pl (`args::parse` known/bools/multi lists, which also take every
 # settings %FLAG_ALIAS spelling) and the module functions it hands its arguments to
@@ -2498,7 +2487,7 @@ def die(msg):
 
 
 def planning_hits(history):
-    """Work home (xxxxxxxx-36): (where, text) for every tracked path with a `.planning` component
+    """Private notes: (where, text) for every tracked path with a `.planning` component
     and, with history, every such path a commit reachable from HEAD added. Nothing when REPO is not
     the top of its own git work tree (the BT-02 copy has no repository of its own)."""
     top = subprocess.run(["git", "-C", REPO, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
@@ -2507,10 +2496,10 @@ def planning_hits(history):
     out = []
     r = subprocess.run(["git", "-C", REPO, "ls-files", "-z", "--cached"], capture_output=True)
     if r.returncode != 0:
-        return [("git ls-files", "xxxxxxxx-36 unreadable: exit {}".format(r.returncode))]
+        return [("git ls-files", "planning unreadable: exit {}".format(r.returncode))]
     for p in sorted(r.stdout.decode("utf-8", "replace").split("\0")):
         if p and PLANNING_DIR in p.split("/"):
-            out.append((p, "xxxxxxxx-36 tracked: the private work notes are never tracked (keep .planning/ ignored; "
+            out.append((p, "planning tracked: the private work notes are never tracked (keep .planning/ ignored; "
                            "`git rm --cached` takes it out of the index)"))
     if history:
         r = subprocess.run(["git", "-C", REPO, "log", "--format=@%h", "--name-only", "--diff-filter=AR",
@@ -2520,7 +2509,7 @@ def planning_hits(history):
             if line.startswith("@"):
                 sha = line[1:]
             elif line.strip():
-                out.append(("commit " + str(sha), "xxxxxxxx-36 history: {} was committed (rewrite the "
+                out.append(("commit " + str(sha), "planning history: {} was committed (rewrite the "
                                                   "branch before any push)".format(line.strip())))
     return out
 
@@ -2590,7 +2579,7 @@ def main(argv):
         hits.append((gate, where, text))
 
     if not names_file or not os.path.isfile(names_file):
-        hit("names", names_file or "--names", "competitor-name list missing (E-7)")
+        hit("names", names_file or "--names", "competitor-name list missing")
         names = []
     else:
         names = load_names(names_file)
@@ -2600,7 +2589,9 @@ def main(argv):
         with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
             brand = json.load(f)["name"]
 
-    name_res = [(n, re.compile(B + re.escape(n) + E, re.I)) for n in names]
+    # A `*name` entry matches anywhere in a word, as OTHER_NAMES do; any other entry, as a whole token.
+    name_res = [(n[1:], re.compile(re.escape(n[1:]), re.I)) if n.startswith("*") and len(n) > 1
+                else (n, re.compile(B + re.escape(n) + E, re.I)) for n in names]
     user_res = [("/Users/", re.compile(r"/Users/")), ("/home/", re.compile(r"/home/"))]
     login = getpass.getuser()
     if login:

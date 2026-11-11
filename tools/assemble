@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 """tools/assemble: assemble every compaction asset per path and check its budget.
 
-Port of the design-phase assembler (compaction DESIGN-NOTES §2 grammar, HK-39 / AT-P-07
-budgets, SIZE-CHECK worst cases), reading src/assets/.
+Port of the design-phase assembler (the tag grammar below, AT-P-07 budgets, worst-case
+runtime values), reading src/assets/.
 
 Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--chunk-bytes N] [--goldens | --check]
   --name      plugin name filled into {{plugin}} (default: brand.json name)
@@ -17,30 +17,29 @@ Usage: tools/assemble [--name NAME] [--path-len N] [--dir ASSET_DIR] [--chunk-by
               the index goldens.gen.ts that gathers them
   --check     compare those files with a fresh render instead of writing them, byte for byte
               (CRLF drift, stray .txt files and stray _gen/goldens*.gen.ts files count, and so
-              does a module over GOLDEN_CHUNK_MAX; BUILD-PLAN §4 X-gen, BH-5)
+              does a module over GOLDEN_CHUNK_MAX)
   --chunk-bytes  test only (tools/check goldens-chunks): the module size cap in bytes in place
               of GOLDEN_CHUNK_MAX, so a small cap gives overflow modules
 
 Build step: strip <!-- ... --> comments, fill {{plugin}}. Runtime: fill @tokens@ with
 worst-case values. A line starting "[tag] " is kept (tag stripped) only when the tag is
 active on the path, else dropped. [measured] lines and @remeasure@ belong to the block budget,
-not the static core. Extra checks: no `<!--` survives; CDN Review item 9 (cited step numbers
+not the static core. Extra checks: no `<!--` survives; step citations (cited step numbers
 exist and still name the same step; [queue]/[halt] lines reference only kept lines); a
 nudge with [halt] and without [continue] never says the plugin compacts the session into a
 handoff summary or copies after this turn, and the [halt] line says the plugin compacts only
-if auto-continue is off or at its hourly limit (CR-F30/F35); no handoff-turn render has a
+if auto-continue is off or at its hourly limit; no handoff-turn render has a
 line that starts with "/" and a [submit-idle] render says "launch no agents or workflows"
 (AT-LT-18, AT-IC-12); no render of any asset names the bare launcher (with or without a
 subcommand), and one that writes `<store>` defines it as the @store@ word (AT-PK-03, never skipped); heading literals equal the spec-literals block of handoff-spec.md once
-that file exists. Exclusive tag groups (EXCLUSIVE, XR-19) limit every walk over combinations.
-Budgets: the BUDGETS table (D-17 of the 2026-10-21 rulings, compaction-rem-6 of 2026-10-22;
-AT-P-07, AT-TX-10), with @store@ at a 160-character root stand-in (PKG-RUNTIME A.2). Above a soft
+that file exists. Exclusive tag groups (EXCLUSIVE) limit every walk over combinations.
+Budgets: the BUDGETS table (AT-P-07, AT-TX-10), with @store@ at a 160-character root stand-in. Above a soft
 limit a check prints ADVISORY and still passes; above a hard limit it prints OVER and fails. The
-resume protocol and the resume block total (RP-1, owner 2026-10-23) are soft targets that pass
+resume protocol and the resume block total are soft targets that pass
 only with a logged reason in tools/budget-reasons.json (ADVISORY <budget> <n> > soft <s>: <reason>),
 and only up to the size that reason names; without one they fail. The idle rows cover [idle],
-its halt variant [idle-halt] and the [idle-again] note of a person's return (owner xxxxxxxx-18,
--25, -37; the ID-3 [idle-return] line is gone). AT-QA-01: with no [queue] tag
+its halt variant [idle-halt] and the [idle-again] note of a person's return (the older
+[idle-return] line is gone). AT-QA-01: with no [queue] tag
 the main text and the nudge name no queue or lane.
 Exit 1 when a hard budget is exceeded or any check fails.
 """
@@ -89,99 +88,95 @@ if args:
     sys.exit("assemble: unknown arguments {}\n{}".format(args, __doc__))
 
 PREV = "~/.claude/handoffs/example-repo/LAB-123/" + "p" * (PATH_LEN - len("~/.claude/handoffs/example-repo/LAB-123/"))
-# PKG-RUNTIME A.2 (BLD-04): `@store@` = storeWord(<root>/scripts/<name>-store), the launcher's
+# `@store@` = storeWord(<root>/scripts/<name>-store), the launcher's
 # absolute path as one double-quoted shell word. Budget tests use a 160-character root stand-in.
 STORE_ROOT_LEN = 160
 _ROOT_BASE = "/opt/example/.claude/plugins/cache/example-marketplace/"
 STORE_ROOT = _ROOT_BASE + "r" * (STORE_ROOT_LEN - len(_ROOT_BASE))
 STORE = '"' + STORE_ROOT + "/scripts/" + NAME + '-store"'
 RUNTIME = {"nonce": "a1b2c3d4", "previous_copy": PREV, "measured_at": "2026-10-21T04:40:00+03:00",
-           "session_id": "00000000-0000-4000-8000-000000000000", "saved_copy": PREV, "tokens": "612,345",
+           "session_id": "9f0e1d2c-3b4a-4596-8877-665544332211", "saved_copy": PREV, "tokens": "612,345",
            "store": STORE,
-           # nudge.ts builds queue_add with storeWord (PKG-RUNTIME A.2).
-           "queue_add": STORE + " queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4", "measured_facts": "", "remeasure": "",
-           # D-18 tokens (worst case; text-to-build.md §1): the longest halt reason, c = 1 + call_cap
-           # + recipe_cap (DP-19), and core's handoff_turn::finish_command form. Since wp/core C-2
-           # (XR-03 (1), DP-31 (1)) that command starts with the `<store>` token, which the resume
-           # context defines once; it no longer carries the full launcher word (B-4).
+           # nudge.ts builds queue_add with storeWord.
+           "queue_add": STORE + " queue-add --sid 9f0e1d2c-3b4a-4596-8877-665544332211 --nonce a1b2c3d4", "measured_facts": "", "remeasure": "",
+           # handoff-turn tokens (worst case): the longest halt reason, c = 1 + call_cap
+           # + recipe_cap, and core's handoff_turn::finish_command form. That command starts
+           # with the `<store>` token, which the resume context defines once; it no longer
+           # carries the full launcher word.
            "halt_reason": "compactions keep repeating without progress", "max_calls": "34", "handoff_path": PREV,
            "draft_state": "present",
-           "handoff_finish": "`<store> publish --stage '" + PREV + "/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`",
-           # IC-1 D5 [submit-idle]: minutes idle when the pre-idle turn fires (MOD-SPEC §9.4: 49).
+           "handoff_finish": "`<store> publish --stage '" + PREV + "/.staging/9f0e1d2c-a1b2c3d4' --slug example-topic-slug --status in-progress`",
+           # [submit-idle]: minutes idle when the pre-idle turn fires (49).
            "idle_min": "49",
-           # Owner xxxxxxxx-37 [idle-again]: when a background result's turn took the idle block
+           # [idle-again]: when a background result's turn took the idle block
            # (the @measured_at@ form).
            "idle_used_at": "2026-10-21T04:40:00+03:00",
-           # Away digest phase 1 [idle-done] (owner 2026-10-27 12:5x): the lane word and the longest
+           # Away digest [idle-done]: the lane word and the longest
            # reason lane.ts gives (the worst case of every budget; lane.ts LANE_WHY_MAX, 63 chars,
            # which a unit test holds every reason to), and the longest Basis line lane.ts renders
-           # (LANE_BASIS_MAX, 113 chars: a branch with no upstream; review of fix rounds 1 and 2, M7),
-           # which [idle]'s step-5 digest carries too (owner 2026-10-27 22:32).
+           # (LANE_BASIS_MAX, 113 chars: a branch with no upstream),
+           # which [idle]'s step-5 digest carries too.
            "lane": "hard-blocked", "lane_why": "no Status code could read, but every listed step is marked done",
            "lane_basis": "999+ of 999+ listed steps marked done; 999+ units running; git: no upstream, unpushed unknown, 999+ files changed",
            # 0.1.2 question carry [question]: the open question at its longest (question.ts
            # QUESTION_MAX, 240 chars, one line).
            "question": "q" * 239 + "?",
-           # 0.1.3 resume-text A [resumed]: the first line at its longest (resume.ts resumeLine with
+           # 0.1.3 [resumed]: the first line at its longest (resume.ts resumeLine with
            # a Step 1 clipped to STEP1_MAX, 100 chars with its "…").
            "resume_line": "Resumed · step 1: " + "s" * 99 + "…"}
 TAG = re.compile(r"^\[([a-z-]+)\] ")
 FILES = {"main": "handoff-instructions.txt", "sub": "subagent-instructions.txt",
          "res": "resume-context.txt", "nudge": "checkpoint-nudge.txt", "turn": "handoff-turn.txt"}
-# Tags per asset, in the order DESIGN-NOTES §2 lists them (golden file names use this order).
-# BLD-04: resume-context gains [idle] (IC-1 D3) and [prod-forbid]/[prod-allow] (S-SETTINGS B);
-# 2026-10-23: [idle-halt] (owner xxxxxxxx-25, [idle] in halt mode) and [idle-again] (owner
-# xxxxxxxx-37, the block again on a person's return);
-# handoff-turn gains [submit-pre], [submit-halt] (S-SETTINGS D) and [submit-idle] (IC-1 D5).
-# 2026-10-26: resume-context gains [driver] (owner, GSD re-entry per session: kept only when the
-# re-measure names this session's Active driver), last in the list so older golden names stay.
-# Q-ADAPTER QA-3 / QA-B3 (owner xxxxxxxx-11): the main text gains [queue], kept only when
-# queue_cmd is set (both paths).
-# 2026-10-30: resume-context gains [idle-off] and [idle-done-off] (owner rule (c), 2026-10-28:
-# [idle] and [idle-done] under idle_digest off, one line on the lane state in place of the away
-# digest), last in the list so older golden names stay.
-# 2026-10-30: resume-context gains [handoff-ack] (owner 2026-10-30 07:49, "short message after
-# compaction": a published handoff whose report was not sent gets one ack line; only beside
-# [handoff]), last in the list so older golden names stay.
-# 0.1.2: resume-context gains [question] (question carry, investigation wf_c3788b4f-00e fix 1: the
-# question a main turn ended on that no person's turn has followed yet; beside any other tag), last
-# in the list so older golden names stay.
-# 2026-10-31: resume-context gains [auto-mode] (D-22, root: in auto permission mode the classifier
-# blocks a gated outward action a carried approval covers, so the block asks first), last in the list.
-# 0.1.3: resume-context gains [resumed] (resume-text A: one code-rendered first line) and
-# [question-timeout] (resume-text B: the carried question's dialog timed out), last in the list.
+# Tags per asset, in their original order (golden file names use this order); later tags go
+# last in the list so older golden names stay.
+# resume-context: [idle] and [prod-forbid]/[prod-allow]; [idle-halt] ([idle] in halt mode) and
+# [idle-again] (the block again on a person's return);
+# handoff-turn: [submit-pre], [submit-halt] and [submit-idle].
+# resume-context [driver] (GSD re-entry per session: kept only when the re-measure names this
+# session's Active driver).
+# The main text's [queue], kept only when queue_cmd is set (both paths).
+# resume-context [idle-off] and [idle-done-off] ([idle] and [idle-done] under idle_digest off,
+# one line on the lane state in place of the away digest).
+# resume-context [handoff-ack] (a published handoff whose report was not sent gets one short ack
+# line; only beside [handoff]).
+# 0.1.2: resume-context [question] (question carry: the question a main turn ended on that no
+# person's turn has followed yet; beside any other tag).
+# resume-context [auto-mode] (in auto permission mode the classifier blocks a gated outward action
+# a carried approval covers, so the block asks first).
+# 0.1.3: resume-context [resumed] (one code-rendered first line) and [question-timeout] (the
+# carried question's dialog timed out).
 TAGS = {"main": ["midturn", "auto", "chain", "measured", "handoff", "queue"], "sub": ["fallback"],
         "res": ["midturn", "nonok", "idle", "idle-halt", "idle-again", "handoff", "handoff-partial", "prod-forbid", "prod-allow", "driver",
                 "idle-done", "idle-off", "idle-done-off", "handoff-ack", "question", "auto-mode", "resumed", "question-timeout"],
         "nudge": ["continue", "halt", "halt-handoff", "queue"],
         "turn": ["submit", "near", "spent", "imminent", "submit-pre", "submit-halt", "submit-idle"]}
-# CROSS-REVIEW XR-19: tag groups whose members exclude each other. "one" = exactly one member is
+# Tag groups whose members exclude each other. "one" = exactly one member is
 # active on every path; "most" = at most one. combos() skips every other combination, so the
 # goldens, the step checks and every walk over combinations see only paths that can happen.
-# Owner 2026-10-26 [driver] (review of the first build): the re-enter line never joins [idle-halt],
+# [driver]: the re-enter line never joins [idle-halt],
 # which stops and waits for the user while auto-continue is paused.
-# Away digest phase 1 (owner 2026-10-27 12:5x): [idle-done] is the idle line of a finished or
+# Away digest: [idle-done] is the idle line of a finished or
 # blocked lane, so it joins the idle group; a measured driver keeps the lane working (lane.ts),
 # so [driver] never joins it either.
-# Owner rule (c) (2026-10-28): [idle-off] and [idle-done-off] are the idle_digest off variants of
+# [idle-off] and [idle-done-off] are the idle_digest off variants of
 # [idle] and [idle-done], so they join the idle group, and [driver] never joins [idle-done-off].
 EXCLUSIVE = {"res": [(("prod-forbid", "prod-allow"), "one"),
                      (("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off", "midturn"), "most"),
                      (("driver", "idle-halt"), "most"), (("driver", "idle-done"), "most"), (("driver", "idle-done-off"), "most"),
-                     # 0.1.3 resume-text A: the handoff ack is the block's one first line, and a
+                     # 0.1.3: the handoff ack is the block's one first line, and a
                      # person's return ([idle-again]) gets no second [resumed] line.
                      (("resumed", "handoff-ack"), "most"), (("resumed", "idle-again"), "most")]}
-# A tag that is kept only beside one of these (owner xxxxxxxx-37: [idle-again] goes with an idle
+# A tag that is kept only beside one of these ([idle-again] goes with an idle
 # block, [idle] or [idle-halt]); combos() skips it alone, as it skips an EXCLUSIVE break.
-# Owner 2026-10-30 07:49: [handoff-ack] is kept only beside [handoff], the path it names.
+# [handoff-ack] is kept only beside [handoff], the path it names.
 NEEDS_ONE_OF = {"res": {"idle-again": ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"),
                         "handoff-ack": ("handoff",),
-                        # 0.1.3 resume-text B: [question-timeout] only marks a carried [question].
+                        # 0.1.3: [question-timeout] only marks a carried [question].
                         "question-timeout": ("question",)}}
-# CDN Review item 9: a cited step must exist and still start with the same word.
+# Step citations: a cited step must exist and still start with the same word.
 STEP_NAMES = {("nudge", 1): "Finish", ("nudge", 2): "Save", ("nudge", 3): "List",
               ("res", 3): "Background"}
-# CDN Review item 9: a kept [tag] line refers to these lines, which must be kept too.
+# Step citations: a kept [tag] line refers to these lines, which must be kept too.
 TAG_NEEDS = {("nudge", "halt"): ["Checkpoint: "], ("nudge", "halt-handoff"): ["Checkpoint: "],
              ("nudge", "queue"): ["Questions: "]}
 
@@ -207,37 +202,22 @@ def assemble(text, tags, drop=()):
 
 
 # One row per budget: (unit, soft, hard); None = no limit of that kind. Soft = ADVISORY only.
-# D-17 (root DP-8): the static core has a soft target and no hard cap; the mod channel total
-# stays the hard guard on what reaches the summarizer. compaction-rem-6 (2026-10-22, supersedes
-# DP-8): resume block total 6,500, and never over the 10,000-char SessionStart cutoff.
-# Ratify xxxxxxxx#R3 overturned (owner 2026-10-23, SPEC-DELTAS RP-1): the resume protocol's
-# 3,000 and the block total's 6,500 are SOFT targets that may be exceeded only with a logged
-# reason (REASON_REQUIRED, tools/budget-reasons.json); the 10,000 cutoff stays hard.
-# Owner 2026-10-26 21:2x (plugin-text candidates, "Raise the cap"): the self-imposed mod channel
-# total goes from 8,192 to 8,720 B, the least that fits the Batch B lines (TC-03/06/07/08/09/10/14)
-# and the review of that build (a bare short approval covers its question's items; an ask's
-# status stays the latest when copied) on the worst path (midturn+chain+measured+handoff+queue:
-# 8,705 B, 8,720 B with a 16-character plugin name), with no rule text removed. It stays the hard
-# guard; the classic total keeps 8,192.
-# Owner 2026-10-27 12:5x (away digest phase 1, xxxxxxxx-05/-06): the model sets the work lane's
-# Status (working, finished, hard-blocked, soft-blocked, with the blocked meaning) and marks each
-# Next step todo or done in the summary; 72 B more on every main path. The total goes to 8,800 B,
-# the least that fits the worst path (8,777 B, 8,792 B with a 16-character plugin name), with no
-# rule text removed.
-# Owner 2026-10-30 07:49 ("short message after compaction"; "feel free to raise any limits if
-# needed"): a saved handoff's report in full is its one ack line, `✓ Handoff saved: <path>` (the
-# path so it explains itself: review of the first build); 54 B more on every main path. The total
-# goes to 8,850 B, the least that fits the worst path (8,833 B, 8,848 B with a 16-character plugin
-# name), with no rule text removed.
-# Review of the second build (same owner words): the short form carries the Needs you count
-# (` · Needs you: <n> questions`) and stands after a semicolon; 39 B more on every main path. The
-# total goes to 8,890 B, the least that fits the worst path (8,872 B, 8,887 B with a 16-character
-# plugin name), with no rule text removed.
-# 0.1.5 E-4 (owner D-61): a todo step held on a running job's result or on the user ends
-# `· waits: job|you · todo`, and a gated step `· waits: you · todo`, which code reads instead of the
-# step's words (lane.ts waitsOf); 104 B more on every main path. The total goes to 8,991 B, the
-# least that fits the worst path (8,976 B, 8,991 B with a 16-character plugin name), with no rule
-# text removed.
+# The static core has a soft target and no hard cap; the mod channel total stays the hard guard
+# on what reaches the summarizer. The resume block total is 6,500, and never over the
+# 10,000-char SessionStart cutoff. The resume protocol's 3,000 and the block total's 6,500 are
+# SOFT targets that may be exceeded only with a logged reason (REASON_REQUIRED,
+# tools/budget-reasons.json); the 10,000 cutoff stays hard.
+# The self-imposed mod channel total started at 8,192 B and was raised each time, by the least
+# that fits the worst path with no rule text removed, to fit: the lines on asks, approval scope,
+# relative limits, gotchas, question statuses, overlapped tests and follow-ups (a bare short
+# approval covers its question's items; an ask's status stays the latest when copied); the work
+# lane's Status (working, finished, hard-blocked, soft-blocked, with the blocked meaning) and each
+# Next step's todo or done mark; a saved handoff's one-line report, `✓ Handoff saved: <path>`
+# then ` · Needs you: <n> questions` after a semicolon; and the wait mark of a todo step held on a
+# running job's result or on the user (`· waits: job|you · todo`, a gated step `· waits: you ·
+# todo`), which code reads instead of the step's words (lane.ts waitsOf). Now 8,991 B, the
+# worst path's size with a 16-character plugin name (8,976 B with an 11-character one). It stays
+# the hard guard; the classic total keeps 8,192.
 BUDGETS = {
     "static core":           ("chars", 4500, None),
     "mod channel total":     ("bytes", None, 8991),
@@ -249,27 +229,27 @@ BUDGETS = {
     "resume block total":    ("chars", 6500, None),
     "sessionstart cutoff":   ("chars", None, 10000),
     "nudge":                 ("chars", 2200, None),
-    "handoff turn submit":   ("chars", None, None),   # D-18 handoff-turn.txt: printed, no limit set
+    "handoff turn submit":   ("chars", None, None),   # handoff-turn.txt: printed, no limit set
     "handoff turn note":     ("chars", None, None),
-    "submit-idle lines":     ("chars", None, 600),    # IC-1 D5 / MOD-SPEC §9.4: the [submit-idle] lines alone
+    "submit-idle lines":     ("chars", None, 600),    # the [submit-idle] lines alone
 }
 
 
-# RP-1: soft budgets that may be exceeded only with a logged reason. tools/budget-reasons.json
+# Soft budgets that may be exceeded only with a logged reason. tools/budget-reasons.json
 # maps a budget name to its reason: a string, or {"why": …, "up_to": N}, where up_to (chars or
 # bytes, as the budget counts) is the size the reason was written for; above it the reason no
 # longer covers the overrun and the check fails until the reason is reviewed (so a reason never
-# becomes a blank cheque, and the compaction-rem-6 probe still catches a text that grows).
-# REVIEW-NIGHT NR-17: the main static core (D-17 soft target; the mod channel total is its hard
-# guard) went over 4,500 on this branch with the 2026-10-23 Approvals and [queue] lines, so its
-# overrun needs a logged reason too. (The nudge and subagent overruns predate these rulings.)
+# becomes a blank cheque, and the budget check still catches a text that grows).
+# The main static core (a soft target; the mod channel total is its hard guard) went over 4,500
+# with the Approvals and [queue] lines, so its overrun needs a logged reason too. (The nudge and
+# subagent overruns predate that rule.)
 REASON_REQUIRED = {"resume protocol", "resume block total", "static core"}
 REASONS_FILE = os.path.join(REPO, "tools", "budget-reasons.json")
 
 
 def reason_entry(k, v):
     """(why, up_to) for one tools/budget-reasons.json entry, or a string naming what is wrong.
-    REVIEW-NIGHT NR-19: a malformed entry (an `up_to` that is not a positive whole number, an
+    A malformed entry (an `up_to` that is not a positive whole number, an
     empty reason, an unknown field) is an error, never a reason without a limit."""
     if isinstance(v, str):
         return (v, None) if v.strip() else "{}: an empty reason".format(k)
@@ -344,7 +324,7 @@ main, sub, res, nudge, turn = TEXT["main"], TEXT["sub"], TEXT["res"], TEXT["nudg
 
 
 def static(text, tags, drop=()):
-    """HK-39 static core: build-time text only; runtime @tokens@ count toward the channel total, not here."""
+    """Static core: build-time text only; runtime @tokens@ count toward the channel total, not here."""
     saved = dict(RUNTIME)
     RUNTIME.update({k: "" for k in RUNTIME})
     try:
@@ -354,7 +334,7 @@ def static(text, tags, drop=()):
 
 
 def valid(asset, tags):
-    """XR-19: the combination keeps every EXCLUSIVE rule of the asset, and every NEEDS_ONE_OF tag
+    """The combination keeps every EXCLUSIVE rule of the asset, and every NEEDS_ONE_OF tag
     in it has one of its partners."""
     for members, rule in EXCLUSIVE.get(asset, []):
         n = sum(1 for t in members if t in tags)
@@ -374,19 +354,19 @@ def combos(asset):
                 yield list(c)
 
 
-# Owner 2026-10-26 [driver]: one more tag line that can join any resume block would double the
+# [driver]: one more tag line that can join any resume block would double the
 # resume-context goldens (96 to 192), and goldens.gen.ts would pass the 1 MiB the test kit reads
 # (claude plugin test: "over 1048576 bytes and was not read"). Since 0.1.2 (goldens-split) the
 # goldens are split into modules of at most GOLDEN_CHUNK_MAX bytes, so that limit applies to each
-# module, not to all the goldens; this rule stays as the owner ruled it. Its goldens are rendered only
+# module, not to all the goldens; this rule stays as it was set. Its goldens are rendered only
 # beside these tags (6 more goldens: each prod line alone, with [midturn] or [idle]; never with
 # [idle-halt], EXCLUSIVE); the grammar is the same for every tag line, and the budget, step, store and
 # leftover walks still run over every combination (combos).
-# Away digest phase 1: [idle-done] likewise only beside a prod line and [idle-again] (4 goldens).
-# Owner rule (c): [idle-off] and [idle-done-off] likewise (4 goldens each).
-# Owner 2026-10-30 07:49: [handoff-ack] only beside [handoff] and a prod line (2 goldens).
+# Away digest: [idle-done] likewise only beside a prod line and [idle-again] (4 goldens).
+# [idle-off] and [idle-done-off] likewise (4 goldens each).
+# [handoff-ack] only beside [handoff] and a prod line (2 goldens).
 # 0.1.2 [question]: only beside [prod-forbid] (1 golden: goldens.gen.ts had 13 KB left under the 1 MiB).
-# D-22 [auto-mode]: only beside a prod line and [midturn] (4 goldens).
+# [auto-mode]: only beside a prod line and [midturn] (4 goldens).
 # 0.1.3 [resumed]: only beside a prod line and [midturn] or [idle] (6 goldens); [question-timeout]
 # only beside [question] and [prod-forbid] (1 golden).
 GOLDEN_SPARSE = {"res": {"handoff-ack": {"handoff", "prod-forbid", "prod-allow"},
@@ -445,7 +425,7 @@ def store_checks():
     nudge, handoff turn) names the bare `<name>-store`, with or without a subcommand after it (the
     texts call it through @store@ or the `<store>` token; the filled @store@ word holds it only
     after `/scripts/`), and a render that writes `<store>` also defines it as the filled launcher
-    word, `<store> = <@store@>` (TXT-06, XR-03 (1))."""
+    word, `<store> = <@store@>`."""
     bare = re.compile(r"(?<![/\w.-])" + re.escape(NAME) + r"-store(?![\w-])")
     define = "<store> = " + STORE
     bad = False
@@ -504,11 +484,11 @@ def step_checks():
     return bad
 
 
-# CR-F30/F35 (text-to-build §6): a nudge that halts (no [continue]) never promises a plugin
-# compaction or an after-turn copy; the [halt] line says when the plugin still compacts (DP-4).
+# A nudge that halts (no [continue]) never promises a plugin
+# compaction or an after-turn copy; the [halt] line says when the plugin still compacts.
 HALT_FORBIDDEN = ("the plugin compacts the session into a handoff summary", "after this turn the plugin copies")
 HALT_LINE_NEEDS = "only if auto-continue is off or at its hourly limit"
-# Owner 2026-10-26 [driver] (review of the first build): a halted idle block ([idle-halt]: stop and
+# [driver]: a halted idle block ([idle-halt]: stop and
 # wait for the user) never tells the model to run a re-enter command.
 HALT_RES_FORBIDDEN = ("re-enter command",)
 
@@ -535,11 +515,11 @@ def halt_checks():
             if phrase in s:
                 print(f"halt check res {'+'.join(tags)} FAIL runs '{phrase}' while halted")
                 bad = True
-    print("CR-F30/F35 (halted nudge: no compaction or copy promise)  " + ("FAIL" if bad else "ok"))
+    print("halted nudge (no compaction or copy promise)  " + ("FAIL" if bad else "ok"))
     return bad
 
 
-# AT-QA-01 (Q-ADAPTER QA-3, owner xxxxxxxx-11 "setting-driven, one text"): with queue_cmd empty
+# AT-QA-01 (setting-driven, one text): with queue_cmd empty
 # the [queue] tag is never active, and then no render of the main text (mod and classic paths)
 # or the nudge names a queue, a queued question or a lane.
 QUEUE_WORDS = re.compile(r"\bqueue[a-z_-]*|\bQueued\b|\blanes?\b", re.I)
@@ -808,34 +788,34 @@ def res_label(tags):
     return "+".join(PROD_LABEL.get(t, t) for t in tags)
 
 
-# Owner xxxxxxxx-25 / -37: an idle block is [idle] or, in halt mode, [idle-halt]; a person's
+# An idle block is [idle] or, in halt mode, [idle-halt]; a person's
 # return after a background result's turn took it adds [idle-again].
 IDLE_ROWS = (["idle"], ["idle", "nonok"], ["idle", "nonok", "handoff", "handoff-ack"], ["idle", "nonok", "handoff-partial"],
              ["idle", "idle-again", "nonok", "handoff-partial"], ["idle-halt", "nonok", "handoff-partial"],
              ["idle-halt", "idle-again", "nonok", "handoff-partial"],
-             # Away digest phase 1 (owner 2026-10-27 12:5x): a finished or blocked lane's idle line.
+             # Away digest: a finished or blocked lane's idle line.
              ["idle-done"], ["idle-done", "nonok"], ["idle-done", "nonok", "handoff", "handoff-ack"], ["idle-done", "nonok", "handoff-partial"],
              ["idle-done", "idle-again", "nonok", "handoff-partial"],
-             # Owner rule (c) (2026-10-28): the idle_digest off variants of [idle] and [idle-done].
+             # The idle_digest off variants of [idle] and [idle-done].
              ["idle-off"], ["idle-off", "nonok"], ["idle-off", "nonok", "handoff", "handoff-ack"], ["idle-off", "nonok", "handoff-partial"],
              ["idle-off", "idle-again", "nonok", "handoff-partial"],
              ["idle-done-off"], ["idle-done-off", "nonok"], ["idle-done-off", "nonok", "handoff", "handoff-ack"],
              ["idle-done-off", "nonok", "handoff-partial"], ["idle-done-off", "idle-again", "nonok", "handoff-partial"])
-# Owner 2026-10-30 07:49: [handoff-ack] names the path a second time, so a [handoff] row with the
+# [handoff-ack] names the path a second time, so a [handoff] row with the
 # ack can outgrow the [handoff-partial] one; each idle line with [idle-again] is checked with it.
 IDLE_ROWS += tuple([t, "idle-again", "nonok", "handoff", "handoff-ack"] for t in ("idle", "idle-halt", "idle-done", "idle-off", "idle-done-off"))
-# Owner 2026-10-26 (GSD re-entry per session): [driver] can join any block, so every row is
-# checked again with it. Owner 2026-10-30 07:49: a [handoff] row carries [handoff-ack] (its worst case).
+# GSD re-entry per session: [driver] can join any block, so every row is
+# checked again with it. A [handoff] row carries [handoff-ack] (its worst case).
 PROTOCOL_ROWS = ([], ["midturn"], ["nonok"], ["midturn", "nonok"], ["midturn", "nonok", "handoff", "handoff-ack"],
                  ["midturn", "nonok", "handoff-partial"]) + IDLE_ROWS
 PROTOCOL_ROWS += tuple(b + ["driver"] for b in PROTOCOL_ROWS if not {"idle-halt", "idle-done", "idle-done-off"} & set(b))
 # 0.1.2 question carry: [question] can join any block, so every row is checked again with it.
 PROTOCOL_ROWS += tuple(b + ["question"] for b in PROTOCOL_ROWS)
-# 0.1.3 resume-text: [question-timeout] joins any [question] row, and [resumed] any row without
+# 0.1.3: [question-timeout] joins any [question] row, and [resumed] any row without
 # [handoff-ack] or [idle-again] (EXCLUSIVE).
 PROTOCOL_ROWS += tuple(b + ["question-timeout"] for b in PROTOCOL_ROWS if "question" in b)
 PROTOCOL_ROWS += tuple(b + ["resumed"] for b in PROTOCOL_ROWS if not {"handoff-ack", "idle-again"} & set(b))
-# D-22 [auto-mode] can join any block too (the mod saw auto permission mode), so every row is
+# [auto-mode] can join any block too (the mod saw auto permission mode), so every row is
 # checked again with it.
 for base in PROTOCOL_ROWS + tuple(b + ["auto-mode"] for b in PROTOCOL_ROWS):
     tags, s = longest("res", [base + [p] for p in PROD], drop=("measured_at", "remeasure"))
@@ -860,7 +840,7 @@ for tags in (["continue"], ["halt"], ["continue", "queue"], ["halt", "queue"], [
              ["halt", "halt-handoff", "queue"]):
     bad |= check(f"nudge {'+'.join(tags)}", assemble(nudge, tags), "nudge")
 bad |= check("handoff turn [submit]", assemble(turn, ["submit"]), "handoff turn submit")
-# S-SETTINGS D / IC-1 D5: each reason's lines joined with the shared [submit] line.
+# Each reason's lines joined with the shared [submit] line.
 for t in ("submit-halt", "submit-pre", "submit-idle"):
     bad |= check(f"handoff turn [submit]+[{t}]", assemble(turn, ["submit", t]), "handoff turn submit")
 idle_lines = "\n".join(ln[len("[submit-idle] "):] for ln in turn.splitlines() if ln.startswith("[submit-idle] "))
