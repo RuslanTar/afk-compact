@@ -1,20 +1,20 @@
-# cmd/watch.pl: `watch` subcommand (BUILD-PLAN §3.1). Owner: WP-watch.
+# cmd/watch.pl: `watch` subcommand.
 # Forms:
-#   watch prune --days N [--sid S]      (D-9) built and tested; no hook calls it until the
-#                                       owner answers E-8. stdout `pruned files=<n> bytes=<n>`;
+#   watch prune --days N [--sid S]      built and tested; no hook calls it yet.
+#                                       stdout `pruned files=<n> bytes=<n>`;
 #                                       row `watch_prune` (the given session's classic log,
 #                                       else <watch>/unknown.classic.jsonl).
 #   watch report [--since <N>d|<YYYY-MM-DD>|all] [--input DIR] [--export] [--out FILE]
-#                                       W13 (WATCHER-SPEC §10.2, §10.7; W-BETA E): the report
+#                                       the report
 #                                       markdown. Live: <watch>/reports/<date>_watch-report.md;
 #                                       --input DIR (export rows): printed unless --out.
 #                                       stdout `WATCH-REPORT <path>`.
-#   watch audit [--since ...] [--input DIR]   W13 audit: `AUDIT FAIL ...` lines, then
+#   watch audit [--since ...] [--input DIR]   audit: `AUDIT FAIL ...` lines, then
 #                                       `AUDIT: PASS|FAIL (...)`; exit 1 on a failure.
-# `watch backfill` is W13 too and stays deferred (BUILD-PLAN §0): usage error.
+# `watch backfill` stays deferred: usage error.
 # prune and a report that writes under the watch dir (the default reports/ folder, or --export's
 # salt) print `REFUSED: <key>: <reason>` and exit 3 when the watch dir or handoff root is
-# refused (WATCH §6.1, watch::ctx::refused); they write and delete nothing then.
+# refused (watch::ctx::refused); they write and delete nothing then.
 # Exit: 0 ran, 1 audit failed, 3 REFUSED, 64 usage, 70 internal error, 73 output not writable.
 use strict;
 use warnings;
@@ -71,7 +71,7 @@ while (@ARGV) {
 my $res = eval {
     local $SIG{__DIE__};
     my $ctx = watch::ctx::init({ sid => (defined $sid ? $sid : 'unknown') });
-    # WATCH §6.1: under a refused watch dir or handoff root the watcher deletes and writes nothing
+    # under a refused watch dir or handoff root the watcher deletes and writes nothing
     if (my $why = watch::ctx::refused($ctx)) { return { refused => $why } }
     my $r = watch::prune::prune(watch => $ctx->{watch}, days => 0 + $days, now => $ctx->{now});
     watch::ctx::log_row($ctx, 'watch_prune', { days => 0 + $days, files => $r->{files}, bytes => $r->{bytes},

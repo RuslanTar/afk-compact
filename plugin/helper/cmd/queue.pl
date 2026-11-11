@@ -1,5 +1,5 @@
-# cmd/queue.pl: `queue check [<program>]` (0.1.6, owner 2026-11-08: share the queue contract
-# and how to connect to it). Owner: WP-core.
+# cmd/queue.pl: `queue check [<program>]` (0.1.6: a way to check a queue tool against the
+# queue contract and how to connect to it).
 # Runs the read-only part of the queue_cmd contract (assets/queue-contract.md) against <program>,
 # default the queue_cmd setting: `list --json --session <made-up id>` once, through queue::call
 # as the plugin runs it (5 s), and checks the file, the exit code, the time, the JSON, the

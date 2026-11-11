@@ -1,12 +1,12 @@
-# cmd/dispatch.pl: write a dispatch record (MOD-SPEC §2.3; BUILD-PLAN §3.1, §3.4). Owner: WP-core.
+# cmd/dispatch.pl: write a dispatch record.
 # dispatch --sid S --nonce N --actor main|<agentId> --trigger T --channel mod-hook|mod-self|classic
 #   --resume-pref P --tags a,b --midturn true|false --instr-sha8 H --instr-bytes B
 #   --cc-version V --load-id L [--handoff-ht H] [--idle[=true|false] --idle-gap-s N] [--model M]
 # -> `ok`; an existing record -> exit 3 `REFUSED: nonce-exists`. Row `dispatch`.
-# --handoff-ht (D-18 B3): the handoff turn this dispatch follows or interrupts.
-# --idle / --idle-gap-s (IC-1 D1): the mod passes them (the `=` form) only on an idle main auto
+# --handoff-ht: the handoff turn this dispatch follows or interrupts.
+# --idle / --idle-gap-s: the mod passes them (the `=` form) only on an idle main auto
 # dispatch; absent means `idle: false` on a mod record (null on a classic one).
-# --model (MG-4, ratify R4 guard): the session's model as the mod read it (`$.session.model()`);
+# --model: the session's model as the mod read it (`$.session.model()`);
 # recorded on the record and the row only. A value that is not a plain model id is left out.
 use strict;
 use warnings;

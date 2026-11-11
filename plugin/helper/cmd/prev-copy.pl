@@ -1,6 +1,5 @@
 # cmd/prev-copy.pl: `prev-copy --sid S --actor main [--cwd DIR]` -> the ~-abbreviated
 # absolute path of this session's newest main copy by frontmatter `date`, or `none`.
-# Owner: WP-core.
 use strict;
 use warnings;
 use utf8;

@@ -1,5 +1,4 @@
-# cmd/queue-add.pl: `queue-add --sid S --nonce N [--file F]` (D-10, small-rulings §1.5;
-# MOD-SPEC §10.3; BUILD-PLAN §3.1). Owner: WP-core.
+# cmd/queue-add.pl: `queue-add --sid S --nonce N [--file F]`.
 # The main model runs it in the checkpoint's step-3 batch, one call per user-owned
 # question, with one JSON draft on stdin ({question, kind, options, blocks, context?}).
 # Steps: queue_cmd set and executable (else off, no exec) -> parse and bound the draft

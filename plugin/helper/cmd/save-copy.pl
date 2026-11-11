@@ -1,6 +1,5 @@
 # cmd/save-copy.pl: `save-copy --sid S --nonce N|- --from FILE --writer mod|postcompact
 # --scope main|sub|unknown [--agent ID] [--tokens B,A] [--cwd DIR] [--transcript PATH]`
-# (MOD-SPEC §2.6, §5.3; BUILD-PLAN §3.1). Owner: WP-core.
 # line 1 `VERDICT <v> marker_line=<n|-> sentinel_from_end=<k|->`; line 2 one of
 # `Saved copy: <path>` · `EXISTS: <path> sha-match` · `EXISTS: <path> sha-differs` ·
 # `REFUSED: <reason>` (exit 3).
@@ -41,8 +40,8 @@ sub run {
                          verdict_ctx => \%vc);
     # the mod's own stash (pending/<nonce>.mod.md) goes once the copy holds it (F2-7)
     copies::drop_stash($opt->{from}, $r->{result});
-    # EXISTS sha-differs with --from inside this session's pending/: the stash is settled once
-    # (RRP-04, MOD-SPEC §5.8 cases 2-3): dropped when redundant, else kept redacted
+    # EXISTS sha-differs with --from inside this session's pending/: the stash is settled once:
+    # dropped when redundant, else kept redacted
     copies::settle_mismatch(path => $opt->{from}, save => $r, scan => $s);
     args::out($r->{line1}, $r->{line2});
     return $r->{exit};

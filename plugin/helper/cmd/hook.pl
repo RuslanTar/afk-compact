@@ -1,5 +1,5 @@
-# cmd/hook.pl: `hook <Event>`, the classic command-hook entry (MOD-SPEC §1.3, §3.2, §3.4,
-# §5.3, §5.4, §7; BUILD-PLAN §3.3). Owner: WP-core (+ watch.on_hook / watch.on_stop).
+# cmd/hook.pl: `hook <Event>`, the classic command-hook entry (core, plus watch.on_hook /
+# watch.on_stop).
 # Always exits 0. Prints nothing, or exactly the event's documented output: PreCompact
 # the fallback text, SessionStart(compact) one hookSpecificOutput JSON line. An internal
 # error writes one `watch_error {stage, error_class}` row and prints nothing.
@@ -14,7 +14,7 @@ require watchcall;
 
 our %EVENTS = map { $_ => 1 } qw(PreCompact PostCompact SessionStart SessionEnd Stop SubagentStop StopFailure PermissionDenied);
 our %KEYSET_EVENTS = map { $_ => 1 } qw(PreCompact PostCompact SessionStart);
-# One writer per row kind (ROOT-RULINGS F2-5): core writes stop_failure and
+# One writer per row kind: core writes stop_failure and
 # permission_denied with their computed classes; the watcher reads those rows from the
 # stream and is not called for these events, so it cannot write a second row.
 our %CORE_ROWS_ONLY = map { $_ => 1 } qw(StopFailure PermissionDenied);
@@ -138,7 +138,7 @@ sub run {
     }
     if ($event eq 'Stop') {
         # Relative seconds (watch.on_stop reads a small value as "from now" on its own clock):
-        # at most the 3 s hard stop of WATCH W9, less when the start or reconcile used the budget.
+        # at most the watcher's 3 s hard stop, less when the start or reconcile used the budget.
         my $left = _stop_left($WATCH_HARD_S * 1000, 0) / 1000;
         $left = 0.2 if $left < 0.2;
         util::trace(sprintf('stop-watch-window %d', $left * 1000));
@@ -164,7 +164,7 @@ sub run {
     return 0;
 }
 
-# ------------------------------------------------------------------ PreCompact (MOD-SPEC §3.2)
+# ------------------------------------------------------------------ PreCompact
 sub on_PreCompact {
     my ($p) = @_;
     my $sid = rc::sid();
@@ -177,7 +177,7 @@ sub on_PreCompact {
     }
     rc::emit('precompact_marker_orphan', [nonce => $d->{nonce}, trigger => $trigger]) if $d->{found};
     # Fallback: nonce, dispatch record, assembly and print only (no checkpoint, sweep,
-    # git, GSD or queue call; S-04).
+    # git, GSD or queue call).
     my $nonce = nonce::draw($sid);
     my $prev = rc::root_ok('handoff_root') ? copies::prev_copy($sid, undef) : undef;
     my $prev_abbrev = defined $prev ? util::abbrev($prev) : undef;
@@ -188,7 +188,7 @@ sub on_PreCompact {
     my $bytes = do { my $c = $text; utf8::encode($c); length $c };
     if (defined(my $w = rc::watch())) {
         # A record that cannot be written (an unwritable root or watch dir) must not cost
-        # the shaping: the fallback text is still printed (MOD-SPEC §3.2).
+        # the shaping: the fallback text is still printed.
         my $ok = eval {
             my $c = rc::claude();
             my $rec = dispatch::record(nonce => $nonce, session_id => $sid, actor => 'unknown', trigger => $trigger,
@@ -207,27 +207,27 @@ sub on_PreCompact {
     return ($text, { instructions => $d, fallback_nonce => $nonce });
 }
 
-# ------------------------------------------------------------------ PostCompact (MOD-SPEC §5.3)
+# ------------------------------------------------------------------ PostCompact
 sub on_PostCompact {
     my ($p) = @_;
-    # SESSION-RESTART D10: the fresh permission mode of this compaction, with its time
+    # Restart on update: the fresh permission mode of this compaction, with its time
     eval { restart::note_post(rc::sid_dir(), $p) };
     my $r = postcompact::run($p);
     return ('', { detect => $r });
 }
 
-# ------------------------------------------------------------------ SessionStart (MOD-SPEC §3.4, §5.6 C1h, §7)
+# ------------------------------------------------------------------ SessionStart
 sub on_SessionStart {
     my ($p) = @_;
     my $sid = rc::sid();
     my $src = (defined $p->{source} && $p->{source} =~ /^(startup|resume|clear|compact|fork)$/) ? $p->{source} : 'other';
-    # P5-FOLD A7: the scratchpad path goes to the private sidecar only, never into a row
+    # The scratchpad path goes to the private sidecar only, never into a row
     my $sp = (defined $p->{scratchpad_dir} && !ref $p->{scratchpad_dir} && $p->{scratchpad_dir} =~ m{^/}) ? $p->{scratchpad_dir} : undef;
     my $spd = rc::sid_dir();
     eval { sidecar::note_scratchpad($spd, $sp, $src) } if defined $spd && defined $sp;
     # 0.1.3 version skew (lib/plugver.pm): this process's first start under this plugin copy
     eval { plugver::note_load($sid, $src, $p->{cwd}) };
-    # 0.1.7 (D-81): the cache state's transcript, the session live again after a resume, and the
+    # 0.1.7: the cache state's transcript, the session live again after a resume, and the
     # stable launcher shim for status lines (lib/cachestate.pm)
     if (!defined $p->{agent_id}) {
         eval { cachestate::on_start($sid, $p->{transcript_path}) };
@@ -272,7 +272,7 @@ sub on_SessionStart {
                          pid => $c->{pid}, pid_lstart => $c->{lstart},
                          scratchpad => (defined $sp ? 'present' : 'absent'),
                          under_temp_root => (defined $sp ? jsonc::bool(sweep::_temp_root(util::clean_path($sp))) : undef)]);
-    # the cross-session finish pass, after this session's own records (MOD-SPEC §5.8, ≤ 1 s)
+    # the cross-session finish pass, after this session's own records (≤ 1 s)
     eval { orphans::pass(budget_ms => $orphans::PASS_MS, after => \&_finished_watch) } if $src =~ /^(startup|resume|clear)$/;
     return ('', {});
 }
@@ -350,7 +350,7 @@ sub session_compact {
     return ("$json\n", { dispatch => $nonce, resume_bytes => length($block) });
 }
 
-# ------------------------------------------------------------------ SessionEnd (MOD-SPEC §7)
+# ------------------------------------------------------------------ SessionEnd
 sub on_SessionEnd {
     my ($p) = @_;
     my $sid = rc::sid();
@@ -360,10 +360,10 @@ sub on_SessionEnd {
     my $c = rc::claude();
     rc::emit('session', [phase => 'end', source => undef, reason => $reason, mod_loaded => undef,
                          previous_session_id => undef, lineage_reason => undef, pid => $c->{pid}, pid_lstart => $c->{lstart}]);
-    # RR-S21-02: a PostCompact deferred for want of proof is decided by reconcile (P3,
-    # F2-1). A session that ends before its next Stop (/clear, exit) gets that reconcile
-    # here, with the same 2 s budget: the boundary row has landed by now (S-21). Final mode
-    # (RRP-05, MOD-SPEC §5.4): what P3 leaves unproven is saved unattributed at once.
+    # RR-S21-02: a PostCompact deferred for want of proof is decided by reconcile (P3).
+    # A session that ends before its next Stop (/clear, exit) gets that reconcile
+    # here, with the same 2 s budget: the boundary row has landed by now (S-21). Final mode:
+    # what P3 leaves unproven is saved unattributed at once.
     # 0.1.4: at most what leaves the finish pass and the watcher's end pass their time by
     # END_BY_MS from the helper's start, so a start slowed by load still ends inside the 5 s
     # timeout (a save reconcile has no time to sweep waits for a later run, as at Stop).
@@ -372,18 +372,18 @@ sub on_SessionEnd {
     $rb = 0 if $rb < 0;
     my $n = eval { reconcile::run(transcript => $p->{transcript_path}, cwd => $p->{cwd}, budget_ms => int $rb,
                                   final => 1, cutoff => reconcile::cutoff()) };
-    # then the cross-session finish pass (MOD-SPEC §5.8, ≤ 1 s)
+    # then the cross-session finish pass (≤ 1 s)
     eval { orphans::pass(budget_ms => $orphans::PASS_MS, after => \&_finished_watch) };
     return ('', { reconcile => $n });
 }
 
-# ------------------------------------------------------------------ Stop / SubagentStop (MOD-SPEC §5.4, §7)
+# ------------------------------------------------------------------ Stop / SubagentStop
 sub on_Stop {
     my ($p) = @_;
     my $d = rc::sid_dir() // return ('', {});
     eval { sidecar::write($d, $p, 'Stop') };
     eval { util::write_atomic("$d/last-stop", util::iso_ms(util::now()) . "\n", 0600) };
-    # SESSION-RESTART D10, §3.6, G12: the turn's permission mode and effort level, and the transcript
+    # Restart on update: the turn's permission mode and effort level, and the transcript
     eval { restart::note_stop($d, $p) };
     # AT-RP-04: a resume block armed for this process's first turn that the turn did not take
     eval { resumeblock::settle_armed($d, rc::sid()) };
@@ -398,11 +398,11 @@ sub on_Stop {
     # cut by the Stop budget: a budget under reconcile's own 2 s that ran out, or a main-proven
     # save left for the next Stop (no time for its sweep)
     push @{ $STOP{cut} }, 'reconcile' if ($rb < $RECONCILE_MS && $rms >= $rb) || (ref $n eq 'HASH' && $n->{waited});
-    # the cross-session finish pass, only when reconcile left ≥ 500 ms of its budget (MOD-SPEC §5.8)
+    # the cross-session finish pass, only when reconcile left ≥ 500 ms of its budget
     my $rleft = $rb - (util::clock_ms() - $r0);
     eval { orphans::pass(budget_ms => ($rleft < $orphans::PASS_MS ? $rleft : $orphans::PASS_MS), after => \&_finished_watch) }
         if $rleft >= $orphans::STOP_MIN_LEFT_MS;
-    # Dev-1 D5: a relaunch bumped in this turn that no recorded job matched
+    # a relaunch bumped in this turn that no recorded job matched
     eval { jobrec::on_stop($d) };
     my ($gb, $g0) = (_stop_left($GSD_WARM_MS, $WATCH_MIN_MS), util::clock_ms());
     my $gsd = eval { _warm_gsd($d, $p->{transcript_path}, $gb) };
@@ -462,9 +462,9 @@ sub on_SubagentStop {
     return ('', {});
 }
 
-# ------------------------------------------------------------------ StopFailure (WATCHER W10)
-# watcher = off also stops the stop_failure and permission_denied rows (WATCHER §8 item 6,
-# W-BETA A, CONFIG-REVIEW BG-29); the value is read as _watch_call reads it (trimmed, folded).
+# ------------------------------------------------------------------ StopFailure
+# watcher = off also stops the stop_failure and permission_denied rows; the value is read as
+# _watch_call reads it (trimmed, folded).
 sub _watcher_off { my $w = settings::trim(lc(rc::val('watcher') // 'shadow')); return $w eq 'off' ? 1 : 0 }
 
 sub on_StopFailure {
@@ -479,7 +479,7 @@ sub on_StopFailure {
 # A payload from inside a subagent carries agent_id: the row's actor is then unknown.
 sub _payload_actor { my ($p) = @_; return defined $p->{agent_id} ? 'unknown' : 'main' }
 
-# ------------------------------------------------------------------ PermissionDenied (MOD-SPEC §1.3, OD-20)
+# ------------------------------------------------------------------ PermissionDenied
 # reason_class and guard_class are fixed classes computed in memory; neither the
 # raw reason nor tool_input is ever stored.
 our @REASON = (
@@ -508,7 +508,7 @@ sub _guard_rules {
         # U-06: the limits of the other pattern keys (32 entries, 200 characters, settings::pattern_ok)
         last if $n > $GUARD_MAX;
         # the class, then the rest trimmed: (.+?)\s*$ tried \s*$ at every space of an inner run
-        # (150,000 spaces held this 2 s hook past 10 s; U-06 review)
+        # (150,000 spaces held this 2 s hook past 10 s; U-06)
         next unless $pair =~ /\A\s*(sleep-poll|routing|secret|write-guard|scope|other)\s*=/;
         my ($cls, $src) = ($1, settings::trim(substr($pair, $+[0])));
         next if $src eq '' || index($src, "\n") >= 0;
@@ -533,9 +533,9 @@ sub _guard_class {
     return 'other';
 }
 
-# _turn_kind() -> (kind, inject_epoch, heal_epoch): the turn kind of MOD-SPEC §1.3 from the
+# _turn_kind() -> (kind, inject_epoch, heal_epoch): the turn kind from the
 # newest rows after the last Stop, the time of the plugin-injected block behind it, and
-# the time of a heal action after the last Stop (WATCHER-SPEC §6.3 caused_by).
+# the time of a heal action after the last Stop (the watcher's caused_by).
 sub _turn_kind {
     my ($tail) = @_;
     my $d = rc::sid_dir() // return ('other', undef, undef);
@@ -570,10 +570,10 @@ sub _turn_kind {
     return ('other', undef, $heal);
 }
 
-# RR-S21-03 (PKG-RUNTIME E.1): a pending PostCompact record counts as a post-compaction turn when
+# A pending PostCompact record counts as a post-compaction turn when
 # no main rollup row exists after the last Stop: its ts is after the last Stop, no copy row names
 # it yet, and a main compact_boundary row in the transcript tail lies within [ts - 2 s, ts + 600 s]
-# (F2-1 constants). At most the 20 newest records; the inject time is the record's ts.
+# (the reconcile constants). At most the 20 newest records; the inject time is the record's ts.
 sub _pending_post {
     my ($d, $last, $tail) = @_;
     return undef unless defined $tail;
@@ -632,7 +632,7 @@ sub _calls_since {
     return $n;
 }
 
-# WATCHER-SPEC §6.3: `plugin` when the denied call is within the first 10 calls after a
+# The watcher's caused_by: `plugin` when the denied call is within the first 10 calls after a
 # plugin-injected block or a heal action, else `session`. Without a readable transcript
 # the injection alone decides (the earlier rule).
 our $CAUSED_BY_CALLS = 10;

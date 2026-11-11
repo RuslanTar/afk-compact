@@ -1,5 +1,5 @@
 # cmd/settings.pl: `settings show`, `settings set` and `settings reset` (0.1.2 visible defaults,
-# onboarding and the settings writer). Owner: WP-core.
+# onboarding and the settings writer).
 #   settings show [--root D] [--log-dir D] [settings flags]
 #       read-only: the settings file and the plugin's options key, then every key in @KEYS order
 #       with its value, source and default, the warnings (a saved "", an ambiguous key), the
@@ -15,7 +15,7 @@
 #   settings set <key>=<value>... [--plan P] [--apply]
 #   settings reset <key>...|--all [--plan P] [--apply]
 #   settings migrate [--plan P] [--apply]
-#       the settings writer (lib/settings_write.pm; owner 2026-10-30, "helper writer, safe keys"):
+#       the settings writer (lib/settings_write.pm: the helper's one writer, safe keys only):
 #       a dry run unless --apply (as `project copy`), which lists each change as old -> new
 #       (never a pattern's or a list's text) and the way to apply it with --plan (the file's
 #       hash), so the apply refuses a file changed since. A model-run call may apply it for any
@@ -23,7 +23,7 @@
 #       user's `!` line from a model's call); for those it prints the user-run ways. A value set
 #       to its default (or empty) removes the member. --apply prints each change, the backup next
 #       to the file and when it takes effect.
-#       migrate (D-72, 0.1.6): the values saved in a form from before 0.1.6 (settings::old_values:
+#       migrate (0.1.6): the values saved in a form from before 0.1.6 (settings::old_values:
 #       an on/off key's old word, an option in another case), which Claude Code reads as unset,
 #       set to their new form through the same writer; a consent key among them is listed with
 #       the user-run ways, never written.
@@ -230,7 +230,7 @@ sub write_cmd {
         return 0;
     }
     return _refused($sub, $p, { why => 'changed' }) if defined $given && $given ne $p->{sha};
-    # D-72: a value saved in a form from before 0.1.6 shows as saved (it reads as its new form), and
+    # A value saved in a form from before 0.1.6 shows as saved (it reads as its new form), and
     # migrate shows the new form as written
     my $old = sub { return exists $_[0]{raw} && settings_write::old_form($_[0]{key}, $_[0]{raw}) ? jsonc::encode_bytes($_[0]{raw}) : $_[0]{old} };
     my $new = sub { return $sub eq 'migrate' && $_[0]{kind} eq 'set' ? $_[0]{json} : $_[0]{new} };

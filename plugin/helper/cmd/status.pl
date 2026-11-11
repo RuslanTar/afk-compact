@@ -1,24 +1,24 @@
-# cmd/status.pl: `status --sid S` (MOD-SPEC §11; BUILD-PLAN §3.1). Owner: WP-core
-# (+ watch.status_lines). Lines: effective thresholds (clamped marked), last 5
+# cmd/status.pl: `status --sid S` (core, plus watch.status_lines). Lines: effective
+# thresholds (clamped marked), last 5
 # compactions (seat_state, trigger, verdict, copy path), open escalations, halt
 # state and continues this hour, smokeDue with the user-run smoke line, policy
-# flags, unsafe roots, the handoff-root mode (MOD-SPEC §11 Block C, D-12), automatic
-# relaunch (Dev-1, DP-2), settings notes, then the watcher's open alerts. Never content.
-# 2026-10-22: the first line is the watcher line (W-BETA A) with the first-run notice when its
-# marker is missing; the min_window sentence (P5-FOLD A3); the allow rule, the stale-rule check
-# and the user-run lines with the real plugin folder (PKG-RUNTIME A.6; read only, nothing is
-# written); relaunch_allow active (S-SETTINGS C); the unattended_prod_reads line (S-SETTINGS B);
-# the kept mismatch stashes with their paths (C-STORE D3). 2026-10-23 (owner xxxxxxxx-29): the
+# flags, unsafe roots, the handoff-root mode, automatic
+# relaunch, settings notes, then the watcher's open alerts. Never content.
+# The first line is the watcher line with the first-run notice when its
+# marker is missing; the min_window sentence; the allow rule, the stale-rule check
+# and the user-run lines with the real plugin folder (read only, nothing is
+# written); relaunch_allow active; the unattended_prod_reads line;
+# the kept mismatch stashes with their paths; the
 # protected branches line with a warning per ignored protected_branches entry.
-# 2026-10-26 (CW-1): `status` without a session id (missing, empty or unsubstituted --sid):
+# `status` without a session id (missing, empty or unsubstituted --sid):
 # `session: unknown (no session id)` and the store-wide lines only; nothing is written. A
-# placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way (CW-1 review).
+# placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way.
 # U-06: a warning per pattern of the user's stopped at its time bound (lib/userre.pm).
-# 2026-10-27 (headless probe): `automatic compaction: not available here …` for a headless load,
+# Headless loads: `automatic compaction: not available here …` for a headless load,
 # from the mod's `headless` row; `automatic compaction: by /compact …` while its `/compact` path is
-# on (`compact: command`). IDLE-COMPACT-SPEC §4.1 B: the `idle compaction: …` line (who compacts an
+# on (`compact: command`). The `idle compaction: …` line (who compacts an
 # idle session, from the mod's `idle_mode` row) replaces the `pre-idle handoff turn: …` line.
-# 2026-10-27 (SESSION-RESTART §6.1): the `restart on update` lines after the automatic relaunch
+# Restart on update: the `restart on update` lines after the automatic relaunch
 # lines: the setting and the route (the launcher's install line when a terminal session was not
 # started through it), the drift, this session's last outcome, and store-wide the background
 # restarts that failed after the kill and the launcher's refusals, each with its resume command.
@@ -41,7 +41,7 @@ our @ESCALATIONS = qw(copy_failed copy_mismatch copy_late verdict_mismatch root_
                       version_hint compaction_unresolved lock_stale watch_error lane_unknown config_ambiguous
                       relaunch_unmatched jobs_caller_refused);
 
-# Status lines are text (MOD-SPEC §2.6 text encoding): rows and state files are decoded JSON
+# Status lines are text: rows and state files are decoded JSON
 # (characters), byte paths are decoded where they join a line, and args::out encodes once.
 sub _bytes_deep {
     my ($x) = @_;
@@ -58,12 +58,12 @@ sub _last {
 
 sub run {
     my ($opt) = args::parse(\@_, known => [qw(sid root log-dir cwd)]);
-    # CW-1 (Cowork check 2026-10-26): status only reads, so a missing, empty or unsubstituted
+    # Status only reads, so a missing, empty or unsubstituted
     # --sid gives the store-wide lines and `session: unknown (no session id)` instead of a
     # refusal; this session's lines are left out and nothing is written (no preamble rows, no
     # once markers, no session folder). A value that is not a session id is still refused. A
     # placeholder id (args::reserved_sid: `unknown`, `smoke`, `anon-*`) names a pool of rows
-    # from many sessions, not this one, so it takes the same no-id path (CW-1 review).
+    # from many sessions, not this one, so it takes the same no-id path.
     my $sid;
     if (args::no_sid($opt->{sid}) || args::reserved_sid($opt->{sid})) {
         rc::init(sid => undef, writer => 'helper', flags => settings::flags_from($opt));
@@ -103,7 +103,7 @@ sub run {
         for my $k (qw(target soft_max window native_trigger)) {
             next unless defined $eff->{$k};
             my $v = $eff->{$k};
-            next if !ref $v && $v =~ /\A-/;    # a raw negative value is never shown (P5-FOLD A3)
+            next if !ref $v && $v =~ /\A-/;    # a raw negative value is never shown
             $v .= " (clamped from $cl{$k})" if exists $cl{$k};
             push @parts, "$k $v";
         }
@@ -126,7 +126,7 @@ sub run {
     my $rolls = _bytes_deep(rollup::rows($d));
     my @last = @$rolls > 5 ? @$rolls[-5 .. -1] : @$rolls;
     my $nonok = grep { defined $_->{verdict} && $_->{verdict} !~ /^ok(?:-trailer|-unclosed)?$/ } @last;
-    # a kept rollup size that disagrees with the boundary row joined by nonce (PKG-RUNTIME E.2)
+    # a kept rollup size that disagrees with the boundary row joined by nonce
     my $jc = grep { $_->{join_conflict} } @$rolls;
     push @out, sprintf('compactions: %d in this session; last %d (%d not ok)%s:', scalar @$rolls, scalar @last, $nonok,
                        ($jc ? " · join_conflict $jc" : ''));
@@ -186,10 +186,10 @@ sub smoke_lines {
             . ($v->{previousVersion} // 'the previous version') . '; live smoke checks to re-run: compaction and resume delivery, the compaction nudge, background subagents');
 }
 
-# The refused roots of the private store, one line each (unsafe roots, D-12). For roots in a git work tree
+# The refused roots of the private store, one line each (unsafe roots). For roots in a git work tree
 # and not ignored, one more line per folder to ignore: the roots, their work tree, and the two ways out
 # (ignore the folder there, or set the key to a folder outside any work tree). A root under the state
-# folder (~/.local/state/<plugin>, STATE-ROOT), which holds every default root, names that folder when it
+# folder (~/.local/state/<plugin>), which holds every default root, names that folder when it
 # lies strictly inside the work tree: a home folder that is a git work tree (a dotfiles repository)
 # refuses all of them until it is ignored. A work tree at or under the state folder (git init there)
 # names the root's own path, joined by a later root under it in the same work tree (.watch under the
@@ -271,9 +271,9 @@ sub store_lines {
     push @out, protected_lines();
     push @out, regex_lines($classic);
     push @out, idle_lines($headless, $mod), keep_warm_lines($headless, $sid, $mod), usage_lines($sid), settings_keys_line(), values_lines();
-    # Q-ADAPTER QA-1: the queue adapter mode (no queue call: the setting, the file and this
+    # The queue adapter mode (no queue call: the setting, the file and this
     # session's last list outcome); /status is the only place that says `queue: off`. Without a
-    # session id that outcome is not read, so `on` says so (CW-1 review 2)
+    # session id that outcome is not read, so `on` says so
     my $q = queue::mode_text();
     $q .= " (this session's queue state unknown: no session id)" if $q eq 'on' && !defined $d;
     push @out, 'queue: ' . $q;
@@ -286,8 +286,8 @@ sub store_lines {
     return @out;
 }
 
-# STATE-ROOT (0.1.2): while handoff_root is the default, the old default ~/.claude/handoffs is read,
-# never written, and never moved (D-8; `migrate --apply` copies it on request); one line says so, with
+# Old default folders (0.1.2): while handoff_root is the default, the old default ~/.claude/handoffs
+# is read, never written, and never moved (`migrate --apply` copies it on request); one line says so, with
 # its bucket count, or that the unsafe-root checks skipped it. The same for disposable_root and the old
 # ~/.claude/trash-staging, with its dated folders. No line when there is no such folder.
 sub legacy_lines {
@@ -323,7 +323,7 @@ sub verdict_lines {
     return (defined $v && !ref $v) ? ($v) : ();
 }
 
-# watcher lines (WP-watch): this session's alerts only with a sid, then the store-wide counts.
+# watcher lines: this session's alerts only with a sid, then the store-wide counts.
 # The seam returns [line] (lib/watch.pm); a plain list is taken too.
 sub watch_lines {
     my ($sid) = @_;
@@ -332,9 +332,9 @@ sub watch_lines {
     return grep { defined && !ref } @wl;
 }
 
-# Block C (D-12): the mode line; when declared but not accepted, the accept route (the
-# /config row or editing settings.json by hand: the typed mod command waits for PR-2,
-# DP-5); the ignored and .gitignore-drift notes; the exports in this worktree.
+# Handoff-root mode: the mode line; when declared but not accepted, the accept route (the
+# /config row or editing settings.json by hand; there is no typed mod command for it yet);
+# the ignored and .gitignore-drift notes; the exports in this worktree.
 sub mode_lines {
     my ($cwd) = @_;
     my $m = rc::mode($cwd);
@@ -352,8 +352,8 @@ sub mode_lines {
     return @l;
 }
 
-# Dev-1 (DP-2, DP-24 (a)): automatic relaunch needs a job's output file; the source is the
-# Bash result text (P-D1-6), checked against the task-file layout. The state follows
+# Automatic relaunch needs a job's output file; the source is the
+# Bash result text, checked against the task-file layout. The state follows
 # relaunch_auto; this session's jobs without a confirmed output path ask. Then pending
 # relaunches no recorded job matched.
 my %RELAUNCH_STATE = (on => 'active (read-only jobs and allowlisted jobs)', shadow => 'shadow (reports would-relaunch, runs nothing)', off => 'off');
@@ -374,7 +374,7 @@ sub relaunch_lines {
         $line .= ", $differs differ from the layout" if $differs;
         push @l, $line;
     }
-    # S-SETTINGS C (Q-J1-1): the allowlist is active; it acts only while relaunch_auto is on
+    # the allowlist is active; it acts only while relaunch_auto is on
     push @l, '  relaunch_allow: ' . scalar(@{ $rl->{allow} }) . ' patterns, '
               . ($rl->{auto} eq 'on' ? 'active' : "not used while relaunch_auto is $rl->{auto}")
         if @{ $rl->{allow} };
@@ -387,7 +387,7 @@ sub relaunch_lines {
 }
 
 # ---------------------------------------------------------------- restart on update
-# SESSION-RESTART §6.1: read only; `claude --version` (5 s) only while the setting is on.
+# Read only; `claude --version` (5 s) only while the setting is on.
 my %RESTART_LAST = (
     'background-work' => 'background tasks would be lost', crons => 'session crons would be lost', draft => 'a draft in the prompt box',
     present => 'someone at the prompt', remote => 'a remote client', attached => 'a client attached', 'session-rules' => 'rules set for this session',
@@ -399,7 +399,7 @@ my %RESTART_LAST = (
     'keepset-unverified' => 'a restriction it was started with may be lost (what a restart keeps is not checked for that version yet)',
     'mode-unknown' => 'the permission mode to restart in is not known',
 );
-# The launcher's refusal reasons (its file contract §5), for the `launcher did not restart` line.
+# The launcher's refusal reasons (its file contract), for the `launcher did not restart` line.
 my %LAUNCHER_REASON = (
     'exit-code' => 'Claude Code did not exit cleanly', pattern => 'the note was not valid', proto => 'another note version',
     token => 'the note was for another launch', age => 'the note was too old', window => 'the exit came too late',
@@ -427,7 +427,7 @@ sub restart_lines {
     } else {
         my $route;
         if (($ENV{CLAUDE_CODE_SESSION_KIND} // '') eq 'bg') {
-            # Before the background route ships (restriction gate, RS-P5) no `→ restarts` clause follows.
+            # Before the background route ships (the restriction gate) no `→ restarts` clause follows.
             $route_off = restart::bg_route() ? 0 : 1;
             $route = 'background session (claude respawn)'
                      . ($route_off ? ' · background restarts are not enabled in this version yet' : '');
@@ -435,7 +435,7 @@ sub restart_lines {
             my $launch = $ENV{ restart::launch_env_name() };
             my $lr = (defined $launch && $launch ne '' && defined $sid) ? restart::launcher($launch, $sid) : undef;
             if ($lr && $lr->{ok}) {
-                # Until the owner ships it the route is off (fg-not-shipped): no `→ restarts` clause.
+                # Until that route ships it is off (fg-not-shipped): no `→ restarts` clause.
                 $route_off = restart::fg_route() ? 0 : 1;
                 $route = "launcher $brand-claude (proto $restart::PROTO, pid $lr->{pid})"
                          . ($route_off ? ' · terminal restarts are not enabled in this version yet' : '');
@@ -494,12 +494,12 @@ sub _drift_text {
     return "Claude Code $run running, $inst installed" . ($off ? '' : ' → restarts at the next compaction');
 }
 
-# ---------------------------------------------------------------- watcher (W-BETA A)
+# ---------------------------------------------------------------- watcher
 # The first line: the watcher state, the size of its logs and the number of sessions; with
 # `off` what stays written. The first-run notice line while its marker is missing (the mod
 # claims it at session.start; a session where the mod never ran shows it here).
 # 0.1.3 version skew: this session's plugin copy (its version and folder), then the notice when
-# sessions started since run another version or (0.1.4 V-1) an install replaced this copy
+# sessions started since run another version or (0.1.4) an install replaced this copy
 # (lib/plugver.pm); also without a session id.
 sub plugin_lines {
     my @l = ('plugin: ' . ctx::version() . ' · ' . util::abbrev(ctx::root()));
@@ -548,7 +548,7 @@ sub _size {
     return sprintf('%.1f GB', $b / (1024 * 1024 * 1024));
 }
 
-# ---------------------------------------------------------------- min_window (P5-FOLD A3)
+# ---------------------------------------------------------------- min_window
 # The smallest window that keeps plugin compactions on with these settings, from the shared
 # clamp constants (spec `clamp`, the same object the mod and the watcher read; these literals
 # are its fallback): max(soft_needed + native_offset + reserve, ceil(soft_needed / soft_ratio)),
@@ -584,7 +584,7 @@ sub min_window {
     return $a > $b ? $a : $b;
 }
 
-# 2026-10-27 (headless probe): the load is headless when the mod's last `headless` row comes
+# Headless loads: the load is headless when the mod's last `headless` row comes
 # after this session's last `session` start row: Claude Code runs it headless (`claude -p`, the
 # Agent SDK, or an app or editor built on it) and rejects a plugin's compaction call there, so
 # the mod gives no nudge. A later interactive load of the same session (its own start row) ends
@@ -629,10 +629,10 @@ sub small_window_line {
                       : "plugin compactions off: the window is below $mw, the smallest for these settings";
 }
 
-# ---------------------------------------------------------------- allow rule (PKG-RUNTIME A.6)
+# ---------------------------------------------------------------- allow rule
 # The rule for default mode with the absolute current folder, and one line per older plugin
 # folder that an allow rule in the user's or the project's settings still names. Read only:
-# nothing is written and no settings file is edited (D-2).
+# nothing is written and no settings file is edited.
 sub allow_lines {
     my ($cwd) = @_;
     my $store = ctx::store_cmd();
@@ -689,8 +689,8 @@ sub _rule_folders {
 }
 
 # The commands the user types (with the leading !), with the real plugin folder. Without a
-# session id the reconcile line is left out: it works on this session first (CW-1). `migrate` only while an
-# old default folder is read (STATE-ROOT).
+# session id the reconcile line is left out: it works on this session first. `migrate` only while an
+# old default folder is read.
 sub user_run_lines {
     my ($sid) = @_;
     my $store = ctx::store_cmd() // return ();
@@ -699,20 +699,20 @@ sub user_run_lines {
             map { "  ! $store $_" } ('smoke', 'project init', 'project copy', 'watch prune',
                                      (defined $sid ? ("reconcile --sid $sid --orphans --full") : ()), 'report',
                                      'settings reset <key> --apply',
-                                     # STATE-ROOT: only while an old default folder is read (a dry run; --apply copies)
+                                     # only while an old default folder is read (a dry run; --apply copies)
                                      (defined rc::legacy() || defined rc::disposable_legacy() ? ('migrate') : ()),
                                      # 0.1.6: only while queue_cmd is set (runs its list once; never add or adopt)
                                      (queue::mode()->{mode} ne 'off' ? ('queue check') : ())));
 }
 
-# ---------------------------------------------------------------- prod reads (S-SETTINGS B)
+# ---------------------------------------------------------------- prod reads
 my %SRC = (settings => 'settings file', default => 'default', safe => 'safe value');
 sub prod_lines {
     my $r = rc::settings();
     my $p = eval { settings::prod($r) } || { reads => 'forbid', user => 0, invalid => [] };
     my $src = $SRC{ $r->{source}{unattended_prod_reads} // 'default' } // 'default';
     my $shipped = scalar(@{ $p->{classes} || [] }) - ($p->{user} // 0);
-    # D-72: the setting as /config shows it (false = forbid, true = allow)
+    # the setting as /config shows it (false = forbid, true = allow)
     my $reads = settings::switch_form('unattended_prod_reads', $p->{reads}) // 'false';
     my @l = ("unattended_prod_reads: $reads ($src) · production patterns: "
              . ($shipped > 0 ? 'prod-token' : 'none') . ' + ' . ($p->{user} // 0) . ' yours');
@@ -723,7 +723,7 @@ sub prod_lines {
     return @l;
 }
 
-# ---------------------------------------------------------------- protected branches (owner xxxxxxxx-29)
+# ---------------------------------------------------------------- protected branches
 # The user's add-only protected_branches entries in use beside the shipped list, and one warning
 # per ignored (invalid) entry by its position, never its text.
 sub protected_lines {
@@ -764,9 +764,9 @@ sub regex_lines {
     return @l;
 }
 
-# ---------------------------------------------------------------- idle compaction (IA-4, IDLE-COMPACT §4.1 B) and SK-7
-# Who compacts an idle session (IDLE-COMPACT-SPEC §4.1, lane B): native idle compaction (Claude
-# Code), plugin idle compaction or nobody, and the idle handoff turn, with their token bands (D-75).
+# ---------------------------------------------------------------- idle compaction and the settings keys line
+# Who compacts an idle session: native idle compaction (Claude
+# Code), plugin idle compaction or nobody, and the idle handoff turn, with their token bands.
 # The source is this session's last `idle_mode` row (the mod's own merged reading: `native`
 # vetoed / compaction-off / on / unknown, `plugin_turn`, `plugin_compact`, `compact_min`, `cache_s`),
 # which the mod writes at load and whenever the policy changes for the session id (a `/clear` gets its own). With no such row (no load or turn end of
@@ -774,7 +774,7 @@ sub regex_lines {
 # line is read the same way from the user settings file and the helper's environment
 # (`autoCompactEnabled` false, DISABLE_COMPACT or DISABLE_AUTO_COMPACT: automatic compaction off;
 # `idleCompaction` false alone: Claude Code's own idle compaction off; a file that is not JSON:
-# unknown; O-9 "unreadable means check what happened"), and says so. While Claude Code's own idle
+# unknown, since an unreadable file means checking what happened), and says so. While Claude Code's own idle
 # compaction is on (or unknown) a neutral note says it runs in sessions without the plugin too, and
 # how to keep it to the plugin's; when the user file says `"idleCompaction": false` but the
 # session reads it on, another note says a project, local, --settings or managed value turned it
@@ -816,7 +816,7 @@ sub _user_native {
     $native = 'compaction-off' if _env_true($ENV{DISABLE_COMPACT}) || _env_true($ENV{DISABLE_AUTO_COMPACT});
     return ($native, $vetoed);
 }
-# D-75 terms (owner 2026-11-08): native idle compaction is Claude Code's own, plugin idle
+# Terms: native idle compaction is Claude Code's own, plugin idle
 # compaction the plugin's, and the idle handoff turn the turn that writes a handoff without
 # compacting, from idle_handoff_min_tokens up to the idle-compaction minimum. The line prints
 # each path's token band from the effective values (the minimum as the mod read it, else as
@@ -826,8 +826,8 @@ my $NATIVE_UNKNOWN = 'native idle compaction (Claude Code; unknown: the settings
 my $NATIVE_OFF = 'native idle compaction is off ("idleCompaction": false)';
 my $FAILED = "it failed twice in this session; it is back once the plugin reloads";
 my $TURN = 'idle handoff turn';
-# The line for one policy (native, plugin_turn, plugin_compact), as the §4.1 B table words it,
-# with the bands: $m the idle-compaction minimum, $h idle_handoff_min_tokens.
+# The line for one policy (native, plugin_turn, plugin_compact), with the
+# bands: $m the idle-compaction minimum, $h idle_handoff_min_tokens.
 sub idle_line {
     my ($native, $pt, $pc, $min, $headless, $compact_opt, $hmin) = @_;
     $min //= _compact_min();
@@ -921,7 +921,7 @@ sub idle_lines {
     return @out;
 }
 
-# Keep-warm (D-14, 2026-10-30; the mod's keepwarm.ts): on or off by keep_warm_hours (0 = off), and,
+# Keep-warm (the mod's keepwarm.ts): on or off by keep_warm_hours (0 = off), and,
 # with a session id, this session's current idle gap from its last keep_warm_start, keep_warm_ping
 # and keep_warm_stop rows: warming with the pings that kept the cache warm so far, or not warming
 # (with the last warmed gap's pings and its stop reason, or the last gap refused before its first
@@ -953,7 +953,7 @@ sub keep_warm_lines {
     return ("$on · this gap: not warming");
 }
 
-# D-83 (0.1.8), D-88: the session's last usage reading, from the shared usage record
+# 0.1.8: the session's last usage reading, from the shared usage record
 # (lib/usagerec.pm, dated as the plugin's decisions date it: a status line's entry never newer
 # than its session's plugin entry): per window kind its share, where it came from (the plugin or
 # the status line's --note-usage; the plugin's on a tie), how old it is and when its window resets
@@ -1015,8 +1015,9 @@ sub usage_lines {
     return ($l);
 }
 
-# SK-7 (owner xxxxxxxx-12/-13/-14): the six 2026-10-23 keys as values the user can check, never
-# the ticket pattern or a secret rule's text.
+# The six keys (resume_proceed, handoff_reuse_window_min, ticket_pattern, secret_extra_rules,
+# evidence_total_max_mb, watch_quota_mb) as values the user can check, never the ticket pattern
+# or a secret rule's text.
 sub settings_keys_line {
     my $r = rc::settings();
     my $v = $r->{values} || {};
@@ -1049,7 +1050,7 @@ sub values_lines {
     return @l;
 }
 
-# Rename order (ruling xxxxxxxx-32, 2026-10-23): options saved in the settings file under the
+# Rename order: options saved in the settings file under the
 # plugin's former name are not read. One line per such key, with its option count and the key
 # to move them to (the key this plugin reads now, else `<name>@…`); read-only, never a value.
 sub former_name_lines {
@@ -1062,7 +1063,7 @@ sub former_name_lines {
     } eval { settings::former_name_keys() };
 }
 
-# ---------------------------------------------------------------- kept stashes (C-STORE D3)
+# ---------------------------------------------------------------- kept stashes
 # Stashes kept after a real copy mismatch (pending/*.mismatch.md, redacted, never deleted by
 # the plugin), in every session folder: the count and the paths (at most 10 shown).
 our $KEPT_SHOW = 10;

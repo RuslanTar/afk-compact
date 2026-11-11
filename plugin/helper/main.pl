@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # helper/main.pl: entry of the plugin helper, started by the launcher in scripts/.
-# Owner: WP-core. Dispatches `<subcommand>` to cmd/<subcommand>.pl (BUILD-PLAN §3.1).
+# Dispatches `<subcommand>` to cmd/<subcommand>.pl.
 #
 # The guard below must stay parsable by perl 5.8: it runs before any other
 # `use`, so an old perl that reaches this file still takes the fallback. The
@@ -46,7 +46,7 @@ umask 077;
 binmode STDOUT;
 binmode STDIN;
 
-# Subcommands of the §3.1 table. Each one lives in cmd/<sub>.pl.
+# Subcommands. Each one lives in cmd/<sub>.pl.
 my %KNOWN = map { $_ => 1 } qw(
     hook ident dispatch prev-copy checkpoint save-copy sweep claim measure log
     reconcile status smoke handoff-turn handoff-state queue-add
@@ -70,13 +70,13 @@ if ($IS_HOOK) {
     $SIG{PIPE} = 'IGNORE';
 }
 
-# Core libraries every subcommand may use (BUILD-PLAN §3.6 seams), in load order.
+# Core libraries every subcommand may use, in load order.
 our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock nonce
                git gsd queue bucket frontmatter detect assemble secrets evidence
                dispatch transcript scope sessions sidecar ledger copies measure checkpoint
                sweep reconcile orphans keyset resumeblock args rollup postcompact repomode jobrec handoff_turn notice userre
                restart plugver cachestate usagerec);
-# 0.1.4 (T-12): `hook <Event>` loads the base set and its event's table, not all of @CORE
+# 0.1.4: `hook <Event>` loads the base set and its event's table, not all of @CORE
 # (compiling every library was the largest part of a hook's start under load). A table holds
 # the libraries the event's handler in cmd/hook.pl calls and what they call in turn (a file-level
 # reading; reconcile, which the cross-session finish calls only for an ended session, is left out
@@ -104,9 +104,9 @@ our %HOOK_EVENT = (
     StopFailure      => [],
     PermissionDenied => [qw(dispatch rollup reconcile ledger copies)],
 );
-# 0.1.7 (D-81): `cache` runs from a status line every few seconds and writes nothing (but the
+# 0.1.7: `cache` runs from a status line every few seconds and writes nothing (but the
 # shared usage record with --note-usage, 0.1.8): it loads only these, not settings, paths, rc or
-# identity (whose setup, args::init_sid, writes once-notes and config rows); 0.1.8 (D-83) `usage`,
+# identity (whose setup, args::init_sid, writes once-notes and config rows); 0.1.8 `usage`,
 # which the mod calls as a usage reading changes, the same. CACHE-04 and USAGE-01 hold the sets
 # (STORE_TEST_INC_OUT).
 our %SUB_LIBS = (cache => [qw(util jsonc ctx args cachestate usagerec)], usage => [qw(util jsonc ctx args cachestate usagerec)]);

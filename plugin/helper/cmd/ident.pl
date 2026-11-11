@@ -1,11 +1,11 @@
 # cmd/ident.pl: `ident --sid S` -> {"pid":N,"pid_lstart":"…","execpath_version":"…"|null,
-# "watch":"<abs dir>"|null} (BUILD-PLAN §3.1, E-18; the mod caches it at session.start).
-# `watch` is the effective log folder after the unsafe-root checks (MOD-SPEC §1.2): log_dir,
+# "watch":"<abs dir>"|null} (the mod caches it at session.start).
+# `watch` is the effective log folder after the unsafe-root checks: log_dir,
 # else <root>/.watch when log_dir is unsafe, else null (refused). The mod writes its files
-# there, so neither side writes under a refused root. Owner: WP-core.
-# SESSION-RESTART: `restart` is the restart_on_update setting (off, shadow or on; settings file
+# there, so neither side writes under a refused root.
+# Restart on update: `restart` is the restart_on_update setting (off, shadow or on; settings file
 # only), and `restart_reports` the background restarts that failed after the old process ended
-# (§2.3: `[{short, to, code}]`, each marked reported here, so one load reports it once); the scan
+# (`[{short, to, code}]`, each marked reported here, so one load reports it once); the scan
 # runs only while the setting is not off.
 use strict;
 use warnings;

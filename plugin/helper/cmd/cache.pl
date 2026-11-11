@@ -1,9 +1,9 @@
-# cmd/cache.pl: `cache [--sid <id>] [--stdin] [--json] [--note-usage]` (0.1.7, D-81). Owner: WP-core.
+# cmd/cache.pl: `cache [--sid <id>] [--stdin] [--json] [--note-usage]` (0.1.7).
 # Whether the session's prompt cache is warm, for a status line: one plain line (`cache 1h warm
 # 42m left ↻3/7`; nothing when unknown) or, with --json, the `<plugin>-cache/v1` object
 # (assets/cache-contract.md). --stdin reads the status line's JSON (session_id, prompt_cache,
 # transcript_path). Read-only: it writes nothing, and always exits 0 (a usage error says so on
-# stderr). The one exception is opt-in (0.1.8, D-83): with --note-usage and --stdin it also records
+# stderr). The one exception is opt-in (0.1.8): with --note-usage and --stdin it also records
 # the input's rate_limits in the shared usage record (lib/usagerec.pm), and nothing else; the output
 # is the same. main.pl loads only the libraries it needs (%SUB_LIBS), so no setup path runs.
 use strict;

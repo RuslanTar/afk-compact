@@ -1,4 +1,4 @@
-# cmd/notice.pl: the watcher's first-run notice (W-BETA A; WATCHER-SPEC §8 item 8). Owner: WP-core.
+# cmd/notice.pl: the watcher's first-run notice.
 #   notice claim --id ID [--sid S]
 #     -> `show` when this call created <watch>/notice/<ID>.shown (exclusive create, 0600 in a
 #        0700 folder), `seen` when it was there already; `off` (no marker) while watcher = off,

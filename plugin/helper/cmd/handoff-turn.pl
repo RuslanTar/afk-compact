@@ -1,4 +1,4 @@
-# cmd/handoff-turn.pl: the handoff-turn records of D-18 §9.1 (BUILD-PLAN §3.1). Owner: WP-core.
+# cmd/handoff-turn.pl: the handoff-turn records.
 #   handoff-turn open --sid S --ht H --reason R --max-calls C --max-tokens T
 #     -> `ok` (exclusive create of <watch>/<sid>/handoff-turn/<ht>.json; row
 #        handoff_turn_open) | `EXISTS` (that ht is taken: draw another)
@@ -7,11 +7,11 @@
 #        the plugin compaction for this ht is dropped. Unknown ht -> exit 3 `REFUSED: no-ht`
 #   handoff-turn close --sid S --ht H --why cancelled|ended
 #     -> `ok` (exclusive create of <ht>.closed, 0600) | `EXISTS`; begin no longer binds
-#        that ht (CR-F17/F25). Unknown ht -> exit 3 `REFUSED: no-ht`; handoff-state is
+#        that ht. Unknown ht -> exit 3 `REFUSED: no-ht`; handoff-state is
 #        unchanged by it
 # The mod runs all three; the reason is the halt reason of the last cycle (2-nonok, thrash,
-# cap, continue-off), or the optional turn: precompact (§9.3) or idle (§9.4); C and T are the
-# mod's limits for the turn (D-18 B1 step 2).
+# cap, continue-off), or the optional turn: precompact or idle; C and T are the
+# mod's limits for the turn.
 use strict;
 use warnings;
 use utf8;
