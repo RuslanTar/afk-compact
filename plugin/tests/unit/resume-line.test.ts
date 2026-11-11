@@ -1,6 +1,6 @@
 // U tests through the kit: the 0.1.3 resume-text lane.
-// A (owner 2026-10-30 07:52: "it's not clear if the compaction went well, as there are literally no
-// messages after compaction"; usage review: median 5 tool calls before the first visible line): a
+// A (with no message after a compaction it was not clear whether the compaction went well;
+// usage review: median 5 tool calls before the first visible line): a
 // main block opens with one code-rendered first line, `Resumed · step 1: <the summary's Step 1>`,
 // else the fixed `Resumed after compaction`; never beside the handoff ack (its own one line) or the
 // block again on a person's return. Subagents get no block.
@@ -48,7 +48,7 @@ describe('resume line (A): Step 1 as code reads it', () => {
     // summary not in handoff form may quote a plan's Step 1 that is not the resume step).
     expect(step1Of('## Resume here\nStatus: working\n## Next steps\nStep 1: later')).toBeUndefined()
     expect(step1Of('Summary:\nStep 1: `git status`\n')).toBeUndefined()
-    // The template's other tail, `— proposed…` or `| proposed`, is cut too (real copy xxxxxxxx c1).
+    // The template's other tail, `— proposed…` or `| proposed`, is cut too (seen in a real copy).
     expect(step1Of('## Resume here\nStep 1: `catchup.py answers` — proposed: read the answers; if none, wait\n')).toBe('`catchup.py answers`')
     expect(step1Of('## Resume here\nStep 1: `make lint` | proposed\n')).toBe('`make lint`')
     expect(step1Of('## Resume here\nStep 1:\nGate: none')).toBeUndefined()
@@ -60,7 +60,7 @@ describe('resume line (A): Step 1 as code reads it', () => {
     expect(step1Of('## Resume here\nStep 1: `make gate` — for the 0.1.1 gate (U-3) | proposed\n')).toBe('`make gate`')
     expect(step1Of('## Resume here\nStep 1: report — for the owner\'s "ship it?"\n')).toBe('report')
     expect(step1Of('## Resume here\nStep 1: rerun — for each red case, read its log\n')).toBe('rerun — for each red case, read its log')
-    // 0.1.4 R-8 (review of the 0.1.3 follow-up, mutant r2: `the` without its space): `— for them`
+    // 0.1.4 (review of the 0.1.3 follow-up, mutant r2: `the` without its space): `— for them`
     // and `— for these` are not the free `— for the …` tail.
     expect(step1Of('## Resume here\nStep 1: x — for them\n')).toBe('x — for them')
     expect(step1Of('## Resume here\nStep 1: ping the owners — for these two lanes\n')).toBe('ping the owners — for these two lanes')
@@ -84,7 +84,7 @@ describe('resume line (A): Step 1 as code reads it', () => {
   })
 
   test('a cut Step 1 ends at a word when that keeps 60 chars, else mid-word; an open backtick is closed (review of the first build)', () => {
-    const path = '`tail -c 600 /srv/u/claude/projects/-srv-u-projects-meta/00000000-0000-4000-8000-000000000000/subagents/agent-a1b2c3d4.jsonl`'
+    const path = '`tail -c 600 /srv/u/claude/projects/-srv-u-projects-meta/5e55a001-e2f1-4c55-9a1b-0c0ffee00000/subagents/agent-a1b2c3d4.jsonl`'
     const cut = clipStep1(path)
     expect(cut).toBe(path.slice(0, STEP1_MAX - 2) + '`…')
     expect(cut.length).toBe(STEP1_MAX)
@@ -171,8 +171,8 @@ describe('resume line (A): the block', () => {
   })
 
   // Review round 2: a headless load (`claude -p`, the Agent SDK: session.start `isInteractive`
-  // false) gets no [resumed] line; a script reads its reply. 0.1.4 R-3: only with no surface (a
-  // `-p` load has none: probe 2026-11-03).
+  // false) gets no [resumed] line; a script reads its reply. 0.1.4: only with no surface (a
+  // `-p` load has none, as a probe showed).
   test('a headless load with no surface (`claude -p`): the block has no [resumed] line', async ($, on) => {
     const w = new World().install(on)
     w.interactive = false
@@ -186,7 +186,7 @@ describe('resume line (A): the block', () => {
     expect(resumedLine(b)).toBeUndefined()
   })
 
-  // 0.1.4 R-3 (the line's audience decides): Claude Code reports `isInteractive` false for the
+  // 0.1.4 (the line's audience decides): Claude Code reports `isInteractive` false for the
   // desktop app and the IDE extensions too; a person reads the reply there.
   test('a headless load with a surface (the desktop app, an IDE) keeps the [resumed] line; so does one whose entrypoint is claude-desktop or claude-vscode', async ($, on) => {
     const w = new World().install(on)
@@ -212,7 +212,7 @@ describe('resume line (A): the block', () => {
     expect(resumedLine(b)).toBeUndefined()
   })
 
-  // 0.1.4 review F-4: the other entrypoints Claude Code 2.1.317 counts as a person's surface (its
+  // 0.1.4 review: the other entrypoints Claude Code 2.1.317 counts as a person's surface (its
   // person-surface set beside isInteractive) keep the line in a headless load with no surface too,
   // the underscore forms it maps to the same Cowork and Slack surfaces (local_agent,
   // claude_in_slack) as well.
@@ -239,7 +239,7 @@ describe('resume line (A): the block', () => {
     expect(resumedLine(await nextBlock($, w))).toBe(RESUMED ? lineFor('Resumed after compaction') : undefined)
   })
 
-  // 0.1.4 R-4 (the 0.1.3 follow-up's long-term note: a block built before the load was found
+  // 0.1.4 (the 0.1.3 follow-up's long-term note: a block built before the load was found
   // headless kept [resumed]): the block records its reader at build, and a delivery to another
   // reader builds it again.
   test('a block built before the load is found headless (no surface) is delivered without [resumed]; the record keeps the reader of its build', async ($, on) => {
@@ -577,7 +577,7 @@ describe('no re-ask after a timeout (B)', () => {
     expect(b).not.toContain(TIMED)
   })
 
-  // 0.1.4 R-7 (review of the 0.1.3 follow-up: an interjection kept the mark): the person typed into
+  // 0.1.4 (review of the 0.1.3 follow-up: an interjection kept the mark): the person typed into
   // the running turn after its dialog timed out (AT-ID-03 "typed over it"), so a mid-turn block of
   // that turn, and the turn's end, carry the question without [question-timeout].
   test('a prompt the person typed into the running turn after a timed-out dialog: a mid-turn block has [question] without [question-timeout]', async ($, on) => {
@@ -607,7 +607,7 @@ describe('no re-ask after a timeout (B)', () => {
     if (TIMEOUT) expect(b).toContain(TIMED)
   })
 
-  // 0.1.4 R-7 (review F-3): a person typing into a later background turn clears the mark an earlier
+  // 0.1.4 (review): a person typing into a later background turn clears the mark an earlier
   // turn left on the open question (personTyped's openTimedOut).
   test('an earlier turn left the timed-out question open; the person types into a background turn: a mid-turn block has no [question-timeout]', async ($, on) => {
     const w = new World().install(on)
@@ -628,7 +628,7 @@ describe('no re-ask after a timeout (B)', () => {
     expect(b).not.toContain(TIMED)
   })
 
-  // 0.1.4 R-7 (review F-3): a dialog that times out after the person typed into the turn is a new
+  // 0.1.4 (review): a dialog that times out after the person typed into the turn is a new
   // timeout (noteDialog resets askPersonSince).
   test('a dialog that times out after the person typed into the turn marks its question', async ($, on) => {
     const w = new World().install(on)
@@ -658,9 +658,9 @@ describe('no re-ask after a timeout (B)', () => {
   })
 })
 
-// 0.1.4 R-5 (the 0.1.3 lane's long-term note, repeated by its reviews): the no-dialog rule reaches
+// 0.1.4 (the 0.1.3 lane's long-term note, repeated by its reviews): the no-dialog rule reaches
 // the model at the timed-out dialog's own result, so a session that never compacts gets it too.
-describe('no re-ask after a timeout: the note on the result (R-5)', () => {
+describe('no re-ask after a timeout: the note on the result', () => {
   const NOTE = (w: World): string =>
     `Note from the user's ${w.name} plugin: the dialog timed out: ask it again only in text, at the end of your reply, until the person writes.`
   test('a main dialog that closed on the AFK timeout gets the note; an answered one, an empty one and another tool none', async ($, on) => {

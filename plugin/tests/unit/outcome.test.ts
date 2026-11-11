@@ -1,4 +1,4 @@
-// U tests through the kit: the per-compaction `mod_outcome` row (F2-3, MOD-SPEC §2.5 rollup
+// U tests through the kit: the per-compaction `mod_outcome` row (the rollup
 // fields nudged, continued, halt, resume). One append-only row per compaction, written once
 // the compaction's resume block has settled; readers join it to the rollup by nonce.
 import { expect, test } from 'claude-code/testing'
@@ -111,7 +111,7 @@ test('F2-3: the capped 4th nudge-driven compaction: not continued, halt true, it
   for (let i = 0; i < 4; i++) {
     await nudgedTurn($, w)
     if (i === 3) {
-      // The capped cycle's handoff turn (MOD-SPEC §9.1) comes first; nothing is published here.
+      // The capped cycle's handoff turn comes first; nothing is published here.
       if (hasAsset('handoff-turn')) {
         await w.advance(2000)
         await w.turnStart($, '')

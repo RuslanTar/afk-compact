@@ -1,4 +1,4 @@
-// U tests through the kit: the session.compact handler (MOD-SPEC §3.1, §5.2, §6, §8).
+// U tests through the kit: the session.compact handler.
 import { expect, test } from 'claude-code/testing'
 import { COMPACT_LINE_DELAY_MS, compactLine, summaryText } from '../../hooks/lib/compact'
 import { detectSummary, markerText, sentinelText } from '../../hooks/lib/detect'
@@ -271,7 +271,7 @@ test('CC311-01: the Claude Code 2.1.311 installed form (tools-used block in a <s
   expect(w.toasts.some(t => t.includes('not in handoff format'))).toBe(false)
 })
 
-test('RRP-04 (core-to-mod §13): after EXISTS sha-differs the mod neither rewrites its .mod.md stash nor retries save-copy (the helper settles the stash)', async ($, on) => {
+test('RRP-04: after EXISTS sha-differs the mod neither rewrites its .mod.md stash nor retries save-copy (the helper settles the stash)', async ($, on) => {
   const w = new World().install(on)
   w.saveLine = `EXISTS: ${ROOT}/r/x.md sha-differs`
   await raiseCompact($, { trigger: 'auto' })
@@ -323,8 +323,8 @@ test('helper down: dispatch record written with $.fs.write, helper_missing in a 
   await raiseCompact($, { trigger: 'manual' })
   const nonce = markerNonce(w, w.compacts[0]?.instructions) ?? ''
   const rec = JSON.parse(w.files.get(`${WATCH}/${SID_A}/dispatch/${nonce}.json`) ?? '{}') as Record<string, unknown>
-  // The helper's record keys in its order (core-to-mod §17, dispatch.pm record): idle and idle_gap_s always;
-  // `model` last, when the session's model was read (MG-4).
+  // The helper's record keys in its order (dispatch.pm record): idle and idle_gap_s always;
+  // `model` last, when the session's model was read.
   expect(Object.keys(rec)).toEqual(['v', 'nonce', 'session_id', 'actor', 'agent_id', 'trigger', 'channel', 'resume_pref', 'midturn', 'idle', 'idle_gap_s', 'tags', 'instructions_sha8', 'instructions_bytes', 'cc_version', 'cc_version_src', 'load_id', 'pid', 'pid_lstart', 'ts', 'model'])
   expect([rec.agent_id, rec.idle, rec.idle_gap_s]).toEqual([null, false, null])
   expect(rec.cc_version_src).toBe(typeof rec.cc_version === 'string' && rec.cc_version !== '' ? 'mod' : null)
@@ -385,7 +385,7 @@ test('compacted.skip is a class: a short token is kept, free text from a hook is
   expect(JSON.stringify(w.rows)).not.toContain('SQL migration')
 })
 
-test('after-step toasts (MOD-SPEC §5.2 step 6): non-ok verdict names it; the fourth main compaction toasts once', async ($, on) => {
+test('after-step toasts: non-ok verdict names it; the fourth main compaction toasts once', async ($, on) => {
   const w = new World().install(on)
   const fourth = () => w.toasts.filter(t => t === `${w.name}: 4 compactions in this session; consider /${w.name}:handoff and a fresh session.`).length
   w.summaryMode = 'truncated'
@@ -436,7 +436,7 @@ test('@remeasure@: the after-step measures for this compaction\'s nonce (its own
   expect(w.flag(m[0], '--nonce')).toBe(nonce)
 })
 
-// AP-5 (D-2 replaced by scoped carry, owner 2026-10-23; SPEC-DELTAS AT-AP-05, mod half): the
+// Scoped carry (AT-AP-05, mod half): the
 // re-measure names this compaction's saved copy, so the helper checks the summary's approvals.
 test('AT-AP-05 (mod): the after-step measure passes --copy=<the saved copy save-copy printed>; no saved copy, no --copy; the delivery re-measure passes it too', async ($, on) => {
   const w = new World().install(on)
@@ -454,7 +454,7 @@ test('AT-AP-05 (mod): the after-step measure passes --copy=<the saved copy save-
   expect((last?.args ?? []).some(a => a.startsWith('--copy'))).toBe(false)
 })
 
-// C-STORE D4 (MOD-SPEC §5.8 item 4): the mod writes the orphan index marker before its stash.
+// C-STORE: the mod writes the orphan index marker before its stash.
 test('AT-ST-03, AT-ST-07 (mod half): the after-step writes <watch>/.orphans/<sid> (empty) before pending/<nonce>.mod.md, main and subagent', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
@@ -469,7 +469,7 @@ test('AT-ST-03, AT-ST-07 (mod half): the after-step writes <watch>/.orphans/<sid
   expect(w.files.get(marker)).toBe('')
 })
 
-test('MOD-06: no vetted watch folder (ident refused every log folder): no marker and no stash', async ($, on) => {
+test('no vetted watch folder (ident refused every log folder): no marker and no stash', async ($, on) => {
   const w = new World().install(on)
   w.identWatch = null
   await w.start($)
@@ -477,8 +477,8 @@ test('MOD-06: no vetted watch folder (ident refused every log folder): no marker
   expect(w.writes.filter(p => p.includes('/.orphans/') || p.endsWith('.mod.md'))).toEqual([])
 })
 
-// QA-B3 (owner xxxxxxxx-11 "setting-driven, one text"; REVIEW-NIGHT NR-10): the [queue] lines of
-// the compaction text ride on queue_cmd, as the nudge's do (D-10); unset, they are dropped.
+// QA-B3 (setting-driven, one text): the [queue] lines of
+// the compaction text ride on queue_cmd, as the nudge's do; unset, they are dropped.
 const QUEUE_LINE = 'A queued question (Questions shows its id)'
 test('QA-B3 (mod part): queue_cmd set: the main compaction text keeps the [queue] lines and the dispatch tags name queue', { options: { queue_cmd: '/q/bin/queue' } }, async ($, on) => {
   const w = new World().install(on)
@@ -523,7 +523,7 @@ test('ok-unclosed: complete but for the closing line: no nonok note or toast, tw
   expect(w.rowsOf('halt').map(r => [r.reason, r.active])).toEqual([['2-nonok', true]])
 })
 
-// Owner 2026-10-30 07:52 ("not clear if the compaction went well"): one dim transcript line after
+// So the user can tell whether the compaction went well: one dim transcript line after
 // every main compaction (compact.ts compactLine), never sent to the model, never for a subagent.
 test('compaction line: ok main compaction: one line, copy saved, running jobs counted from the measure', async ($, on) => {
   const w = new World().install(on)

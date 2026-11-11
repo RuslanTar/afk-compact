@@ -2,7 +2,7 @@
 // rejects a plugin's compaction call (`$.session.compact`). The plugin then neither nudges nor
 // opens a handoff or idle turn; it compacts only by running `/compact` at a turn end
 // (headless-compact.test.ts), and not at all once that path is off. Claude Code's own
-// compactions are still shaped. Live probe 2026-10-27: the nudge at 315K, then
+// compactions are still shaped. A live probe: the nudge at 315K, then
 // `compact_rejected` with the error text discarded.
 import { expect, test } from 'claude-code/testing'
 import type { Deps, RunResult } from '../../hooks/lib/deps'
