@@ -2,7 +2,7 @@
  "id": "AT-IC-37",
  "layer": "H",
  "owner": "core",
- "note": "IDLE-COMPACT-SPEC §4.1 (lane B): /status says who compacts an idle session from this session's last idle_mode row (native, plugin_turn, plugin_compact, compact_min, cache_s), one step per table row; the native-on note (its path follows CLAUDE_CONFIG_DIR), the overriding-settings note, the test-seam line, the user-settings fallback with its suffix, and a second session id after a /clear. plugin_compact check (lane B; owner Q2): the 55.5-min check compacts at the minimum or more, agents running or not; agents is a lane A row.",
+ "note": "/status says who compacts an idle session from this session's last idle_mode row (native, plugin_turn, plugin_compact, compact_min, cache_s), one step per table row; the native-on note (its path follows CLAUDE_CONFIG_DIR), the overriding-settings note, the test-seam line, the user-settings fallback with its suffix, and a second session id after a /clear. plugin_compact check (lane B; owner Q2): the 55.5-min check compacts at the minimum or more, agents running or not; agents is a lane A row.",
  "now": "2026-10-27T10:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

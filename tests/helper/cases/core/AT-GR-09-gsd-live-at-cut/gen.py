@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""gen.py OUT.json: writes AT-GR-09's case.json (run from this folder: python3 gen.py case.json). The owner's 2026-10-27
-20:57 ruling: an Active driver only while the loop is clearly live at the cut (one of its own steps mid-turn, or an agent,
-workflow or teammate it launched still running: root call 2026-10-28, never a shell, a monitor or a wake-up alone, and a
+"""gen.py OUT.json: writes AT-GR-09's case.json (run from this folder: python3 gen.py case.json). The live rule:
+an Active driver only while the loop is clearly live at the cut (one of its own steps mid-turn, or an agent,
+workflow or teammate it launched still running, never a shell, a monitor or a wake-up alone, and a
 single-phase loop's gate gives the hint); a hint in every other case. Synthetic transcripts in Claude Code's row shapes,
 measured at many cuts. Edit this file, not case.json."""
 import datetime, json, re, sys
@@ -784,7 +784,7 @@ t.cut("that prompt delivered: still a Paused driver", paused(EP3))
 TS.append(t)
 
 # ---- round 6 review: a single-phase loop's own gates; arguments a re-enter command cannot repeat ----
-# (root call 2026-10-28: a gate gives the hint, never Active: what follows a single-phase loop is unclear)
+# (a gate gives the hint, never Active: what follows a single-phase loop is unclear)
 t = T(64, "gsd-execute-phase runs its own code-review and validate gates (GSD commands through the Skill tool) before its phase.complete")
 ep3(t)
 e1 = t.bgagent("wave 1 executor", "a9641")
@@ -1029,7 +1029,7 @@ t.skill("gsd-code-review", "4 --ws " + WS)
 t.cut("a Was driving hint, never Active", hint(EP3, "another GSD command followed"))
 TS.append(t)
 
-# ---- root call 2026-10-28: only an agent, teammate or workflow keeps a loop live past its turn's end ----
+# ---- only an agent, teammate or workflow keeps a loop live past its turn's end ----
 t = T(94, "a loop asleep until its own wake-up (ScheduleWakeup): a wake-up alone keeps no loop Active")
 ep3(t)
 t.tool("ScheduleWakeup", {"delaySeconds": 1800, "prompt": "Check phase 3's wave 1 and continue.", "reason": "poll wave 1"},
@@ -1141,7 +1141,7 @@ t.cut("the GSD line is at most 400 characters",
        MODES))
 TS.append(t)
 
-# ---- five sessions sharing this worktree (owner 21:37), cut live and not live ----
+# ---- five sessions sharing this worktree, cut live and not live ----
 t = T(31, "five sessions, plain .planning (the shared pointer names workstream-b)")
 t.typed("gsd-execute-phase", "3")
 t.gsd("state.begin-phase 3", ws=None)
@@ -1196,7 +1196,7 @@ t.cut("after a prompt: a Was driving hint, no GSD line", hint("/superpowers:exec
 TS.append(t)
 
 EB5 = "/gsd-execute-phase 5 --ws " + WB
-t = T(36, "five sessions, workstream B's single-phase loop runs its code-review gate (root call 2026-10-28: a gate gives the hint)")
+t = T(36, "five sessions, workstream B's single-phase loop runs its code-review gate (a gate gives the hint)")
 t.typed("gsd-workstreams", "switch " + WB)
 t.prompt("continue phase 5")
 t.skill("gsd-execute-phase", "5 --ws " + WB)
@@ -1383,9 +1383,9 @@ for t in TS:
 case = {"id": "AT-GR-09",
         "sid": sid(1),
         "note": ("Written by gen.py in this folder (python3 gen.py case.json): edit that, not this file. "
-                 "Owner ruling 2026-10-27 20:57 (binding): the imperative `Active driver` line only while the loop is clearly live at the cut: "
+                 "The live rule: the imperative `Active driver` line only while the loop is clearly live at the cut: "
                  "one of its own steps (its skill, a gsd-execute-phase it invoked, its gsd-tools run) is mid-turn, or an agent, workflow or "
-                 "teammate it launched still runs (root call 2026-10-28: a single-phase loop's own code-review or validate gate gives the hint, "
+                 "teammate it launched still runs (a single-phase loop's own code-review or validate gate gives the hint, "
                  "session 64; a background command, a monitor or a wake-up only names itself in the hint: a server it left running while it "
                  "waits for the person, sessions 19, 72, 94; a teammate's idle notice is a notification, session 70); the `Was driving` hint in "
                  "every other case: its turn ended, an "
@@ -1412,7 +1412,7 @@ case = {"id": "AT-GR-09",
                  "long meta row of Claude Code's own is not (sessions 116-120). "
                  "R1: the outermost loop drives, "
                  "also past a pause it wrote (session 50); R4: a paused loop is shown, never run. Five sessions in this one worktree each keep "
-                 "their own GSD line and workstream (owner 21:37)."),
+                 "their own GSD line and workstream."),
         "tmp_base": "short", "now": "2026-10-26T14:05:12+03:00", "tz": "Etc/GMT-3", "steps": steps}
 open(sys.argv[1], "w", encoding="utf-8").write(json.dumps(case, ensure_ascii=False, indent=1) + "\n")
 print("steps", len(steps), "measures", sum(1 for s in steps if "argv" in s))

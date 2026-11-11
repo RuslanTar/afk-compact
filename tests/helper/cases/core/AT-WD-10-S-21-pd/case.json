@@ -1,7 +1,7 @@
 {
  "id": "AT-WD-10 (S-21-pd)",
  "needs": ["fixture:sequences/S-21-pd/input.json"],
- "note": "PKG-RUNTIME E.1 / RR-S21-03 (CORE-13) on the WP-fix sequence S-21-pd: a PermissionDenied after a deferred PostCompact reads turn_kind post-compaction only when the pending record qualifies (after the last Stop, no copy row yet, a main boundary row in the 512 KB tail within [ts - 2 s, ts + 600 s]); the negatives read other. Skipped until the WP-fix fixtures are merged.",
+ "note": "RR-S21-03 on the sequence S-21-pd: a PermissionDenied after a deferred PostCompact reads turn_kind post-compaction only when the pending record qualifies (after the last Stop, no copy row yet, a main boundary row in the 512 KB tail within [ts - 2 s, ts + 600 s]); the negatives read other. Skipped until the fixtures are merged.",
  "tz": "Etc/GMT-3",
  "sequence": "S-21-pd"
 }

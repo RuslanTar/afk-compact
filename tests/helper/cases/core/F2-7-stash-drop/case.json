@@ -1,6 +1,6 @@
 {
  "id": "F2-7-stash-drop",
- "note": "ROOT-RULINGS F2-7 (PRIV-03): the plugin's own raw-summary stash goes once a copy holds the summary: PostCompact's pending/<id6>.post.md after its save, the mod's pending/<nonce>.mod.md after save-copy prints Saved or EXISTS sha-match; an unsaved stash (EXISTS sha-differs) is settled once (RRP-04: here a real mismatch, kept redacted as pending/<nonce>.mod.mismatch.md, the raw stash gone), a --from file outside pending/ is never touched, and the content-free .post.json meta stays",
+ "note": "F2-7: the plugin's own raw-summary stash goes once a copy holds the summary: PostCompact's pending/<id6>.post.md after its save, the mod's pending/<nonce>.mod.md after save-copy prints Saved or EXISTS sha-match; an unsaved stash (EXISTS sha-differs) is settled once (here a real mismatch, kept redacted as pending/<nonce>.mod.mismatch.md, the raw stash gone), a --from file outside pending/ is never touched, and the content-free .post.json meta stays",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -85,7 +85,7 @@
    }
   },
   {
-   "name": "a mismatching mod stash is settled (RRP-04 keep)",
+   "name": "a mismatching mod stash is settled (kept)",
    "setup": [
     {
      "write": "$WATCH/$SID/pending/1a2b3c4d.mod.md",

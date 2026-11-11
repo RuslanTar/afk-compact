@@ -1,6 +1,6 @@
 {
  "id": "AT-QA-B3 (classic)",
- "note": "QA-B3 (owner xxxxxxxx-11 setting-driven, one text; REVIEW-NIGHT NR-10): with queue_cmd set, the classic PreCompact fallback keeps the [queue] lines of the main text (the golden with +queue) and the dispatch record names the queue tag; the helper makes no queue call here (S-04)",
+ "note": "QA-B3: with queue_cmd set, the classic PreCompact fallback keeps the [queue] lines of the main text (the golden with +queue) and the dispatch record names the queue tag; the helper makes no queue call here (S-04)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

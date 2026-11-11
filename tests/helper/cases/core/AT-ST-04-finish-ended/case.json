@@ -1,6 +1,6 @@
 {
  "id": "AT-ST-04 (RRP-05 cross-session finish via an ended- record)",
- "note": "C-STORE D4 / MOD-SPEC §5.8 case 4 (CORE-07): session A leaves an unproven PostCompact stash, its marker and an ended- record (its SessionEnd never reconciled). Session B's SessionStart(startup) finishes A in final mode under A's reconcile.lock: A's copy is saved (unattributed: no boundary row), A's rows carry finished_by = B's sid8, the copy's frontmatter takes claude_pid from A's newest record and finished_by, A's marker is gone, and B's own stream gains only one orphan_finished row for A (no copy row of its own)",
+ "note": "session A leaves an unproven PostCompact stash, its marker and an ended- record (its SessionEnd never reconciled). Session B's SessionStart(startup) finishes A in final mode under A's reconcile.lock: A's copy is saved (unattributed: no boundary row), A's rows carry finished_by = B's sid8, the copy's frontmatter takes claude_pid from A's newest record and finished_by, A's marker is gone, and B's own stream gains only one orphan_finished row for A (no copy row of its own)",
  "tz": "Etc/GMT-3",
  "vars": {"A": "a0a0a0a0-1111-4222-8333-444444444444"},
  "steps": [

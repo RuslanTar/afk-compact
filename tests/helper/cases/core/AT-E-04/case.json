@@ -1,6 +1,6 @@
 {
  "id": "AT-E-04",
- "note": "MOD-SPEC §10 AT-E-04 (HK-44, S-10): the sweep files of tests/fixtures/secrets/corpus.json (values joined from fragments at run time): HARD hits in plain files are withheld, a log or JSON with a hit and a WARN hit are copied redacted, .env is withheld by name, .env.example and the control file are copied; the row lists rule ids, and no secret value reaches the log, the disposable root or the handoff root",
+ "note": "AT-E-04: the sweep files of tests/fixtures/secrets/corpus.json (values joined from fragments at run time): HARD hits in plain files are withheld, a log or JSON with a hit and a WARN hit are copied redacted, .env is withheld by name, .env.example and the control file are copied; the row lists rule ids, and no secret value reaches the log, the disposable root or the handoff root",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

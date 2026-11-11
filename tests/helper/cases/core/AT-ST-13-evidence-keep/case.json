@@ -1,7 +1,7 @@
 {
  "id": "AT-ST-13 (BD-4 agent output always withheld, evidence --keep)",
  "needs": ["fixture:setups/st-13-agent-output.json"],
- "note": "C-STORE D6 BD-4 / MOD-SPEC §10 (CORE-10), the evidence --keep half of AT-ST-13 (core-to-skills §4): `evidence --keep` runs the same evidence::copy as the sweep, so on the WP-fix setup st-13-agent-output the symlink to an agent JSONL (a1; evidence --keep resolves the link first, so its row names the JSONL and the deny-name rule withholds it before the agent-output detector runs), the file whose first line is a transcript row (t1) and the outputs the sidecar types subagent (b1) and workflow (w1) are withheld with no bytes kept, while the monitor output (m1) is kept; no agent text reaches the evidence folder. Skipped until the WP-fix fixtures are merged.",
+ "note": "BD-4, the evidence --keep half of AT-ST-13: `evidence --keep` runs the same evidence::copy as the sweep, so on the setup st-13-agent-output the symlink to an agent JSONL (a1; evidence --keep resolves the link first, so its row names the JSONL and the deny-name rule withholds it before the agent-output detector runs), the file whose first line is a transcript row (t1) and the outputs the sidecar types subagent (b1) and workflow (w1) are withheld with no bytes kept, while the monitor output (m1) is kept; no agent text reaches the evidence folder. Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "tmp_base": "repo",
  "now": "2026-10-21T14:05:12+03:00",

@@ -1,6 +1,6 @@
 {
  "id": "M1-sessionstart-budget",
- "note": "BUILD-PLAN §3.3 SessionStart (5 s) row, MOD-SPEC §3.4: with a git that takes 3 s per call and a queue_cmd that takes 10 s, SessionStart(compact) still prints and claims its block well inside the 5 s hook timeout (one budget for git, the work-tree lookup and the queue call; a step with too little time left is skipped). A helper killed with TERM while it waits for queue_cmd takes the queue_cmd process group along",
+ "note": "with a git that takes 3 s per call and a queue_cmd that takes 10 s, SessionStart(compact) still prints and claims its block well inside the 5 s hook timeout (one budget for git, the work-tree lookup and the queue call; a step with too little time left is skipped). A helper killed with TERM while it waits for queue_cmd takes the queue_cmd process group along",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "path_prepend": [

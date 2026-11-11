@@ -3,7 +3,7 @@
  "needs": [
   "fixture:transcripts/fill-joins/joins.json"
  ],
- "note": "C-STORE D5 / MOD-SPEC §5.9 join (c) (CORE-09) on the WP-fix fill-joins fixture, case time-join: an unmarked subagent summary whose body is in no agent summary row; A3's boundary row is 0.4 s before the PostCompact (in the window), A2's 35.4 s before (outside TOL_S): exactly one candidate. The copy is saved sub-unknown at the Stop and the fill renames it to -aa7d00d1e, attributed_by reconcile-c, one copy_attributed {proof: c}. Skipped until the WP-fix fixtures are merged.",
+ "note": "Fill join (c) on the fill-joins fixture, case time-join: an unmarked subagent summary whose body is in no agent summary row; A3's boundary row is 0.4 s before the PostCompact (in the window), A2's 35.4 s before (outside TOL_S): exactly one candidate. The copy is saved sub-unknown at the Stop and the fill renames it to -aa7d00d1e, attributed_by reconcile-c, one copy_attributed {proof: c}. Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "tz": "Etc/GMT-3",
  "steps": [

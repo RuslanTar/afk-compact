@@ -1,6 +1,6 @@
 {
  "id": "AT-E-01",
- "note": "MOD-SPEC §10 AT-E-01: checkpoint --measured with tests/fixtures/bin/git-slow installed as git (3 s per call, past the 2 s git budget): the git section reads not measured (timeout) in the JSON and in the measured block, checkpoint_ms.git >= 2000, the total stays within the 10 s budget",
+ "note": "AT-E-01: checkpoint --measured with tests/fixtures/bin/git-slow installed as git (3 s per call, past the 2 s git budget): the git section reads not measured (timeout) in the JSON and in the measured block, checkpoint_ms.git >= 2000, the total stays within the 10 s budget",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "path_prepend": [

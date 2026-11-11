@@ -1,6 +1,6 @@
 {
  "id": "AT-WB-12 (helper half: notice claim)",
- "note": "W-BETA A / WATCHER-SPEC §8 item 8 (CORE-17): `notice claim --id watcher-1` makes <watch>/notice/watcher-1.shown by exclusive create (0600 in a 0700 folder) and prints show; every later claim prints seen (also from another session: the marker is per install); a version bump (watcher-2) shows again; with watcher off it prints off and makes no marker; `notice text` prints the fixed text, {{plugin}} filled, at most 200 characters, no placeholder left; status drops its notice line once the marker exists; a bad id is a usage error",
+ "note": "`notice claim --id watcher-1` makes <watch>/notice/watcher-1.shown by exclusive create (0600 in a 0700 folder) and prints show; every later claim prints seen (also from another session: the marker is per install); a version bump (watcher-2) shows again; with watcher off it prints off and makes no marker; `notice text` prints the fixed text, {{plugin}} filled, at most 200 characters, no placeholder left; status drops its notice line once the marker exists; a bad id is a usage error",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

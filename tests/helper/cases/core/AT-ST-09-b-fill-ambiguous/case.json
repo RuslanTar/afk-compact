@@ -3,7 +3,7 @@
    "needs" : [
       "fixture:transcripts/fill-joins/joins.json"
    ],
-   "note" : "C-STORE D5 / MOD-SPEC §5.9 join (c) (CORE-09) on the WP-fix fill-joins fixture, case ambiguous: an unmarked subagent summary whose body is in neither agent summary row; two agents have unjoined boundary rows inside the copy's window [e - TOL_S, e + SUB_WINDOW_S] (A2's 1.0 s before, A3's 34 s after): no fill, one copy_attribution_ambiguous with both candidates, also after a second Stop. Skipped until the WP-fix fixtures are merged.",
+   "note" : "Fill join (c) on the fill-joins fixture, case ambiguous: an unmarked subagent summary whose body is in neither agent summary row; two agents have unjoined boundary rows inside the copy's window [e - TOL_S, e + SUB_WINDOW_S] (A2's 1.0 s before, A3's 34 s after): no fill, one copy_attribution_ambiguous with both candidates, also after a second Stop. Skipped until the fixtures are merged.",
    "sid" : "5e55a001-0c0f-4f1e-9a00-00000000a001",
    "steps" : [
       {

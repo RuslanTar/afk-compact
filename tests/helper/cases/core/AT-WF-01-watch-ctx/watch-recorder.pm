@@ -1,6 +1,6 @@
 package watch;
 # AT-WF-01 test double for plugin/helper/lib/watch.pm: records the ctx core passes to the
-# watcher seams (PKG-RUNTIME D.1) as one row per call in <sid_dir>/wf-ctx.jsonl.
+# watcher seams as one row per call in <sid_dir>/wf-ctx.jsonl.
 use strict;
 use warnings;
 

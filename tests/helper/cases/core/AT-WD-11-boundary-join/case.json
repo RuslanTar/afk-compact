@@ -1,7 +1,7 @@
 {
  "id": "AT-WD-11 (compaction_boundary, S-21-mod)",
  "needs": ["fixture:sequences/S-21-mod/input.json"],
- "note": "PKG-RUNTIME E.2 / MOD-SPEC §5.4 (CORE-11, AT-WD-11 writer half) on the WP-fix sequence S-21-mod: after the Stop's reconcile there is exactly one compaction_boundary row for the nonce with the boundary's sizes, duration and version; a second reconcile adds none; rollup::rows joins it by nonce (non-null sizes, join_conflict 0); the copy keeps mode 0400, its bytes and its frontmatter. Skipped until the WP-fix fixtures are merged.",
+ "note": "AT-WD-11 writer half, on the sequence S-21-mod: after the Stop's reconcile there is exactly one compaction_boundary row for the nonce with the boundary's sizes, duration and version; a second reconcile adds none; rollup::rows joins it by nonce (non-null sizes, join_conflict 0); the copy keeps mode 0400, its bytes and its frontmatter. Skipped until the fixtures are merged.",
  "tz": "Etc/GMT-3",
  "sequence": "S-21-mod"
 }

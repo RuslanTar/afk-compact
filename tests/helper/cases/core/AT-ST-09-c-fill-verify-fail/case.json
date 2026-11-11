@@ -3,7 +3,7 @@
  "needs": [
   "fixture:transcripts/fill-joins/joins.json"
  ],
- "note": "C-STORE D5 / MOD-SPEC §5.9 step 5 (CORE-09) on the WP-fix fill-joins fixture, case verify-fail: the time-join with the test-mode fault STORE_TEST_FILL_CORRUPT=1 (honoured only under STORE_TEST_MODE), which flips the last body byte of the new -a<agent8> file after its exclusive create and before the re-read. The new file is unlinked, the old sub-unknown copy stays (0400, no renamed_from), one copy_attribution_failed {why: verify}, no copy_attributed; the next Stop (no fault) does not retry and leaves the old file byte-identical. Skipped until the WP-fix fixtures are merged.",
+ "note": "Fill step 5 on the fill-joins fixture, case verify-fail: the time-join with the test-mode fault STORE_TEST_FILL_CORRUPT=1 (honoured only under STORE_TEST_MODE), which flips the last body byte of the new -a<agent8> file after its exclusive create and before the re-read. The new file is unlinked, the old sub-unknown copy stays (0400, no renamed_from), one copy_attribution_failed {why: verify}, no copy_attributed; the next Stop (no fault) does not retry and leaves the old file byte-identical. Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "tz": "Etc/GMT-3",
  "steps": [

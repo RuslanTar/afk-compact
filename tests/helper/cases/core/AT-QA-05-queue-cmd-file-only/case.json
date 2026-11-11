@@ -1,6 +1,6 @@
 {
  "id": "AT-QA-05 (helper part)",
- "note": "Q-ADAPTER QA-B1 / MOD-SPEC §1.2 (CORE-02): queue_cmd is file-only (%FILE_ONLY, safe value empty). A --queue-cmd flag and a CLAUDE_PLUGIN_OPTION_QUEUE_CMD env value are ignored with the note 'queue_cmd: settings file only' and one config_note row: no queue_cmd process starts. The value in the settings file is used. Under a foreign CLAUDE_CONFIG_DIR the queue stays off (safe value) even when that folder's file names a queue tool",
+ "note": "queue_cmd is file-only (%FILE_ONLY, safe value empty). A --queue-cmd flag and a CLAUDE_PLUGIN_OPTION_QUEUE_CMD env value are ignored with the note 'queue_cmd: settings file only' and one config_note row: no queue_cmd process starts. The value in the settings file is used. Under a foreign CLAUDE_CONFIG_DIR the queue stays off (safe value) even when that folder's file names a queue tool",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,6 +1,6 @@
 {
  "id": "AT-E-08",
- "note": "MOD-SPEC §10 AT-E-08: bucket evidence above evidence_quota_mb (tests/fixtures/tempfiles/at-e-08-quota.json: 2 MB under <bucket>/evidence/, quota 1 MB): WARN quota line and warn_quota row; the new file is still copied",
+ "note": "AT-E-08: bucket evidence above evidence_quota_mb (tests/fixtures/tempfiles/at-e-08-quota.json: 2 MB under <bucket>/evidence/, quota 1 MB): WARN quota line and warn_quota row; the new file is still copied",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {

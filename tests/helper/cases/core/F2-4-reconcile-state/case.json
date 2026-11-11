@@ -1,6 +1,6 @@
 {
  "id": "F2-4-reconcile-state",
- "note": "ROOT-RULINGS F2-4 (SAFE-02, reconcile side): reconcile keeps its incremental state in <watch>/<sid>/reconcile.json (0600, atomic write): byte offsets of the main transcript and the classic stream, and what it read from them. A later Stop reads only the bytes past the kept offsets (a row inserted before the offset of a file rewritten in place is not read again, so it raises no order_anomaly, which a full re-read would), and a row appended after it is read: the boundary row of a later unproven PostCompact proves it main",
+ "note": "F2-4 (reconcile side): reconcile keeps its incremental state in <watch>/<sid>/reconcile.json (0600, atomic write): byte offsets of the main transcript and the classic stream, and what it read from them. A later Stop reads only the bytes past the kept offsets (a row inserted before the offset of a file rewritten in place is not read again, so it raises no order_anomaly, which a full re-read would), and a row appended after it is read: the boundary row of a later unproven PostCompact proves it main",
  "tz": "Etc/GMT-3",
  "steps": [
   {

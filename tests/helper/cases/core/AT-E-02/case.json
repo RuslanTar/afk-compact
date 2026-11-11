@@ -1,6 +1,6 @@
 {
  "id": "AT-E-02",
- "note": "MOD-SPEC §10 AT-E-02: paths recorded for 1 KB, 12 MB and 2 x 30 MB temp files (tests/fixtures/tempfiles/at-e-02-sizes.json): the 1 KB file is copied, every file over 10 MB is ref-only with an excerpt file; MANIFEST rows carry bytes, sha256 and mtime. Second step: six 9 MB files (each under the 10 MB file cap, 54 MB together) in another session: the sixth is never copied (withheld, rules over-total, by the 50 MB evidence_total_max_mb default since SK-5, or referenced-budget when the 8 s sweep budget runs out first on a slow host), so a compaction never copies more than 50 MB. Third step (MOD-SPEC §5.3 step 5, the 8 s sweep budget): with the budget set to 300 ms by STORE_TEST_SWEEP_BUDGET_MS, a dense 10 MB file whose secret scan and redact take seconds starts inside the budget and is stopped inside the file once the deadline passes: it and the file after it are referenced-budget, no copy of it is written, and the sweep_evidence row's ms stays within the budget plus 2 s (before the stop inside a file, that file was redacted and copied whatever the deadline)",
+ "note": "AT-E-02: paths recorded for 1 KB, 12 MB and 2 x 30 MB temp files (tests/fixtures/tempfiles/at-e-02-sizes.json): the 1 KB file is copied, every file over 10 MB is ref-only with an excerpt file; MANIFEST rows carry bytes, sha256 and mtime. Second step: six 9 MB files (each under the 10 MB file cap, 54 MB together) in another session: the sixth is never copied (withheld, rules over-total, by the 50 MB evidence_total_max_mb default since SK-5, or referenced-budget when the 8 s sweep budget runs out first on a slow host), so a compaction never copies more than 50 MB. Third step (the 8 s sweep budget): with the budget set to 300 ms by STORE_TEST_SWEEP_BUDGET_MS, a dense 10 MB file whose secret scan and redact take seconds starts inside the budget and is stopped inside the file once the deadline passes: it and the file after it are referenced-budget, no copy of it is written, and the sweep_evidence row's ms stays within the budget plus 2 s (before the stop inside a file, that file was redacted and copied whatever the deadline)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -149,7 +149,7 @@
    }
   },
   {
-   "name": "sweep budget: a file the deadline passes in stops there (MOD-SPEC §5.3 step 5)",
+   "name": "sweep budget: a file the deadline passes in stops there",
    "setup": [
     {
      "bigfile": "$TMP/tmpdir/late/dense.bin",

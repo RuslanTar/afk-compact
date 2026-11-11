@@ -3,7 +3,7 @@
    "needs" : [
       "fixture:transcripts/fill-joins/joins.json"
    ],
-   "note" : "C-STORE D5 / MOD-SPEC Â§5.9 join (b) (CORE-09) on the WP-fix fill-joins fixture, case sha-join: an unmarked subagent summary (no dispatch) is deferred, P3 at the Stop proves sub, the copy is saved sub-unknown (a time match names no agent), and the fill joins it by body sha to agent A2 (the engine trailers cut from the summary row): -aa5c0ffee, attributed_by reconcile-b. Skipped until the WP-fix fixtures are merged.",
+   "note" : "Fill join (b) on the fill-joins fixture, case sha-join: an unmarked subagent summary (no dispatch) is deferred, P3 at the Stop proves sub, the copy is saved sub-unknown (a time match names no agent), and the fill joins it by body sha to agent A2 (the engine trailers cut from the summary row): -aa5c0ffee, attributed_by reconcile-b. Skipped until the fixtures are merged.",
    "sid" : "5e55a001-0c0f-4f1e-9a00-00000000a001",
    "steps" : [
       {

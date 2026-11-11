@@ -1,6 +1,6 @@
 {
  "id": "AT-C-07",
- "note": "a full compaction whose summary, instructions and user note contain the canary string: no log row, record or index under <watch> holds it. ESCALATED: MOD-SPEC 5.3 step 1 stashes compact_summary under <watch>/<sid>/pending/, which AT-C-07's 'rg <watch> finds nothing' contradicts; the stash files are excluded here",
+ "note": "a full compaction whose summary, instructions and user note contain the canary string: no log row, record or index under <watch> holds it. ESCALATED: the PostCompact step stashes compact_summary under <watch>/<sid>/pending/, which AT-C-07's 'rg <watch> finds nothing' contradicts; the stash files are excluded here",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

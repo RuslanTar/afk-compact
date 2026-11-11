@@ -1,6 +1,6 @@
 {
- "id": "AT-ST-03 (RRP-05 final mode)",
- "note": "C-STORE D3 / MOD-SPEC §5.4 Final mode (CORE-07), the RR-deferred-end case: an unproven PostCompact stash (no dispatch, no marker), then SessionEnd 1 s later. (b) No boundary row: saved unattributed at once (the SETTLE_S wait waived), copy_late, the stash and the stash marker gone, within 2 s. (c) A transcript not read to its end within the read limit: the stash and the marker stay for the next run. (a), a boundary row present -> the slot by P3, is RR-S21-02-session-end.",
+ "id": "AT-ST-03 (final mode)",
+ "note": "Final mode, the RR-deferred-end case: an unproven PostCompact stash (no dispatch, no marker), then SessionEnd 1 s later. (b) No boundary row: saved unattributed at once (the SETTLE_S wait waived), copy_late, the stash and the stash marker gone, within 2 s. (c) A transcript not read to its end within the read limit: the stash and the marker stay for the next run. (a), a boundary row present -> the slot by P3, is RR-S21-02-session-end.",
  "tz": "Etc/GMT-3",
  "steps": [
   {"name": "(b) PostCompact: unproven, deferred",

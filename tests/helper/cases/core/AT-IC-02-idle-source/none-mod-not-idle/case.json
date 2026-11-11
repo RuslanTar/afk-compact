@@ -3,7 +3,7 @@
  "needs": [
   "fixture:transcripts/idle-cases.json"
  ],
- "note": "IC-1 D1 / MOD-SPEC §2.5 idle rule (CORE-14), WP-fix transcripts/idle-cases.json case none-mod-not-idle: a mod-hook main auto dispatch (idle from the record), PostCompact writes the rollup row with idle unknown; the next Stop reads the first native idle row after the main boundary (prefix only) and appends idle, idle_source, idle_gap_s on the compaction_boundary row; rollup::rows joins them; a disagreement gives one idle_mismatch {nonce}; no notice text in <watch>. A second Stop adds nothing. Skipped until the WP-fix fixtures are merged.",
+ "note": "IC-1 D1 idle rule, transcripts/idle-cases.json case none-mod-not-idle: a mod-hook main auto dispatch (idle from the record), PostCompact writes the rollup row with idle unknown; the next Stop reads the first native idle row after the main boundary (prefix only) and appends idle, idle_source, idle_gap_s on the compaction_boundary row; rollup::rows joins them; a disagreement gives one idle_mismatch {nonce}; no notice text in <watch>. A second Stop adds nothing. Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,7 +1,7 @@
 {
  "id": "AT-E-06",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
- "note": "MOD-SPEC §10 AT-E-06 (S-10, §5.3 step 4): PostCompact with a summary that holds a JWT (payloads/PostCompact/jwt-summary.json) and its mod-hook main dispatch: the copy is written redacted, frontmatter redacted: 1 (jwt) with the original's sha256, and the token is in no copy and no row; the raw stash is dropped once the copy is saved (ROOT-RULINGS F2-7, PRIV-03), so the token is in no file under the handoff root",
+ "note": "AT-E-06: PostCompact with a summary that holds a JWT (payloads/PostCompact/jwt-summary.json) and its mod-hook main dispatch: the copy is written redacted, frontmatter redacted: 1 (jwt) with the original's sha256, and the token is in no copy and no row; the raw stash is dropped once the copy is saved (F2-7), so the token is in no file under the handoff root",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

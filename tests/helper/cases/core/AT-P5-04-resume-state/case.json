@@ -1,6 +1,6 @@
 {
  "id": "AT-P5-04",
- "note": "P5-FOLD A2 / MOD-SPEC §2.5 resume row (CORE-05): rollup::resume_state, shared by PostCompact and reconcile. The claim file decides first, whatever the actor: a classic subagent compaction whose SessionStart(compact) claimed the block reads delivered:sessionstart with actor sub-unknown; a mod-path subagent with no claim reads none-subagent; main with no claim at PostCompact reads pending (the mod's row settles it); a classic subagent with no claim reads undelivered; a claim holding dropped:session-end (XR-26) is taken as it is",
+ "note": "rollup::resume_state, shared by PostCompact and reconcile. The claim file decides first, whatever the actor: a classic subagent compaction whose SessionStart(compact) claimed the block reads delivered:sessionstart with actor sub-unknown; a mod-path subagent with no claim reads none-subagent; main with no claim at PostCompact reads pending (the mod's row settles it); a classic subagent with no claim reads undelivered; a claim holding dropped:session-end is taken as it is",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

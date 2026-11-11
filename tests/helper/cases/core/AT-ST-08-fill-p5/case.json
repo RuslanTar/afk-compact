@@ -3,7 +3,7 @@
    "needs" : [
       "fixture:transcripts/P5-replay/replay.json"
    ],
-   "note" : "C-STORE D5 / MOD-SPEC Â§5.9 (CORE-09) on the WP-fix P5 replay (lab e1-131fc3 under the seat): six PostCompacts with a classic dispatch and an s=sub marker save six sub-unknown copies; the next Stop reads the agent transcript's boundary and summary rows (nonce and sha only) and fills all six by nonce: -aa494e1b0_c1..6-<id6>.md, actor = the agent id, renamed_from, attributed_by reconcile-a, mode 0400, six copy_attributed rows with the boundary sizes, the old names gone, nothing else added; a second Stop is a no-op. Skipped until the WP-fix fixtures are merged (tests/helper/run.pl --fixtures DIR checks it before).",
+   "note" : "On the P5 replay: six PostCompacts with a classic dispatch and an s=sub marker save six sub-unknown copies; the next Stop reads the agent transcript's boundary and summary rows (nonce and sha only) and fills all six by nonce: -aa494e1b0_c1..6-<id6>.md, actor = the agent id, renamed_from, attributed_by reconcile-a, mode 0400, six copy_attributed rows with the boundary sizes, the old names gone, nothing else added; a second Stop is a no-op. Skipped until the fixtures are merged (tests/helper/run.pl --fixtures DIR checks it before).",
    "sid" : "5e55a001-0c0f-4f1e-9a00-00000000a001",
    "steps" : [
       {

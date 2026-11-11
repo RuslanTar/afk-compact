@@ -1,6 +1,6 @@
 {
  "id": "AT-P5-05",
- "note": "P5-FOLD A4 text encoding: every output is valid UTF-8 with each character encoded once (no c3 82 c2 b7 'Â·', no c3 a2 c2 80 c2 a6 'â€¦') and a non-ASCII path round-trips. Inputs: a repo at $TMP/Док/h on branch fix-ü (git line with ·), an in-flight task (·), an evidence row (→), a STATE.md phase line with — and ’ in the session's GSD line (cut with …; owner 2026-10-26: only for a session whose own transcript shows GSD work, here a typed /gsd-progress), a handoff root given by env at $TMP/Док/root. Outputs: (1) checkpoint --measured block, (2) SessionStart(compact) additionalContext, (3) classic PreCompact fallback stdout with the [chain] path, (4) status",
+ "note": "P5 text encoding: every output is valid UTF-8 with each character encoded once (no c3 82 c2 b7 'Â·', no c3 a2 c2 80 c2 a6 'â€¦') and a non-ASCII path round-trips. Inputs: a repo at $TMP/Док/h on branch fix-ü (git line with ·), an in-flight task (·), an evidence row (→), a STATE.md phase line with — and ’ in the session's GSD line (cut with …; only for a session whose own transcript shows GSD work, here a typed /gsd-progress), a handoff root given by env at $TMP/Док/root. Outputs: (1) checkpoint --measured block, (2) SessionStart(compact) additionalContext, (3) classic PreCompact fallback stdout with the [chain] path, (4) status",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

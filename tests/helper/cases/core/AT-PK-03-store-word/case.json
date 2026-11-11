@@ -1,6 +1,6 @@
 {
  "id": "AT-PK-03-store-word",
- "note": "PKG-RUNTIME A.1, AT-PK-03 (helper half; the mod's parity test compares storeWord with these words): ctx::store_cmd() is the plugin's own launcher, <root>/scripts/<name>-store, by its real path as one shell word. Double quotes by default (a root with a space or a single quote), single quotes when the root holds a double quote, $, a backquote or a backslash, and no word at all when it holds both quote kinds: the status smoke line then names store_path_unquotable instead of a command. The classic SessionStart(compact) resume block fills @store@ with the same word (C-5, as the mod's storeRuntime does) and drops that line when there is no word. Each step runs a copy of the staged plugin under such a root",
+ "note": "AT-PK-03 (helper half; the mod's parity test compares storeWord with these words): ctx::store_cmd() is the plugin's own launcher, <root>/scripts/<name>-store, by its real path as one shell word. Double quotes by default (a root with a space or a single quote), single quotes when the root holds a double quote, $, a backquote or a backslash, and no word at all when it holds both quote kinds: the status smoke line then names store_path_unquotable instead of a command. The classic SessionStart(compact) resume block fills @store@ with the same word (C-5, as the mod's storeRuntime does) and drops that line when there is no word. Each step runs a copy of the staged plugin under such a root",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

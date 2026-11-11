@@ -3,7 +3,7 @@
   "needs": [
     "fixture:summaries/unclosed/expected.tsv"
   ],
-  "note": "0.1.3 (root decision on the small-fixes review): a main or sub summary with no line in the sentinel grammar that holds every section the spec's unclosed_required lists for its scope, in order, with text under the last (or after a colon on its heading line), reads ok-unclosed, an ok verdict; cut inside the body, an empty last section or out of order stays truncated. The helper detector gives summaries/unclosed/expected.tsv (the TS detector checks the same table in U). The PostCompact copy and its verdict row carry ok-unclosed; status counts it ok and shows the word; a summary cut inside its body is still truncated and counted not ok",
+  "note": "0.1.3 (small-fixes review): a main or sub summary with no line in the sentinel grammar that holds every section the spec's unclosed_required lists for its scope, in order, with text under the last (or after a colon on its heading line), reads ok-unclosed, an ok verdict; cut inside the body, an empty last section or out of order stays truncated. The helper detector gives summaries/unclosed/expected.tsv (the TS detector checks the same table in U). The PostCompact copy and its verdict row carry ok-unclosed; status counts it ok and shows the word; a summary cut inside its body is still truncated and counted not ok",
   "tz": "Etc/GMT-3",
   "steps": [
     {

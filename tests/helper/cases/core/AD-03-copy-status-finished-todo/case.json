@@ -1,6 +1,6 @@
 {
  "id": "AD-03-copy-status-finished-todo",
- "note": "Away digest phase 1 (owner 2026-10-27 12:5x; build item 6): the copy's frontmatter status follows the summary's Status word: finished with a step still marked todo is in-progress, as the plugin's lane check reads it (review of the first build, L2; otherwise as AT-M3-01)",
+ "note": "Away digest phase 1: the copy's frontmatter status follows the summary's Status word: finished with a step still marked todo is in-progress, as the plugin's lane check reads it (review of the first build, L2; otherwise as AT-M3-01)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

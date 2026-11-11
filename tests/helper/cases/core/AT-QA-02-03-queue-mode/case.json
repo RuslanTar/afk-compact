@@ -1,6 +1,6 @@
 {
  "id": "AT-QA-02, AT-QA-03 (core part: queue mode, strict list, queue_contract)",
- "note": "Q-ADAPTER QA-1, QA-2 / MOD-SPEC §10.3, §10.4 (CORE-18): queue::mode() is off when queue_cmd is empty, degraded (not-executable) for a path that is not an executable file (no exec), on otherwise, and degraded (<why>) after this session's list reply broke the contract. A list reply must carry schema queue-stub/v1: an untagged reply gives degraded (untagged), no Queued: line, no lane, and one queue_contract {why: untagged} row per session; queue-stub/v2 gives degraded (schema); a tagged v1 reply gives the Queued: line and caches its commands (adopt:must-exist). The same parser serves checkpoint, measure --compact and PostCompact; /status says the mode and makes no queue call",
+ "note": "QA-1, QA-2: queue::mode() is off when queue_cmd is empty, degraded (not-executable) for a path that is not an executable file (no exec), on otherwise, and degraded (<why>) after this session's list reply broke the contract. A list reply must carry schema queue-stub/v1: an untagged reply gives degraded (untagged), no Queued: line, no lane, and one queue_contract {why: untagged} row per session; queue-stub/v2 gives degraded (schema); a tagged v1 reply gives the Queued: line and caches its commands (adopt:must-exist). The same parser serves checkpoint, measure --compact and PostCompact; /status says the mode and makes no queue call",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -36,7 +36,7 @@
    "env": {"QUEUE_STUB_LOG": "$TMP/status-queue.log"},
    "expect": {"exit": 0, "stdout_has": ["^queue: degraded \\(untagged\\)$"], "trace_absent": ["queue_cmd"],
               "files": [{"path": "$TMP/status-queue.log", "count": 0}]}},
-  {"name": "skills-to-core §5: queue::mode(sid, cmd) reads that session's record, no queue call",
+  {"name": "queue::mode(sid, cmd) reads that session's record, no queue call",
    "lib": "queue_mode", "args": {"watch": "$WATCH", "sid": "$SID", "cmd": "$FIX/bin/queue-stub", "mode": "degraded", "why": "untagged", "text": "degraded (untagged)"}},
   {"name": "another session with no record: on",
    "lib": "queue_mode", "args": {"watch": "$WATCH", "sid": "5e55a0ff-0c0f-4f1e-9a00-00000000a0ff", "cmd": "$FIX/bin/queue-stub", "mode": "on", "why": null, "text": "on"}},

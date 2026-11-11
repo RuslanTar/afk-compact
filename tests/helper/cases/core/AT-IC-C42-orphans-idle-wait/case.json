@@ -1,6 +1,6 @@
 {
  "id": "AT-IC-C42 (orphans: the cross-session finish keeps a waiting idle block)",
- "note": "MOD-SPEC §3.4 idle exception (P4 fix, 2026-10-28) with §5.8 (RRP-05): session A compacted idle (dispatch idle, resume_pref prompt.context) and its block waits on disk, unclaimed, for A's next process (resume-persist); A also has a non-idle main compaction with no claim, and an unproven PostCompact stash, and its process ended (supervisor stop). Session B's SessionStart(startup) finishes A in final mode under A's reconcile.lock: A's non-idle block is resume_undelivered (finished_by B), the idle one is not, and its record stays pending for a resume of A",
+ "note": "Idle exception (P4 fix) with the orphan sweep: session A compacted idle (dispatch idle, resume_pref prompt.context) and its block waits on disk, unclaimed, for A's next process (resume-persist); A also has a non-idle main compaction with no claim, and an unproven PostCompact stash, and its process ended (supervisor stop). Session B's SessionStart(startup) finishes A in final mode under A's reconcile.lock: A's non-idle block is resume_undelivered (finished_by B), the idle one is not, and its record stays pending for a resume of A",
  "tz": "Etc/GMT-3",
  "vars": {"A": "a0a0a0a0-1111-4222-8333-c42c42c42c42"},
  "steps": [

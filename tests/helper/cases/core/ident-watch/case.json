@@ -1,6 +1,6 @@
 {
  "id": "ident-watch",
- "note": "BUILD-PLAN §3.1 ident row (+ watch), MOD-SPEC §1.2 unsafe roots: ident gives the mod the effective log folder, so the mod never writes under a refused root: log_dir (default <root>/.watch) when safe; the default root's .watch when log_dir or handoff_root is inside a git work tree or a .planning folder; null when that default is unsafe too",
+ "note": "ident (+ watch), unsafe roots: ident gives the mod the effective log folder, so the mod never writes under a refused root: log_dir (default <root>/.watch) when safe; the default root's .watch when log_dir or handoff_root is inside a git work tree or a .planning folder; null when that default is unsafe too",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {

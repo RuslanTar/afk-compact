@@ -1,6 +1,6 @@
 {
  "id": "R-1-sha-fallback",
- "note": "ROOT-RULINGS R-1: the embedded SHA-256 equals Digest::SHA and the FIPS vectors",
+ "note": "R-1: the embedded SHA-256 equals Digest::SHA and the FIPS vectors",
  "steps": [
   {
    "lib": "sha_vectors",

@@ -1,6 +1,6 @@
 {
  "id": "AT-WF-02",
- "note": "PKG-RUNTIME D.2 (CORE-06): cc_version source order mod record > exec hint > transcript tail > mirror, named by cc_version_src in the dispatch record. With the mirror at 2.1.306, CLAUDE_CODE_EXECPATH=…/2.1.307 and no record: 2.1.307 / exec; without the hint: the transcript's 2.1.305; with neither: the mirror's 2.1.306; a mod-hook dispatch record's 2.1.304 wins over all for its compaction's rows. Hook-written rows carry the value",
+ "note": "cc_version source order mod record > exec hint > transcript tail > mirror, named by cc_version_src in the dispatch record. With the mirror at 2.1.306, CLAUDE_CODE_EXECPATH=…/2.1.307 and no record: 2.1.307 / exec; without the hint: the transcript's 2.1.305; with neither: the mirror's 2.1.306; a mod-hook dispatch record's 2.1.304 wins over all for its compaction's rows. Hook-written rows carry the value",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

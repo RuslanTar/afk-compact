@@ -1,6 +1,6 @@
 {
  "id": "AT-M3-16",
- "note": "two different unmarked summaries for one sid in the same second, no dispatch (seated, unknown scope): PostCompact stashes both under different h<sha5> ids and defers them (ROOT-RULINGS F2-1: no proof in the hook); the Stop after SETTLE_S, with no boundary row for either, saves two files in compact/unattributed/; a replay of the first prints EXISTS sha-match",
+ "note": "two different unmarked summaries for one sid in the same second, no dispatch (seated, unknown scope): PostCompact stashes both under different h<sha5> ids and defers them; the Stop after SETTLE_S, with no boundary row for either, saves two files in compact/unattributed/; a replay of the first prints EXISTS sha-match",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

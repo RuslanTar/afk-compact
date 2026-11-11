@@ -1,6 +1,6 @@
 {
  "id": "AT-P-11",
- "note": "RUNTIME AT-P-11 / ROOT-RULINGS R-5 / PKG-RUNTIME B.2 (CORE-03): every use or require in plugin/helper is on the perl-base floor, a helper library, or (Digest::SHA, Time::HiRes) inside an eval with a fallback (L1); no implicit load the floor image lacks: %+ %- $+{ $-{, \\N{NAME}, \\p{}, use open, Encode:: (L2); no version above the floor (use v5.N, post-5.28 features, builtin::) (L3). Each hit carries its reason and its fix. Step 1 lints a fixture tree with one hit per rule; step 2 the real tree, where lib/watch/shape.pm still uses %+ until WCH-03 (PKG-RUNTIME B.5) changes it to numbered captures",
+ "note": "AT-P-11: every use or require in plugin/helper is on the perl-base floor, a helper library, or (Digest::SHA, Time::HiRes) inside an eval with a fallback (L1); no implicit load the floor image lacks: %+ %- $+{ $-{, \\N{NAME}, \\p{}, use open, Encode:: (L2); no version above the floor (use v5.N, post-5.28 features, builtin::) (L3). Each hit carries its reason and its fix. Step 1 lints a fixture tree with one hit per rule; step 2 the real tree, where lib/watch/shape.pm still uses %+ until a later change moves it to numbered captures",
  "steps": [
   {
    "name": "fixture: one hit per rule, each with reason and fix",
@@ -26,7 +26,7 @@
   {
    "name": "plugin/helper",
    "lib": "floor_lint",
-   "args": {"known": {"lib/watch/shape.pm": "WCH-03 changes %+ to numbered captures, PKG-RUNTIME B.5"}}
+   "args": {"known": {"lib/watch/shape.pm": "a later change moves %+ to numbered captures"}}
   }
  ]
 }

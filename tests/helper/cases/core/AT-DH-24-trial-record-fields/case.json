@@ -1,6 +1,6 @@
 {
  "id": "AT-DH-24-trial-record-fields",
- "note": "TRIAL-DUAL-HANDOFF 4.6/4.7 (P-DH-SAVE, review fixes): the mod's local times east of UTC (+03:00, with or without milliseconds) and Z, and a served model with Claude Code's [1m] suffix are kept in the record; a cloud ARN as model is dropped (MG-4, the export's model class); a repo name that is not one safe path part (a space) is filed under its bucket name (slug + 8 hex of its sha256) instead of a usage exit; the skip-list matches the name as found; a token-shaped kebab slug falls back to handoff; the mod's minimal `failed` call after a failed save writes one save-failed row with the arm statuses and no reply",
+ "note": "Trial record fields (review fixes): the mod's local times east of UTC (+03:00, with or without milliseconds) and Z, and a served model with Claude Code's [1m] suffix are kept in the record; a cloud ARN as model is dropped (MG-4, the export's model class); a repo name that is not one safe path part (a space) is filed under its bucket name (slug + 8 hex of its sha256) instead of a usage exit; the skip-list matches the name as found; a token-shaped kebab slug falls back to handoff; the mod's minimal `failed` call after a failed save writes one save-failed row with the arm statuses and no reply",
  "now": "2026-10-27T10:00:00+03:00",
  "tz": "Etc/GMT-3",
  "sid": "5e55a0d4-0c0f-4f1e-9a00-0000000000d4",

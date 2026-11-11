@@ -1,6 +1,6 @@
 {
  "id": "AT-E-05",
- "note": "MOD-SPEC §10 AT-E-05: a 5,000-line tasks/x.output (tests/fixtures/tempfiles/at-e-05-task-output.json) is copied as a redacted head/tail excerpt of at most 80 lines: 40 head lines, the marker line, 39 tail lines",
+ "note": "AT-E-05: a 5,000-line tasks/x.output (tests/fixtures/tempfiles/at-e-05-task-output.json) is copied as a redacted head/tail excerpt of at most 80 lines: 40 head lines, the marker line, 39 tail lines",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

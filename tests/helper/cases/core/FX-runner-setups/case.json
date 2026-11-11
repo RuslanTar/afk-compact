@@ -1,6 +1,6 @@
 {
- "id": "FX-runner-setups (fix-to-core §1, §2)",
- "note": "Runner actions for the WP-fix recipes: fixture_setup runs every step of setups/<id>.json (case dir first, then tests/fixtures/setups/) in order; touch puts a file's mtime at a time on the case clock. assembly_runtime fills {{plugin}} in runtime.json values with the brand (BT-04-H against goldens rendered under the brand)",
+ "id": "FX-runner-setups",
+ "note": "Runner actions for the fixture recipes: fixture_setup runs every step of setups/<id>.json (case dir first, then tests/fixtures/setups/) in order; touch puts a file's mtime at a time on the case clock. assembly_runtime fills {{plugin}} in runtime.json values with the brand (BT-04-H against goldens rendered under the brand)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

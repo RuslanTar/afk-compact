@@ -1,6 +1,6 @@
 {
  "id": "AT-PR-05 (checkpoint consent field)",
- "note": "S-SETTINGS B / MOD-SPEC §9.3 (CORE-15, mod-to-core §6): the checkpoint JSON carries consent {unattended_prod_reads: allow|forbid}, the helper's own reading of the consent key: the settings file's allow (trimmed, case-folded) gives allow; no value, another value, the env or the flag alone give forbid; under a foreign CLAUDE_CONFIG_DIR the safe value forbid. The mod keeps [prod-allow] only when this says allow",
+ "note": "the checkpoint JSON carries consent {unattended_prod_reads: allow|forbid}, the helper's own reading of the consent key: the settings file's allow (trimmed, case-folded) gives allow; no value, another value, the env or the flag alone give forbid; under a foreign CLAUDE_CONFIG_DIR the safe value forbid. The mod keeps [prod-allow] only when this says allow",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

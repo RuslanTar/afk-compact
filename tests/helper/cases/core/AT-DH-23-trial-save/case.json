@@ -1,6 +1,6 @@
 {
  "id": "AT-DH-23-trial-save",
- "note": "TRIAL-DUAL-HANDOFF 4.5/4.6 (P-DH-SAVE): a skip record is content-free; both replies are secret-scanned and redacted before disk (rule ids only in the record), saved 0600 under the trial folder with the slug from the frame line, the native body sha by the engine's rule; nothing under the handoff root; unknown moment fields dropped; a bad slug -> handoff; REUSE of this bucket's old shadow -> reuse, REUSE of any other path -> bad-reuse; a config that is off writes nothing; not the owner's config -> no shadow",
+ "note": "a skip record is content-free; both replies are secret-scanned and redacted before disk (rule ids only in the record), saved 0600 under the trial folder with the slug from the frame line, the native body sha by the engine's rule; nothing under the handoff root; unknown moment fields dropped; a bad slug -> handoff; REUSE of this bucket's old shadow -> reuse, REUSE of any other path -> bad-reuse; a config that is off writes nothing; not the owner's config -> no shadow",
  "now": "2026-10-27T10:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

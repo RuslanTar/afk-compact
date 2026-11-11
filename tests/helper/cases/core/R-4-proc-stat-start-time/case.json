@@ -1,6 +1,6 @@
 {
  "id": "R-4-proc-stat-start-time",
- "note": "ROOT-RULINGS R-4 (Linux start time from /proc/<pid>/stat field 22 + btime): identity::_proc_stat over real stat lines recorded on Linux returns the comm whole (spaces, parentheses, a newline, a tab, fake fields after a `)`, a 15-character cut), the ppid and the start ticks of field 22, not field 23 (vsize), for a sleeping, a 64 MB, a zombie and a pid-1 process",
+ "note": "R-4 (Linux start time from /proc/<pid>/stat field 22 + btime): identity::_proc_stat over real stat lines recorded on Linux returns the comm whole (spaces, parentheses, a newline, a tab, fake fields after a `)`, a 15-character cut), the ppid and the start ticks of field 22, not field 23 (vsize), for a sleeping, a 64 MB, a zombie and a pid-1 process",
  "steps": [
   {
    "lib": "proc_stat_lines",

@@ -1,6 +1,6 @@
 {
  "id": "CORE-20 (copy_attributed when the late slot differs from the rollup actor)",
- "note": "C-STORE incidental 1 (DP-31 (4), CORE-20): PostCompact defers an unmarked summary to the open mod-hook main dispatch (copy_deferred why=mod) and its rollup row names actor main; the after-step never comes, so the Stop after the settle wait saves the stash under the deferred nonce in unattributed/ (its own proof: none). The rollup row is not rewritten; one copy_attributed {actor: unattributed, proof: slot} row names the copy, once. A late save into the slot the rollup row names writes no such row.",
+ "note": "PostCompact defers an unmarked summary to the open mod-hook main dispatch (copy_deferred why=mod) and its rollup row names actor main; the after-step never comes, so the Stop after the settle wait saves the stash under the deferred nonce in unattributed/ (its own proof: none). The rollup row is not rewritten; one copy_attributed {actor: unattributed, proof: slot} row names the copy, once. A late save into the slot the rollup row names writes no such row.",
  "tz": "Etc/GMT-3",
  "steps": [
   {"name": "PostCompact defers to the mod dispatch", "now": "2026-10-21T14:05:00+03:00",

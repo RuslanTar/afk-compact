@@ -1,6 +1,6 @@
 {
  "id": "M1-measure-nonce-evidence",
- "note": "MOD-SPEC §2.6 measure --compact ('evidence map ... from this compaction's checkpoint or sweep'), §3.4 @remeasure@: for a compaction with no checkpoint (a trigger:plugin call of another plugin, or a native one), measure --nonce N lists the evidence of N's own sweep, never another compaction's newer checkpoint",
+ "note": "measure --compact (an evidence map from this compaction's checkpoint or sweep) and @remeasure@: for a compaction with no checkpoint (a trigger:plugin call of another plugin, or a native one), measure --nonce N lists the evidence of N's own sweep, never another compaction's newer checkpoint",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

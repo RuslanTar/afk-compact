@@ -1,6 +1,6 @@
 {
  "id": "MG-4 (dispatch --model)",
- "note": "SPEC-DELTAS MG-4 (ratify R4 kept with a tested guard, owner xxxxxxxx-18, 2026-10-23): the mod passes the session's model ($.session.model()) as --model=<id>; the record and the dispatch row carry it last; a value that is not a plain model id is left out, never a usage error; no flag, no key",
+ "note": "MG-4 (R4 kept with a tested guard): the mod passes the session's model ($.session.model()) as --model=<id>; the record and the dispatch row carry it last; a value that is not a plain model id is left out, never a usage error; no flag, no key",
  "now": "2026-10-23T10:04:36+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,6 +1,6 @@
 {
  "id": "F2-6-log-stdin",
- "note": "ROOT-RULINGS F2-6 (SAFE-08): `log --stream paths --stdin` appends one row per JSON line in one write (blank lines skipped), so the mod sends one batch per tool call; a line that is not a JSON object (exit 64) or a row over 4 KB (REFUSED: row-too-large) writes nothing of the batch; the single-row --json form still works",
+ "note": "F2-6: `log --stream paths --stdin` appends one row per JSON line in one write (blank lines skipped), so the mod sends one batch per tool call; a line that is not a JSON object (exit 64) or a row over 4 KB (REFUSED: row-too-large) writes nothing of the batch; the single-row --json form still works",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
