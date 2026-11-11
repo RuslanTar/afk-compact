@@ -2419,3 +2419,39 @@ test('AT-KW-61 (0.1.7 item 4, D-80): a fork-miss beside a window in the band (fi
   expect(skips(w)).toEqual([['fork-miss', 'check']])
   expect(selfCompacts(w)).toBe(0)
 })
+
+// ---- D-88: a reading counts until its window resets (the share only grows until then), however
+// old: an idle gap refreshes nothing (a keep-warm fork does not update the reading).
+const DAY = 24 * 60 * MIN
+
+test('D88-06 (D-88): the live scenario: an agent open, seven_day at 99 resetting in 3 days, read 20 min before the second ping: it still counts: stop near-limit (rule cap) with the hand-over, its age logged; the handed-back compaction skips near-limit with it', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = await bandGap($, on, w, [{ kind: 'five_hour', percentUsed: 20 }, { kind: 'seven_day', percentUsed: 99, resetsAt: new Date(w.clock.now() + 3 * DAY).toISOString() } as never], 80)
+  expect(f.at).toEqual([50])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'cap']])
+  expect(w.rowsOf('keep_warm_stop').map(r => [r.windows, (r.usage_age_s as Record<string, number>).seven_day])).toEqual([[['five_hour:20', 'seven_day:99'], 1200]])
+  expect(nearSkips(w)).toEqual([['compact', 'cap']])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('D88-07 (D-88): a reading past its reset counts for nothing: an agent open, five_hour at 99 read 20 min before the ping, resetting at 105 min: the ping waits for the reset (106), then warms', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const at = w.clock.now()
+  const f = await bandGap($, on, w, [{ kind: 'five_hour', percentUsed: 99, resetsAt: new Date(at + 105 * MIN).toISOString() } as never, { kind: 'seven_day', percentUsed: 30 }], 80)
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_wait').map(r => [r.n, r.next_s, r.windows, r.rule])).toEqual([[1, 360, ['five_hour:99', 'seven_day:30'], 'cap']])
+  await until(w, f.t0, 107)
+  expect(f.at).toEqual([50, 106])
+  expect(pings(w)).toEqual([['warm', 1], ['warm', 2]])
+  expect(nearStops(w)).toEqual([])
+})
+
+test('D88-08 (D-80 kept): going above 90 still needs a fresh reading: an agent open, five_hour at 93 (change 2) resetting in 4 h, read 20 min before the ping: no band: stop near-limit (rule stale) with the hand-over; the compaction skips with it', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  const f = await bandGap($, on, w, [{ kind: 'five_hour', percentUsed: 93, resetsAt: new Date(w.clock.now() + 240 * MIN).toISOString() } as never], 80)
+  expect(f.at).toEqual([50])
+  expect(nearStops(w)).toEqual([['near-limit', true, 'stale']])
+  expect(nearSkips(w)).toEqual([['compact', 'stale']])
+  expect(selfCompacts(w)).toBe(0)
+})

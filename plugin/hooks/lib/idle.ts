@@ -698,8 +698,8 @@ function armReading(rec: Due, spend = false): Reading[] {
 /**
  * G12, the idle handoff turn's own near-limit rule (`idle_handoff_near_limit`; never under `run`):
  * a window at the limit share or more (any kind, a gateway's too; `skip-spend`: a gateway's spend
- * limit only, plan windows ignored), by the trust rule of D-83 (limits.ts `judge`): every fresh
- * reading of that kind at the share or more; none reported, the record's reading at arm.
+ * limit only, plan windows ignored), by the trust rule of D-83 (limits.ts `judge`): every counted
+ * window of that kind at the share or more (D-88: a reading counts until its reset); none reported, the record's reading at arm.
  */
 async function turnNearLimit(d: Deps, sid: string, u: Use, rec: Due, now: number): Promise<Verdict | undefined> {
   const mode = d.cfg.idle_handoff_near_limit
@@ -714,7 +714,8 @@ async function turnNearLimit(d: Deps, sid: string, u: Use, rec: Due, now: number
 /**
  * G12 of plugin idle compaction (D-80, D-83, limits.ts): every reading of the windows, the
  * session's own and the shared record's, by the adaptive rule and the trust rule (a window that
- * reset counts for nothing, only fresh readings decide, any one under the limit lets it run);
+ * reset counts for nothing, D-88: every other counts until its reset, a window by its latest
+ * reading, and any window under the limit lets it run);
  * none reported, the record's highest share at arm (90%, rule `arm-90`, only while that reading
  * is fresh). A skip, or the rule for the `idle_compact` row (`band`, `split`, `no-fresh`), or nothing.
  */

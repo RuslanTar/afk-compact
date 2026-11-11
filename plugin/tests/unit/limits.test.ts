@@ -299,3 +299,42 @@ test('AT-LM-16 (0.1.9, review): usage writes are throttled: parallel refreshes s
   await noteUsage(d, NOW + 31 * MIN)
   expect(sent.map(x => x.windows[0]?.pct).slice(6)).toEqual([46.5])
 })
+
+// ---- D-88: within a window (a kind and its reset time) the share only grows until the reset, so a
+// reading counts until its window resets, however old; the readings of a window are one, its latest.
+const DAY = 24 * 60 * MIN
+
+test('D88-01 (D-88): the live scenario: one seven_day reading at 99, 20 min old, resetting in 3 days, nothing refreshed it: it still counts, so keep-warm and plugin idle compaction stop (rule cap); its age is logged', () => {
+  const v = judge([r('seven_day', 99, 'plugin', 20, NOW + 3 * DAY)], C)
+  expect([v.ok, v.rule, v.windows, v.usage]).toEqual([false, 'cap', ['seven_day:99'], { usage_src: ['seven_day:plugin'], usage_age_s: { seven_day: 1200 }, usage_n: { seven_day: 1 } }])
+  expect(verdictOf([w('seven_day', 99, NOW + 3 * DAY)], { ...C, usageAt: NOW - 20 * MIN }).ok).toBe(false)
+  // A reading with no reset time keeps the 10-minute rule.
+  expect(judge([r('seven_day', 99, 'plugin', 20)], C).rule).toBe('no-fresh')
+})
+
+test('D88-02 (D-88): a reading whose reset has passed counts for nothing, however recent: a peer at 40 read a minute ago in a window that reset leaves the own 99 (20 min old, resets in 3 days) alone, and with nothing else counted the action runs', () => {
+  const R = NOW + 3 * DAY
+  expect(judge([r('seven_day', 99, 'plugin', 20, R), r('seven_day', 40, 'peer', 1, NOW - MIN)], C).rule).toBe('cap')
+  expect(judge([r('seven_day', 99, 'plugin', 20, NOW - 1)], C)).toMatchObject({ ok: true, rule: '90', usage: { usage_n: {} } })
+})
+
+test('D88-03 (D-88, D-86): two windows of one kind (99 resetting in 3 days, 21 resetting in 5, another account behind a proxy), both read 20-30 min before: they differ, so the action runs (split, the window with room named, 2 windows)', () => {
+  const v = judge([r('seven_day', 99, 'plugin', 20, NOW + 3 * DAY), r('seven_day', 21, 'peer', 30, NOW + 5 * DAY)], { ...C, job: false })
+  expect([v.ok, v.rule, v.windows, v.usage.usage_n, v.usage.usage_anomaly]).toEqual([true, 'split', ['seven_day:21'], { seven_day: 2 }, ['seven_day:plugin', 'seven_day:peer']])
+})
+
+test('D88-04 (D-88): one window\'s readings are one: its latest decides (an older 40, another session\'s 5 min ago, and the own 99 a minute ago: stop; the other way round: run); resets within a minute are one window, two minutes apart two', () => {
+  const R = NOW + 3 * DAY
+  const v = judge([r('seven_day', 40, 'peer', 5, R), r('seven_day', 99, 'plugin', 1, R + 30000)], { ...C, job: false })
+  expect([v.ok, v.rule, v.windows, v.usage.usage_n]).toEqual([false, 'cap', ['seven_day:99'], { seven_day: 1 }])
+  expect(judge([r('seven_day', 99, 'plugin', 5, R), r('seven_day', 40, 'peer', 1, R)], C)).toMatchObject({ ok: true, rule: '90', windows: ['seven_day:40'] })
+  expect(judge([r('seven_day', 40, 'peer', 5, R), r('seven_day', 99, 'plugin', 1, R + 2 * MIN)], C)).toMatchObject({ ok: true, rule: 'split' })
+  // The keep-warm wait: every window that stops resets by the latest of them.
+  expect(judge([r('five_hour', 99, 'plugin', 20, NOW + 30 * MIN), r('five_hour', 97, 'peer', 2, NOW + 90 * MIN)], C).reset).toBe(NOW + 90 * MIN)
+})
+
+test('D88-05 (D-80 kept): going above 90 still needs a fresh reading: a job open and a measured change that fits, at 92 read 20 min before (resets in 3 days): stop (rule stale); read 5 min before: the band', () => {
+  const R = NOW + 3 * DAY
+  expect(judge([r('seven_day', 92, 'plugin', 20, R)], C)).toMatchObject({ ok: false, band: false, rule: 'stale' })
+  expect(judge([r('seven_day', 92, 'plugin', 5, R)], C)).toMatchObject({ ok: true, band: true, rule: 'band', reset: R })
+})
