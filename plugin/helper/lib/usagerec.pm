@@ -10,10 +10,15 @@ package usagerec;
 # sends a status line (cmd/cache.pl --note-usage). No account id, no secret, no content. Claude Code
 # fills both from one in-process object (the last API response's headers), so the two sources of
 # one session are one reading at two times; only another session's reading is independent.
+# A status line gets that reading without the time Claude Code took it and shows it again every
+# few seconds, so a `statusline` entry's `at` is when the status line first showed that share and
+# reset: an unchanged one keeps it (an idle session's 50-minute-old reading never reads as fresh)
+# and only moves `seen`, the last time the status line showed it.
 # Writers read the file, merge their entries (one per sid8, src and kind; the later `at` wins),
-# drop those read more than $KEEP_S ago, keep the newest $MAX_ENTRIES and rename a temp file over
-# it (cachestate::_put: never inside a git work tree or a .planning folder). Two writers at once:
-# the last one wins, and the lost entry comes back at that session's next write.
+# drop those not read or seen for $KEEP_S, keep the $MAX_ENTRIES last seen and rename a temp file
+# over it (cachestate::_put: never inside a git work tree or a .planning folder, so with the state
+# folder in one there is no record). Two writers at once: the last one wins, and the lost entry
+# comes back at that session's next write.
 use strict;
 use warnings;
 use utf8;
@@ -21,7 +26,7 @@ use utf8;
 our $KEEP_S = 3600;
 our $MAX_ENTRIES = 64;
 our $MAX_BYTES = 65536;
-# A statusline entry with the same share and reset as the one kept is written again only this
+# A statusline entry with the same share and reset as the one kept moves its `seen` only this
 # much later (a status line runs every few seconds).
 our $SAME_S = 60;
 our %SRC = map { $_ => 1 } qw(plugin statusline);
@@ -52,8 +57,13 @@ sub _entry {
     my $at = _num($e->{at});
     return undef unless defined $pct && $pct >= 0 && $pct <= 1000 && defined $at && $at > 0;
     my $r = _num($e->{resets_at});
-    return { kind => $kind, pct => $pct, resets_at => (defined $r && $r > 0 ? int($r) : undef), at => _t($at), src => $src, sid8 => $sid8 };
+    my $seen = _num($e->{seen});
+    return { kind => $kind, pct => $pct, resets_at => (defined $r && $r > 0 ? int($r) : undef), at => _t($at), src => $src, sid8 => $sid8,
+             (defined $seen && $seen > $at ? (seen => _t($seen)) : ()) };
 }
+
+# _last(entry) -> when the entry was last read or seen
+sub _last { my ($e) = @_; return $e->{seen} // $e->{at} }
 
 # read_all() -> [entry...] as kept (none, unreadable or another schema: [])
 sub read_all {
@@ -76,13 +86,16 @@ sub note {
     for my $e (grep { defined } map { _entry($_) } @{ $new || [] }) {
         next if $e->{at} > $now + 300;
         my $old = $at{ _key($e) };
-        next if $old && $old->{at} >= $e->{at};
-        next if $old && $e->{src} eq 'statusline' && $old->{pct} == $e->{pct} && ($old->{resets_at} // 0) == ($e->{resets_at} // 0)
-                && $e->{at} - $old->{at} < $SAME_S;
-        $at{ _key($e) } = $e;
+        next if $old && _last($old) >= $e->{at};
+        if ($old && $e->{src} eq 'statusline' && $old->{pct} == $e->{pct} && ($old->{resets_at} // 0) == ($e->{resets_at} // 0)) {
+            next if $e->{at} - _last($old) < $SAME_S;
+            $at{ _key($e) } = { %$old, seen => $e->{at} };
+        } else {
+            $at{ _key($e) } = $e;
+        }
         $ch = 1;
     }
-    my @keep = sort { $b->{at} <=> $a->{at} || _key($a) cmp _key($b) } grep { $now - $_->{at} <= $KEEP_S } values %at;
+    my @keep = sort { _last($b) <=> _last($a) || _key($a) cmp _key($b) } grep { $now - _last($_) <= $KEEP_S } values %at;
     splice(@keep, $MAX_ENTRIES) if @keep > $MAX_ENTRIES;
     $ch = 1 if @keep != @$all;
     return \@keep unless $ch;
@@ -92,7 +105,8 @@ sub note {
 }
 
 # from_statusline(input, now) -> [entry...]: the rate_limits of a status line's JSON
-# ({"five_hour": {"used_percentage", "resets_at"}, "seven_day": …, "spend_limit": …}) of its session
+# ({"five_hour": {"used_percentage", "resets_at"}, "seven_day": …, "spend_limit": …}) of its session,
+# shown `now` (note() keeps an unchanged one's first time)
 sub from_statusline {
     my ($in, $now) = @_;
     return [] unless ref $in eq 'HASH' && ref $in->{rate_limits} eq 'HASH';

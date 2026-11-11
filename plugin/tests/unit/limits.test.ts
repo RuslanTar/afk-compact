@@ -186,3 +186,14 @@ test('AT-LM-12 (D-83): readingsNow writes the own reading and reads the record i
   reply = { ok: false, exitCode: 64, stdout: '', error: '' }
   expect((await readingsNow(d, 's', [w('seven_day', 95)])).map(x => x.src)).toEqual(['plugin'])
 })
+
+test('AT-LM-13 (D-83, review): the session\'s own status line entry is the live reading shown again, so it is never newer than the live reading\'s refresh: a status line run 30 s ago over a reading 54 min old reads 54 min old (no-fresh, not a skip)', () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const own = NOW - 54 * MIN
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 95, resets_at: null, at: (NOW - 30000) / 1000, src: 'statusline', sid8: '5e55a001', ...o })
+  expect(recordReadings([e({}), e({ sid8: '5e55a002' })], sid, own).map(x => [x.src, x.at])).toEqual([['statusline', own], ['peer', NOW - 30000]])
+  expect(recordReadings([e({ at: (own - MIN) / 1000 })], sid, own).map(x => x.at)).toEqual([own - MIN])
+  expect(recordReadings([e({})], sid).map(x => x.at)).toEqual([NOW - 30000])
+  const v = judge([...ownReadings([w('seven_day', 95)], own), ...recordReadings([e({})], sid, own)], { ...C, job: false, usageAt: own })
+  expect([v.ok, v.rule, v.usage.usage_n, v.usage.usage_age_s]).toEqual([true, 'no-fresh', { seven_day: 0 }, { seven_day: 54 * 60 }])
+})

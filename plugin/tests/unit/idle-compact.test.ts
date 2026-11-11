@@ -1758,7 +1758,7 @@ test('D83-05 (D-83): own seven_day at 95 read 54 min before (nothing refreshed i
   expect(selfCompacts(w)).toBe(1)
 })
 
-test('D83-06 (D-83): the own reading 54 min old, the session\'s status line fresh at 95 (cache --note-usage): the status line\'s reading is the session\'s fresh one: [near-limit, compact]', { options: ON }, async ($, on) => {
+test('D83-06 (D-83, review): the own reading 54 min old, the session\'s status line entry 30 s old at 95 (cache --note-usage shows the same in-memory reading again): it is never newer than the own reading, so no fresh reading: the compaction runs (rule no-fresh, age 54 min)', { options: ON }, async ($, on) => {
   const w = world(on)
   await w.start($)
   await humanTurn($, w)
@@ -1767,7 +1767,9 @@ test('D83-06 (D-83): the own reading 54 min old, the session\'s status line fres
   await w.advance(53 * MIN)
   w.usageEntries = [entry(w, 'seven_day', 95, 'statusline', SID_A.slice(0, 8)), entry(w, 'five_hour', 12, 'statusline', SID_A.slice(0, 8))]
   await w.advance(MIN)
-  expect(w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.kind, r.usage_src])).toEqual([['compact', ['five_hour:statusline', 'seven_day:statusline']]])
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.rule, r.usage_src, r.usage_n, (r.usage_age_s as Record<string, number>).seven_day])).toEqual([['no-fresh', ['five_hour:plugin', 'seven_day:plugin'], { five_hour: 0, seven_day: 0 }, 3240]])
+  expect(selfCompacts(w)).toBe(1)
 })
 
 test('D83-07 (D-83): a fresh peer reading whose reset is 5 h from the own one\'s (another account behind a proxy) is still a reading, marked an anomaly: split, the compaction runs', { options: ON }, async ($, on) => {
