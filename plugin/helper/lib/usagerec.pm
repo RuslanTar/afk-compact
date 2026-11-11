@@ -18,8 +18,11 @@ package usagerec;
 # that session's `plugin` entry of the same kind (dated() here; the mod: limits.ts recordReadings),
 # and one with no such entry is no reading.
 # Writers read the file, merge their entries (one per sid8, src and kind; the later `at` wins),
-# drop those not read or seen for $KEEP_S, keep at most $MAX_ENTRIES, a session's entries
-# together (the sessions last read or seen first), and rename a temp file over it
+# drop those that no longer count (kept(): D-88, a window's share only grows until its reset, so an
+# entry stays until its `resets_at`, however old; one with none only $FRESH_S after it was last
+# read or seen), keep at most $MAX_ENTRIES, a session's entries together (the sessions last read or
+# seen first), never dropping for room the session and kind whose entry is the latest of a window
+# (_deciding(): the reading a near-limit decision goes by), and rename a temp file over it
 # (cachestate::_put: never inside a git work tree or a .planning folder, so with the state folder
 # in one there is no record). Two writers at once: the last one wins, and the lost entry comes
 # back at that session's next write.
@@ -27,7 +30,11 @@ use strict;
 use warnings;
 use utf8;
 
-our $KEEP_S = 3600;
+# An entry with no reset time is kept this long after it was last read or seen (the plugin counts
+# one only while it is that fresh: limits.ts LIMIT_FRESH_MS).
+our $FRESH_S = 600;
+# Entries of one kind whose resets are at most this far apart are of one window (limits.ts RESET_SAME_MS).
+our $SAME_RESET_S = 60;
 our $MAX_ENTRIES = 64;
 our $MAX_BYTES = 65536;
 # A statusline entry with the same share and reset as the one kept moves its `seen` only this
@@ -81,6 +88,31 @@ sub read_all {
 
 sub _key { my ($e) = @_; return join("\0", @$e{qw(sid8 src kind)}) }
 
+# kept(entries, now) -> [entry...]: those that still count at `now` (D-88): an entry with a reset
+# time until it, one without for $FRESH_S after it was last read or seen
+sub kept {
+    my ($all, $now) = @_;
+    return [ grep { defined $_->{resets_at} ? $_->{resets_at} > $now : $now - _last($_) <= $FRESH_S } @$all ];
+}
+
+# _deciding(entries) -> { "sid8\0kind" => 1 }: per window (a kind, its entries' resets within
+# $SAME_RESET_S of the window's earliest) the session whose reading is the latest (dated(); the
+# larger share on a tie): the one that decides for that window
+sub _deciding {
+    my ($all) = @_;
+    my (%out, $win, $first);
+    for my $e (sort { $a->{kind} cmp $b->{kind} || $a->{resets_at} <=> $b->{resets_at} } grep { defined $_->{resets_at} } @{ dated($all) }) {
+        if (!$win || $win->{kind} ne $e->{kind} || $e->{resets_at} - $first > $SAME_RESET_S) {
+            $out{"$win->{sid8}\0$win->{kind}"} = 1 if $win;
+            ($win, $first) = ($e, $e->{resets_at});
+            next;
+        }
+        $win = $e if $e->{at} > $win->{at} || ($e->{at} == $win->{at} && $e->{pct} > $win->{pct});
+    }
+    $out{"$win->{sid8}\0$win->{kind}"} = 1 if $win;
+    return \%out;
+}
+
 # note([entry...], now) -> [entry...] kept after the merge (written when anything changed)
 sub note {
     my ($new, $now) = @_;
@@ -99,11 +131,16 @@ sub note {
         }
         $ch = 1;
     }
-    my @live = grep { $now - _last($_) <= $KEEP_S } values %at;
+    my @live = @{ kept([ values %at ], $now) };
     my %grp;
     for my $e (@live) { $grp{ $e->{sid8} } = _last($e) if !defined $grp{ $e->{sid8} } || _last($e) > $grp{ $e->{sid8} } }
     my @keep = sort { $grp{ $b->{sid8} } <=> $grp{ $a->{sid8} } || $a->{sid8} cmp $b->{sid8} || _last($b) <=> _last($a) || _key($a) cmp _key($b) } @live;
-    splice(@keep, $MAX_ENTRIES) if @keep > $MAX_ENTRIES;
+    if (@keep > $MAX_ENTRIES) {
+        my $dec = _deciding(\@keep);
+        my $room = $MAX_ENTRIES - grep { $dec->{"$_->{sid8}\0$_->{kind}"} } @keep;
+        @keep = grep { $dec->{"$_->{sid8}\0$_->{kind}"} || $room-- > 0 } @keep;
+        splice(@keep, $MAX_ENTRIES) if @keep > $MAX_ENTRIES;
+    }
     $ch = 1 if @keep != @$all;
     return \@keep unless $ch;
     my $f = file();

@@ -2373,3 +2373,44 @@ test('D88-11 (D-88): one window, two readings: another session\'s 40 read 5 min 
   expect(w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.rule, r.windows, r.usage_n])).toEqual([['cap', ['seven_day:99'], { seven_day: 1 }]])
   expect(selfCompacts(w)).toBe(0)
 })
+
+// D-88: a load that adopted the session (a reload or restart in the idle gap) has no reading of its
+// own before its first response; the session's own entries in the usage record stand for it, and
+// count until their reset like any other reading. A session with none (an API key) reads no other
+// session's either.
+test('D88-12 (D-88): an adopted compaction record (armed at 30), no reading yet, the session\'s own record entry seven_day 99 read 50 min before (resets in 3 days): it counts: [near-limit, compact] (rule cap)', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, {}, adoptedRecord(probe))
+  w.rateLimits = []
+  w.tokens = undefined
+  const R = Math.floor(T0 / 1000) + 3 * 86400
+  w.usageEntries = [entry(w, 'seven_day', 99, 'plugin', SID_A.slice(0, 8), 50 * 60, R), entry(w, 'seven_day', 99, 'statusline', SID_A.slice(0, 8), 40 * 60, R)]
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(skips(w)).toEqual([['near-limit', 'compact']])
+  expect(w.rowsOf('handoff_skipped').filter(r => r.why === 'near-limit').map(r => [r.rule, r.windows, r.usage_src])).toEqual([['cap', ['seven_day:99'], ['seven_day:plugin']]])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('D88-13 (D-88): the same adopted record with only another session\'s entry at 99 (no own one, as with an API key): no reading of its own, so the arm reading decides and the compaction runs', { options: ON }, async ($, on) => {
+  const probe = new World()
+  const w = world(on, {}, adoptedRecord(probe))
+  w.rateLimits = []
+  w.tokens = undefined
+  w.usageEntries = [entry(w, 'seven_day', 99, 'plugin', '5e55a002', 60, Math.floor(T0 / 1000) + 3 * 86400)]
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.adopted, r.windows])).toEqual([[true, undefined]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('D88-14 (D-88, idle_handoff_near_limit skip): the adopted 49-min turn record (armed at 30), no reading yet, the session\'s own record entry seven_day 99 read 45 min before (resets in 3 days): [near-limit, turn], no submit', { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip' } }, async ($, on) => {
+  const w = world(on, {}, adoptedTurn('1h'))
+  w.rateLimits = []
+  w.tokens = undefined
+  w.usageEntries = [entry(w, 'seven_day', 99, 'plugin', SID_A.slice(0, 8), 45 * 60, Math.floor(T0 / 1000) + 3 * 86400)]
+  await w.start($)
+  await w.advance(10 * MIN)
+  expect([w.submits.length, skips(w)]).toEqual([0, [['near-limit', 'turn']]])
+})

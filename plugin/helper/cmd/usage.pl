@@ -2,7 +2,7 @@
 # The shared usage record (lib/usagerec.pm) for the mod. With --stdin and --sid it first adds the
 # session's own reading, one JSON object: {"at": epoch seconds, "windows": [{"kind", "pct",
 # "resets_at"}]} (source `plugin`); then it prints one JSON line, {"schema", "now", "readings":
-# [entry...]}, every entry kept. It always exits 0 (a usage error says so on stderr, and an empty
+# [entry...]}, every entry that still counts (usagerec::kept, a read alone too). It always exits 0 (a usage error says so on stderr, and an empty
 # list prints). main.pl loads only the libraries it needs (%SUB_LIBS), so no setup path runs.
 use strict;
 use warnings;
@@ -34,7 +34,7 @@ sub run {
             $all = eval { usagerec::note(\@e, $now) };
         }
     }
-    $all //= eval { usagerec::read_all() } // [];
+    $all //= eval { usagerec::kept(usagerec::read_all(), $now) } // [];
     print STDOUT jsonc::encode_bytes({ schema => usagerec::schema(), now => int($now), readings => $all }) . "\n";
     return 0;
 }

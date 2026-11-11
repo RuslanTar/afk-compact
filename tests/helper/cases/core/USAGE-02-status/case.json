@@ -87,7 +87,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^usage: no reading of this session in the last hour; other sessions on this machine: five_hour 45% \\(2m ago, resets in 4h\\) · seven_day 21% \\(15m ago, resets in 4h\\)$"
+     "^usage: no reading of this session; other sessions on this machine: five_hour 45% \\(2m ago, resets in 4h\\) · seven_day 21% \\(15m ago, resets in 4h\\)$"
     ]
    }
   }

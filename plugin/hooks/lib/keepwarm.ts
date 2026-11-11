@@ -370,15 +370,17 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | Wait
   // the band (a job with a certain result open, a fresh reading, the measured compaction change
   // fits below the cap: `rule` band, with the job flag of D-79); no more pings in the band either.
   // When every such window resets before this gap's last ping moment (and the held record's
-  // deadline), the ping waits for the reset instead of spending the last points. None reported (or
-  // no reading): this guard is skipped.
+  // deadline), the ping waits for the reset instead of spending the last points. None reported: the
+  // session's own entries in the usage record (D-88, limits.ts `readingsNow`); no reading at all:
+  // this guard is skipped.
   const limits = u?.rateLimits ?? []
   let wait: Wait | undefined
   kw.note = undefined
-  if (limits.length > 0) {
-    // D-83: every reading of the windows, the session's own and the shared record's (limits.ts `judge`).
+  // D-83: every reading of the windows, the session's own and the shared record's (limits.ts `judge`).
+  const rs = await readingsNow(d, kw.sid, limits)
+  if (rs.length > 0) {
     const c = await limitCtx(d, await resultJobOpen(d, kw.sid), now)
-    const v = judge(await readingsNow(d, kw.sid, limits), c)
+    const v = judge(rs, c)
     kw.note = noteOf(v)
     if (!v.ok || v.band) {
       const reset = v.reset

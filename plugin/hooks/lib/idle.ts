@@ -699,14 +699,16 @@ function armReading(rec: Due, spend = false): Reading[] {
  * G12, the idle handoff turn's own near-limit rule (`idle_handoff_near_limit`; never under `run`):
  * a window at the limit share or more (any kind, a gateway's too; `skip-spend`: a gateway's spend
  * limit only, plan windows ignored), by the trust rule of D-83 (limits.ts `judge`): every counted
- * window of that kind at the share or more (D-88: a reading counts until its reset); none reported, the record's reading at arm.
+ * window of that kind at the share or more (D-88: a reading counts until its reset); none reported,
+ * the session's own entries in the usage record (`readingsNow`), else the record's reading at arm.
  */
 async function turnNearLimit(d: Deps, sid: string, u: Use, rec: Due, now: number): Promise<Verdict | undefined> {
   const mode = d.cfg.idle_handoff_near_limit
   if (mode === 'run') return undefined
   const spendOnly = mode === 'skip-spend'
   const limits = u?.rateLimits ?? []
-  const rs = limits.length > 0 ? await readingsNow(d, sid, limits) : armReading(rec, spendOnly)
+  const now0 = await readingsNow(d, sid, limits)
+  const rs = now0.length > 0 ? now0 : armReading(rec, spendOnly)
   const rule = spendOnly ? 'option-skip-spend' : 'option-skip'
   return judge(rs, { job: false, usageAt: undefined, now, deltas: {} }, r => ((spendOnly && r.kind !== SPEND_WINDOW && r.kind !== 'arm') || r.percentUsed < NEAR_LIMIT_PCT ? 'ok' : rule))
 }
@@ -716,15 +718,15 @@ async function turnNearLimit(d: Deps, sid: string, u: Use, rec: Due, now: number
  * session's own and the shared record's, by the adaptive rule and the trust rule (a window that
  * reset counts for nothing, D-88: every other counts until its reset, a window by its latest
  * reading, and any window under the limit lets it run);
- * none reported, the record's highest share at arm (90%, rule `arm-90`, only while that reading
- * is fresh). A skip, or the rule for the `idle_compact` row (`band`, `split`, `no-fresh`), or nothing.
+ * none reported, the session's own entries in the usage record (`readingsNow`, D-88), else the
+ * record's highest share at arm (90%, rule `arm-90`, only while that reading is fresh). A skip, or
+ * the rule for the `idle_compact` row (`band`, `split`, `no-fresh`), or nothing.
  */
 async function compactLimit(d: Deps, sid: string, u: Use, rec: Due, now: number): Promise<Skip | { limit?: LimitNote }> {
   const limits = u?.rateLimits ?? []
   const c = await limitCtx(d, await resultJobOpen(d, sid), now)
-  const v = limits.length > 0
-    ? judge(await readingsNow(d, sid, limits), c)
-    : judge(armReading(rec), c, r => (r.percentUsed < NEAR_LIMIT_PCT ? 'ok' : 'arm-90'))
+  const rs = await readingsNow(d, sid, limits)
+  const v = rs.length > 0 ? judge(rs, c) : judge(armReading(rec), c, r => (r.percentUsed < NEAR_LIMIT_PCT ? 'ok' : 'arm-90'))
   if (!v.ok) return { why: 'near-limit', windows: v.windows, rule: v.rule, usage: v.usage }
   const limit = noteOf(v)
   return limit !== undefined ? { limit } : {}

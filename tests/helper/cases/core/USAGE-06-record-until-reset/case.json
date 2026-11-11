@@ -1,0 +1,673 @@
+{
+ "id": "USAGE-06-record-until-reset",
+ "note": "D-88 (review of the 0.1.9 usage lane): the shared usage record keeps an entry until its window resets, however old, as the plugin counts it (before, every entry not read or seen for an hour was dropped at the next write, so another session's reading counted for an hour only); one past its reset, or one with no reset time read or seen over 10 minutes ago, is dropped, and `usage` without --stdin leaves those out too. At 64 entries the sessions read or shown longest ago still go first, but never the session and kind whose entry is the latest of a window (the reading a near-limit decision goes by).",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "two other sessions' seven_day readings 70 min old, both resetting days ahead (99 in the window this session reads, 21 in another); this session writes its own 50, read 2 h ago: all three are kept",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "seven_day",
+        "pct": 21,
+        "resets_at": 1794657600,
+        "at": 1794221400,
+        "src": "plugin",
+        "sid8": "5e55a002"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 99,
+        "resets_at": 1794484800,
+        "at": 1794221400,
+        "src": "plugin",
+        "sid8": "5e55a003"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "usage",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "at": 1794218400,
+    "windows": [
+     {
+      "kind": "seven_day",
+      "pct": 50,
+      "resets_at": 1794484800
+     }
+    ]
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 3
+     },
+     "readings.0.sid8": "5e55a002",
+     "readings.0.pct": 21,
+     "readings.1.sid8": "5e55a003",
+     "readings.1.pct": 99,
+     "readings.2.sid8": "$SID8",
+     "readings.2.at": 1794218400
+    }
+   }
+  },
+  {
+   "name": "a read alone leaves out an entry past its reset and one with no reset time 20 min old, as a write would drop them",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "seven_day",
+        "pct": 99,
+        "resets_at": 1794484800,
+        "at": 1794221400,
+        "src": "plugin",
+        "sid8": "5e55a003"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 97,
+        "resets_at": 1794225540,
+        "at": 1794225000,
+        "src": "plugin",
+        "sid8": "5e55a004"
+       },
+       {
+        "kind": "spend_limit",
+        "pct": 95,
+        "resets_at": null,
+        "at": 1794224400,
+        "src": "plugin",
+        "sid8": "5e55a005"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 1
+     },
+     "readings.0.sid8": "5e55a003"
+    }
+   }
+  },
+  {
+   "name": "a full record: 63 sessions read five_hour 20 in the last 50 min, and 5e55d000 read seven_day 99 three hours ago (resets in 3 days); a new session's reading makes 65: the session read longest ago that decides no window goes (5e55b001), 5e55d000 stays",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222610,
+        "src": "plugin",
+        "sid8": "5e55b001"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222620,
+        "src": "plugin",
+        "sid8": "5e55b002"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222630,
+        "src": "plugin",
+        "sid8": "5e55b003"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222640,
+        "src": "plugin",
+        "sid8": "5e55b004"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222650,
+        "src": "plugin",
+        "sid8": "5e55b005"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222660,
+        "src": "plugin",
+        "sid8": "5e55b006"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222670,
+        "src": "plugin",
+        "sid8": "5e55b007"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222680,
+        "src": "plugin",
+        "sid8": "5e55b008"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222690,
+        "src": "plugin",
+        "sid8": "5e55b009"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222700,
+        "src": "plugin",
+        "sid8": "5e55b010"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222710,
+        "src": "plugin",
+        "sid8": "5e55b011"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222720,
+        "src": "plugin",
+        "sid8": "5e55b012"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222730,
+        "src": "plugin",
+        "sid8": "5e55b013"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222740,
+        "src": "plugin",
+        "sid8": "5e55b014"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222750,
+        "src": "plugin",
+        "sid8": "5e55b015"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222760,
+        "src": "plugin",
+        "sid8": "5e55b016"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222770,
+        "src": "plugin",
+        "sid8": "5e55b017"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222780,
+        "src": "plugin",
+        "sid8": "5e55b018"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222790,
+        "src": "plugin",
+        "sid8": "5e55b019"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222800,
+        "src": "plugin",
+        "sid8": "5e55b020"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222810,
+        "src": "plugin",
+        "sid8": "5e55b021"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222820,
+        "src": "plugin",
+        "sid8": "5e55b022"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222830,
+        "src": "plugin",
+        "sid8": "5e55b023"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222840,
+        "src": "plugin",
+        "sid8": "5e55b024"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222850,
+        "src": "plugin",
+        "sid8": "5e55b025"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222860,
+        "src": "plugin",
+        "sid8": "5e55b026"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222870,
+        "src": "plugin",
+        "sid8": "5e55b027"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222880,
+        "src": "plugin",
+        "sid8": "5e55b028"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222890,
+        "src": "plugin",
+        "sid8": "5e55b029"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222900,
+        "src": "plugin",
+        "sid8": "5e55b030"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222910,
+        "src": "plugin",
+        "sid8": "5e55b031"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222920,
+        "src": "plugin",
+        "sid8": "5e55b032"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222930,
+        "src": "plugin",
+        "sid8": "5e55b033"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222940,
+        "src": "plugin",
+        "sid8": "5e55b034"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222950,
+        "src": "plugin",
+        "sid8": "5e55b035"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222960,
+        "src": "plugin",
+        "sid8": "5e55b036"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222970,
+        "src": "plugin",
+        "sid8": "5e55b037"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222980,
+        "src": "plugin",
+        "sid8": "5e55b038"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794222990,
+        "src": "plugin",
+        "sid8": "5e55b039"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223000,
+        "src": "plugin",
+        "sid8": "5e55b040"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223010,
+        "src": "plugin",
+        "sid8": "5e55b041"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223020,
+        "src": "plugin",
+        "sid8": "5e55b042"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223030,
+        "src": "plugin",
+        "sid8": "5e55b043"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223040,
+        "src": "plugin",
+        "sid8": "5e55b044"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223050,
+        "src": "plugin",
+        "sid8": "5e55b045"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223060,
+        "src": "plugin",
+        "sid8": "5e55b046"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223070,
+        "src": "plugin",
+        "sid8": "5e55b047"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223080,
+        "src": "plugin",
+        "sid8": "5e55b048"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223090,
+        "src": "plugin",
+        "sid8": "5e55b049"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223100,
+        "src": "plugin",
+        "sid8": "5e55b050"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223110,
+        "src": "plugin",
+        "sid8": "5e55b051"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223120,
+        "src": "plugin",
+        "sid8": "5e55b052"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223130,
+        "src": "plugin",
+        "sid8": "5e55b053"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223140,
+        "src": "plugin",
+        "sid8": "5e55b054"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223150,
+        "src": "plugin",
+        "sid8": "5e55b055"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223160,
+        "src": "plugin",
+        "sid8": "5e55b056"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223170,
+        "src": "plugin",
+        "sid8": "5e55b057"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223180,
+        "src": "plugin",
+        "sid8": "5e55b058"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223190,
+        "src": "plugin",
+        "sid8": "5e55b059"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223200,
+        "src": "plugin",
+        "sid8": "5e55b060"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223210,
+        "src": "plugin",
+        "sid8": "5e55b061"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223220,
+        "src": "plugin",
+        "sid8": "5e55b062"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 20,
+        "resets_at": 1794236400,
+        "at": 1794223230,
+        "src": "plugin",
+        "sid8": "5e55b063"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 99,
+        "resets_at": 1794484800,
+        "at": 1794214800,
+        "src": "plugin",
+        "sid8": "5e55d000"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "usage",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "at": 1794225595,
+    "windows": [
+     {
+      "kind": "five_hour",
+      "pct": 21,
+      "resets_at": 1794236400
+     }
+    ]
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 64
+     },
+     "readings.0.sid8": "$SID8",
+     "readings.1.sid8": "5e55b063",
+     "readings.62.sid8": "5e55b002",
+     "readings.63.sid8": "5e55d000",
+     "readings.63.pct": 99
+    }
+   }
+  }
+ ]
+}

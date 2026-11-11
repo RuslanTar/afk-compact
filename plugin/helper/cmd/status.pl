@@ -1003,7 +1003,7 @@ sub usage_lines {
         my $e = $mine{$_};
         sprintf('%s %s%% (%s, %s ago, %s)', $_, int($e->{pct}), $e->{src} eq 'statusline' ? 'status line' : 'plugin', $ago->($now - $e->{at}), $reset->($e))
     } sort keys %mine;
-    my $l = 'usage: ' . (@w ? join(' · ', @w) : defined $s8 ? 'no reading of this session in the last hour' : 'unknown (no session id)');
+    my $l = 'usage: ' . (@w ? join(' · ', @w) : defined $s8 ? 'no reading of this session' : 'unknown (no session id)');
     if (@win) {
         my @p = map { sprintf('%s %s%% (%s ago, %s)', $_->{kind}, int($_->{pct}), $ago->($now - $_->{at}), $reset->($_)) } @win[0 .. ($#win < $USAGE_PEERS_SHOWN - 1 ? $#win : $USAGE_PEERS_SHOWN - 1)];
         push @p, '+' . (@win - $USAGE_PEERS_SHOWN) . ' more' if @win > $USAGE_PEERS_SHOWN;

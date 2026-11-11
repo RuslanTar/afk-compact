@@ -169,7 +169,7 @@ test('AT-LM-11 (D-83): recordReadings: the session\'s own plugin entries are lef
   ])
 })
 
-test('AT-LM-12 (D-83): readingsNow writes the own reading and reads the record in one helper call; with no own window it calls nothing; a failed call leaves the own reading', async () => {
+test('AT-LM-12 (D-83): readingsNow writes the own reading and reads the record in one helper call; with no own window it only reads (D-88: and with no own entry there, another session\'s reading is none); a failed call leaves the own reading', async () => {
   const sent: (readonly string[])[] = []
   let reply = { ok: true, exitCode: 0, stdout: JSON.stringify({ readings: [{ kind: 'seven_day', pct: 40, resets_at: null, at: NOW / 1000 - 60, src: 'plugin', sid8: '5e55a002' }] }) + '\n', error: '' }
   const state = newState('l')
@@ -182,7 +182,7 @@ test('AT-LM-12 (D-83): readingsNow writes the own reading and reads the record i
   expect(rs.map(x => [x.kind, x.percentUsed, x.src, x.at])).toEqual([['seven_day', 95, 'plugin', NOW - MIN], ['seven_day', 40, 'peer', NOW - MIN]])
   expect(sent).toEqual([['usage', '--sid', '5e55a001-0c0f-4f1e-9a00-00000000a001', '--stdin']])
   expect(await readingsNow(d, 's', [])).toEqual([])
-  expect(sent.length).toBe(1)
+  expect(sent).toEqual([['usage', '--sid', '5e55a001-0c0f-4f1e-9a00-00000000a001', '--stdin'], ['usage', '--sid', 's']])
   reply = { ok: false, exitCode: 64, stdout: '', error: '' }
   expect((await readingsNow(d, 's', [w('seven_day', 95)])).map(x => x.src)).toEqual(['plugin'])
 })
@@ -337,4 +337,21 @@ test('D88-05 (D-80 kept): going above 90 still needs a fresh reading: a job open
   const R = NOW + 3 * DAY
   expect(judge([r('seven_day', 92, 'plugin', 20, R)], C)).toMatchObject({ ok: false, band: false, rule: 'stale' })
   expect(judge([r('seven_day', 92, 'plugin', 5, R)], C)).toMatchObject({ ok: true, band: true, rule: 'band', reset: R })
+})
+
+test('D88-06 (D-88): no own window (a load that adopted the session before its first response): the session\'s own record entries stand for the live reading and count until their reset, the other sessions\' beside them; the window\'s latest decides; with no own entry, none', async () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const R = (NOW + 3 * DAY) / 1000
+  let rec: Record<string, unknown>[] = []
+  const d = {
+    state: newState('l'), helper: '/p/helper', sessionId: async () => sid,
+    run: async () => ({ ok: true, exitCode: 0, stdout: JSON.stringify({ readings: rec }) + '\n', error: '' }),
+  } as unknown as Deps
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 99, resets_at: R, at: (NOW - 50 * MIN) / 1000, src: 'plugin', sid8: '5e55a001', ...o })
+  rec = [e({}), e({ src: 'statusline', at: (NOW - MIN) / 1000 }), e({ sid8: '5e55a002', pct: 40, at: (NOW - 70 * MIN) / 1000 })]
+  const rs = await readingsNow(d, sid, [])
+  expect(rs.map(x => [x.src, x.percentUsed, x.at])).toEqual([['plugin', 99, NOW - 50 * MIN], ['statusline', 99, NOW - 50 * MIN], ['peer', 40, NOW - 70 * MIN]])
+  expect(judge(rs, C)).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'], usage: { usage_src: ['seven_day:plugin'], usage_n: { seven_day: 1 } } })
+  rec = [e({ sid8: '5e55a002' })]
+  expect(await readingsNow(d, sid, [])).toEqual([])
 })

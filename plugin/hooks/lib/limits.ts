@@ -28,12 +28,14 @@
 // `plugin` entry of that kind; none: no reading).
 // D-88: within one window (a kind and its reset time) the share only grows until the reset, so a
 // reading counts until its window resets, however old (idle gaps refresh nothing: a keep-warm
-// fork does not update the reading), and a reading whose reset has passed counts for nothing; one
-// with no reset time counts only while refreshed in the last 10 minutes, one per session (its
-// newest). The readings of a kind whose resets are within a minute of each other are one window,
-// and its latest reading (the largest `at`) is its share. A window kind stops the action only when
-// every window of it does; one that does not lets it run (`split`: behind a proxy that routes
-// requests across accounts, each with its own window, the next request may go to one with room);
+// fork does not update the reading; the shared record keeps it as long, lib/usagerec.pm), and a
+// reading whose reset has passed counts for nothing; one with no reset time counts only while
+// refreshed in the last 10 minutes, one per session (its newest; none beside that session's
+// reading of the kind with a reset: one Claude Code object). The readings of a kind whose resets
+// are within a minute of each other are one window, and its latest reading (the largest `at`) is
+// its share. A window kind stops the action only when every window of it does; one that does not
+// lets it run (`split`: behind a proxy that routes requests across accounts, each with its own
+// window, the next request may go to one with room);
 // with no counted reading of a kind, it never stops (`no-fresh` when an uncounted one would have).
 // A window whose reset is more than an hour from the other windows' of its kind (a proxy's other
 // account, or the session moved there by a compaction) still counts, logged as an anomaly.
@@ -269,14 +271,15 @@ export function resetOf(limits: readonly Limit[], c: LimitCtx): number | undefin
 /**
  * D-83: the shared usage record's entries as readings (helper `usage`: times and resets in epoch
  * seconds): this session's status line's (`statusline`) and every other session's (`peer`); this
- * session's own `plugin` entries are left out (the live reading stands for them). A status line's
- * entry is its session's reading shown again (one object in Claude Code), and its `at` is only when
+ * session's own `plugin` entries are left out (the live reading stands for them) unless
+ * `ownPlugin` (D-88: no live reading, as in a load that adopted the session before its first
+ * response). A status line's entry is its session's reading shown again (one object in Claude Code), and its `at` is only when
  * a status line first showed it (an entry dropped from the record comes back dated anew), so it is
  * never newer than that session's own refresh: this session's live reading (`ownAt`, epoch ms) or,
  * for another session or without `ownAt`, that session's `plugin` entry of the same kind; with
  * neither it is no reading. An entry out of form is dropped.
  */
-export function recordReadings(entries: readonly unknown[], sid: string, ownAt?: number): Reading[] {
+export function recordReadings(entries: readonly unknown[], sid: string, ownAt?: number, ownPlugin = false): Reading[] {
   const own = sid.slice(0, 8)
   const out: Reading[] = []
   const plugAt = new Map<string, number>()
@@ -295,7 +298,7 @@ export function recordReadings(entries: readonly unknown[], sid: string, ownAt?:
     const r = e.resets_at
     if (typeof kind !== 'string' || kind === '' || typeof pct !== 'number' || !Number.isFinite(pct) || typeof at !== 'number' || !Number.isFinite(at)) continue
     if ((src !== 'plugin' && src !== 'statusline') || typeof sid8 !== 'string' || sid8 === '') continue
-    if (sid8 === own && src === 'plugin') continue
+    if (sid8 === own && src === 'plugin' && !ownPlugin) continue
     const resetsAt = typeof r === 'number' && Number.isFinite(r) ? r * 1000 : undefined
     let t = at * 1000
     if (src === 'statusline') {
@@ -303,7 +306,7 @@ export function recordReadings(entries: readonly unknown[], sid: string, ownAt?:
       if (cap === undefined) continue
       t = Math.min(t, cap)
     }
-    out.push({ kind, percentUsed: pct, ...(resetsAt !== undefined ? { resetsAt } : {}), at: t, ...(sid8 === own ? { src: 'statusline' as const } : { src: 'peer' as const, sid8 }) })
+    out.push({ kind, percentUsed: pct, ...(resetsAt !== undefined ? { resetsAt } : {}), at: t, ...(sid8 === own ? { src } : { src: 'peer' as const, sid8 }) })
   }
   return out
 }
@@ -311,14 +314,24 @@ export function recordReadings(entries: readonly unknown[], sid: string, ownAt?:
 /**
  * D-83: every reading a near-limit decision reads now: the session's own windows (`limits`, read at
  * `LoadState.usageAt`) and the shared record's other ones; the own reading is written to the record
- * in the same helper call. With no own window, the record is not read: a session that reports
- * none (an API key, before its first response) has no limit of its own that another session's
- * reading could tell of. A failed call leaves the own reading alone, and the next refresh writes it
- * (`noteUsage`).
+ * in the same helper call. With no own window (an API key, or a load that adopted the session
+ * before its first response), the session's own record entries stand for it (D-88: they count
+ * until their reset), and with none of those there is no reading at all: a session with no limit
+ * of its own has none that another session's reading could tell of. A failed call leaves the own
+ * reading alone, and the next refresh writes it (`noteUsage`).
  */
 export async function readingsNow(d: Deps, sid: string, limits: readonly Limit[]): Promise<Reading[]> {
   const own = ownReadings(limits, d.state.usageAt)
-  if (limits.length === 0) return own
+  if (limits.length === 0) {
+    let all: unknown[] | undefined
+    try {
+      all = await usageRecord(d, sid)
+    } catch {
+      all = undefined
+    }
+    const rs = recordReadings(all ?? [], sid, undefined, true)
+    return rs.some(r => r.src !== 'peer') ? rs : []
+  }
   const at = d.state.usageAt
   const w = recordWindows(limits)
   let entries: unknown[] | undefined

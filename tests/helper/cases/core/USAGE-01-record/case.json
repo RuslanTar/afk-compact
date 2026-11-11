@@ -1,6 +1,6 @@
 {
  "id": "USAGE-01-record",
- "note": "0.1.8 D-83: the shared usage record, <state>/<plugin>/usage.v1.json (0600): `usage --sid S --stdin` adds the session's own reading (source plugin, sid8 the id's first 8 characters; an entry out of form is dropped), `cache --stdin --note-usage` adds the status line's rate_limits (source statusline, read now), plain `cache --stdin` writes nothing. One entry per sid8, source and kind: the later `at` wins, an older one changes nothing. Entries read more than an hour ago are dropped at the next write; a torn file reads as empty; a reserved or missing --sid writes nothing. Every call exits 0 and prints the record. `usage` loads only util, jsonc, ctx, args, cachestate and usagerec (no setup path runs: no handoffs folder on a fresh HOME).",
+ "note": "0.1.8 D-83: the shared usage record, <state>/<plugin>/usage.v1.json (0600): `usage --sid S --stdin` adds the session's own reading (source plugin, sid8 the id's first 8 characters; an entry out of form is dropped), `cache --stdin --note-usage` adds the status line's rate_limits (source statusline, read now), plain `cache --stdin` writes nothing. One entry per sid8, source and kind: the later `at` wins, an older one changes nothing. D-88: an entry is kept until its resets_at, however old; one past it, or one with no reset read or seen more than 10 minutes ago, is dropped at the next write; a torn file reads as empty; a reserved or missing --sid writes nothing. Every call exits 0 and prints the record. `usage` loads only util, jsonc, ctx, args, cachestate and usagerec (no setup path runs: no handoffs folder on a fresh HOME).",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
@@ -245,7 +245,7 @@
    }
   },
   {
-   "name": "an entry read more than an hour ago is dropped at the next write",
+   "name": "D-88: an entry 76 min old whose window resets later is kept; one past its reset, and one with no reset time 11 min old, are dropped at the next write (one with none 8 min old is kept)",
    "setup": [
     {
      "write": "$HOME/.local/state/$BRAND/usage.v1.json",
@@ -264,10 +264,26 @@
        {
         "kind": "five_hour",
         "pct": 31,
-        "resets_at": 1794240000,
-        "at": 1794222100,
+        "resets_at": 1794225000,
+        "at": 1794225500,
         "src": "plugin",
         "sid8": "5e55a005"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 32,
+        "resets_at": null,
+        "at": 1794224900,
+        "src": "plugin",
+        "sid8": "5e55a006"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 33,
+        "resets_at": null,
+        "at": 1794225100,
+        "src": "plugin",
+        "sid8": "5e55a007"
        }
       ]
      }
@@ -293,10 +309,12 @@
     "exit": 0,
     "json": {
      "readings": {
-      "len": 2
+      "len": 3
      },
      "readings.0.sid8": "$SID8",
-     "readings.1.sid8": "5e55a005"
+     "readings.1.sid8": "5e55a007",
+     "readings.2.sid8": "5e55a004",
+     "readings.2.at": 1794221000
     }
    }
   },
