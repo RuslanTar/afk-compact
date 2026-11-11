@@ -253,16 +253,12 @@ sub _vcmp {
     return 0;
 }
 
-# installed() -> 1 when this copy is one Claude Code installed (.../plugins/cache/<marketplace>/
-# <name>/<version>, or .../plugins/synced/<x>/<name>, as hook.pl own_data_name reads it) and not a
-# --plugin-dir load (settings::inline_key).
+# installed() -> 1 when this copy is one Claude Code installed: in its plugin cache, synced, or
+# read in place from a marketplace's folder (0.1.9: a directory marketplace), as
+# settings::load_source reads this copy's root; never a --plugin-dir load (settings::inline_key).
 sub installed {
     return 0 if defined settings::inline_key();
-    my $b = ctx::brand();
-    my @s = grep { $_ ne '' } split m{/+}, ctx::root() // '';
-    return 1 if @s >= 5 && $s[-5] eq 'plugins' && $s[-4] eq 'cache' && $s[-2] eq $b;
-    return 1 if @s >= 4 && $s[-4] eq 'plugins' && $s[-3] eq 'synced' && $s[-1] =~ /\A\Q$b\E(?:~g[0-9]+)?\z/;
-    return 0;
+    return settings::load_source(ctx::root())->{kind} =~ /\A(?:cache|synced|marketplace)\z/ ? 1 : 0;
 }
 
 # keep_shim() -> what it did: written, same, newer-kept, foreign, dev-load, no-launcher, unquotable,

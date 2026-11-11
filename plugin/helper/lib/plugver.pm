@@ -15,7 +15,9 @@ package plugver;
 #   scope(cwd) -> {kind, tag}: the install this copy belongs to. A copy in Claude Code's plugin
 #     cache (<config>/plugins/cache/<marketplace>/<name>/<version>) is `project` when that config's
 #     plugins/installed_plugins.json holds a project or local entry of the plugin for this session's
-#     project folder (CLAUDE_PROJECT_DIR, else the hook's cwd), else `user`; any other folder (a
+#     project folder (CLAUDE_PROJECT_DIR, else the hook's cwd), else `user`; a copy Claude Code
+#     reads in place from a marketplace's folder (0.1.9, a directory marketplace; settings::
+#     load_source) takes the scope of that install's cache folder; any other folder (a
 #     --plugin-dir run, a checkout) is `dir`, compared with loads of that same folder only. The tag
 #     (8 hex of sha256 over the kind, the cache folder of the plugin's versions or the folder, and
 #     the project) keeps another config folder, project pin or folder apart: a project pinned to
@@ -119,9 +121,16 @@ sub scope {
     return $SCOPE if $SCOPE;
     my $root = ctx::root();
     my ($kind, $key) = ('dir', "dir\n$root");
+    my ($cfg, $mkt, $name, $parent);
     if ($root =~ m{\A(.+)/plugins/cache/([^/]+)/([^/]+)/[^/]+\z}) {
-        my ($cfg, $mkt, $name) = ($1, $2, $3);
-        my $parent = util::dirname($root);
+        ($cfg, $mkt, $name, $parent) = ($1, $2, $3, util::dirname($root));
+    } elsif ((my $ld = settings::load_source($root))->{kind} eq 'marketplace') {
+        # 0.1.9: read in place from a marketplace's folder: the scope of that install's cache folder,
+        # by the config folder's real path, as the cache branch reads it from the (real) root
+        ($cfg, $mkt, $name) = (util::real_path(settings::config_dir()), $ld->{mkt}, ctx::brand());
+        $parent = "$cfg/plugins/cache/$mkt/$name";
+    }
+    if (defined $cfg) {
         ($kind, $key) = ('user', "user\n$parent");
         my $pd = defined $ENV{CLAUDE_PROJECT_DIR} && $ENV{CLAUDE_PROJECT_DIR} =~ m{\A/} ? $ENV{CLAUDE_PROJECT_DIR}
                : defined $cwd && !ref $cwd && $cwd =~ m{\A/} ? $cwd : do { require Cwd; Cwd::getcwd() };

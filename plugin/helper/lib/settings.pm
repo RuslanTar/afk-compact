@@ -4,7 +4,7 @@ package settings;
 #   ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json -> userConfig default.
 # Empty values and values starting `${user_config.` count as unset; a leading ~ is
 # expanded. pluginConfigs key (E-14, provisional): `<name>@inline` when
-# CLAUDE_PLUGIN_ROOT is set and not under the config dir's plugins/; otherwise the
+# CLAUDE_PLUGIN_ROOT is set and a --plugin-dir load (load_source); otherwise the
 # single key whose part before `@` is the brand; several -> defaults + ambiguous.
 # Consent keys (DP-3, REVIEW A-3; %FILE_ONLY) are read from the settings file only: a
 # model-run Bash call can pass flags and env, so those two sources are ignored with the
@@ -356,14 +356,119 @@ sub former_name_keys {
     return @out;
 }
 
-# inline_key() -> `<name>@inline` when CLAUDE_PLUGIN_ROOT is set and not under the config dir's
-# plugins/ (a --plugin-dir run, E-14), else undef.
+# inline_key() -> `<name>@inline` when CLAUDE_PLUGIN_ROOT is set and load_source reads it as a
+# --plugin-dir load (E-14), else undef.
 sub inline_key {
     my $pr = $ENV{CLAUDE_PLUGIN_ROOT};
     return undef unless defined $pr && $pr ne '';
-    my $plugins = util::clean_path(config_dir() . '/plugins');
-    my $p = util::clean_path($pr);
-    return index("$p/", "$plugins/") != 0 ? ctx::brand() . '@inline' : undef;
+    return load_source($pr)->{kind} eq 'inline' ? ctx::brand() . '@inline' : undef;
+}
+
+# load_source([root]) -> {kind, mkt}: how Claude Code loaded the plugin copy at root (default
+# CLAUDE_PLUGIN_ROOT, else the helper's own root), the one reading of hook.pl own_data_name,
+# inline_key, cachestate::installed, settings_write::plugin_key and plugver::scope. kind:
+#   cache        .../plugins/cache/<mkt>/<name>/<version>
+#   synced       .../plugins/synced/<x>/<name> (Claude Code may add ~g<n> to that folder's name); mkt synced
+#   marketplace  (0.1.9) at or under the folder of a marketplace in <config>/plugins/
+#                known_marketplaces.json (its installLocation, or the folder of a directory or
+#                file source) that the plugin is installed from (a `<name>@<mkt>` entry in
+#                installed_plugins.json): Claude Code reads a directory marketplace's plugin in
+#                place (`claude plugin list`: "Read from"), not from the cache folder it records;
+#                also any other folder when CLAUDE_PLUGIN_DATA is the data folder of the one
+#                `<name>@<mkt>` install there (Claude Code's .../data/<name>-<mkt>, each character
+#                of the id but A-Za-z0-9_- as -): a session that loaded the copy before that
+#                marketplace was pointed at another folder (the next release's) is still that
+#                install
+#   inline       a --plugin-dir load: any other folder, and any folder but the cache's when
+#                CLAUDE_PLUGIN_DATA is the plugin's own .../data/<name>-inline (Claude Code's
+#                data folder for <name>@inline, under <config>/plugins or the folder
+#                CLAUDE_CODE_PLUGIN_CACHE_DIR names); mkt inline
+#   config       another folder under <config>/plugins/: no install, not inline for the options
+#                key either (E-14); mkt inline
+# Kept per root for the process.
+my %LOAD;
+sub load_source {
+    my ($root) = @_;
+    $root //= $ENV{CLAUDE_PLUGIN_ROOT};
+    $root = ctx::root() unless defined $root && $root =~ m{\A/};
+    my $b = ctx::brand();
+    my $cfg = util::clean_path(config_dir()) // '';
+    my $memo = ($root // '') . "\0$cfg\0" . ($ENV{CLAUDE_PLUGIN_DATA} // '');
+    return $LOAD{$memo} //= do {
+        my @s = grep { $_ ne '' } split m{/+}, $root // '';
+        my $r;
+        if (@s >= 5 && $s[-5] eq 'plugins' && $s[-4] eq 'cache' && $s[-2] eq $b) { $r = { kind => 'cache', mkt => $s[-3] } }
+        elsif (@s >= 4 && $s[-4] eq 'plugins' && $s[-3] eq 'synced' && $s[-1] =~ /\A\Q$b\E(?:~g[0-9]+)?\z/) { $r = { kind => 'synced', mkt => 'synced' } }
+        else {
+            my $pd = $ENV{CLAUDE_PLUGIN_DATA} // '';
+            $pd =~ s{(?<=.)/+\z}{};
+            my ($dn) = $pd =~ m{/data/([^/]+)\z};
+            my $inl = defined $dn && $dn eq "$b-inline";
+            my $m = !$inl && defined $root && $root =~ m{\A/} ? _marketplace_of($root, $cfg) : undef;
+            $m //= _install_of_data($dn, $cfg) if !$inl && defined $dn;
+            my $p = util::clean_path("$cfg/plugins");
+            my $c = util::clean_path($root);
+            $r = defined $m ? { kind => 'marketplace', mkt => $m }
+               : !$inl && defined $c && index("$c/", "$p/") == 0 ? { kind => 'config', mkt => 'inline' }
+               : { kind => 'inline', mkt => 'inline' };
+        }
+        $r;
+    };
+}
+
+# _marketplace_of(root, config dir) -> the name of the known marketplace whose folder holds root
+# and that the plugin is installed from, or undef (load_source)
+sub _marketplace_of {
+    my ($root, $cfg) = @_;
+    return undef unless $cfg =~ m{\A/};
+    my $raw = util::read_file("$cfg/plugins/known_marketplaces.json", 4 << 20) // return undef;
+    my $km = eval { jsonc::decode($raw) };
+    return undef unless ref $km eq 'HASH';
+    my $real = util::real_path($root) // return undef;
+    my $b = ctx::brand();
+    my ($inst, @hit);
+    for my $name (sort keys %$km) {
+        my $e = $km->{$name};
+        next unless ref $e eq 'HASH' && $name ne '' && $name !~ m{[/\x00-\x1f]};
+        my $src = ref $e->{source} eq 'HASH' ? $e->{source} : {};
+        my $sp = !ref $src->{path} ? $src->{path} : undef;
+        my @loc = (!ref $e->{installLocation} ? $e->{installLocation} : undef);
+        if (defined $sp && ($src->{source} // '') eq 'directory') { push @loc, $sp }
+        elsif (defined $sp && ($src->{source} // '') eq 'file') {
+            my $d = util::dirname($sp);
+            push @loc, util::basename($d) eq '.claude-plugin' ? util::dirname($d) : $d;
+        }
+        my $in = 0;
+        for my $l (grep { defined $_ && m{\A/} } @loc) {
+            my $lr = util::real_path($l) // next;
+            $lr =~ s{/+\z}{};
+            if ($lr ne '' && index("$real/", "$lr/") == 0) { $in = 1; last }
+        }
+        next unless $in;
+        # installed_plugins.json: the entry's key, read as text (the file can hold megabytes; a key
+        # is a quoted string not inside another one)
+        $inst //= util::read_file("$cfg/plugins/installed_plugins.json", 16 << 20) // '';
+        push @hit, $name if $inst =~ /(?<!\\)"\Q$b\E\@\Q$name\E"\s*:\s*\[\s*\{/;
+    }
+    return @hit == 1 ? $hit[0] : undef;
+}
+
+# _install_of_data(data folder name, config dir) -> the marketplace of the one `<name>@<mkt>` entry
+# in <config>/plugins/installed_plugins.json whose data folder name (the id, each character but
+# A-Za-z0-9_- as -) is that name, or undef (load_source)
+sub _install_of_data {
+    my ($dn, $cfg) = @_;
+    return undef unless $cfg =~ m{\A/};
+    my $inst = util::read_file("$cfg/plugins/installed_plugins.json", 16 << 20) // return undef;
+    my $b = ctx::brand();
+    my %hit;
+    while ($inst =~ /(?<!\\)"\Q$b\E\@([^"\\\x00-\x1f]+)"\s*:\s*\[\s*\{/g) {
+        my $m = $1;
+        next if $m eq 'inline';
+        (my $id = "$b\@$m") =~ s/[^A-Za-z0-9_-]/-/g;
+        $hit{$m} = 1 if $id eq $dn;
+    }
+    return keys %hit == 1 ? (keys %hit)[0] : undef;
 }
 
 # Returns (options hashref or undef, note) from the user's settings file.
@@ -373,8 +478,8 @@ sub _settings_file_options {
 }
 
 # options_key(pluginConfigs hash) -> (key or undef, [candidates]): the plugin's key in
-# pluginConfigs (E-14): `<name>@inline` when CLAUDE_PLUGIN_ROOT is set and not under the config
-# dir's plugins/; otherwise the single key whose part before `@` is the brand. Several such keys:
+# pluginConfigs (E-14): `<name>@inline` for a --plugin-dir load (inline_key); otherwise the
+# single key whose part before `@` is the brand. Several such keys:
 # (undef, [them]), ambiguous.
 sub options_key {
     my ($pc) = @_;

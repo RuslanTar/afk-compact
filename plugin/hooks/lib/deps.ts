@@ -627,6 +627,12 @@ export type LoadState = {
    * a key of its windows, and when (a reading written again only once it changed or grew old).
    */
   usageNote: { key: string; at: number } | undefined
+  /**
+   * 0.1.9 (limits.ts `noteUsage`): set while a usage write runs; `next` is the latest refresh that
+   * came meanwhile, written (if it changed) once that write is done, so parallel responses spawn
+   * one helper, not one each.
+   */
+  usageNoting: { next: number | undefined } | undefined
 }
 
 /**
@@ -839,6 +845,7 @@ export function newState(loadId: string): LoadState {
     endedTasks: new Set(),
     usageAt: undefined,
     usageNote: undefined,
+    usageNoting: undefined,
   }
 }
 

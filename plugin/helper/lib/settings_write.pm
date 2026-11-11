@@ -437,7 +437,8 @@ sub clamp_notes {
 # plugin_key(pluginConfigs hash or undef, settings doc or undef) -> (key, how) or (undef, why):
 # the key in use (settings::options_key; an @inline run gives undef, inline), else
 # `<plugin>@<marketplace>` from the installed copy's folder
-# (<config dir>/plugins/cache/<marketplace>/<plugin>/<version>/), else the one enabledPlugins
+# (<config dir>/plugins/cache/<marketplace>/<plugin>/<version>/, or the marketplace whose folder
+# holds it, settings::load_source), else the one enabledPlugins
 # key for the plugin.
 sub plugin_key {
     my ($pc, $doc) = @_;
@@ -449,6 +450,9 @@ sub plugin_key {
     my $root = Cwd::abs_path(ctx::root() // '') // '';
     my $cache = Cwd::abs_path(settings::config_dir() . '/plugins/cache');
     if (defined $cache && $root =~ m{\A\Q$cache\E/([^/]+)/\Q$brand\E(?:/|\z)}) { return ("$brand\@$1", 'installed') }
+    # 0.1.9: read in place from a marketplace's folder (a directory marketplace)
+    my $ld = settings::load_source(ctx::root());
+    return ("$brand\@$ld->{mkt}", 'installed') if $ld->{kind} eq 'marketplace';
     my $en = ref $doc eq 'HASH' && ref $doc->{enabledPlugins} eq 'HASH' ? $doc->{enabledPlugins} : {};
     my @e = grep { (split /\@/, $_, 2)[0] eq $brand && /\@./ } sort keys %$en;
     return ($e[0], 'enabled') if @e == 1;
