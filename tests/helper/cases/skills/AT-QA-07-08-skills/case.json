@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Q-ADAPTER QA-4 (AT-QA-07): with queue mode off (begin measured no queue_cmd) a typed Queued: line and a \"· queued\" question row each give LINT queue-off with its why/fix line, and the publish is refused; with the mode on, the same body has no queue-off. AT-QA-08, repo-mode part: in repo mode with the queue on, the published handoff and the repository export keep the question in full plus · queued <id> (no id-only row).",
+ "note": "AT-QA-07: with queue mode off (begin measured no queue_cmd) a typed Queued: line and a \"· queued\" question row each give LINT queue-off with its why/fix line, and the publish is refused; with the mode on, the same body has no queue-off. AT-QA-08, repo-mode part: in repo mode with the queue on, the published handoff and the repository export keep the question in full plus · queued <id> (no id-only row).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "STATE-ROOT: the unsafe-root checks (lib/roots.pm) apply to the old default root on read; inside a git work tree (not ignored) it is skipped with a note line in locate and status, and none of its files is read. No old root: status has no legacy line.",
+ "note": "State root: the unsafe-root checks (lib/roots.pm) apply to the old default root on read; inside a git work tree (not ignored) it is skipped with a note line in locate and status, and none of its files is read. No old root: status has no legacy line.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "D-12 §1.5.9, Dev-6: project copy --from private --ticket T is a read-only dry run by default (would-export, skip secret, TOTAL; no file, dir or row written); --apply sends each private handoff through the export pipeline (rewrite, scan, no-replace write) and exports N-1 with skip secret for the one with a HARD hit; originals stay byte-identical; a re-run prints exists; other tickets are not touched; copy needs repo mode",
+ "note": "D-12 project copy, Dev-6: project copy --from private --ticket T is a read-only dry run by default (would-export, skip secret, TOTAL; no file, dir or row written); --apply sends each private handoff through the export pipeline (rewrite, scan, no-replace write) and exports N-1 with skip secret for the one with a HARD hit; originals stay byte-identical; a re-run prints exists; other tickets are not touched; copy needs repo mode",
  "tz": "Etc/GMT-3",
  "steps": [
   {

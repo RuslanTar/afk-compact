@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "pin: writes <root>/.sessions/<sid>.json under the TPL §6 lock (bucket, resumed_from, worktree, lane); a lock whose owner pid is dead is taken over and logged lock_stale; a live owner's lock is never broken (REFUSED: pin-locked, pin unchanged); outside the root or an auto: lane refused",
+ "note": "pin: writes <root>/.sessions/<sid>.json under the pin lock (bucket, resumed_from, worktree, lane); a lock whose owner pid is dead is taken over and logged lock_stale; a live owner's lock is never broken (REFUSED: pin-locked, pin unchanged); outside the root or an auto: lane refused",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

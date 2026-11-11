@@ -1,9 +1,9 @@
 {
- "id": "AT-TX-02, AT-TX-04, AT-TX-14, AT-AC-01 (T-TEXT E6, E7)",
+ "id": "AT-TX-02, AT-TX-04, AT-TX-14, AT-AC-01",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "publish prints, under the first line of each lint id in one run, `  why: <why> · fix: <fix>` from the spec's lint_texts (once per id); section_caps fires (`section-cap ## <heading> <chars>><cap>`); handoff_publish rows carry attempt (1-based per stage, refused calls too), template_rev (sha256/8 of the built template), acuity (the Resume here rating or -) and acuity_floor (begin's measure in the stage meta: in-progress git operation -> unstable, a measured in-flight row -> watch, else stable); ADVISORY acuity missing / below <floor>; the receipt row carries cmds_asked. Needs the T-TEXT E2 spec keys (lint_texts, acuity_re, section_caps, acuity in lint_ids).",
+ "note": "publish prints, under the first line of each lint id in one run, `  why: <why> · fix: <fix>` from the spec's lint_texts (once per id); section_caps fires (`section-cap ## <heading> <chars>><cap>`); handoff_publish rows carry attempt (1-based per stage, refused calls too), template_rev (sha256/8 of the built template), acuity (the Resume here rating or -) and acuity_floor (begin's measure in the stage meta: in-progress git operation -> unstable, a measured in-flight row -> watch, else stable); ADVISORY acuity missing / below <floor>; the receipt row carries cmds_asked. Needs the spec keys (lint_texts, acuity_re, section_caps, acuity in lint_ids).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,5 +1,5 @@
 {
- "id": "AT-PR-RA-prod-cases (fix-to-skills 2: settings/prod-cases.json)",
+ "id": "AT-PR-RA-prod-cases",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
@@ -8,7 +8,7 @@
   "fixture:settings/relaunch-allow-make-test.json",
   "fixture:settings/relaunch-allow-reindex-prod.json"
  ],
- "note": "S-SETTINGS B, C (AT-PR-01..04, AT-RA-01, -02; SKL-02): the 17 recorded commands of tests/fixtures/settings/prod-cases.json, each as a job of this session (k1..k17, in the file's order), with a published auto recipe holding expected outputs exactly when the file says so; heal-check prints the file's effects class under its settings file (copied from tests/fixtures, none = no options), which the BUILD-PLAN §3.7 order gives: unknown > outward > prod-write > prod-read > none > local > unknown. unknown and prod-write never print run:. Generated from the fixture; regenerate when it changes.",
+ "note": "AT-PR-01..04, AT-RA-01, -02: the 17 recorded commands of tests/fixtures/settings/prod-cases.json, each as a job of this session (k1..k17, in the file's order), with a published auto recipe holding expected outputs exactly when the file says so; heal-check prints the file's effects class under its settings file (copied from tests/fixtures, none = no options), which the class order gives: unknown > outward > prod-write > prod-read > none > local > unknown. unknown and prod-write never print run:. Generated from the fixture; regenerate when it changes.",
  "tz": "Etc/GMT-3",
  "steps": [
   {

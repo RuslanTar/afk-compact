@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "STATE-ROOT: an old default root whose real path lies in a .planning folder (here through a symlink) is skipped with a note line in locate and status.",
+ "note": "State root: an old default root whose real path lies in a .planning folder (here through a symlink) is skipped with a note line in locate and status.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

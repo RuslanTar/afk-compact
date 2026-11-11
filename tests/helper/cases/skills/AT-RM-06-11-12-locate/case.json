@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "D-12 §1.5.7 locate: with the main checkout M accepted, a publish from worktree W exports under W only; own twin and export (same nonce and session) give one candidate, the private twin, with the export path beside it; a newer teammate export is never auto-picked; in M, W's export is a candidate labelled repo:w and nothing is picked; an exact single ticket selects the export, read as foreign (source, from session, evidence not on this machine, in-flight not probed); not accepted, the exports are not read and one note line counts them; REVIEW-NIGHT-3 R3-08: an own export or an own file outside the store given by path says foreign",
+ "note": "D-12 repo mode, locate: with the main checkout M accepted, a publish from worktree W exports under W only; own twin and export (same nonce and session) give one candidate, the private twin, with the export path beside it; a newer teammate export is never auto-picked; in M, W's export is a candidate labelled repo:w and nothing is picked; an exact single ticket selects the export, read as foreign (source, from session, evidence not on this machine, in-flight not probed); not accepted, the exports are not read and one note line counts them; R3-08: an own export or an own file outside the store given by path says foreign",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

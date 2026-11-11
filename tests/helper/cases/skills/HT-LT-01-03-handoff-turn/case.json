@@ -137,7 +137,7 @@
    }
   },
   {
-   "name": "HT-LT-03 staged, no draft: finish= starts with the <store> token the resume context defines once (C-2, XR-03 (1))",
+   "name": "HT-LT-03 staged, no draft: finish= starts with the <store> token the resume context defines once (C-2)",
    "argv": [
     "handoff-state",
     "--sid",

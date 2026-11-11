@@ -1,9 +1,9 @@
 {
- "id": "AT-PK-04 (PKG-RUNTIME A.4, store-path)",
+ "id": "AT-PK-04 (store-path)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "publish lint `store-path` (advisory): a body line holding /scripts/<plugin>-store (the launcher by its path) gets `ADVISORY store-path line <n>` and its why/fix line; handoffs write the symbolic <store>. The repo export of such a body is scanned and written as before (home rewritten to ~/), carrying the advisory on the publish row. Needs the T-TEXT E2 spec (store-path in lint_ids.advisory, its lint_texts entry).",
+ "note": "publish lint `store-path` (advisory): a body line holding /scripts/<plugin>-store (the launcher by its path) gets `ADVISORY store-path line <n>` and its why/fix line; handoffs write the symbolic <store>. The repo export of such a body is scanned and written as before (home rewritten to ~/), carrying the advisory on the publish row. Needs the spec block (store-path in lint_ids.advisory, its lint_texts entry).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

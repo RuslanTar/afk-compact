@@ -2,7 +2,7 @@
  "id": "TMP-JUNK-01",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.3 small fixes: begin's tmp_candidates drop a recorded path that names no file and is a piece of a command (in the owner's 70 sessions 157 of 1,606 distinct paths): not absolute ($S/tasks/x.output), an unexpanded variable (${RULES}, $$), a glob or brace pattern, a backslash (an escaped newline), a ... part (/var/folders/.../T), a last - (a prefix cut at a variable: /private/tmp/flow-guard-) or a printf directive (/private/tmp/claude-%d) (0.1.4 T-9); a shell assignment or wait spec it was cut with (F=/path, exit:/path) is taken off; a missing plain path and an existing file of any name stay. The text rules are pinned by tests/fixtures/paths/junk-paths.json, the table the mod's recorder (hooks/lib/nudge.ts junkPath, units.test.ts) is held to as well (0.1.4 T-10)",
+ "note": "0.1.3 small fixes: begin's tmp_candidates drop a recorded path that names no file and is a piece of a command (in a sample of 70 real sessions, 157 of 1,606 distinct paths): not absolute ($S/tasks/x.output), an unexpanded variable (${RULES}, $$), a glob or brace pattern, a backslash (an escaped newline), a ... part (/var/folders/.../T), a last - (a prefix cut at a variable: /private/tmp/flow-guard-) or a printf directive (/private/tmp/claude-%d) (0.1.4 T-9); a shell assignment or wait spec it was cut with (F=/path, exit:/path) is taken off; a missing plain path and an existing file of any name stay. The text rules are pinned by tests/fixtures/paths/junk-paths.json, the table the mod's recorder (hooks/lib/nudge.ts junkPath, units.test.ts) is held to as well (0.1.4 T-10)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

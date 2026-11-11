@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "SR-7 (O-6 owner-ruled xxxxxxxx-35: duties in code), the H half of AT-SR-09 and AT-AP-07: `risk --cmd-file FILE [--source own|foreign] [--cwd DIR]` gives every row of tests/fixtures/risk/corpus.tsv its answer, plus the code-only checks the literals cannot see: recorded (byte-identical to a jobs.jsonl command in any session folder), read-outside (a real path outside the work tree, or no work tree), a test/build target the repository defines and no build definition differing from HEAD (NR-23), the first gate family (env-write before infra-write), protected-push from the destination branch, prod-write, the own-source asks (gate, outward, production, credential-value); never a command on the shell line (NR-03); one content-free risk row; REVIEW-NIGHT-2 R2-01..R2-05: option bundles and abbreviations, follow-link options, the test/build flag allowlists, an option's attached path and `..` steps (read-outside), and a bare push to an upstream main; REVIEW-NIGHT-3: the class patterns also match the command as the shell reads it (quotes and escapes removed, command words in lower case: R3-06), a recorded command keeps write-outside (R3-09), and the NR-23 list holds the files that decide what a test or build run executes (R3-11); owner xxxxxxxx-07 (all four risk rules kept): R-2 an unknown push destination (--all, --mirror, a detached HEAD) is protected-push, R-1 a production command that is not exactly one production read (the approvals read grammar or readonly_cmd_re, one segment) is the prod-write gate",
+ "note": "SR-7 (duties in code), the H half of AT-SR-09 and AT-AP-07: `risk --cmd-file FILE [--source own|foreign] [--cwd DIR]` gives every row of tests/fixtures/risk/corpus.tsv its answer, plus the code-only checks the literals cannot see: recorded (byte-identical to a jobs.jsonl command in any session folder), read-outside (a real path outside the work tree, or no work tree), a test/build target the repository defines and no build definition differing from HEAD, the first gate family (env-write before infra-write), protected-push from the destination branch, prod-write, the own-source asks (gate, outward, production, credential-value); never a command on the shell line; one content-free risk row; R2-01..R2-05: option bundles and abbreviations, follow-link options, the test/build flag allowlists, an option's attached path and `..` steps (read-outside), and a bare push to an upstream main; the class patterns also match the command as the shell reads it (quotes and escapes removed, command words in lower case: R3-06), a recorded command keeps write-outside (R3-09), and the list holds the files that decide what a test or build run executes (R3-11); all four risk rules are kept: R-2 an unknown push destination (--all, --mirror, a detached HEAD) is protected-push, R-1 a production command that is not exactly one production read (the approvals read grammar or readonly_cmd_re, one segment) is the prod-write gate",
  "now": "2026-10-23T08:10:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -529,7 +529,7 @@
    }
   },
   {
-   "name": "NR-23: a build definition differs from HEAD, so make test asks",
+   "name": "a build definition differs from HEAD, so make test asks",
    "argv": [
     "risk",
     "--cmd-file",
@@ -549,7 +549,7 @@
    }
   },
   {
-   "name": "NR-23: npm test in the same repository asks too",
+   "name": "npm test in the same repository asks too",
    "argv": [
     "risk",
     "--cmd-file",
@@ -994,7 +994,7 @@
    }
   },
   {
-   "name": "R-2 (owner xxxxxxxx-07): git push --all is protected-push (its destinations cannot be told)",
+   "name": "R-2: git push --all is protected-push (its destinations cannot be told)",
    "argv": [
     "risk",
     "--cmd-file",
@@ -1054,7 +1054,7 @@
    }
   },
   {
-   "name": "R-1 (owner xxxxxxxx-07): own, a production command with no listed write verb is the prod-write gate",
+   "name": "R-1: own, a production command with no listed write verb is the prod-write gate",
    "argv": [
     "risk",
     "--cmd-file",

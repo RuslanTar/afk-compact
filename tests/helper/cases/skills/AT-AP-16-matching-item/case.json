@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-16 (matching item, owner xxxxxxxx-06)",
+ "id": "AT-AP-16 (matching item)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner xxxxxxxx-06 \"Matching item\" (2026-10-26; NIGHT-REVIEW 2.7, R3-04): a quote under 4 words also counts as one whole line of a longer message, when the assistant text before it names a target and (a) the line's item number is that of the item of the assistant's last numbered list that names a target, or (b) the line itself holds a word of the action or a target. Counted: \"1. publish yourself.\" and \"publish yourself\" (line 1 of a 3-line reply; it holds the action), \"yes\" as \"2. yes\" answering item 2 \"Push branch feat/y\", and \"merge it\" (line 1, holds the action; item 1 names no target; an sdk-origin row). Refused (approval-quote): \"1. yes\" of \"1. yes / 2. no\" for the push of feat/x that item 2 asked (the trap), \"yes\" for feat/w named only in an earlier list, \"1. yes\" where line 1 is \"later\", and an unnumbered \"ok\" line holding no action. Then the handoff's measure counts the carried approvals by origin (owner xxxxxxxx-12): human 3, sdk 1, kept in the publish record.",
+ "note": "Matching item: a quote under 4 words also counts as one whole line of a longer message, when the assistant text before it names a target and (a) the line's item number is that of the item of the assistant's last numbered list that names a target, or (b) the line itself holds a word of the action or a target. Counted: \"1. publish yourself.\" and \"publish yourself\" (line 1 of a 3-line reply; it holds the action), \"yes\" as \"2. yes\" answering item 2 \"Push branch feat/y\", and \"merge it\" (line 1, holds the action; item 1 names no target; an sdk-origin row). Refused (approval-quote): \"1. yes\" of \"1. yes / 2. no\" for the push of feat/x that item 2 asked (the trap), \"yes\" for feat/w named only in an earlier list, \"1. yes\" where line 1 is \"later\", and an unnumbered \"ok\" line holding no action. Then the handoff's measure counts the carried approvals by origin: human 3, sdk 1, kept in the publish record.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -163,7 +163,7 @@
    }
   },
   {
-   "name": "owner xxxxxxxx-12: measure <handoff> counts the carried approvals by the origin publish recorded; no text in the row",
+   "name": "measure <handoff> counts the carried approvals by the origin publish recorded; no text in the row",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",

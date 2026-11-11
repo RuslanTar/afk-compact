@@ -1,9 +1,9 @@
 {
- "id": "AT-P5-05 skills (SKL-06)",
+ "id": "AT-P5-05 skills",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "P5-FOLD A4 text encoding, skills half (golden bytes): the handoff_root comes from the user's settings file (a character string from the core reader, Latin-1 range only: räume), the repository folder from git output (rëpo), the title holds Cyrillic and the helper's own literals (· —). begin, publish, locate and evidence print every path and literal UTF-8 encoded exactly once, the published file keeps the body bytes, and the paths round-trip (the files are found again). Before SKL-06 the git bytes joined to the character root came out double-encoded and the Latin-1-range root came out as Latin-1.",
+ "note": "P5 text encoding, skills half (golden bytes): the handoff_root comes from the user's settings file (a character string from the core reader, Latin-1 range only: räume), the repository folder from git output (rëpo), the title holds Cyrillic and the helper's own literals (· —). begin, publish, locate and evidence print every path and literal UTF-8 encoded exactly once, the published file keeps the body bytes, and the paths round-trip (the files are found again). Before the fix the git bytes joined to the character root came out double-encoded and the Latin-1-range root came out as Latin-1.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

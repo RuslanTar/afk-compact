@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-18 (origin counts on approvals_carry, owner xxxxxxxx-12)",
+ "id": "AT-AP-18 (origin counts on approvals_carry)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner xxxxxxxx-12 \"Count, log origin\" (2026-10-26; NIGHT-REVIEW 3.6): an sdk-origin row (claude -p, Agent SDK) still counts as the user's words, and the approvals_carry row counts the carried approvals by the origin of the row their quote was found in: human, sdk, composer, none (a typed row without an origin), dialog (an AskUserQuestion answer). A gate (the push to main, U-7) is not carried and not counted. Class words only: no quote text in any row.",
+ "note": "Count and log the origin: an sdk-origin row (claude -p, Agent SDK) still counts as the user's words, and the approvals_carry row counts the carried approvals by the origin of the row their quote was found in: human, sdk, composer, none (a typed row without an origin), dialog (an AskUserQuestion answer). A gate (the push to main, U-7) is not carried and not counted. Class words only: no quote text in any row.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

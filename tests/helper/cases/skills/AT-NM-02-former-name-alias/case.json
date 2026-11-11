@@ -1,9 +1,9 @@
 {
- "id": "AT-NM-02 (read-only alias for the former name, owner xxxxxxxx-26)",
+ "id": "AT-NM-02 (read-only alias for the former name)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner 2026-10-23 xxxxxxxx-26 (\"Read-only alias\"): a handoff in the private store, of this session or a lineage predecessor, whose marker and sentinel carry the plugin's former name (settings.pm @FORMER_NAMES, compactinue) with one nonce reads as integrity ok and own (locate names the former name; measure carries its checked approval; publish carries it into a new file). Another session's former-name file, an own file outside the store, an own file without any marker, one with a name that was never this plugin's, and a former marker with a current-name sentinel stay legacy (foreign). A fork still carries no approval. New files are always written under the current name.",
+ "note": "Read-only alias: a handoff in the private store, of this session or a lineage predecessor, whose marker and sentinel carry the plugin's former name (settings.pm @FORMER_NAMES, compactinue) with one nonce reads as integrity ok and own (locate names the former name; measure carries its checked approval; publish carries it into a new file). Another session's former-name file, an own file outside the store, an own file without any marker, one with a name that was never this plugin's, and a former marker with a current-name sentinel stay legacy (foreign). A fork still carries no approval. New files are always written under the current name.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -86,7 +86,7 @@
    ]
   },
   {
-   "name": "xxxxxxxx-26: an own file in the store marked with the former name reads ok and own",
+   "name": "an own file in the store marked with the former name reads ok and own",
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
@@ -110,7 +110,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26: its checked approval carries in the same session",
+   "name": "its checked approval carries in the same session",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -129,7 +129,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26: a /clear successor reads the predecessor's former-name file as own (successor)",
+   "name": "a /clear successor reads the predecessor's former-name file as own (successor)",
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
@@ -150,7 +150,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26: and carries its checked approval",
+   "name": "and carries its checked approval",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -166,7 +166,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26: a fork reads it as own for commands (successor, ok)",
+   "name": "a fork reads it as own for commands (successor, ok)",
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
@@ -187,7 +187,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26 + 27 revised: a fork carries no approval, alias or not",
+   "name": "a fork carries no approval, alias or not",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -203,7 +203,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26: another session's former-name file stays legacy",
+   "name": "another session's former-name file stays legacy",
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
@@ -242,7 +242,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26: an own file without any marker stays legacy",
+   "name": "an own file without any marker stays legacy",
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
@@ -345,7 +345,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26: an own former-name file outside the private store stays legacy and foreign",
+   "name": "an own former-name file outside the private store stays legacy and foreign",
    "cwd": "$TMP/repo",
    "argv": [
     "locate",
@@ -420,7 +420,7 @@
    "content": "# LAB-9 — after the rename\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
-   "name": "xxxxxxxx-26: publish carries the former-name file's checked line (own base)",
+   "name": "publish carries the former-name file's checked line (own base)",
    "cwd": "$TMP/repo",
    "argv": [
     "publish",
@@ -446,7 +446,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-26: the new file is written under the current name only",
+   "name": "the new file is written under the current name only",
    "cwd": "$TMP/repo",
    "argv": [
     "handoff-state",

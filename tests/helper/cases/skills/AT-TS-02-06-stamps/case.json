@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "RV-24 (small-rulings §3a): the blocking time-format rule catches `checked` or `[verified` with HH:MM, MM-DD HH:MM or a date without its offset; a full stamp the helper did not print is unprinted-time; a stamp from `stamp` publishes, and a legacy short form inside a line carried byte-identical from the base is not flagged. measure reads a new and a legacy handoff and prints a full stamp",
+ "note": "RV-24: the blocking time-format rule catches `checked` or `[verified` with HH:MM, MM-DD HH:MM or a date without its offset; a full stamp the helper did not print is unprinted-time; a stamp from `stamp` publishes, and a legacy short form inside a line carried byte-identical from the base is not flagged. measure reads a new and a legacy handoff and prints a full stamp",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
