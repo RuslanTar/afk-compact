@@ -1,4 +1,4 @@
-// U tests through the kit: question carry (0.1.2, investigation wf_c3788b4f-00e fix 1). A main
+// U tests through the kit: question carry (0.1.2). A main
 // turn that ends on a question to the user (its answer's last line asks one, or one of its
 // AskUserQuestion dialogs closed on Claude Code's AFK timeout) leaves that question open until a
 // person's turn starts; a main compaction in between carries its text in the resume block

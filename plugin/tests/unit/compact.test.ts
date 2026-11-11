@@ -500,7 +500,7 @@ test('QA-B3 (mod part): queue_cmd unset: no [queue] line and no queue tag', asyn
   expect((w.flag(w.callsOf('dispatch')[0], '--tags') ?? '').split(',')).not.toContain('queue')
 })
 
-// 0.1.3 (root decision on the small-fixes review): a summary complete but for its closing line
+// 0.1.3 (decision on the small-fixes review): a summary complete but for its closing line
 // reads ok-unclosed, an ok verdict: no fallback note, no toast, never toward the 2-in-a-row halt;
 // the compaction line names the word. A summary cut inside its body stays truncated.
 test('ok-unclosed: complete but for the closing line: no nonok note or toast, two in a row never halt, the line names the word; cut in the body still halts', async ($, on) => {

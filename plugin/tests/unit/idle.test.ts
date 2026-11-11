@@ -1356,7 +1356,7 @@ for (const c of AGENT_SKIPS) {
   })
 }
 
-test('AT-IS-04: the served hint (2b) is logged in idle_mode and idle_silent, never decides: mode off or compact, the check runs the same', { options: TURN }, async ($, on) => {
+test('AT-IS-04: the served hint is logged in idle_mode and idle_silent, never decides: mode off or compact, the check runs the same', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.rateLimits = LIMITS
   w.files.set(HOME + '/.claude.json', served('off'))
