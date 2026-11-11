@@ -953,32 +953,62 @@ sub keep_warm_lines {
     return ("$on · this gap: not warming");
 }
 
-# D-83 (0.1.8): the session's last usage reading, from the shared usage record (lib/usagerec.pm,
-# dated as the plugin's decisions date it: a status line's entry never newer than its session's
-# plugin entry): per window kind its share, where it came from (the plugin or the status line's
-# --note-usage; the plugin's on a tie) and how old it is, then how many window readings other
-# sessions on this machine left in the last 10 minutes (one per session and kind). Read only; one line.
+# D-83 (0.1.8), D-88: the session's last usage reading, from the shared usage record
+# (lib/usagerec.pm, dated as the plugin's decisions date it: a status line's entry never newer
+# than its session's plugin entry): per window kind its share, where it came from (the plugin or
+# the status line's --note-usage; the plugin's on a tie), how old it is and when its window resets
+# (a reading counts until then, however old; one past its reset, or one with no reset time older
+# than 10 minutes, is marked not counted); then the other sessions' readings on this machine that
+# count, as the plugin's near-limit rule reads them (limits.ts windowsOf): per window kind and
+# reset (within a minute) the latest, with no reset time each session's newest, at most
+# $USAGE_PEERS_SHOWN of them. Read only; one line.
+our $USAGE_PEERS_SHOWN = 6;
 sub usage_lines {
     my ($sid) = @_;
     my $s8 = usagerec::sid8($sid);
     my $all = eval { usagerec::dated(usagerec::read_all()) } || [];
     my $now = util::now();
-    my (%mine, %peer);
+    my $counts = sub { my ($e) = @_; return defined $e->{resets_at} ? $e->{resets_at} > $now : abs($now - $e->{at}) <= 600 };
+    my (%mine, @peer);
     for my $e (@$all) {
         if (defined $s8 && $e->{sid8} eq $s8) {
             my $o = $mine{ $e->{kind} };
             $mine{ $e->{kind} } = $e if !$o || $e->{at} > $o->{at} || ($e->{at} == $o->{at} && $e->{src} eq 'plugin');
         }
-        elsif ($now - $e->{at} <= 600) { $peer{"$e->{sid8}\0$e->{kind}"} = 1 }
+        elsif ($counts->($e)) { push @peer, $e }
     }
-    my $peers = keys %peer;
-    my $ago = sub { my $x = $_[0] < 0 ? 0 : int($_[0]); return $x < 60 ? "${x}s" : $x < 3600 ? int($x / 60) . 'm' : int($x / 3600) . 'h' };
+    # the other sessions' windows: grouped by kind and reset (a group's resets within a minute of
+    # its earliest), or by kind and session without one; each one's latest (the larger share on a tie)
+    my @win;
+    for my $e (sort { $a->{kind} cmp $b->{kind} || ($a->{resets_at} // 0) <=> ($b->{resets_at} // 0) || $a->{sid8} cmp $b->{sid8} } @peer) {
+        my $g;
+        if (defined $e->{resets_at}) {
+            $g = $win[-1] if @win && $win[-1][1]{kind} eq $e->{kind} && defined $win[-1][0] && $e->{resets_at} - $win[-1][0] <= 60;
+        } else {
+            ($g) = grep { !defined $_->[0] && $_->[1]{kind} eq $e->{kind} && $_->[1]{sid8} eq $e->{sid8} } @win;
+        }
+        if (!$g) { push @win, [$e->{resets_at}, $e]; next }
+        my $o = $g->[1];
+        $g->[1] = $e if $e->{at} > $o->{at} || ($e->{at} == $o->{at} && $e->{pct} > $o->{pct});
+    }
+    @win = map { $_->[1] } @win;
+    my $ago = sub { my $x = $_[0] < 0 ? 0 : int($_[0]); return $x < 60 ? "${x}s" : $x < 3600 ? int($x / 60) . 'm' : $x < 172800 ? int($x / 3600) . 'h' : int($x / 86400) . 'd' };
+    my $reset = sub {
+        my ($e) = @_;
+        return $counts->($e) ? 'no reset time' : 'no reset time: not counted after 10 min' unless defined $e->{resets_at};
+        return 'reset passed: not counted' unless $e->{resets_at} > $now;
+        return 'resets in ' . $ago->($e->{resets_at} - $now);
+    };
     my @w = map {
         my $e = $mine{$_};
-        sprintf('%s %s%% (%s, %s ago)', $_, int($e->{pct}), $e->{src} eq 'statusline' ? 'status line' : 'plugin', $ago->($now - $e->{at}))
+        sprintf('%s %s%% (%s, %s ago, %s)', $_, int($e->{pct}), $e->{src} eq 'statusline' ? 'status line' : 'plugin', $ago->($now - $e->{at}), $reset->($e))
     } sort keys %mine;
     my $l = 'usage: ' . (@w ? join(' · ', @w) : defined $s8 ? 'no reading of this session in the last hour' : 'unknown (no session id)');
-    $l .= "; other sessions on this machine: $peers reading" . ($peers == 1 ? '' : 's') . ' in the last 10 min' if $peers;
+    if (@win) {
+        my @p = map { sprintf('%s %s%% (%s ago, %s)', $_->{kind}, int($_->{pct}), $ago->($now - $_->{at}), $reset->($_)) } @win[0 .. ($#win < $USAGE_PEERS_SHOWN - 1 ? $#win : $USAGE_PEERS_SHOWN - 1)];
+        push @p, '+' . (@win - $USAGE_PEERS_SHOWN) . ' more' if @win > $USAGE_PEERS_SHOWN;
+        $l .= '; other sessions on this machine: ' . join(' · ', @p);
+    }
     return ($l);
 }
 

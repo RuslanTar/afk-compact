@@ -576,7 +576,7 @@
    }
   },
   {
-   "name": "status of another session: 5e55a0a1's status line entry reads as old as its plugin entry (12:00); the 31 status-line-only sessions have no plugin entry, so no reading",
+   "name": "status of another session: 5e55a0a1's status line entry reads as old as its plugin entry (12:00; D-88: it still counts, its window resets in 3 days); the 31 status-line-only sessions have no plugin entry, so no reading",
    "argv": [
     "status",
     "--sid",
@@ -585,7 +585,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^usage: no reading of this session in the last hour$"
+     "^usage: no reading of this session in the last hour; other sessions on this machine: seven_day 95% \\(51m ago, resets in 3d\\)$"
     ]
    }
   },
@@ -657,7 +657,7 @@
    }
   },
   {
-   "name": "status of another session: 5e55a0b2's reading counts from 12:11:30 (50 min: not recent); only 5e55a0c3's is",
+   "name": "status of another session: 5e55a0b2's reading is dated 12:11:30 (50 min old; D-88: it still counts until its reset), 5e55a0c3's 30 s",
    "now": "2026-11-09T13:01:30Z",
    "argv": [
     "status",
@@ -667,7 +667,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^usage: no reading of this session in the last hour; other sessions on this machine: 1 reading in the last 10 min$"
+     "^usage: no reading of this session in the last hour; other sessions on this machine: five_hour 10% \\(30s ago, resets in 3d\\) · seven_day 95% \\(50m ago, resets in 3d\\)$"
     ]
    }
   }
