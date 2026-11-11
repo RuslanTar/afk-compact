@@ -85,7 +85,7 @@ if [ "${1-}" = hook ]; then
   # a watch folder that is not an absolute path (a relative log_dir) is root-invalid (the helper
   # refuses it): no row, since it would land under the hook's working folder
   case $watch in /*) ;; *) exit 0 ;; esac
-  # MOD-SPEC 1.2 without the helper: a row only in an absolute folder that no folder from it up to
+  # The root rule without the helper: a row only in an absolute folder that no folder from it up to
   # / marks as a git work tree or a .planning folder (no git call, so a git-ignored root gets no
   # row either), at most 64 levels; else nothing is written and the hook still exits 0. The walk
   # runs on the path as given and again from the deepest folder that exists read through its
