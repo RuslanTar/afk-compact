@@ -355,3 +355,9 @@ test('D88-06 (D-88): no own window (a load that adopted the session before its f
   rec = [e({ sid8: '5e55a002' })]
   expect(await readingsNow(d, sid, [])).toEqual([])
 })
+
+test('D88-07 (D-88): a session\'s reading with no reset time beside its own reading of that kind with one is the same reading (one Claude Code object): not a window of its own, so an older lower share cannot split it', () => {
+  const R = NOW + 3 * DAY
+  const v = judge([r('seven_day', 99, 'plugin', 20, R), r('seven_day', 40, 'statusline', 5)], { ...C, job: false })
+  expect([v.ok, v.rule, v.usage.usage_n]).toEqual([false, 'cap', { seven_day: 1 }])
+})

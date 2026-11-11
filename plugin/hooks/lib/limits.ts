@@ -163,7 +163,9 @@ function later(a: Reading, b: Reading): boolean {
 /**
  * D-88: the windows of one kind's readings, each as its latest reading, in the readings' order:
  * those with a reset time grouped by it (a group's resets within `RESET_SAME_MS` of its earliest),
- * those without one per session (its newest; the own session's `plugin` and `statusline` are one).
+ * those without one per session (its newest; the own session's `plugin` and `statusline` are one),
+ * left out where that session has a reading of the kind with a reset time (one Claude Code object:
+ * the reset is known).
  */
 export function windowsOf(rs: readonly Reading[]): Reading[] {
   const out: Reading[] = []
@@ -177,9 +179,12 @@ export function windowsOf(rs: readonly Reading[]): Reading[] {
     } else if (later(last, r)) out[out.length - 1] = r
   }
   const own = new Map<string, Reading>()
+  const who = (r: Reading): string => (r.src === 'peer' ? 'p:' + (r.sid8 ?? '') : 'self')
+  const timed = new Set(rs.filter(r => r.resetsAt !== undefined).map(who))
   for (const r of rs) {
     if (r.resetsAt !== undefined) continue
-    const k = r.src === 'peer' ? 'p:' + (r.sid8 ?? '') : 'self'
+    const k = who(r)
+    if (timed.has(k)) continue
     const o = own.get(k)
     if (o === undefined || later(o, r)) own.set(k, r)
   }
