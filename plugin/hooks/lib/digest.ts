@@ -1,16 +1,16 @@
-// Away digest phase 1, the digest turn (owner 2026-10-27 12:5x, xxxxxxxx-09: "Pointer on return.
-// default setting: submit right away"; AWAY-DIGEST §11). After an idle compaction whose work lane
+// Away digest phase 1, the digest turn (a pointer on return; the
+// `submit` setting submits right away). After an idle compaction whose work lane
 // reads finished, hard-blocked or soft-blocked, with nothing running (no agent, and no background
 // task the measure lists: nothing would open a turn before the person comes back), `idle_digest: submit` submits one turn right away:
 // the digest line with the resume block, whose `[idle-done]` line asks for the full digest.
 // `idle_digest: return` submits nothing: the block waits for the next turn, and a person's own
 // message gets the at most 5-line pointer of the same line before its answer.
-// `idle_digest: off` (the default of this version; owner rule (c), 2026-10-28: the digest ships on
+// `idle_digest: off` (the default of this version: the digest ships on
 // only after a live PASS) submits nothing either, and no text asks for the full digest: the block's
 // `[idle-done-off]` line, and every note, ask for one line on the lane state with its Basis, then
 // Needs you or Nothing needed from you.
 // One `digest_submit {nonce, lane, result}` row per idle compaction of a finished or blocked lane.
-// Owner 2026-10-28 digest rules (b): after a background result's turn did the step that result
+// Digest rule (b): after a background result's turn did the step that result
 // unblocked, the lane is read again at that turn's end (`laneTurnEnd`); finished or hard-blocked
 // now gets one digest turn too (`submitResultDigest`), or the person's return gets it.
 import type { Deps, IdleLane } from './deps'
@@ -119,7 +119,7 @@ async function send(d: Deps, sid: string, text: string, g: { stamps: number[]; n
 }
 
 /**
- * Owner 2026-10-28 digest rules (b): at the end of a main turn whose job result unblocked a step
+ * Digest rule (b): at the end of a main turn whose job result unblocked a step
  * held on that job (the lane read working for that turn only: rule (a), lane.ts `laneOf`
  * `byResult`), the lane is read again without that result, so the step the turn did no longer
  * counts. When it now reads finished or hard-blocked, the user still gets the blocked digest,

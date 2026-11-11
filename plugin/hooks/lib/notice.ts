@@ -1,4 +1,4 @@
-// The watcher's first-run notice (WATCHER-SPEC §8 item 8, W-BETA A). At a main `session.start`
+// The watcher's first-run notice. At a main `session.start`
 // the mod asks the helper `notice claim --id <id>`; the helper creates
 // `<watch>/notice/<id>.shown` exclusively and answers `show` (first time) or `seen`. On `show`
 // the mod shows the fixed text once, for 20 s, whatever `warn_ui` says: a one-time transparency
@@ -13,7 +13,7 @@ export const NOTICE_ID = 'watcher-1'
 export const NOTICE_MS = 20000
 export const NOTICE_MAX = 200
 
-/** The fixed text for a plugin name (the spec asset's wording, W-BETA A). */
+/** The fixed text for a plugin name (the spec asset's wording). */
 export function noticeFallback(name: string): string {
   return `${name}: local compaction logs are on (content-free; nothing is sent). To share them: /${name}:report. To turn them off: set watcher to false in /config.`
 }
@@ -40,7 +40,7 @@ export function shippedNotice(name: string): { id: string; text: string } {
 export async function showNotice(d: Deps, sid: string): Promise<void> {
   if (d.cfg.watcher_off) return
   const n = shippedNotice(d.name)
-  void sid // the claim is per install, not per session (WATCHER-SPEC §8 item 8)
+  void sid // the claim is per install, not per session
   const r = await call(d, ['notice', 'claim', '--id', n.id])
   if (!r.ok || r.stdout.trim() !== 'show') return
   d.notice(n.text.slice(0, NOTICE_MAX), NOTICE_MS)

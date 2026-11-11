@@ -1,4 +1,4 @@
-// Options (MOD-SPEC §1.2), the threshold clamp, and the paths the mod writes under. Options are
+// Options, the threshold clamp, and the paths the mod writes under. Options are
 // the only configuration source (no environment reads for configuration).
 import type { PluginOptions } from 'claude-code'
 import type { CompactWindow, Deps } from './deps'
@@ -19,24 +19,24 @@ export type Config = {
   measured_block: boolean
   auto_evidence: boolean
   warn_ui: boolean
-  /** `halt`: a last cycle gets a handoff turn before its compaction (MOD-SPEC §9.1); `off`: none. */
+  /** `halt`: a last cycle gets a handoff turn before its compaction; `off`: none. */
   handoff_turn: 'halt' | 'off'
   handoff_turn_max_tokens: number
-  /** The queue tool (MOD-SPEC §10.3); empty = off. The mod only reads whether it is set. */
+  /** The queue tool; empty = off. The mod only reads whether it is set. */
   queue_cmd: string
-  /** `model`: a handoff turn before a turn-end compaction (MOD-SPEC §9.3); `code`: checkpoint only. */
+  /** `model`: a handoff turn before a turn-end compaction; `code`: checkpoint only. */
   precompact_turn: 'model' | 'code'
-  /** `allow` keeps the resume block's `[prod-allow]` line when the checkpoint agrees (text tag only, §3.4). */
+  /** `allow` keeps the resume block's `[prod-allow]` line when the checkpoint agrees (text tag only). */
   unattended_prod_reads: 'forbid' | 'allow'
   /**
-   * `auto`: a handoff turn about 49 min into an idle episode (MOD-SPEC §9.4) while Claude Code's own
-   * idle compaction is off (IA-1..3, idle D3: owner 2026-10-23 02:4x); `off`: none.
+   * `auto`: a handoff turn about 49 min into an idle episode while Claude Code's own
+   * idle compaction is off; `off`: none.
    */
   idle_handoff_turn: 'auto' | 'off'
   /** No pre-idle handoff turn below this context size. */
   idle_handoff_min_tokens: number
   /**
-   * Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): `run` runs the idle handoff turn at
+   * The handoff is wanted anyway: `run` runs the idle handoff turn at
    * any usage share; `skip` skips it while a rate-limit window is at NEAR_LIMIT_PCT or more (idle.ts
    * `near-limit`); `skip-spend` (0.1.2) skips it only while a gateway's spend limit (a money cap)
    * is there, and runs it near a plan's five-hour or seven-day window. The plugin's idle compaction
@@ -47,21 +47,21 @@ export type Config = {
    * `auto`: while Claude Code's own idle compaction is off in the settings (`"idleCompaction":
    * false`) and automatic compaction is on, the plugin compacts an idle main session itself about
    * 54 minutes after its last request (idle.ts, kind `compact`); while Claude Code's own is on or
-   * unreadable, it compacts at the 55.5-min check when that one stayed silent (lane B; owner Q2);
+   * unreadable, it compacts at the 55.5-min check when that one stayed silent;
    * `off`: never (the pre-idle handoff turn runs in its place).
    */
   idle_compact: 'auto' | 'off'
   /**
-   * Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): after an idle compaction whose work
+   * Away digest phase 1: after an idle compaction whose work
    * lane is finished or blocked with nothing running, `submit` sends the digest turn right away;
-   * `return` waits for the next turn (a person's return gets a short pointer first). `off` (owner
-   * rule (c), 2026-10-28: the digest ships on only after a live PASS): no digest turn, and no text
+   * `return` waits for the next turn (a person's return gets a short pointer first). `off` (the
+   * digest ships on only after a live PASS): no digest turn, and no text
    * asks for the full digest; a finished or blocked lane still starts nothing and gets one line on
    * the lane state with its Basis, then Needs you or Nothing needed from you.
    */
   idle_digest: 'submit' | 'return' | 'off'
   /**
-   * Keep-warm (D-14, 2026-10-30; keepwarm.ts): while the main session is idle and one of its own
+   * Keep-warm (keepwarm.ts): while the main session is idle and one of its own
    * background jobs (an agent, a workflow, a background shell) is still open, the plugin keeps its
    * one-hour prompt cache warm with a hidden fork ping, for up to this many hours of the idle gap,
    * then hands over to the idle path (the handoff turn or the compaction) while the cache is warm.
@@ -73,13 +73,13 @@ export type Config = {
   /**
    * Values replaced while parsing: `config_invalid` keys and `config_clamped` rows (logged once per
    * load); `noted` (present only when not empty): `config_note` rows for a value read another way
-   * (IA-1: the old `idle_handoff_turn: on` reads as `auto`; D-72: a SWITCH key's word before 0.1.6).
+   * (the old `idle_handoff_turn: on` reads as `auto`; a SWITCH key's word before 0.1.6).
    */
   notes: { invalid: string[]; clamped: { key: string; configured: number; effective: number }[]; noted?: { key: string; note: string }[] }
 }
 
 export const DEFAULTS: Config = {
-  // STATE-ROOT (0.1.2): both out of ~/.claude, whose writes get Claude Code's protected-path prompt (helper
+  // 0.1.2: both out of ~/.claude, whose writes get Claude Code's protected-path prompt (helper
   // lib/paths.pm); NAME_TOKEN is the plugin's name (parseOptions), so a rename needs no edit here
   handoff_root: '~/.local/state/<plugin>/handoffs',
   log_dir: '',
@@ -97,33 +97,32 @@ export const DEFAULTS: Config = {
   handoff_turn: 'halt',
   handoff_turn_max_tokens: 64000,
   queue_cmd: '',
-  // Owner xxxxxxxx-18 (2026-10-23 01:48): `model`, E-1 checks it (PT-1); one value with the manifest.
+  // `model`; one value with the manifest.
   precompact_turn: 'model',
   unattended_prod_reads: 'forbid',
   idle_handoff_turn: 'auto',
   idle_handoff_min_tokens: 200000,
-  // Owner xxxxxxxx (2026-10-30): "I want the handoff anyway"; skipping is the option.
+  // The handoff is wanted anyway; skipping is the option.
   idle_handoff_near_limit: 'run',
-  // Owner Q3 (2026-10-27 18:54, "auto ig. will set myself"); the release note says it.
+  // `auto`; the release note says it.
   idle_compact: 'auto',
-  // Owner xxxxxxxx-09 (2026-10-27 12:5x): "default setting: submit right away"; owner rule (c)
-  // (2026-10-28): the away digest ships on only after a live PASS, else off. The live AD2 probe
+  // The away digest ships on (`submit`, right away) only after a live PASS, else off. The live AD2 probe
   // failed the digest's text format, so 0.1.1 ships `off`; a later build flips this one value.
   idle_digest: 'off',
-  // D-14 (2026-10-30): the decision model's cutoff, warm to 6 h then compact while warm.
+  // The decision model's cutoff, warm to 6 h then compact while warm.
   keep_warm_hours: 6,
   watcher_off: false,
   notes: { invalid: [], clamped: [] },
 }
 
-/** MOD-SPEC §1.2 `idle_handoff_min_tokens` bounds (the native idle floor, IC-1 F3). */
+/** `idle_handoff_min_tokens` bounds (the native idle floor). */
 export const IDLE_TOKENS_MIN = 100000
 export const IDLE_TOKENS_MAX = 1000000
 /** `keep_warm_hours` bounds (0 = off; a day at most). */
 export const KEEP_WARM_HOURS_MIN = 0
 export const KEEP_WARM_HOURS_MAX = 24
 
-/** Empty values and unsubstituted `${user_config.…` count as unset (MOD-SPEC §2.6). */
+/** Empty values and unsubstituted `${user_config.…` count as unset. */
 function unset(v: unknown): boolean {
   return v === undefined || v === null || (typeof v === 'string' && (v.trim() === '' || v.startsWith('${user_config.')))
 }
@@ -149,7 +148,7 @@ function bool(o: PluginOptions, k: keyof Config, d: boolean): boolean {
 }
 
 /**
- * D-72 (0.1.6; owner 2026-11-08): the seven on/off options take `true` or `false` (userConfig
+ * 0.1.6: the seven on/off options take `true` or `false` (userConfig
  * `options`, so /config opens a picker that shows the description; a boolean flips in place there).
  * In the plugin each still runs as its word before 0.1.6: SWITCH gives [the word `true` reads as,
  * the word `false` reads as]. A stored word of a release before 0.1.6 keeps its meaning: either word,
@@ -226,10 +225,10 @@ function bounded(o: PluginOptions, k: keyof Config, dflt: number, min: number, m
 }
 
 /**
- * `native_window_tokens`: 0 (or less) means the compaction window Claude Code settled (0.1.4
- * T-11, its summary context breakdown), else its `autoCompactWindow` setting when set (0.1.3,
+ * `native_window_tokens`: 0 (or less) means the compaction window Claude Code settled (0.1.4,
+ * its summary context breakdown), else its `autoCompactWindow` setting when set (0.1.3,
  * settingWindow), else `context.window`; 1–99,999 count as 100,000, the
- * smallest window Claude Code applies (`--autocompact` floor, P5-FOLD A3), with `config_clamped`.
+ * smallest window Claude Code applies (`--autocompact` floor), with `config_clamped`.
  */
 function nativeWindow(o: PluginOptions, notes: Config['notes']): number {
   const n = num(o, 'native_window_tokens', DEFAULTS.native_window_tokens)
@@ -241,7 +240,7 @@ function nativeWindow(o: PluginOptions, notes: Config['notes']): number {
 }
 
 /**
- * Owner xxxxxxxx-13 (2026-10-26, "Off + common words"; SPEC-DELTAS IA-1 / AT-IA-01): an
+ * Off plus the common words (AT-IA-01): an
  * `idle_handoff_turn` of `false`, `no`, `none`, `disabled` or `0` reads as `off`; `true`, `yes`, `1`
  * or `on` as `auto`; any other value reads as IDLE_INVALID_READS_AS, the value with no extra plugin
  * action, as for the other keys (`precompact_turn: code`, `unattended_prod_reads: forbid`).
@@ -252,9 +251,9 @@ export const IDLE_AUTO_WORDS: readonly string[] = ['auto', 'true', 'yes', '1', '
 export const IDLE_INVALID_READS_AS: Config['idle_handoff_turn'] = 'off'
 
 /**
- * `idle_handoff_turn` (IA-1) and `idle_compact`: true or false, and the words before 0.1.6
+ * `idle_handoff_turn` and `idle_compact`: true or false, and the words before 0.1.6
  * (switchWord: the old `on` notes `legacy-on`); any other value is IDLE_INVALID_READS_AS plus
- * `config_invalid` (the owner's words switch the plugin turn off only when native idle is on, which
+ * `config_invalid` (the user's words switch the plugin turn off only when native idle is on, which
  * idle.ts checks; there is no forced on). settings.pm reads both the same way.
  */
 function idleSwitch(o: PluginOptions, k: 'idle_handoff_turn' | 'idle_compact', notes: Config['notes']): Config['idle_handoff_turn'] {
@@ -272,7 +271,7 @@ function handoffTokens(o: PluginOptions, notes: Config['notes']): number {
   return c
 }
 
-/** The token in DEFAULTS.handoff_root and DEFAULTS.disposable_root that stands for the plugin's name (STATE-ROOT). */
+/** The token in DEFAULTS.handoff_root and DEFAULTS.disposable_root that stands for the plugin's name. */
 export const NAME_TOKEN = '<plugin>'
 
 /**
@@ -301,7 +300,7 @@ export function parseOptions(o: PluginOptions, name?: string): Config {
     handoff_turn: handoffTurn(o, notes),
     handoff_turn_max_tokens: handoffTokens(o, notes),
     queue_cmd: str(o, 'queue_cmd', DEFAULTS.queue_cmd).trim(),
-    // Any other value is `code`, the as-built path with no extra turn (S-SETTINGS D).
+    // Any other value is `code`, the as-built path with no extra turn.
     precompact_turn: switched(o, 'precompact_turn', DEFAULTS.precompact_turn, 'code', notes),
     unattended_prod_reads: switched(o, 'unattended_prod_reads', 'forbid', 'forbid', notes),
     idle_handoff_turn: idleSwitch(o, 'idle_handoff_turn', notes),
@@ -319,11 +318,11 @@ export function parseOptions(o: PluginOptions, name?: string): Config {
 }
 
 /**
- * The clamp constants (MOD-SPEC §1.2, P5-FOLD A3, spec §16), one shared source with the helper's
+ * The clamp constants (handoff spec §16), one shared source with the helper's
  * `/status` and the watcher's fallback clamp: each key from the spec-literals `clamp` object when
  * it is a positive number there (`target_num`/`target_den` positive integers), else these values
  * (the same numbers; a parity test checks the two agree once the object ships).
- * - `native_offset`: the native trigger estimate (800K → ≈767K lab reading; probe P-10).
+ * - `native_offset`: the native trigger estimate (800K → ≈767K lab reading in a probe).
  * - `min_target`: below this effective target, plugin compactions and the nudge are disabled.
  * - `reserve_base`: `reserve` below the native trigger: one oversized nudge-carrying result
  *   25,000 + the checkpoint turn 12,000 + a margin of 15,000, plus the handoff turn's allowance.
@@ -361,7 +360,7 @@ export const NATIVE_OFFSET = CLAMP.native_offset
 export const MIN_TARGET = CLAMP.min_target
 export const RESERVE_BASE = CLAMP.reserve_base
 export const RESERVE_NO_HANDOFF = CLAMP.reserve_no_handoff
-/** MOD-SPEC §1.2 `handoff_turn_max_tokens` bounds (the clamp object's `handoff_tokens_min`/`_max`). */
+/** `handoff_turn_max_tokens` bounds (the clamp object's `handoff_tokens_min`/`_max`). */
 export const HANDOFF_TOKENS_MIN = CLAMP.handoff_tokens_min
 export const HANDOFF_TOKENS_MAX = CLAMP.handoff_tokens_max
 
@@ -383,7 +382,7 @@ export type Effective = {
   window: number
   native_trigger: number
   /**
-   * 0.1.4 T-11: where the window came from: `option` (native_window_tokens), `breakdown` (Claude
+   * 0.1.4: where the window came from: `option` (native_window_tokens), `breakdown` (Claude
    * Code's own compaction window, CompactWindow), `setting` (autoCompactWindow) or `context`
    * (the model's window); `autocompact_source` is the breakdown's autocompactSource, else null.
    */
@@ -402,7 +401,7 @@ export type Effective = {
 }
 
 /**
- * MOD-SPEC §1.2 `min_window`: target ≥ `min_target` needs soft max ≥ 1.5 × `min_target`
+ * `min_window`: target ≥ `min_target` needs soft max ≥ 1.5 × `min_target`
  * (180,000), so `window − native_offset − reserve` and `0.8 × window` must reach it:
  * `max(213,000 + reserve, 225,000)` with the defaults (329,000; `handoff_turn` off 313,000).
  * Configured values below those floors can never enable: `never`.
@@ -433,13 +432,13 @@ export function settingWindow(setting: number | undefined, contextWindow: number
 }
 
 /**
- * MOD-SPEC §1.2 clamp. `contextWindow` is `$.session.usage().context.window`; `setting` is Claude
+ * The clamp. `contextWindow` is `$.session.usage().context.window`; `setting` is Claude
  * Code's `autoCompactWindow`, the window when `native_window_tokens` is unset (0.1.3; an option set
- * wins). `bd` (0.1.4 T-11), the compaction window Claude Code itself settled, comes before the
+ * wins). `bd` (0.1.4), the compaction window Claude Code itself settled, comes before the
  * setting: its window is used as it is, and its threshold, when one is given at or below that
  * window, is the native trigger (else window − native_offset). With `triggers` false the
  * thresholds, the clamped list, `small_window` and `min_window` are computed as with triggers on
- * (P5-FOLD A3), so the row shows what triggers-on would do.
+ * too, so the row shows what triggers-on would do.
  */
 export function clamp(cfg: Config, contextWindow: number, k: ClampConstants = CLAMP, setting?: number, bd?: CompactWindow): Effective {
   const sw = settingWindow(setting, contextWindow, k)
@@ -467,11 +466,11 @@ export function expand(path: string, home: string | undefined): string | undefin
 
 export type Paths = { root: string; watch: string }
 
-/** Where the handoff_root default sits below the home folder (STATE-ROOT): `$XDG_STATE_HOME` stands for it. */
+/** Where the handoff_root default sits below the home folder: `$XDG_STATE_HOME` stands for it. */
 const STATE_HOME_DEFAULT = '~/.local/state'
 
 /**
- * The handoff root a value names, `~` expanded (STATE-ROOT). The default (DEFAULTS.handoff_root with
+ * The handoff root a value names, `~` expanded. The default (DEFAULTS.handoff_root with
  * `name`, else `plugin`) reads under `stateHome` (`$XDG_STATE_HOME`) when that is an absolute path, as
  * the helper's paths::state_default does: the XDG Base Directory rule ignores a relative value. Any
  * other value is returned as it is; undefined when `~` cannot be expanded.
@@ -487,7 +486,7 @@ export function stateRoot(value: string, home: string | undefined, stateHome?: s
 }
 
 /**
- * `<root>` and `<watch>` (MOD-SPEC conventions); undefined when `~` cannot be expanded. `state` gives
+ * `<root>` and `<watch>`; undefined when `~` cannot be expanded. `state` gives
  * `$XDG_STATE_HOME` and the plugin's name for the default root (stateRoot).
  */
 export function paths(cfg: Config, home: string | undefined, state?: { home?: string; name?: string }): Paths | undefined {
@@ -500,7 +499,7 @@ export function paths(cfg: Config, home: string | undefined, state?: { home?: st
 
 /**
  * The options as `CLAUDE_PLUGIN_OPTION_<KEY>` variables for helper calls, so the helper resolves
- * the same settings the mod runs with (MOD-SPEC §2.6 settings order, second step).
+ * the same settings the mod runs with (the settings order, second step).
  */
 export function optionEnv(o: PluginOptions): Record<string, string> {
   const env: Record<string, string> = {}
@@ -524,7 +523,7 @@ export async function effective(d: Deps, sid: string): Promise<Effective> {
   } catch {
     window = 0
   }
-  // 0.1.4 T-11: an unset native_window_tokens follows the compaction window Claude Code settled
+  // 0.1.4: an unset native_window_tokens follows the compaction window Claude Code settled
   // (the summary breakdown); without one, its autoCompactWindow setting (0.1.3).
   let setting: number | undefined
   let bd: CompactWindow | undefined
@@ -545,7 +544,7 @@ export async function effective(d: Deps, sid: string): Promise<Effective> {
   const eff = clamp(d.cfg, window, CLAMP, setting, bd)
   d.state.eff = eff
   // Disabled: the thresholds are null and the computed values go in the `_raw` fields, which no
-  // reader takes as thresholds (they can be negative, P5-FOLD A3).
+  // reader takes as thresholds (they can be negative).
   const off = eff.disabled !== null
   await log(d, sid, 'config_effective', {
     window: eff.window,

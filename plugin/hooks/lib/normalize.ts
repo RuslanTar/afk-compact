@@ -1,4 +1,4 @@
-// Wrapper strip, normalized body and sha256 (MOD-SPEC §5.1). Shared reading with the helper's
+// Wrapper strip, normalized body and sha256. Shared reading with the helper's
 // detector: the PostCompact text (`<summary>…`) and the mod's installed message
 // (`This session is being continued…`) of one summary give the same normalized body.
 
@@ -7,7 +7,7 @@ export type Stripped = {
   lines: string[]
   /** The normalized body: those lines joined by `\n` plus one final `\n`; empty for no body. */
   body: string
-  /** Index in `lines` of a sentinel line moved in from after `</summary>`, or null (P5-FOLD A1). */
+  /** Index in `lines` of a sentinel line moved in from after `</summary>`, or null. */
   movedSentinel: number | null
 }
 
@@ -22,7 +22,7 @@ const REMINDER_OPEN = '<system-reminder>'
 const REMINDER_CLOSE = '</system-reminder>'
 
 /**
- * Strips the header parts MOD-SPEC §5.1 names, repeated at the top until none applies (blank
+ * Strips the summary header parts, repeated at the top until none applies (blank
  * lines between them dropped): a line starting `This session is being continued`, a
  * `<tools-used-before-summary>` block through its closing tag, an `<analysis>` block through its
  * closing tag (the summarizer's scratch text, which a PostCompact `compact_summary` of Claude Code
@@ -35,7 +35,7 @@ const REMINDER_CLOSE = '</system-reminder>'
  * lines joined by `\n` plus one final `\n`, or empty for an empty body (the same reading as the
  * fixture tool's reference detector and the helper, so the sha256 values agree).
  *
- * Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1): when `sentinel` is given and the
+ * Sentinel after the close tag: when `sentinel` is given and the
  * first non-blank line after the `</summary>` line (or the text after `</summary>` on that same
  * line) matches it, that line is appended to the body, and the rest after it goes on as
  * installed-message text (a listed trailer is cut, as above). Only that one line moves: text

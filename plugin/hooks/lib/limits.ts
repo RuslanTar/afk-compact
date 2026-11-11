@@ -1,6 +1,5 @@
-// The usage-limit rule of keep-warm and plugin idle compaction (D-80, owner 2026-11-08 23:31: "I
-// think it should be adaptive", "we also may need to look at the session limit (if present)", and
-// 23:59: "never fixed. always adaptive"). The idle handoff turn keeps its own rule
+// The usage-limit rule of keep-warm and plugin idle compaction: adaptive, never a fixed share,
+// and it reads the session limit too when one is reported. The idle handoff turn keeps its own rule
 // (`idle_handoff_near_limit`, 90%), and so does the shadow trial (shadow.ts).
 //
 // Each window Claude Code reports is read on its own:
@@ -17,8 +16,7 @@
 //   point, stays below the cap (none measured yet: 90%). A window whose reset time has passed has reset: its old reading
 //   counts for nothing.
 // - any other window stops at 90%.
-// D-83 (owner U-60: "what can be more important than creating a handoff and compacting? reading cold
-// cache seems to be more expensive"): a wrong skip lets a large session go cold (its whole cache
+// Reading a cold cache costs more than a handoff and a compaction: a wrong skip lets a large session go cold (its whole cache
 // written again), a wrong run costs one ping or one compaction, so every near-limit decision (this
 // rule, keep-warm's wait, the idle handoff turn's `idle_handoff_near_limit`) reads all the readings
 // it has of each window kind: the session's own, its status line's and the other sessions' on this
@@ -26,7 +24,7 @@
 // time: the record dates it from when a status line first showed it, and it never counts as newer
 // than that session's own refresh (this session: its live reading, `usageAt`; another: its
 // `plugin` entry of that kind; none: no reading).
-// D-88: within one window (a kind and its reset time) the share only grows until the reset, so a
+// Within one window (a kind and its reset time) the share only grows until the reset, so a
 // reading counts until its window resets, however old (idle gaps refresh nothing: a keep-warm
 // fork does not update the reading; the shared record keeps it as long, lib/usagerec.pm), and a
 // reading whose reset has passed counts for nothing; one with no reset time counts only while
@@ -50,13 +48,13 @@ import { limitWindows } from './idle'
 
 /** The share every window stops at unless the band rule below lets a plan window go on. */
 export const LIMIT_SHARE = 90
-/** D-80: the plan windows' caps for the band above LIMIT_SHARE. */
+/** The plan windows' caps for the band above LIMIT_SHARE. */
 export const PLAN_CAPS: Readonly<Record<string, number>> = { five_hour: 98, seven_day: 95 }
-/** D-80: a reading refreshed this recently is fresh. */
+/** A reading refreshed this recently is fresh. */
 export const LIMIT_FRESH_MS = 10 * 60000
-/** D-80: the smallest measured compaction change the band counts (a whole point: readings are whole points). */
+/** The smallest measured compaction change the band counts (a whole point: readings are whole points). */
 export const LIMIT_DELTA_FLOOR = 1
-/** D-80: the measured compaction changes kept per window kind (the newest). */
+/** The measured compaction changes kept per window kind (the newest). */
 export const LIMIT_DELTAS_KEPT = 5
 /** The store key of the measured changes: `{ five_hour: number[], seven_day: number[] }`, oldest first. */
 export const LIMIT_DELTAS_KEY = 'limit_deltas'
@@ -65,26 +63,26 @@ const SPEND = 'spend_limit'
 export type Limit = Usage['rateLimits'][number]
 
 /**
- * D-83: where a reading came from: the session's own `$.session.usage()` (`plugin`), this session's
+ * Where a reading came from: the session's own `$.session.usage()` (`plugin`), this session's
  * status line (`statusline`), or another session on this machine (`peer`), the last two through
  * the shared usage record.
  */
 export type Src = 'plugin' | 'statusline' | 'peer'
 /**
- * D-83: one window as read, with when (epoch ms; undefined: not known), where from, and for a
+ * One window as read, with when (epoch ms; undefined: not known), where from, and for a
  * peer's the first 8 characters of its session id.
  */
 export type Reading = Limit & { at: number | undefined; src: Src; sid8?: string }
 /**
- * D-83: what a row that used a reading logs beside its `windows`: each window's source as
+ * What a row that used a reading logs beside its `windows`: each window's source as
  * `kind:source`, in the same order, and its age in whole seconds by kind (none for a window whose
- * time is not known); after the trust rule also how many windows of each kind counted (D-88) and
+ * time is not known); after the trust rule also how many windows of each kind counted and
  * the anomalies (`kind:source`). Content-free.
  */
 export type UsageFields = { usage_src: string[]; usage_age_s: Record<string, number>; usage_n?: Record<string, number>; usage_anomaly?: string[] }
 
 /**
- * D-83: why a reading at the limit did not stop an action (`split`, `no-fresh`) or the band it runs
+ * Why a reading at the limit did not stop an action (`split`, `no-fresh`) or the band it runs
  * in, for the row of that action: the rule, the windows and their sources and ages.
  */
 export type LimitNote = { rule: string; windows: string[]; usage: UsageFields }
@@ -94,10 +92,10 @@ export function noteOf(v: Verdict): LimitNote | undefined {
   return v.ok && v.rule !== '90' ? { rule: v.rule, windows: v.windows, usage: v.usage } : undefined
 }
 
-/** D-83: a counted window whose reset is this far from the other windows' of its kind is an anomaly. */
+/** A counted window whose reset is this far from the other windows' of its kind is an anomaly. */
 export const RESET_ANOMALY_MS = 60 * 60000
 
-/** D-88: readings of a kind whose resets are at most this far apart are of one window. */
+/** Readings of a kind whose resets are at most this far apart are of one window. */
 export const RESET_SAME_MS = 60000
 
 /** The session's own windows as readings, read at `at` (`LoadState.usageAt`). */
@@ -105,7 +103,7 @@ export function ownReadings(limits: readonly Limit[], at: number | undefined): R
   return limits.map(l => ({ ...l, at, src: 'plugin' as const }))
 }
 
-/** D-83: the `usage_src` and `usage_age_s` of these readings at `now`. */
+/** The `usage_src` and `usage_age_s` of these readings at `now`. */
 export function usageFields(rs: readonly Reading[], now: number): UsageFields {
   const age: Record<string, number> = {}
   for (const r of rs) if (r.at !== undefined) age[r.kind || 'unknown'] = Math.max(0, Math.round((now - r.at) / 1000))
@@ -119,8 +117,8 @@ export type LimitCtx = { job: boolean; usageAt: number | undefined; now: number;
  * `ok`: nothing stops the action; `band`: a plan window is above 90% and the band rule lets it go
  * on; `rule`: the rule that decided (`band`, `90`, the first stopping window kind's: `spend-90`,
  * `other-90`, `cap`, `no-job`, `stale`, `no-delta`, `delta`, or why a reading at the limit did not
- * stop it, D-83: `split`, `no-fresh`); `windows`: each window kind's deciding reading as the row
- * names it (idle.ts `limitWindows`); `usage`: their sources and ages (D-83); `reset`: when every
+ * stop it: `split`, `no-fresh`); `windows`: each window kind's deciding reading as the row
+ * names it (idle.ts `limitWindows`); `usage`: their sources and ages; `reset`: when every
  * window that stops the action or holds it in the band resets (plan windows only, the latest; undefined
  * when one does not say).
  */
@@ -141,13 +139,13 @@ export function windowRule(l: Limit, c: LimitCtx): string {
   return l.percentUsed + Math.max(LIMIT_DELTA_FLOOR, ...ds) + 1 < cap ? 'band' : 'delta'
 }
 
-/** D-83: a reading refreshed in the last `LIMIT_FRESH_MS` (and not from further ahead: a clock skew). */
+/** A reading refreshed in the last `LIMIT_FRESH_MS` (and not from further ahead: a clock skew). */
 export function freshAt(r: Reading, now: number): boolean {
   return r.at !== undefined && Math.abs(now - r.at) <= LIMIT_FRESH_MS
 }
 
 /**
- * D-88: a reading counts while its window's reset is ahead, however old it is (the share only grows
+ * A reading counts while its window's reset is ahead, however old it is (the share only grows
  * until the reset); one with no reset time only while fresh (`freshAt`).
  */
 export function counts(r: Reading, now: number): boolean {
@@ -155,7 +153,7 @@ export function counts(r: Reading, now: number): boolean {
 }
 
 /**
- * D-88: the latest of one window's readings at `now`: the dated one read last (a time up to a
+ * The latest of one window's readings at `now`: the dated one read last (a time up to a
  * minute ahead of `now` reads as `now`; at the same time, the larger share), unless one of unknown
  * time has a larger share: the share only grows until the reset, so that one was read later. A
  * time more than a minute ahead (a clock that stepped back) is not known.
@@ -178,7 +176,7 @@ function latestOf(rs: readonly Reading[], now: number): Reading | undefined {
 }
 
 /**
- * D-88: the windows of one kind's readings at `now`, each as its latest reading (`latestOf`), in the
+ * The windows of one kind's readings at `now`, each as its latest reading (`latestOf`), in the
  * readings' order: those with a reset time grouped by it (a group's resets within `RESET_SAME_MS`
  * of its earliest), those without one per session (the own session's `plugin` and `statusline` are
  * one), left out where that session has a reading of the kind with a reset time (one Claude Code
@@ -208,7 +206,7 @@ export function windowsOf(rs: readonly Reading[], now: number): Reading[] {
   return out.sort((a, b) => rs.indexOf(a) - rs.indexOf(b))
 }
 
-/** D-83: the windows of a kind whose reset is over an hour from most of the others' (a pair that differs: both). */
+/** The windows of a kind whose reset is over an hour from most of the others' (a pair that differs: both). */
 function anomalies(ws: readonly Reading[]): Reading[] {
   return ws.filter(r => {
     if (r.resetsAt === undefined) return false
@@ -218,8 +216,8 @@ function anomalies(ws: readonly Reading[]): Reading[] {
 }
 
 /**
- * D-83, the trust rule, D-88 its windows: the verdict over every reading (`ruleOf` each one's rule,
- * by default the D-80 rule above at its own time). Per window kind: a reading whose reset has
+ * The trust rule and its windows: the verdict over every reading (`ruleOf` each one's rule,
+ * by default the rule above at its own time). Per window kind: a reading whose reset has
  * passed counts for nothing; the counted ones (`counts`) make the kind's windows (`windowsOf`), and
  * each window's latest reading decides for it: any `ok` lets the action run (`split` when another
  * stops it), else any `band` holds it in the band, else the kind stops it with the rule of the own
@@ -291,10 +289,10 @@ export function resetOf(limits: readonly Limit[], c: LimitCtx): number | undefin
 }
 
 /**
- * D-83: the shared usage record's entries as readings (helper `usage`: times and resets in epoch
+ * The shared usage record's entries as readings (helper `usage`: times and resets in epoch
  * seconds): this session's status line's (`statusline`) and every other session's (`peer`); this
  * session's own `plugin` entries are left out (the live reading stands for them) unless
- * `ownPlugin` (D-88: no live reading, as in a load that adopted the session before its first
+ * `ownPlugin` (no live reading, as in a load that adopted the session before its first
  * response, or one of unknown time, as after a plugin reload). A status line's entry is its
  * session's reading shown again (one object in Claude Code), and its `at` is only when a status
  * line first showed it (an entry dropped from the record comes back dated anew), so it is
@@ -335,13 +333,13 @@ export function recordReadings(entries: readonly unknown[], sid: string, ownAt?:
 }
 
 /**
- * D-83: every reading a near-limit decision reads now: the session's own windows (`limits`, read at
+ * Every reading a near-limit decision reads now: the session's own windows (`limits`, read at
  * `LoadState.usageAt`) and the shared record's other ones; the own reading is written to the record
  * in the same helper call. With own windows of unknown time (a load not stamped yet: a plugin
  * reload in the idle gap still reports the last response's windows), the session's own record
- * entries are read beside them, dated (D-88: the latest of a window decides). With no own window
+ * entries are read beside them, dated (the latest of a window decides). With no own window
  * (an API key, or a load that adopted the session before its first response), the session's own
- * record entries stand for it (D-88: they count until their reset), and with none of those there
+ * record entries stand for it (they count until their reset), and with none of those there
  * is no reading at all: a session with no limit
  * of its own has none that another session's reading could tell of. A failed call leaves the own
  * reading alone, and the next refresh writes it (`noteUsage`).
@@ -424,7 +422,7 @@ export async function recordDeltas(d: Deps, before: readonly Limit[] | undefined
   }
 }
 
-/** The plan words for a limit row (D-80), when Claude Code's environment has them. */
+/** The plan words for a limit row, when Claude Code's environment has them. */
 export async function tierFields(d: Deps): Promise<{ plan?: string; tier?: string }> {
   try {
     return (await d.planTier?.()) ?? {}
@@ -434,7 +432,7 @@ export async function tierFields(d: Deps): Promise<{ plan?: string; tier?: strin
 }
 
 /**
- * D-83: the session's own reading goes to the shared usage record (helper `usage`, lib/usagerec.pm:
+ * The session's own reading goes to the shared usage record (helper `usage`, lib/usagerec.pm:
  * one small file per machine, each session's latest reading per window kind and source) when it
  * changed, or once this long after it was last written unchanged, so the other sessions on the
  * machine read it while it is fresh.
@@ -456,7 +454,7 @@ function noteKey(w: ReturnType<typeof recordWindows>): string {
 }
 
 /**
- * D-83: Claude Code refreshed the session's usage reading at `at` (a response, `session.measure`):
+ * Claude Code refreshed the session's usage reading at `at` (a response, `session.measure`):
  * written to the shared record when it changed (by whole points, `noteKey`) or the last write is
  * `USAGE_NOTE_MS` old, so a written reading is never more than that old while refreshes come and a
  * skip decision elsewhere still reads it as fresh (`LIMIT_FRESH_MS`). One write at a time (0.1.9):

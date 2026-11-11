@@ -1,5 +1,5 @@
-// The `session.compact` handler, steps 0–5 (MOD-SPEC §3.1), the dispatch record (§2.3) and the
-// after-step (§5.2), shared with the boundary self-call path (§4).
+// The `session.compact` handler, steps 0–5, the dispatch record and the
+// after-step, shared with the boundary self-call path.
 import type { SessionCompactInput, SessionCompactResult, SessionMessage } from 'claude-code'
 import type { Deps, PendingResume, RequestUsage } from './deps'
 import { prefixRead, uncoveredInput } from './deps'
@@ -39,13 +39,13 @@ export type DispatchRecord = {
   midturn: boolean
   tags: readonly Tag[]
   text: string
-  /** MOD-SPEC §2.3: the handoff turn this dispatch follows or interrupts. */
+  /** The handoff turn this dispatch follows or interrupts. */
   handoffHt?: string
-  /** IC-1 D1: an idle dispatch (`idle: true`), with the gap since the last main turn end. */
+  /** An idle dispatch (`idle: true`), with the gap since the last main turn end. */
   idle?: { gapS: number }
 }
 
-/** IC-1 D1: an `auto` this long after the last main turn end, with nothing running, is idle. */
+/** An `auto` this long after the last main turn end, with nothing running, is idle. */
 export const IDLE_GAP_MS = 1500000
 
 /**
@@ -59,10 +59,10 @@ export const IDLE_GAP_MS = 1500000
 export const COMPACT_LINE_DELAY_MS = 1000
 
 /**
- * IC-1 D1 (MOD-SPEC §2.5 idle rule): a main `auto` dispatch is idle when no main turn runs, no
- * prompt is entering (CR-F17 counter), no plugin compaction is in flight, and the last main turn
+ * The idle rule: a main `auto` dispatch is idle when no main turn runs, no
+ * prompt is entering (its counter), no plugin compaction is in flight, and the last main turn
  * ended at least 1,500 s ago. An idle dispatch is never `[midturn]`. `trigger` is the one
- * triggerCanary returned: a future `idle` trigger arrives here as `auto` (ID-1).
+ * triggerCanary returned: a future `idle` trigger arrives here as `auto`.
  */
 export function idleGap(s: Deps['state'], trigger: string, now: number): number | undefined {
   if (trigger !== 'auto' || s.mainTurnRunning || s.foreignPrompts > 0 || s.busy || s.lastTurnEndAt === undefined) return undefined
@@ -80,7 +80,7 @@ function seenKey(sid: string): string {
 }
 
 /**
- * Owner xxxxxxxx-17: a main compaction completed (any trigger the after-step sees: not
+ * A main compaction completed (any trigger the after-step sees: not
  * precompute), and whether it was an idle dispatch; kept in the load and in `$.store`, so the
  * 55.5-min outcome check finds it after a reload too.
  */
@@ -122,21 +122,21 @@ export async function isSelfDispatch(d: Deps, sid: string, nonce: string): Promi
 }
 
 /**
- * MG-3 (MOD-SPEC §5.2 after-step; the A-28 thresholds of MG-5): a main compaction from this many
+ * The after-step: a main compaction from this many
  * tokens up whose summarizer request read under this share of its cached prefix (`prefixRead`,
- * root ruling 2026-10-27 23:16: L3 0.925 and L1 0.999 warm, a cold L3 about 0.27) is
+ * measured: L3 0.925 and L1 0.999 warm, a cold L3 about 0.27) is
  * `compaction_cold`.
  */
 export const COLD_SHARE = 0.5
 export const COLD_MIN_TOKENS = 100000
 
 /**
- * MG-3: `compaction_cache {nonce, prefix_read, uncovered}` for a compaction whose result carries
+ * `compaction_cache {nonce, prefix_read, uncovered}` for a compaction whose result carries
  * the summarizer's usage, and `compaction_cold {nonce, prefix_read}` for a cold main one (see
  * COLD_SHARE). `uncovered` is the input outside the cache: the compaction request's one cache
  * marker leaves the context after the last summarized assistant message uncached, warm or cold,
- * so it is logged apart and never makes a compaction cold (root ruling 2026-10-27 23:16, which
- * replaced the read share of all input here). A different model than the session's cannot read
+ * so it is logged apart and never makes a compaction cold (this replaced the read share of all
+ * input here). A different model than the session's cannot read
  * the session's cache, so a cold prefix is the runtime sign of one.
  */
 export async function cacheRows(
@@ -155,7 +155,7 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
   const s = d.state
   const instrSha8 = sha8(r.text)
   const instrBytes = byteLength(r.text)
-  // MG-4: the session's model as the record of what this compaction runs on (never passed on).
+  // The session's model as the record of what this compaction runs on (never passed on).
   const model = await d.model()
   const res = await dispatch(d, {
     sid: r.sid, nonce: r.nonce, actor: r.agentId ?? 'main', trigger: r.trigger, channel: r.channel,
@@ -167,7 +167,7 @@ export async function writeDispatch(d: Deps, r: DispatchRecord): Promise<void> {
   if (res.ok) return
   const path = await dispatchPath(d, r.sid, r.nonce)
   if (path) {
-    // The helper's record keys in its order (CORE-14): `idle` and `idle_gap_s` always (a mod
+    // The helper's record keys in its order: `idle` and `idle_gap_s` always (a mod
     // record without the idle flag is `idle: false`, `idle_gap_s: null`), and `cc_version_src`
     // `mod` when the mod gave a version, else null.
     const rec = {
@@ -194,8 +194,8 @@ export type MainText = { text: string; tags: Tag[] }
 /**
  * The main text for a dispatch: `[midturn]` when asked, `[chain]` when `prev-copy` returns a
  * path, `[measured]` when the checkpoint returned a measured block, `[handoff]` with its path
- * when a handoff turn published one just before (MOD-SPEC §9.1; mod path only), `[queue]` when
- * `queue_cmd` is set (QA-B3, owner xxxxxxxx-11 "setting-driven, one text"; D-10 as the nudge).
+ * when a handoff turn published one just before (mod path only), `[queue]` when
+ * `queue_cmd` is set (setting-driven, one text, as the nudge).
  */
 export async function mainText(
   d: Deps, nonce: string, midturn: boolean, prev: string | undefined, measured: string | null, handoffPath?: string,
@@ -215,7 +215,7 @@ export async function mainText(
 type Next = (e: SessionCompactInput) => Promise<SessionCompactResult>
 
 /**
- * CR-F19: a main compaction other than ours (not `precompute`) counts as running from the moment
+ * A main compaction other than ours (not `precompute`) counts as running from the moment
  * its `session.compact` hook is entered, before any await, to the end of our handling of it.
  * Meanwhile a post-handoff compaction waits (boundary.ts); the last one to end hands it back to
  * the scheduler, where `nativeCompactSeq` decides whether it is a second one.
@@ -236,7 +236,7 @@ export async function trackNative(d: Deps, e: SessionCompactInput, run: () => Pr
   }
 }
 
-/** MOD-SPEC §3.1: the `session.compact` handler. */
+/** The `session.compact` handler. */
 export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, next: Next): Promise<SessionCompactResult> {
   const s = d.state
   // Step 0: our marker with a mod-self record = our own self-call reached our hook. The row is
@@ -262,8 +262,8 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
   const nonce = await drawNonce(n => dispatchExists(d, sid, n))
   const midturn = main && (trigger === 'precompute' || (trigger === 'auto' && s.mainTurnRunning))
   const idle = gapS !== undefined && !midturn
-  // MOD-SPEC §9.1 race: a native compaction while the handoff turn runs keeps the full text and
-  // names the turn; §3.1: a native idle auto right after a published handoff gets `[handoff]`.
+  // Race: a native compaction while the handoff turn runs keeps the full text and
+  // names the turn; a native idle auto right after a published handoff gets `[handoff]`.
   const raced = main ? racedTurn(d, trigger) : undefined
   const after = main && trigger === 'auto' && !s.mainTurnRunning ? s.published : undefined
   const handoffHt = raced?.ht ?? after?.ht ?? undefined
@@ -317,7 +317,7 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     usage_present: r.usage !== undefined, ms: (await d.now()) - t0, ...(handoffHt !== undefined ? { handoff_ht: handoffHt } : {}),
   }, actor)
   await cacheRows(d, sid, nonce, r, main, actor)
-  // §9.1: a compaction after the nudge already shrank the context the handoff turn would use.
+  // A compaction after the nudge already shrank the context the handoff turn would use.
   if (main && s.mainTurnRunning && s.nudgedThisTurn) s.compactedInTurn = s.turnSeq
   let block: RaceBlock | undefined
   if (raced && raced.ht !== null && raceState) {
@@ -343,11 +343,11 @@ export async function onCompact(d: Deps, sid: string, e: SessionCompactInput, ne
     uiLine: hold,
   }))
   if (main && failed !== undefined) stepFailedLine(d, failed, hold)
-  // Away digest phase 1 (owner 2026-10-27 12:5x, xxxxxxxx-09): a finished or blocked lane with
+  // Away digest phase 1: a finished or blocked lane with
   // nothing running gets its digest turn right away with `idle_digest: submit` (`off`, the default
-  // of this version by owner rule (c), and `return` log the skip and submit nothing).
+  // of this version, and `return` log the skip and submit nothing).
   if (main && idle) await guarded(d, sid, 'digest', () => armDigest(d, sid, nonce))
-  // SESSION-RESTART D2 (b): right after Claude Code's own idle compaction; nothing is submitted
+  // The restart moment right after Claude Code's own idle compaction; nothing is submitted
   // after it (the new load waits at the prompt with its block, as after any idle compaction).
   if (main && idle) await guarded(d, sid, 'restart', () => restartMoment(d, sid, { cont: false }))
   if (lines.length > 0) {
@@ -374,7 +374,7 @@ export async function guarded(d: Deps, sid: string, stage: string, fn: () => Pro
 }
 
 /**
- * Review of the first build (owner 2026-10-30 07:52): a main after-step that threw never reached
+ * Review of the first build: a main after-step that threw never reached
  * its compaction line, so the user still gets one, with the error class and the status pointer.
  * `sink` takes the line in place of `d.uiLog` (a native compaction holds it: COMPACT_LINE_DELAY_MS).
  */
@@ -391,13 +391,13 @@ export type AfterArgs = {
   messages: readonly SessionMessage[]
   tokensBefore: number | undefined
   tokensAfter: number | undefined
-  /** The resume block's `[handoff]` path, or `[handoff-partial]` after a race (MOD-SPEC §3.4). */
+  /** The resume block's `[handoff]` path, or `[handoff-partial]` after a race. */
   handoff?: RaceBlock
-  /** The handoff-turn rollup fields for this compaction's `mod_outcome` row (MOD-SPEC §2.5). */
+  /** The handoff-turn rollup fields for this compaction's `mod_outcome` row. */
   stats?: Record<string, string | number | null>
   /** This nonce's checkpoint `consent.unattended_prod_reads`, when a checkpoint answered. */
   prodConsent?: string
-  /** An idle dispatch: the resume block gets `[idle]` (IC-1 D3). */
+  /** An idle dispatch: the resume block gets `[idle]`. */
   idle?: boolean
   /** Takes the compaction line in place of `d.uiLog` (a native compaction holds it: COMPACT_LINE_DELAY_MS). */
   uiLine?: (text: string) => void
@@ -439,12 +439,12 @@ async function hooksCopy(d: Deps, sid: string, nonce: string): Promise<{ path: s
   return { path, verdict, body: raw.slice(end + 5) }
 }
 
-/** MOD-SPEC §5.2: the after-step, main and subagent. */
+/** The after-step, main and subagent. */
 export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdict }> {
   const s = d.state
   const main = a.agentId === null
   const actor = a.agentId ?? 'main'
-  // Owner xxxxxxxx-17: the 55.5-min idle check reads this, first, so a later failure cannot hide it.
+  // The 55.5-min idle check reads this, first, so a later failure cannot hide it.
   if (main) await noteCompaction(d, a.sid, a.idle === true)
   let text: string | undefined
   for (const m of a.messages) if (text === undefined && m.role === 'user') text = summaryText(m.text)
@@ -459,7 +459,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   let facts: LaneFacts | undefined
   // 0.1.3 resume-text A: the summary's Step 1 for the block's `[resumed]` line (one line, no text kept beyond it).
   let step1: string | undefined
-  // PRIV-04: the raw summary is stashed only under the watch folder the helper vetted (ident);
+  // The raw summary is stashed only under the watch folder the helper vetted (ident);
   // refused (null) or unknown (no helper answer) means no stash, never the options' folder.
   const stash = await vettedWatch(d, a.sid)
   const p = await d.paths()
@@ -483,7 +483,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     if (main && a.idle === true) facts = laneFacts(text)
     if (main) step1 = step1Of(text)
     const file = stash !== undefined ? `${stash}/${a.sid}/pending/${a.nonce}.mod.md` : undefined
-    // MOD-SPEC §5.8 item 4: the orphan index marker goes first, so a stash this session leaves
+    // The orphan index marker goes first, so a stash this session leaves
     // behind is found by another session's cross-session finish. Empty; an existing one is fine.
     // The `pending/` folder stays the truth: a failed marker write does not stop the stash.
     if (file && stash !== undefined) await d.write(`${stash}/.orphans/${a.sid}`, '')
@@ -524,23 +524,23 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
     s.fourthToasted = false
   }
   s.mainCompactions++
-  // A published handoff names the next window's compaction once (MOD-SPEC §3.1).
+  // A published handoff names the next window's compaction once.
   s.published = undefined
-  // §9.3: the next eligible turn end may have its pre-compaction turn again.
+  // The next eligible turn end may have its pre-compaction turn again.
   s.precompactRan = false
   const question = carriedQuestion(s)
   const blockArgs: BlockArgs = {
     nonce: a.nonce, midturn: a.midturn, nonok: !isOk(verdict), savedCopy, notSaved, ...(a.handoff !== undefined ? { handoff: a.handoff } : {}),
     prodAllow: prodAllowed(d.cfg.unattended_prod_reads, a.prodConsent),
-    // D-22: the mode this compaction saw goes with the block (a restored block reads it).
+    // The mode this compaction saw goes with the block (a restored block reads it).
     ...(s.modeSeen?.mode === 'auto' ? { autoMode: true } : {}),
-    // Owner xxxxxxxx-25: halt mode picks the idle line's variant (checked again at delivery).
+    // Halt mode picks the idle line's variant (checked again at delivery).
     ...(a.idle === true ? { idle: true, halt: s.halt.active, ...(facts !== undefined ? { lane: facts } : {}) } : {}),
     // Question carry (question.ts): a main turn's question no person's turn has followed yet, or
     // the running turn's timed-out dialog.
     ...(question !== undefined ? { question, ...(carriedTimedOut(s) ? { questionTimedOut: true } : {}) } : {}),
     ...(step1 !== undefined ? { step1 } : {}),
-    // 0.1.4 R-4: who reads the reply as this build sees it (a later delivery compares it).
+    // 0.1.4: who reads the reply as this build sees it (a later delivery compares it).
     script: await scriptReader(d),
   }
   const built = await buildBlockWith(d, a.sid, blockArgs)
@@ -549,7 +549,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   else s.idleLane = undefined
   if (built.lane !== undefined) await logLane(d, a.sid, a.nonce, facts, built.lane, 'build', built.running ?? 0)
   // A block still pending is replaced by this one: its outcome is settled now (no channel
-  // will try it again). So is a block held for a person's return (owner xxxxxxxx-37).
+  // will try it again). So is a block held for a person's return.
   const old = s.pending
   if (old) {
     s.pending = undefined
@@ -578,7 +578,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
   }
   if (counted) await countVerdict(d, a.sid, isOk(verdict))
   pend.outcome.halt = s.halt.active
-  // Owner 2026-10-30 07:52 ("not clear if the compaction went well"): one dim transcript line
+  // So the user can tell whether the compaction went well: one dim transcript line
   // after every main compaction, whether a model turn follows or not; the model never reads it.
   // Built from what this step already measured: no new I/O.
   if (d.cfg.warn_ui) {
@@ -601,7 +601,7 @@ export type LineFacts = {
 }
 
 /**
- * Owner 2026-10-30 07:52: the one line the user sees after a main compaction, e.g.
+ * The one line the user sees after a main compaction, e.g.
  * `<name>: compaction ok · copy saved · handoff <file> · 2 jobs running`, or with `NOT` and a
  * pointer to the status skill when the summary is not in handoff format or its copy failed.
  */

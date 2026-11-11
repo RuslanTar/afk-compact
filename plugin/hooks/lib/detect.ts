@@ -1,7 +1,7 @@
-// Marker/sentinel detector, verdict table (MOD-SPEC §5.1) and the unanchored instruction-marker
-// search (MOD-SPEC §2.2). Literals come from the spec-literals block (spec.gen.ts) when it holds
+// Marker/sentinel detector, verdict table and the unanchored instruction-marker
+// search. Literals come from the spec-literals block (spec.gen.ts) when it holds
 // them for the run-time plugin name; otherwise (no block yet, or another name, as in tests) the
-// grammar is MOD-SPEC §2.2 with the run-time name.
+// grammar is the marker grammar with the run-time name.
 import { SPEC } from './spec.gen'
 import { strip } from './normalize'
 import { sha256 } from './normalize'
@@ -30,12 +30,12 @@ function esc(s: string): string {
 
 /**
  * The marker brackets, written as escapes: the source then holds no literal marker shape, so the
- * stale-name gate (BT-01), which reads rendered text for `<open>X v1`, sees no name in code.
+ * stale-name gate, which reads rendered text for `<open>X v1`, sees no name in code.
  */
 export const OPEN = '\u27ea'
 export const CLOSE = '\u27eb'
 
-/** The summary marker line for a plugin name, nonce and scope (MOD-SPEC §2.2 grammar). */
+/** The summary marker line for a plugin name, nonce and scope. */
 export function markerText(plugin: string, nonce: string, scope: Scope): string {
   return OPEN + plugin + ' v1 n=' + nonce + ' s=' + scope + CLOSE
 }
@@ -69,7 +69,7 @@ export function grammar(plugin: string): Grammar {
 
 /**
  * The main form's Resume-here heading literal: from the spec block (`sections_main`, the entry
- * after the title), else the CONSISTENCY §1 literal until the block exists.
+ * after the title), else the literal until the block exists.
  */
 function resumeHeading(): string {
   return specStrings('sections_main').find(h => h.startsWith('## Resume')) ?? '## Resume here'
@@ -100,7 +100,7 @@ export type Detection = {
   sha256: string
 }
 
-/** Detector of MOD-SPEC §5.1 over one summary text. */
+/** The marker/sentinel detector over one summary text. */
 /** `extraTrailers`: installed-message trailers to cut besides the shipped list (fixtures only). */
 export function detectSummary(raw: string, plugin: string, ctx: DetectContext = {}, extraTrailers: readonly string[] = []): Detection {
   const g = grammar(plugin)
@@ -187,7 +187,7 @@ export function unclosed(lines: readonly string[], scope: Scope | null, sentinel
   return lines.slice(j).some(l => l.trim() !== '')
 }
 
-/** A verdict readers treat as ok (CONSISTENCY §1). */
+/** A verdict readers treat as ok. */
 export function isOk(v: Verdict): boolean {
   return v === 'ok' || v === 'ok-trailer' || v === 'ok-unclosed'
 }
@@ -195,7 +195,7 @@ export function isOk(v: Verdict): boolean {
 export type InstrMarker = { nonce: string; scope: 'main' | 'sub' }
 
 /**
- * The last unanchored marker in instruction text (MOD-SPEC §2.2). Whether it is "ours for this
+ * The last unanchored marker in instruction text. Whether it is "ours for this
  * dispatch" depends on a dispatch record, which the caller checks.
  */
 export function lastInstrMarker(text: string | undefined, plugin: string): InstrMarker | undefined {

@@ -1,4 +1,4 @@
-// Update-drift canaries on the mod side (MOD-SPEC §5.6): C1 version, C5 mod key set, C7 trigger.
+// Update-drift canaries on the mod side: C1 version, C5 mod key set, C7 trigger.
 import type { Deps } from './deps'
 import { escalate, log } from './log'
 import { sha8 } from './normalize'
@@ -27,8 +27,8 @@ function bySid(v: unknown): Record<string, string> {
  * and one escalation, when either holds.
  * - Machine: this version is new to the machine. It differs from `lastVersion` and no session here
  *   ran it before (`cc_versions_seen`), or it is a dev build not yet due. `from` is `lastVersion`.
- *   A session on a version another session already ran logs nothing (probe 2026-10-27 P5: a fresh
- *   session on 2.1.310 after P12's 2.1.311 logged a downgrade and moved smokeDue back).
+ *   A session on a version another session already ran logs nothing (in a probe, a fresh
+ *   session on 2.1.310 after a 2.1.311 one logged a downgrade and moved smokeDue back).
  * - Session: this session itself ran another version before (`cc_version_by_sid`): a background
  *   session the supervisor moved, a `claude --resume` or `claude respawn` on another binary.
  *   `from` is that version. Only the row and the escalation: the smoke check stays machine-wide.
@@ -92,7 +92,7 @@ export const TRIGGERS = ['manual', 'auto', 'plugin', 'precompute'] as const
 export type Trigger = (typeof TRIGGERS)[number]
 
 /**
- * ID-1 (owner D2 "native owns idle compaction", 2026-10-23): a trigger Claude Code is expected to
+ * Native owns idle compaction: a trigger Claude Code is expected to
  * add (`idle`, upstream #101070) is handled exactly like the one it refines, wherever that one is
  * tested (checkpoint, the idle predicate, the after-step), with no `trigger_unknown` row. Nothing
  * keys on the "Compacted while idle" notice text.

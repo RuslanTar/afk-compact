@@ -1,4 +1,4 @@
-// Per-compaction nonce (MOD-SPEC §2.2): 8 lowercase hex characters from crypto.getRandomValues
+// Per-compaction nonce: 8 lowercase hex characters from crypto.getRandomValues
 // when present, else Math.random; redrawn while a dispatch record with that nonce exists.
 
 type Crypto = { getRandomValues?: (a: Uint8Array) => Uint8Array }

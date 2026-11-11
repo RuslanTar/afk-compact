@@ -1,7 +1,7 @@
-// The mid-turn nudge (MOD-SPEC §9): main `tool.call` results only, never subagents, once per
-// main turn (never in the handoff turn, §9.1), at or above the effective soft max, never on a
+// The mid-turn nudge: main `tool.call` results only, never subagents, once per
+// main turn (never in the handoff turn), at or above the effective soft max, never on a
 // denied call; `[halt]` with its reason in a last cycle, `[queue]` when `queue_cmd` is set. Also: the open
-// AskUserQuestion count, and the temp paths cited in tool inputs (MOD-SPEC §10 sweep scope).
+// AskUserQuestion count, and the temp paths cited in tool inputs (the sweep scope).
 import type { Deps } from './deps'
 import { storeWord } from './deps'
 import type { Runtime, Tag } from './assemble'
@@ -38,7 +38,7 @@ export async function nudgeText(d: Deps, sid: string): Promise<string | undefine
   if (tokens === undefined || tokens < eff.soft_max) return undefined
   s.nudgedThisTurn = true
   s.resumeAfter = true
-  // A last cycle (MOD-SPEC §9.1) gets `[halt]` with its reason, and the handoff-turn sentence
+  // A last cycle gets `[halt]` with its reason, and the handoff-turn sentence
   // only when that turn can run, so the nudge never promises a resume or a turn that won't come.
   const last = await lastCycleOf(d, sid)
   s.lastCycle = last
@@ -46,9 +46,9 @@ export async function nudgeText(d: Deps, sid: string): Promise<string | undefine
   if (last !== null && (await handoffPossible(d, sid))) tags.push('halt-handoff')
   const runtime: Runtime = { tokens: formatTokens(tokens) }
   if (last !== null) runtime.halt_reason = HALT_REASON_TEXT[last]
-  // D-10: `[queue]` whenever `queue_cmd` is set (no I/O here); the nonce it names is the one this
+  // `[queue]` whenever `queue_cmd` is set (no I/O here); the nonce it names is the one this
   // cycle's plugin compaction then uses.
-  // `queue_add` starts with the launcher word (PKG-RUNTIME A.2); a root no quoting can carry
+  // `queue_add` starts with the launcher word; a root no quoting can carry
   // drops `[queue]` and escalates (A.1).
   if (d.cfg.queue_cmd !== '') {
     const store = storeWord(d.root, d.name)
@@ -63,7 +63,7 @@ export async function nudgeText(d: Deps, sid: string): Promise<string | undefine
   return assemble(d.name, 'checkpoint-nudge', tags, runtime)
 }
 
-// A temp path starts a path (RRP-08): at the string's start or after whitespace, a quote, a
+// A temp path starts a path: at the string's start or after whitespace, a quote, a
 // backtick, `=`, `(`, `<` or `>`, never inside a URL (`https://host/tmp/...`). `?` and `#`
 // end it, so a query string or fragment (which can hold a token) is never recorded.
 const TEMP =
@@ -97,7 +97,7 @@ export function junkPath(p: string): boolean {
   return /%[-+ #0]*[0-9]*(?:\.[0-9]+)?[sdifxXcu]/.test(p)
 }
 
-/** Temp paths in a tool call's input (the sweep scope of MOD-SPEC §10), new ones only, junk left out. */
+/** Temp paths in a tool call's input (the sweep scope), new ones only, junk left out. */
 export function tempPaths(input: Record<string, unknown>, seen: (p: string) => boolean = () => false): string[] {
   const texts: string[] = []
   for (const [k, v] of Object.entries(input)) if (k !== 'tool' && k !== 'agentId' && k !== 'tool_use_id') strings(v, texts)
@@ -122,7 +122,7 @@ export function trackPaths(state: Deps['state'], run: Promise<void>): void {
 
 /**
  * Appends the cited temp paths to `<watch>/<sid>/paths.jsonl`: one `log --stream paths --stdin`
- * spawn per tool call, all its new paths as JSON lines (F2-6). A row over 4 KB is not sent.
+ * spawn per tool call, all its new paths as JSON lines. A row over 4 KB is not sent.
  */
 export async function recordPaths(d: Deps, sid: string, tool: string, input: Record<string, unknown>): Promise<void> {
   const seen = d.state.recordedPaths
