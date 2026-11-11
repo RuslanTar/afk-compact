@@ -251,7 +251,8 @@ export function recordReadings(entries: readonly unknown[], sid: string, ownAt?:
  * `LoadState.usageAt`) and the shared record's other ones; the own reading is written to the record
  * in the same helper call. With no own window, the record is not read: a session that reports
  * none (an API key, before its first response) has no limit of its own that another session's
- * reading could tell of. A failed call leaves the own reading alone.
+ * reading could tell of. A failed call leaves the own reading alone, and the next refresh writes it
+ * (`noteUsage`).
  */
 export async function readingsNow(d: Deps, sid: string, limits: readonly Limit[]): Promise<Reading[]> {
   const own = ownReadings(limits, d.state.usageAt)
@@ -264,7 +265,7 @@ export async function readingsNow(d: Deps, sid: string, limits: readonly Limit[]
   } catch {
     entries = undefined
   }
-  if (at !== undefined && w.length > 0) d.state.usageNote = { key: noteKey(w), at }
+  if (entries !== undefined && at !== undefined && w.length > 0) d.state.usageNote = { key: noteKey(w), at }
   return [...own, ...recordReadings(entries ?? [], sid, at)]
 }
 
@@ -351,7 +352,7 @@ function noteKey(w: ReturnType<typeof recordWindows>): string {
 /**
  * D-83: Claude Code refreshed the session's usage reading at `at` (a response, `session.measure`):
  * written to the shared record when it changed or the last write is `USAGE_NOTE_MS` old. A failed
- * read or write writes nothing (the next refresh tries again).
+ * read or write writes nothing and is not counted as written (the next refresh tries again).
  */
 export async function noteUsage(d: Deps, at: number): Promise<void> {
   let w: ReturnType<typeof recordWindows>
@@ -364,6 +365,5 @@ export async function noteUsage(d: Deps, at: number): Promise<void> {
   const key = noteKey(w)
   const n = d.state.usageNote
   if (n !== undefined && n.key === key && at - n.at < USAGE_NOTE_MS) return
-  d.state.usageNote = { key, at }
-  await usageRecord(d, await d.sessionId(), { at: at / 1000, windows: w })
+  if ((await usageRecord(d, await d.sessionId(), { at: at / 1000, windows: w })) !== undefined) d.state.usageNote = { key, at }
 }

@@ -197,3 +197,24 @@ test('AT-LM-13 (D-83, review): the session\'s own status line entry is the live 
   const v = judge([...ownReadings([w('seven_day', 95)], own), ...recordReadings([e({})], sid, own)], { ...C, job: false, usageAt: own })
   expect([v.ok, v.rule, v.usage.usage_n, v.usage.usage_age_s]).toEqual([true, 'no-fresh', { seven_day: 0 }, { seven_day: 54 * 60 }])
 })
+
+test('AT-LM-14 (D-83, review): a failed record write is not counted as written: the next refresh writes the unchanged reading again at once (noteUsage and readingsNow)', async () => {
+  let ok = false
+  let calls = 0
+  const d = {
+    state: newState('l'), helper: '/p/helper',
+    usage: async () => ({ tokens: 1, window: 2, rateLimits: [w('seven_day', 21)] }),
+    sessionId: async () => '5e55a001-0c0f-4f1e-9a00-00000000a001',
+    run: async () => { calls++; return ok ? { ok: true, exitCode: 0, stdout: '{"readings":[]}\n', error: '' } : { ok: false, exitCode: 64, stdout: '', error: '' } },
+  } as unknown as Deps
+  await noteUsage(d, NOW)
+  expect([calls, d.state.usageNote]).toEqual([1, undefined])
+  d.state.usageAt = NOW
+  await readingsNow(d, '5e55a001-0c0f-4f1e-9a00-00000000a001', [w('seven_day', 21)])
+  expect([calls, d.state.usageNote]).toEqual([2, undefined])
+  ok = true
+  await noteUsage(d, NOW + 1000)
+  expect([calls, d.state.usageNote?.at]).toEqual([3, NOW + 1000])
+  await noteUsage(d, NOW + 2000)
+  expect(calls).toBe(3)
+})
