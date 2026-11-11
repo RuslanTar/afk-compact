@@ -379,13 +379,13 @@ sub inline_key {
 #                of the id but A-Za-z0-9_- as -): a session that loaded the copy before that
 #                marketplace was pointed at another folder (the next release's) is still that
 #                install
-#   inline       a --plugin-dir load: any other folder, and any folder but the cache's when
-#                CLAUDE_PLUGIN_DATA is the plugin's own .../data/<name>-inline (Claude Code's
-#                data folder for <name>@inline, under <config>/plugins or the folder
-#                CLAUDE_CODE_PLUGIN_CACHE_DIR names); mkt inline
 #   config       another folder under <config>/plugins/: no install, not inline for the options
 #                key either (E-14); mkt inline
-# Kept per root for the process.
+#   inline       a --plugin-dir load: any other folder, and any folder but a cache or synced one
+#                when CLAUDE_PLUGIN_DATA is the plugin's own .../data/<name>-inline (Claude Code's
+#                data folder for <name>@inline, under <config>/plugins or the folder
+#                CLAUDE_CODE_PLUGIN_CACHE_DIR names: neither marketplace nor config then); mkt inline
+# Read in this order, the first that holds. Kept per root for the process.
 my %LOAD;
 sub load_source {
     my ($root) = @_;

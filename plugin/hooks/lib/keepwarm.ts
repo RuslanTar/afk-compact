@@ -63,8 +63,9 @@
 //   re-arms the timer (`resumeKeepWarm`), or, while a tick runs, leaves the gap to that tick; the
 //   idle timer it cancelled runs again too (idle.ts `resumeIdle`), so the record `no-idle-path`
 //   reads in the store still has its fire, and the hand-over a taker.
-// Rows: `keep_warm_start {jobs, gap_s, hours, windows}` (`windows`: the usage windows read; 0 means
-// the near-limit guard is skipped), one `keep_warm_ping {n, result, cache_read, cache_creation,
+// Rows: `keep_warm_start {jobs, gap_s, hours, windows, ping_s}` (`windows`: the usage windows read;
+// 0 means the near-limit guard is skipped; `ping_s`: the ping interval, which the cache state's
+// `next_due_at` follows), one `keep_warm_ping {n, result, cache_read, cache_creation,
 // since_s, gap_s, ms, status?}` per ping, one `keep_warm_wait {n, gap_s, next_s, windows, rule}` per
 // wait for a usage window's reset (D-80; `next_s`: the seconds to the ping then), one `keep_warm_stop {why, pings, gap_s, handover, windows?}`
 // per gap that warmed or that `no-idle-path` refused before warming (`windows` on a `near-limit`
@@ -369,15 +370,17 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | Wait
   // the band (a job with a certain result open, a fresh reading, the measured compaction change
   // fits below the cap: `rule` band, with the job flag of D-79); no more pings in the band either.
   // When every such window resets before this gap's last ping moment (and the held record's
-  // deadline), the ping waits for the reset instead of spending the last points. None reported (or
-  // no reading): this guard is skipped.
+  // deadline), the ping waits for the reset instead of spending the last points. None reported: the
+  // session's own entries in the usage record (D-88, limits.ts `readingsNow`); no reading at all:
+  // this guard is skipped.
   const limits = u?.rateLimits ?? []
   let wait: Wait | undefined
   kw.note = undefined
-  if (limits.length > 0) {
-    // D-83: every reading of the windows, the session's own and the shared record's (limits.ts `judge`).
+  // D-83: every reading of the windows, the session's own and the shared record's (limits.ts `judge`).
+  const rs = await readingsNow(d, kw.sid, limits)
+  if (rs.length > 0) {
     const c = await limitCtx(d, await resultJobOpen(d, kw.sid), now)
-    const v = judge(await readingsNow(d, kw.sid, limits), c)
+    const v = judge(rs, c)
     kw.note = noteOf(v)
     if (!v.ok || v.band) {
       const reset = v.reset
@@ -424,7 +427,7 @@ async function refuse(d: Deps, kw: KeepWarm, now: number): Promise<void> {
 
 /**
  * Warming starts for this gap: one `keep_warm_start` row (`windows` 0: no usage window read, the
- * near-limit guard is skipped). True when nothing disturbed the gap meanwhile; false, with
+ * near-limit guard is skipped; `ping_s`: the ping interval, D10-scaled). True when nothing disturbed the gap meanwhile; false, with
  * nothing more to do, when a turn, a prompt or a stop came during its reads (the gap stays `armed`
  * with no row) or during its row's write (a stop then writes its row after this one). The first
  * ping and the idle timer's fire can begin the same gap at once: the one that finds it begun
@@ -441,12 +444,13 @@ async function begin(d: Deps, kw: KeepWarm, now: number): Promise<boolean> {
   } catch {
     windows = 0
   }
+  const pingS = secs(KEEP_WARM_PING_MS * scaleOf(await d.idleEnv()))
   if (moved()) return false
   const jobs = await openJobs(d, kw.sid)
   if (moved()) return false
   if (kw.phase === 'armed') {
     kw.phase = 'warming'
-    kw.startRow = log(d, kw.sid, 'keep_warm_start', { jobs, gap_s: secs(now - kw.start), hours: d.cfg.keep_warm_hours, windows })
+    kw.startRow = log(d, kw.sid, 'keep_warm_start', { jobs, gap_s: secs(now - kw.start), hours: d.cfg.keep_warm_hours, windows, ping_s: pingS })
   }
   // Begun here, or by the other caller meanwhile: after its start row, while undisturbed (a gap
   // found `off`, the other's checks failing, writes nothing: the callers go on only while it warms).

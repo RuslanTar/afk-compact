@@ -169,7 +169,7 @@ test('AT-LM-11 (D-83): recordReadings: the session\'s own plugin entries are lef
   ])
 })
 
-test('AT-LM-12 (D-83): readingsNow writes the own reading and reads the record in one helper call; with no own window it calls nothing; a failed call leaves the own reading', async () => {
+test('AT-LM-12 (D-83): readingsNow writes the own reading and reads the record in one helper call; with no own window it only reads (D-88: and with no own entry there, another session\'s reading is none); a failed call leaves the own reading', async () => {
   const sent: (readonly string[])[] = []
   let reply = { ok: true, exitCode: 0, stdout: JSON.stringify({ readings: [{ kind: 'seven_day', pct: 40, resets_at: null, at: NOW / 1000 - 60, src: 'plugin', sid8: '5e55a002' }] }) + '\n', error: '' }
   const state = newState('l')
@@ -182,7 +182,7 @@ test('AT-LM-12 (D-83): readingsNow writes the own reading and reads the record i
   expect(rs.map(x => [x.kind, x.percentUsed, x.src, x.at])).toEqual([['seven_day', 95, 'plugin', NOW - MIN], ['seven_day', 40, 'peer', NOW - MIN]])
   expect(sent).toEqual([['usage', '--sid', '5e55a001-0c0f-4f1e-9a00-00000000a001', '--stdin']])
   expect(await readingsNow(d, 's', [])).toEqual([])
-  expect(sent.length).toBe(1)
+  expect(sent).toEqual([['usage', '--sid', '5e55a001-0c0f-4f1e-9a00-00000000a001', '--stdin'], ['usage', '--sid', 's']])
   reply = { ok: false, exitCode: 64, stdout: '', error: '' }
   expect((await readingsNow(d, 's', [w('seven_day', 95)])).map(x => x.src)).toEqual(['plugin'])
 })
@@ -298,4 +298,93 @@ test('AT-LM-16 (0.1.9, review): usage writes are throttled: parallel refreshes s
   fail = false
   await noteUsage(d, NOW + 31 * MIN)
   expect(sent.map(x => x.windows[0]?.pct).slice(6)).toEqual([46.5])
+})
+
+// ---- D-88: within a window (a kind and its reset time) the share only grows until the reset, so a
+// reading counts until its window resets, however old; the readings of a window are one, its latest.
+const DAY = 24 * 60 * MIN
+
+test('D88-01 (D-88): the live scenario: one seven_day reading at 99, 20 min old, resetting in 3 days, nothing refreshed it: it still counts, so keep-warm and plugin idle compaction stop (rule cap); its age is logged', () => {
+  const v = judge([r('seven_day', 99, 'plugin', 20, NOW + 3 * DAY)], C)
+  expect([v.ok, v.rule, v.windows, v.usage]).toEqual([false, 'cap', ['seven_day:99'], { usage_src: ['seven_day:plugin'], usage_age_s: { seven_day: 1200 }, usage_n: { seven_day: 1 } }])
+  expect(verdictOf([w('seven_day', 99, NOW + 3 * DAY)], { ...C, usageAt: NOW - 20 * MIN }).ok).toBe(false)
+  // A reading with no reset time keeps the 10-minute rule.
+  expect(judge([r('seven_day', 99, 'plugin', 20)], C).rule).toBe('no-fresh')
+})
+
+test('D88-02 (D-88): a reading whose reset has passed counts for nothing, however recent: a peer at 40 read a minute ago in a window that reset leaves the own 99 (20 min old, resets in 3 days) alone, and with nothing else counted the action runs', () => {
+  const R = NOW + 3 * DAY
+  expect(judge([r('seven_day', 99, 'plugin', 20, R), r('seven_day', 40, 'peer', 1, NOW - MIN)], C).rule).toBe('cap')
+  expect(judge([r('seven_day', 99, 'plugin', 20, NOW - 1)], C)).toMatchObject({ ok: true, rule: '90', usage: { usage_n: {} } })
+})
+
+test('D88-03 (D-88, D-86): two windows of one kind (99 resetting in 3 days, 21 resetting in 5, another account behind a proxy), both read 20-30 min before: they differ, so the action runs (split, the window with room named, 2 windows)', () => {
+  const v = judge([r('seven_day', 99, 'plugin', 20, NOW + 3 * DAY), r('seven_day', 21, 'peer', 30, NOW + 5 * DAY)], { ...C, job: false })
+  expect([v.ok, v.rule, v.windows, v.usage.usage_n, v.usage.usage_anomaly]).toEqual([true, 'split', ['seven_day:21'], { seven_day: 2 }, ['seven_day:plugin', 'seven_day:peer']])
+})
+
+test('D88-04 (D-88): one window\'s readings are one: its latest decides (an older 40, another session\'s 5 min ago, and the own 99 a minute ago: stop; the other way round: run); resets within a minute are one window, two minutes apart two', () => {
+  const R = NOW + 3 * DAY
+  const v = judge([r('seven_day', 40, 'peer', 5, R), r('seven_day', 99, 'plugin', 1, R + 30000)], { ...C, job: false })
+  expect([v.ok, v.rule, v.windows, v.usage.usage_n]).toEqual([false, 'cap', ['seven_day:99'], { seven_day: 1 }])
+  expect(judge([r('seven_day', 99, 'plugin', 5, R), r('seven_day', 40, 'peer', 1, R)], C)).toMatchObject({ ok: true, rule: '90', windows: ['seven_day:40'] })
+  expect(judge([r('seven_day', 40, 'peer', 5, R), r('seven_day', 99, 'plugin', 1, R + 2 * MIN)], C)).toMatchObject({ ok: true, rule: 'split' })
+  // The keep-warm wait: every window that stops resets by the latest of them.
+  expect(judge([r('five_hour', 99, 'plugin', 20, NOW + 30 * MIN), r('five_hour', 97, 'peer', 2, NOW + 90 * MIN)], C).reset).toBe(NOW + 90 * MIN)
+})
+
+test('D88-05 (D-80 kept): going above 90 still needs a fresh reading: a job open and a measured change that fits, at 92 read 20 min before (resets in 3 days): stop (rule stale); read 5 min before: the band', () => {
+  const R = NOW + 3 * DAY
+  expect(judge([r('seven_day', 92, 'plugin', 20, R)], C)).toMatchObject({ ok: false, band: false, rule: 'stale' })
+  expect(judge([r('seven_day', 92, 'plugin', 5, R)], C)).toMatchObject({ ok: true, band: true, rule: 'band', reset: R })
+})
+
+test('D88-06 (D-88): no own window (a load that adopted the session before its first response): the session\'s own record entries stand for the live reading and count until their reset, the other sessions\' beside them; the window\'s latest decides; with no own entry, none', async () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const R = (NOW + 3 * DAY) / 1000
+  let rec: Record<string, unknown>[] = []
+  const d = {
+    state: newState('l'), helper: '/p/helper', sessionId: async () => sid,
+    run: async () => ({ ok: true, exitCode: 0, stdout: JSON.stringify({ readings: rec }) + '\n', error: '' }),
+  } as unknown as Deps
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 99, resets_at: R, at: (NOW - 50 * MIN) / 1000, src: 'plugin', sid8: '5e55a001', ...o })
+  rec = [e({}), e({ src: 'statusline', at: (NOW - MIN) / 1000 }), e({ sid8: '5e55a002', pct: 40, at: (NOW - 70 * MIN) / 1000 })]
+  const rs = await readingsNow(d, sid, [])
+  expect(rs.map(x => [x.src, x.percentUsed, x.at])).toEqual([['plugin', 99, NOW - 50 * MIN], ['statusline', 99, NOW - 50 * MIN], ['peer', 40, NOW - 70 * MIN]])
+  expect(judge(rs, C)).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'], usage: { usage_src: ['seven_day:plugin'], usage_n: { seven_day: 1 } } })
+  rec = [e({ sid8: '5e55a002' })]
+  expect(await readingsNow(d, sid, [])).toEqual([])
+})
+
+test('D88-07 (D-88): a session\'s reading with no reset time beside its own reading of that kind with one is the same reading (one Claude Code object): not a window of its own, so an older lower share cannot split it', () => {
+  const R = NOW + 3 * DAY
+  const v = judge([r('seven_day', 99, 'plugin', 20, R), r('seven_day', 40, 'statusline', 5)], { ...C, job: false })
+  expect([v.ok, v.rule, v.usage.usage_n]).toEqual([false, 'cap', { seven_day: 1 }])
+})
+
+test('D88-15 (D-88, review 3): own windows of unknown time (a plugin reload in the idle gap: the engine still reports the last response\'s windows, the load has not stamped them): the session\'s own record entries are read beside them, dated, so a lower share from another session read earlier does not decide; with no own entry the live share stands, being the larger (the share only grows until the reset)', async () => {
+  const sid = '5e55a001-0c0f-4f1e-9a00-00000000a001'
+  const R = (NOW + 3 * DAY) / 1000
+  let rec: Record<string, unknown>[] = []
+  const d = {
+    state: newState('l'), helper: '/p/helper', sessionId: async () => sid,
+    run: async () => ({ ok: true, exitCode: 0, stdout: JSON.stringify({ readings: rec }) + '\n', error: '' }),
+  } as unknown as Deps
+  const e = (o: Record<string, unknown>) => ({ kind: 'seven_day', pct: 99, resets_at: R, at: (NOW - 50 * MIN) / 1000, src: 'plugin', sid8: '5e55a001', ...o })
+  const live = [w('seven_day', 99, NOW + 3 * DAY)]
+  rec = [e({}), e({ sid8: '5e55a002', pct: 40, at: (NOW - 70 * MIN) / 1000 })]
+  const rs = await readingsNow(d, sid, live)
+  expect(rs.map(x => [x.src, x.percentUsed, x.at])).toEqual([['plugin', 99, undefined], ['plugin', 99, NOW - 50 * MIN], ['peer', 40, NOW - 70 * MIN]])
+  expect(judge(rs, { ...C, job: false, usageAt: undefined })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'], usage: { usage_age_s: { seven_day: 3000 }, usage_n: { seven_day: 1 } } })
+  rec = [e({ sid8: '5e55a002', pct: 40, at: (NOW - 70 * MIN) / 1000 })]
+  expect(judge(await readingsNow(d, sid, live), { ...C, job: false, usageAt: undefined })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'] })
+  // A live share below a dated one of the same window was read before it: the dated one decides.
+  rec = [e({ sid8: '5e55a002', at: (NOW - 70 * MIN) / 1000 })]
+  expect(judge(await readingsNow(d, sid, [w('seven_day', 30, NOW + 3 * DAY)]), { ...C, job: false, usageAt: undefined })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'] })
+})
+
+test('D88-16 (D-88, review 3): a reading dated more than a minute ahead (a clock that stepped back) has no known time, so it is not the latest of its window over a larger share: the own 99 read a minute ago and another session\'s 40 dated 4 min ahead stop (cap); one dated 30 s ahead is read as now, the latest: it runs', () => {
+  const R = NOW + 3 * DAY
+  expect(judge([r('seven_day', 99, 'plugin', 1, R), r('seven_day', 40, 'peer', -4, R)], { ...C, job: false })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'] })
+  expect(judge([r('seven_day', 99, 'plugin', 1, R), r('seven_day', 40, 'peer', -0.5, R)], { ...C, job: false })).toMatchObject({ ok: true, rule: '90', windows: ['seven_day:40'] })
 })

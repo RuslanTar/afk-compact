@@ -23,7 +23,9 @@ use utf8;
 use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 
 # keepwarm.ts: the next ping 50 min after the last warm request (or, 0.1.8, when a keep_warm_wait
-# row says: a wait for a usage window's reset); none later than 58 min.
+# row says: a wait for a usage window's reset); none later than 58 min. A gap whose keep_warm_start
+# row has ping_s (0.1.9) runs at that interval instead (the test seam STORE_TEST_IDLE_CACHE_S
+# scales it) and these bounds and its hours scale with it.
 our $PING_S = 50 * 60;
 our $LATEST_S = 58 * 60;
 our %TTL_S = ('1h' => 3600, '5m' => 300);
@@ -168,8 +170,9 @@ sub _apply {
     my $gap = _num($r->{gap_s}) // 0;
     if ($ev eq 'keep_warm_start') {
         my $gs = $t - $gap;
+        my $ps = _num($r->{ping_s});
         $s->{keep_warm} = { started_at => _t($t), gap_start => _t($gs), hours => _num($r->{hours}), n => 0, warm_at => _t($gs),
-                            result => undef, stop => undef, last_at => _t($t) };
+                            result => undef, stop => undef, last_at => _t($t), (defined $ps && $ps >= 1 ? (ping_s => int($ps)) : ()) };
         return 1;
     }
     if ($ev eq 'keep_warm_ping') {
@@ -457,15 +460,19 @@ sub _with_kw {
     # 0.1.8: the next ping is the reset wait's when a keep_warm_wait row set one after the last warm request
     my $next = _num($kw->{next_at});
     $next = undef unless defined $next && defined $warm && $next > $warm;
+    # the gap's own ping interval (its start row's ping_s), and the scale of the bounds below
+    my $ping = _num($kw->{ping_s});
+    $ping = $PING_S unless defined $ping && $ping >= 1;
+    my $scale = $ping / $PING_S;
     # warming runs from its start row to its stop row; a gap whose stop never came (a crash) ends at
     # the 58-minute bound of its last warm request, at the cutoff, at the session's end, or at a main
     # request after its last row
-    my $active = defined $started && !$stop && !defined $end && defined $warm && $now <= $warm + $LATEST_S + 120
-                 && (!defined $hours || $now < (_num($kw->{gap_start}) // $started) + $hours * 3600 + 600)
+    my $active = defined $started && !$stop && !defined $end && defined $warm && $now <= $warm + $LATEST_S * $scale + 120
+                 && (!defined $hours || $now < (_num($kw->{gap_start}) // $started) + $hours * 3600 * $scale + 600)
                  && !(defined $main_at && $main_at > (_num($kw->{last_at}) // $started)) ? 1 : 0;
     $r->{keep_warm} = {
         active => jsonc::bool($active), n => _num($kw->{n}) // 0, max => $max, hours => $hours,
-        gap_started_at => _int(_num($kw->{gap_start})), next_due_at => ($active ? int($next // $warm + $PING_S) : undef),
+        gap_started_at => _int(_num($kw->{gap_start})), next_due_at => ($active ? int($next // $warm + $ping) : undef),
         last_result => (defined $kw->{result} && !ref $kw->{result} ? $kw->{result} : undef),
         stop => ($stop ? { why => $stop->{why}, pings => _num($stop->{pings}) // 0, at => _int(_num($stop->{at})) } : undef),
     };
