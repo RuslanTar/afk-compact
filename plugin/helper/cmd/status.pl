@@ -978,7 +978,10 @@ sub usage_lines {
         elsif ($counts->($e)) { push @peer, $e }
     }
     # the other sessions' windows: grouped by kind and reset (a group's resets within a minute of
-    # its earliest), or by kind and session without one; each one's latest (the larger share on a tie)
+    # its earliest), or by kind and session without one, left out where that session has a counted
+    # entry of the kind with a reset (one reading); each one's latest (the larger share on a tie)
+    my %timed = map { ("$_->{sid8}\0$_->{kind}" => 1) } grep { defined $_->{resets_at} } @peer;
+    @peer = grep { defined $_->{resets_at} || !$timed{"$_->{sid8}\0$_->{kind}"} } @peer;
     my @win;
     for my $e (sort { $a->{kind} cmp $b->{kind} || ($a->{resets_at} // 0) <=> ($b->{resets_at} // 0) || $a->{sid8} cmp $b->{sid8} } @peer) {
         my $g;
