@@ -87,7 +87,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^usage: no reading of this session recorded yet; other sessions on this machine: 4 readings in the last 10 min$"
+     "^usage: no reading of this session in the last hour; other sessions on this machine: 4 readings in the last 10 min$"
     ]
    }
   }

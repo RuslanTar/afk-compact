@@ -972,7 +972,7 @@ sub usage_lines {
         my $e = $mine{$_};
         sprintf('%s %s%% (%s, %s ago)', $_, int($e->{pct}), $e->{src} eq 'statusline' ? 'status line' : 'plugin', $ago->($now - $e->{at}))
     } sort keys %mine;
-    my $l = 'usage: ' . (@w ? join(' · ', @w) : defined $s8 ? 'no reading of this session recorded yet' : 'unknown (no session id)');
+    my $l = 'usage: ' . (@w ? join(' · ', @w) : defined $s8 ? 'no reading of this session in the last hour' : 'unknown (no session id)');
     $l .= "; other sessions on this machine: $peers reading" . ($peers == 1 ? '' : 's') . ' in the last 10 min' if $peers;
     return ($l);
 }
