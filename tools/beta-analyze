@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""tools/beta-analyze: the owner's analysis of closed-beta report bundles (W-BETA F; BUILD-PLAN 2.5).
+"""tools/beta-analyze: the maintainer's analysis of closed-beta report bundles.
 
 Dev workspace only, never under plugin/. Python 3 standard library only; run it isolated:
 
@@ -235,7 +235,7 @@ def tsv(rows):
 
 def parse_created(s):
     """Date and time with offset -> epoch seconds, else None. Reads the manifest's own `created`
-    stamp (RV-24: `YYYY-MM-DD HH:MM +hhmm`, what `report` writes) and the rows' ISO form
+    stamp (`YYYY-MM-DD HH:MM +hhmm`, what `report` writes) and the rows' ISO form
     (`YYYY-MM-DDTHH:MM:SS[.fff]+hh:mm` or `Z`)."""
     if not isinstance(s, str):
         return None
@@ -465,7 +465,7 @@ def default_store():
 
 
 def config_rows(cfg):
-    """config.json (settings::export_view, W-BETA D) -> {key: changed bool}; None when unavailable."""
+    """config.json (settings::export_view) -> {key: changed bool}; None when unavailable."""
     if not isinstance(cfg, dict) or cfg.get("available") is False:
         return None
     keys = cfg.get("keys") if isinstance(cfg.get("keys"), dict) else cfg
@@ -850,12 +850,12 @@ def render(bundles, installs, rows_in, rows_dup, rows_bad):
           "- notice_shown: %d yes, %d no" % (pooled["notice"]["true"], pooled["notice"]["false"]),
           "- watcher off: %d of %d installs" % (pooled["watcher_off"], len(installs)), ""]
 
-    # W-BETA G bars
+    # the benefit bars
     returned = len(installs)
     total = n["valid"] + n["quarantined"] + n["refused"] + n["unverified"]
     ms = sorted(pooled["ms"])
     p95 = pct(ms, 95)
-    L += ["## Benefit bars (W-BETA G)", "", "| Bar | Target | Value | Result |", "|---|---|---|---|",
+    L += ["## Benefit bars", "", "| Bar | Target | Value | Result |", "|---|---|---|---|",
           "| Uptake | >=3 installs each return >=1 valid bundle | %d | %s |" % (returned, "PASS" if returned >= 3 else "FAIL"),
           "| Bundle validity | 100%% pass report verify; any quarantine is a P0 | %d of %d valid, %d quarantined | %s |"
           % (n["valid"], total, n["quarantined"], "n/a (no bundle)" if not total else "PASS" if n["valid"] == total else "FAIL"),

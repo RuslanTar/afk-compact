@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""tools/typecheck: tsc --noEmit -p tsconfig.json against the Claude Code type declarations (E-5).
+"""tools/typecheck: tsc --noEmit -p tsconfig.json against the Claude Code type declarations.
 
 CC_TYPES_DIR names the folder holding claude-code.d.ts (the cached 2.1.305 types for this
 build). It is copied to .types/ (git-ignored), which tsconfig.json includes. Without

@@ -1,12 +1,12 @@
 #!/usr/bin/python3
-"""tools/helper-replies-gen: record real helper replies for BT-05 (ROOT-RULINGS: WP-core owns it).
+"""tools/helper-replies-gen: record real helper replies for BT-05 (WP-core owns it).
 
 Usage:
   tools/helper-replies-gen            write plugin/tests/unit/_gen/helper-replies.gen.ts
   tools/helper-replies-gen --check    exit 1 when the committed module differs from a fresh run
 
 Runs the built launcher plugin/scripts/<name>-store (run tools/build first) through the calls the
-mod makes (BUILD-PLAN §3.1, hooks/lib/helper.ts and log.ts), in one fresh temporary HOME with
+mod makes (hooks/lib/helper.ts and log.ts), in one fresh temporary HOME with
 STORE_TEST_MODE=1, a fixed clock and a fixed Claude pid, and records each call's argv, exit
 code and stdout. The U test (plugin/tests/unit/replies.test.ts, WP-mod) replays the same argv
 against the mod's fake helper and compares exit codes and output shapes.
@@ -22,13 +22,13 @@ sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 OUT = os.path.join(REPO, "plugin", "tests", "unit", "_gen", "helper-replies.gen.ts")
 PLUGIN = os.path.join(REPO, "plugin")
-# The launcher folder (PKG-RUNTIME A.1): one constant, as in tools/build, deps.ts and ctx.pm.
+# The launcher folder: one constant, as in tools/build, deps.ts and ctx.pm.
 LAUNCHER_DIR = "scripts"
 SID = "5e55a001-0c0f-4f1e-9a00-00000000a001"
 NONCE = "1a2b3c4d"
 NOW = "2026-10-21T14:05:12+03:00"
 CLAUDE_PID = "424242:Tue Oct 21 09:00:00 2026"
-# D-18 handoff-turn ids (8 lowercase hex): open/supersede/superseded, none, staged with a draft,
+# Handoff-turn ids (8 lowercase hex): open/supersede/superseded, none, staged with a draft,
 # staged with no safe finish command, published, claimed with no file in place (publish-failed),
 # and one never opened.
 HT_OPEN, HT_NONE, HT_DRAFT, HT_NOFINISH, HT_PUBLISHED, HT_FAILED, HT_UNKNOWN = (
@@ -54,7 +54,7 @@ def summary(name):
 def ht_setup(tmp, home):
     """Files `begin` and `publish` (WP-skills) write for a bound ht, written here directly so the
     recorded `handoff-state` replies cover every form (core lib/handoff_turn.pm)."""
-    # the default handoff_root (STATE-ROOT, 0.1.2: ~/.local/state/<name>/handoffs)
+    # the default handoff_root (0.1.2: ~/.local/state/<name>/handoffs)
     root = os.path.join(home, ".local", "state", brand(), "handoffs")
     d = os.path.join(root, ".watch", SID, "handoff-turn")
     bucket = os.path.join(root, "repo", "LAB-42")
@@ -124,7 +124,7 @@ def calls(tmp):
         ("measure", ["measure", "--sid", SID, "--compact"]),
         ("log", ["log", "--sid", SID, "--json", row]),
         ("log-paths", ["log", "--sid", SID, "--stream", "paths", "--json", prow]),
-        # D-18 B8 and Dev-1 D1 (needs/mod-to-build.md §1)
+        # handoff-turn open/supersede and handoff-state in every form
         ("handoff-turn-open", hto(HT_OPEN)),
         ("handoff-turn-open-exists", hto(HT_OPEN)),
         ("handoff-turn-supersede", ["handoff-turn", "supersede", "--sid", SID, "--ht", HT_OPEN, "--nonce", NONCE]),
@@ -141,11 +141,11 @@ def calls(tmp):
         ("handoff-state-superseded", hts(HT_OPEN)),
         ("log-jobs-caller", ["log", "--sid", SID, "--stream", "jobs", "--stdin"], job + "\n"),
         ("dispatch-handoff-ht", [a if a != NONCE else "2b3c4d5e" for a in disp] + ["--handoff-ht", HT_OPEN]),
-        # The local shadow trial (TRIAL-DUAL-HANDOFF, P-DH-GEN): without its config both commands
+        # The local shadow trial: without its config both commands
         # answer that it is absent and write nothing.
         ("trial-measure-absent", ["trial-measure", "--sid", SID, "--budget-ms", "7500", "--cc-version", "2.1.306"]),
         ("trial-save-absent", ["trial-save", "--sid", SID], trial_skip + "\n"),
-        # SESSION-RESTART (restart on update, the default `off`): the gate's refusal, a claim with
+        # Restart on update (the default `off`): the gate's refusal, a claim with
         # no carry note, a state change with no note and a cancel with no respawn record.
         ("restart-gate-off", ["restart", "gate", "--sid", SID, "--route", "fg", "--from", "2.1.311", "--to", "2.1.312",
                               "--model", "", "--seen-mode", "default", "--seen-at", "1792580712000",
@@ -159,7 +159,7 @@ def calls(tmp):
 
 def portable(s, tmp, home, name):
     # The plugin folder first: the helper writes its own launcher path into the commands it
-    # prints (ctx::store_cmd, PKG-RUNTIME A.1), and the repo path is a user path.
+    # prints (ctx::store_cmd), and the repo path is a user path.
     for p in (os.path.realpath(PLUGIN), PLUGIN):
         s = s.replace(p, "$PLUGIN")
     s = s.replace(home, "~").replace(tmp, "$TMP")
@@ -237,7 +237,7 @@ def main(argv):
         sys.exit(__doc__)
     text = record()
     if argv == ["--check"]:
-        # bytes as written (newline=""): CRLF drift is a difference too (BH-5)
+        # bytes as written (newline=""): CRLF drift is a difference too
         cur = open(OUT, encoding="utf-8", newline="").read() if os.path.exists(OUT) else None
         ok = cur == text
         print("HELPER REPLIES CHECK: " + ("PASS" if ok else "FAIL (run tools/helper-replies-gen)"))

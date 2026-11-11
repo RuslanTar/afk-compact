@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""tools/build: render src/ into the installable plugin (BUILD-PLAN §1, §4.6).
+"""tools/build: render src/ into the installable plugin.
 
 Usage:
   tools/build                       render into the repo (GEN files), update tools/build.state
@@ -7,23 +7,23 @@ Usage:
                                     byte for byte (CRLF drift counts), and report any other
                                     file in a folder only GEN tools write as stale
   tools/build --name N --out DIR    render a full copy under DIR (rename drill; repo untouched)
-  tools/build --variant V --out DIR render a lab variant under DIR (E-1 H11 arms; repo untouched):
+  tools/build --variant V --out DIR render a lab variant under DIR (experiment arms; repo untouched):
                                     skills-only   same name, skills, helper and assets; no hooks/
                                                   (no hooks.json, no mod) and no plugin/tests/
                                     triggers-off  the full build with userConfig triggers
                                                   defaulting to false
-                                    It prints a tree sha256 (paths, modes and bytes) for FROZEN.md,
+                                    It prints a tree sha256 (paths, modes and bytes) to record,
                                     and refuses unless the plugin/ files it copies, src/,
                                     brand.json, LICENSE and tools/build match HEAD, untracked
                                     files included (the arms come from one commit; the line
                                     then names it). --allow-dirty builds anyway and marks
-                                    the hash UNVERIFIED (not for FROZEN.md).
+                                    the hash UNVERIFIED (not for a record).
   DIR is refused when it is the repo, one of its parents, or inside the repo other than under
   tmp/<name>/ (not tmp/store-h-*), compared after symlinks and letter case are resolved. An
   existing DIR is replaced only when it is empty or holds the .tools-build-out mark a previous
-  --out run wrote; anything else is left alone (D-8).
+  --out run wrote; anything else is left alone.
 
-Build-time rules (compaction DESIGN-NOTES §2, BUILD-PLAN §3.4): strip
+Build-time rules: strip
 `[ \\t]*<!--.*?-->` (multi-line) and fill `{{plugin}}`. Manifests also take
 `{{marketplace}}`, `{{version}}` and `{{description}}` from brand.json.
 """
@@ -37,15 +37,15 @@ SPEC_BLOCK = re.compile(r"^```json spec-literals[ \t]*\n(.*?)\n```[ \t]*$", re.S
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 EXEC = 0o755
 PLAIN = 0o644
-# The launcher's folder (PKG-RUNTIME A.1, Q-R1): the one spelling here, in deps.ts and in
+# The launcher's folder: the one spelling here, in deps.ts and in
 # ctx.pm; the AT-PK-01 gate finds any other. No top-level bin/ ships (claude.ai and Cowork
 # refuse a plugin with one).
 LAUNCHER_DIR = "scripts"
-# The launcher's old folder (before the move). It stays a GEN place for one round (A.7): a
+# The launcher's old folder (before the move). It stays a GEN place for one round: a
 # file left there is reported stale by --check, and tools/build removes the old launcher
 # (listed in tools/build.state) and then the folder once it is empty.
 OLD_LAUNCHER_DIRS = ("plugin/bin",)
-# Places only GEN tools write (BUILD-PLAN §1, OWNERS.tsv). Every file found there must be a
+# Places only GEN tools write (OWNERS.tsv). Every file found there must be a
 # tools/build output or one of OTHER_GEN (a path, or a pattern in OTHER_GEN_PATTERNS), else
 # --check reports it stale: it would ship. A pattern's owner reports its own stale files: since
 # 0.1.2 (goldens-split) tools/assemble --check reports a _gen/goldens*.gen.ts no render writes.
@@ -162,7 +162,7 @@ def gen_place_files():
 
 
 def check_context_note(spec):
-    """0.1.2 D-8 (review finding 6): approval_context_re spells carry.foreign_approval_note
+    """approval_context_re spells carry.foreign_approval_note
     literally, so a changed note must change the regex too (the context-only own line reuses the
     foreign form). Dies when the regex lacks the note, escaped as a regex literal."""
     rx = spec.get("approval_context_re")
@@ -232,7 +232,7 @@ def plan(brand):
     out["plugin/hooks/lib/spec.gen.ts"] = (spec_ts, PLAIN)
     out["plugin/hooks/lib/meta.gen.ts"] = (ts_header("brand.json") + "export const PLUGIN_VERSION = " +
                                            json.dumps(brand["version"]) + "\n", PLAIN)
-    # SESSION-RESTART §3.2: the restart launcher's launch folder env, read by its literal name
+    # The restart launcher's launch folder env, read by its literal name
     # (the engine takes literal $.env.get names only); the launcher exports the same name.
     env = launch_env(name)
     out["plugin/hooks/lib/launch.gen.ts"] = (
@@ -249,7 +249,7 @@ def plan(brand):
         out["plugin/skills/" + os.path.relpath(rel, "src/skills")] = (render(read(rel), name), PLAIN)
 
     out["plugin/{}/{}-store".format(LAUNCHER_DIR, name)] = (render(read("src/launcher.tmpl"), name), EXEC)
-    # The opt-in restart launcher (SESSION-RESTART §3): beside the helper launcher, never in a
+    # The opt-in restart launcher: beside the helper launcher, never in a
     # bin/ folder (a plugin's bin/ joins the Bash tool's PATH; the model must not start sessions).
     out["plugin/{}/{}-claude".format(LAUNCHER_DIR, name)] = (
         render_claude_launcher(read("src/claude-launcher.tmpl"), brand), EXEC)
@@ -289,7 +289,7 @@ def write_file(root, rel, text, mode):
 
 
 def apply_variant(gen, variant):
-    """The E-1 H11 arms. skills-only: drop the hooks (classic hooks.json and the mod) so nothing
+    """The experiment arms. skills-only: drop the hooks (classic hooks.json and the mod) so nothing
     runs at compaction; the skills and their helper stay. triggers-off: pin triggers to false."""
     if variant == "skills-only":
         return {rel: v for rel, v in gen.items() if not rel.startswith(("plugin/hooks/", "plugin/tests/"))}
@@ -504,7 +504,7 @@ def main(argv):
             if commit:
                 print("tree sha256 {} {} commit {}".format(sha, variant, commit))
             else:
-                print("tree sha256 {} {} UNVERIFIED ({}): not for FROZEN.md".format(sha, variant, unverified))
+                print("tree sha256 {} {} UNVERIFIED ({}): not for a record".format(sha, variant, unverified))
         return 0
 
     for rel in old["files"]:
@@ -515,7 +515,7 @@ def main(argv):
                 print("removed stale " + rel)
     for rel in OLD_LAUNCHER_DIRS:
         # Only an empty folder goes (rmdir); a file someone left there stays, and --check
-        # reports it stale (D-8: tools/build deletes only what an earlier build wrote).
+        # reports it stale (tools/build deletes only what an earlier build wrote).
         p = os.path.join(REPO, rel)
         if os.path.isdir(p) and not os.path.islink(p) and not os.listdir(p):
             os.rmdir(p)
