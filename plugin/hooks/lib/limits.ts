@@ -370,7 +370,9 @@ function noteKey(w: ReturnType<typeof recordWindows>): string {
 /**
  * D-83: Claude Code refreshed the session's usage reading at `at` (a response, `session.measure`):
  * written to the shared record when it changed or the last write is `USAGE_NOTE_MS` old. A failed
- * read or write writes nothing and is not counted as written (the next refresh tries again).
+ * read writes nothing, and a failed helper call is not counted as written (the next refresh tries
+ * again); a write the helper could not make (no record in a git work tree, a full disk) is not
+ * reported, so it is tried again `USAGE_NOTE_MS` later (fewer fresh readings, the safe side).
  */
 export async function noteUsage(d: Deps, at: number): Promise<void> {
   let w: ReturnType<typeof recordWindows>
