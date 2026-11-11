@@ -2455,3 +2455,25 @@ test('D88-08 (D-80 kept): going above 90 still needs a fresh reading: an agent o
   expect(nearSkips(w)).toEqual([['compact', 'stale']])
   expect(selfCompacts(w)).toBe(0)
 })
+
+test('KW-PING-S (0.1.9): the start row names the gap\'s ping interval (ping_s, 3000 s), which the cache state\'s next_due_at follows', { options: ON }, async ($, on) => {
+  const w = world(on)
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w)
+  f.t0 = t0
+  await until(w, t0, 51)
+  expect(f.at).toEqual([50])
+  expect(w.rowsOf('keep_warm_start').map(r => [r.gap_s, r.ping_s])).toEqual([[3000, 3000]])
+})
+
+test('KW-PING-S (0.1.9): under STORE_TEST_IDLE_CACHE_S=600 the first ping comes 500 s into the gap, and the start row says ping_s 500', { options: ON }, async ($, on) => {
+  const w = world(on)
+  w.env = { STORE_TEST_IDLE_CACHE_S: '600' }
+  const f = forks(on, w)
+  await w.start($)
+  await humanTurn($, w)
+  await w.advance(501 * 1000)
+  expect(f.at.length).toBe(1)
+  expect(w.rowsOf('keep_warm_start').map(r => [r.gap_s, r.ping_s])).toEqual([[500, 500]])
+})

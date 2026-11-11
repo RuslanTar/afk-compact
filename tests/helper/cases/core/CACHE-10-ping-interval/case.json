@@ -1,0 +1,87 @@
+{
+ "id": "CACHE-10-ping-interval",
+ "note": "0.1.9 nit: keep-warm pings at its own interval (50 min, scaled by the test seam STORE_TEST_IDLE_CACHE_S: 500 s at a 600 s cache), which its keep_warm_start row now names (ping_s); `cache` reports keep_warm.next_due_at that long after the last warm request, and ends a gap whose stop never came at its scaled 58-minute bound, instead of a fixed 50 and 58 min. A gap with no ping_s keeps 50 min (CACHE-02, CACHE-07-reset-wait).",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "a gap begun at 11:50:40 under a 600 s cache: its start row at 11:59:00 names a 500 s ping interval",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:59:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 500, \"hours\": 2, \"windows\": 2, \"ping_s\": 500}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "the first ping is due 500 s into the gap (11:59:00), not 50 min",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": true,
+     "keep_warm.n": 0,
+     "keep_warm.next_due_at": 1794225540
+    }
+   }
+  },
+  {
+   "name": "the first ping, warm, started 11:59:00",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:59:05.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 500, \"gap_s\": 500, \"ms\": 5000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "the next 500 s after it (12:07:20)",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": true,
+     "keep_warm.n": 1,
+     "keep_warm.next_due_at": 1794226040
+    }
+   }
+  },
+  {
+   "name": "no row since: past the scaled 58-minute bound (580 s, plus 2 min) the gap reads ended",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": false,
+     "keep_warm.n": 1
+    }
+   },
+   "now": "2026-11-09T12:12:00.000Z"
+  }
+ ]
+}

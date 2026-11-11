@@ -241,7 +241,7 @@ our %SCHEMA = (
     # and wrote, its result, an HTTP status), then stops for one reason, handing the idle timer's
     # record back to the idle path or not; or a gap no idle path could take over refuses before warming
     # (one stop row, why no-idle-path, pings 0, with no start row before it)
-    keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int' },
+    keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int', ping_s => 'int' },
     keep_warm_ping => { n => 'int', result => [enum => qw(warm fork-miss nothing-to-fork api-error aborted error)], cache_read => 'num',
                         cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int',
                         # D-83 (0.1.8): a reading at the limit that did not stop the ping
