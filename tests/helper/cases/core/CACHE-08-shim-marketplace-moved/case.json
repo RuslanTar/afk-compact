@@ -1,0 +1,281 @@
+{
+ "id": "CACHE-08-shim-marketplace-moved",
+ "note": "0.1.9, after CACHE-07: (1) a copy read in place from a directory marketplace takes its load records' scope from the config folder's real path, as a cache copy does from its real root, so a CLAUDE_CONFIG_DIR through a symlink gives a cache session and an in-place session of one install the same tag; (2) a session whose marketplace has since been pointed at another folder (the next release's) is still that install when CLAUDE_PLUGIN_DATA is the data folder of the one <name>@<mkt> entry in installed_plugins.json (Claude Code's <plugins>/data/<id, each character but A-Za-z0-9_- as ->): shim kept, data folder <name>-m, pluginConfigs[<name>@m]; a data folder no install has stays a dev load; (3) a --plugin-dir load whose data folder is <name>-inline under CLAUDE_CODE_PLUGIN_CACHE_DIR (not <config>/plugins) stays a dev load inside an installed marketplace's folder.",
+ "now": "2026-11-11T07:00:00Z",
+ "tz": "UTC",
+ "plugin_at": "$HOME/mkt/rel/plugin",
+ "manifest": {
+  "version": "9.0.0"
+ },
+ "options": {
+  "watcher": "false"
+ },
+ "env": {
+  "STORE_TEST_MACHINE_ID": "TEST-MACHINE-1"
+ },
+ "steps": [
+  {
+   "name": "config folder through a symlink: the scope tag of the real config folder's cache folder",
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$PLUGIN",
+    "CLAUDE_CONFIG_DIR": "$HOME/cfglink",
+    "CLAUDE_PLUGIN_DATA": "$HOME/.claude/plugins/data/$BRAND-m",
+    "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.322"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim written"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads/*_9.0.0_$UTAG.json",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/.sessions/loads/*_9.0.0_$LTAG.json",
+      "count": 0
+     }
+    ]
+   },
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$HOME/.claude/plugins/known_marketplaces.json",
+     "json": {
+      "m": {
+       "source": {
+        "source": "directory",
+        "path": "$HOME/mkt/rel"
+       },
+       "installLocation": "$HOME/mkt/rel",
+       "lastUpdated": "2026-11-11T04:26:08.577Z"
+      }
+     }
+    },
+    {
+     "write": "$HOME/.claude/plugins/installed_plugins.json",
+     "json": {
+      "version": 2,
+      "plugins": {
+       "$BRAND@m": [
+        {
+         "scope": "user",
+         "installPath": "$HOME/.claude/plugins/cache/m/$BRAND/9.0.0",
+         "version": "9.0.0",
+         "installedAt": "2026-11-11T04:26:09.257Z",
+         "lastUpdated": "2026-11-11T04:26:09.257Z"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "symlink": "$HOME/cfglink",
+     "to": "$HOME/.claude"
+    },
+    {
+     "sha_tag": "user\n$HOME/.claude/plugins/cache/m/$BRAND",
+     "var": "UTAG"
+    },
+    {
+     "sha_tag": "user\n$HOME/cfglink/plugins/cache/m/$BRAND",
+     "var": "LTAG"
+    }
+   ]
+  },
+  {
+   "name": "marketplace m now names the next release's folder: data folder <name>-m still reads as the install, an older version's shim pointed here",
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$PLUGIN",
+    "CLAUDE_PLUGIN_DATA": "$HOME/.claude/plugins/data/$BRAND-m",
+    "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.322"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim written"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n"
+      ]
+     }
+    ],
+    "absent": [
+     "$HOME/.claude/plugins/data/$BRAND-inline"
+    ]
+   },
+   "setup": [
+    {
+     "write": "$HOME/.claude/plugins/known_marketplaces.json",
+     "json": {
+      "m": {
+       "source": {
+        "source": "directory",
+        "path": "$HOME/mkt/next"
+       },
+       "installLocation": "$HOME/mkt/next",
+       "lastUpdated": "2026-11-11T06:26:08.577Z"
+      }
+     }
+    },
+    {
+     "mkdir": "$HOME/mkt/next"
+    },
+    {
+     "write": "$HOME/old/.claude-plugin/plugin.json",
+     "json": {
+      "name": "$BRAND",
+      "version": "0.1.8"
+     }
+    },
+    {
+     "write": "$HOME/old/scripts/$BRAND-store",
+     "content": "#!/bin/sh\n",
+     "mode": "0755"
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+     "content": "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$HOME/old/scripts/$BRAND-store' \"$@\"\n",
+     "mode": "0755"
+    }
+   ]
+  },
+  {
+   "name": "its options: still pluginConfigs[<name>@m], not @inline",
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$PLUGIN",
+    "CLAUDE_PLUGIN_DATA": "$HOME/.claude/plugins/data/$BRAND-m"
+   },
+   "argv": [
+    "settings",
+    "show",
+    "--json"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "config_key": "$BRAND@m",
+     "config_key_state": "found",
+     "settings.watcher.value": "false"
+    }
+   }
+  },
+  {
+   "name": "a data folder of no install (<name>-zz) outside every marketplace: a dev load",
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$PLUGIN",
+    "CLAUDE_PLUGIN_DATA": "$HOME/.claude/plugins/data/$BRAND-zz",
+    "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.322"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim dev-load"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "exec '$HOME/old/scripts/$BRAND-store' \"$@\"\n"
+      ]
+     }
+    ]
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+     "content": "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$HOME/old/scripts/$BRAND-store' \"$@\"\n",
+     "mode": "0755"
+    }
+   ]
+  },
+  {
+   "name": "inside the installed marketplace's folder again, as a --plugin-dir load whose data folder is <name>-inline under CLAUDE_CODE_PLUGIN_CACHE_DIR: a dev load",
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$PLUGIN",
+    "CLAUDE_CODE_PLUGIN_CACHE_DIR": "$TMP/pcache",
+    "CLAUDE_PLUGIN_DATA": "$TMP/pcache/data/$BRAND-inline",
+    "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.322"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim dev-load"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "contains": [
+       "exec '$HOME/old/scripts/$BRAND-store' \"$@\"\n"
+      ]
+     }
+    ]
+   },
+   "setup": [
+    {
+     "write": "$HOME/.claude/plugins/known_marketplaces.json",
+     "json": {
+      "m": {
+       "source": {
+        "source": "directory",
+        "path": "$HOME/mkt/rel"
+       },
+       "installLocation": "$HOME/mkt/rel",
+       "lastUpdated": "2026-11-11T04:26:08.577Z"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

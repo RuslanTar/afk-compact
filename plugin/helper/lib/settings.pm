@@ -373,10 +373,16 @@ sub inline_key {
 #                known_marketplaces.json (its installLocation, or the folder of a directory or
 #                file source) that the plugin is installed from (a `<name>@<mkt>` entry in
 #                installed_plugins.json): Claude Code reads a directory marketplace's plugin in
-#                place (`claude plugin list`: "Read from"), not from the cache folder it records
+#                place (`claude plugin list`: "Read from"), not from the cache folder it records;
+#                also any other folder when CLAUDE_PLUGIN_DATA is the data folder of the one
+#                `<name>@<mkt>` install there (Claude Code's .../data/<name>-<mkt>, each character
+#                of the id but A-Za-z0-9_- as -): a session that loaded the copy before that
+#                marketplace was pointed at another folder (the next release's) is still that
+#                install
 #   inline       a --plugin-dir load: any other folder, and any folder but the cache's when
-#                CLAUDE_PLUGIN_DATA is the plugin's own .../plugins/data/<name>-inline (Claude
-#                Code's data folder for <name>@inline); mkt inline
+#                CLAUDE_PLUGIN_DATA is the plugin's own .../data/<name>-inline (Claude Code's
+#                data folder for <name>@inline, under <config>/plugins or the folder
+#                CLAUDE_CODE_PLUGIN_CACHE_DIR names); mkt inline
 #   config       another folder under <config>/plugins/: no install, not inline for the options
 #                key either (E-14); mkt inline
 # Kept per root for the process.
@@ -396,8 +402,10 @@ sub load_source {
         else {
             my $pd = $ENV{CLAUDE_PLUGIN_DATA} // '';
             $pd =~ s{(?<=.)/+\z}{};
-            my $inl = $pd =~ m{/plugins/data/([^/]+)\z} && $1 eq "$b-inline";
+            my ($dn) = $pd =~ m{/data/([^/]+)\z};
+            my $inl = defined $dn && $dn eq "$b-inline";
             my $m = !$inl && defined $root && $root =~ m{\A/} ? _marketplace_of($root, $cfg) : undef;
+            $m //= _install_of_data($dn, $cfg) if !$inl && defined $dn;
             my $p = util::clean_path("$cfg/plugins");
             my $c = util::clean_path($root);
             $r = defined $m ? { kind => 'marketplace', mkt => $m }
@@ -443,6 +451,24 @@ sub _marketplace_of {
         push @hit, $name if $inst =~ /(?<!\\)"\Q$b\E\@\Q$name\E"\s*:\s*\[\s*\{/;
     }
     return @hit == 1 ? $hit[0] : undef;
+}
+
+# _install_of_data(data folder name, config dir) -> the marketplace of the one `<name>@<mkt>` entry
+# in <config>/plugins/installed_plugins.json whose data folder name (the id, each character but
+# A-Za-z0-9_- as -) is that name, or undef (load_source)
+sub _install_of_data {
+    my ($dn, $cfg) = @_;
+    return undef unless $cfg =~ m{\A/};
+    my $inst = util::read_file("$cfg/plugins/installed_plugins.json", 16 << 20) // return undef;
+    my $b = ctx::brand();
+    my %hit;
+    while ($inst =~ /(?<!\\)"\Q$b\E\@([^"\\\x00-\x1f]+)"\s*:\s*\[\s*\{/g) {
+        my $m = $1;
+        next if $m eq 'inline';
+        (my $id = "$b\@$m") =~ s/[^A-Za-z0-9_-]/-/g;
+        $hit{$m} = 1 if $id eq $dn;
+    }
+    return keys %hit == 1 ? (keys %hit)[0] : undef;
 }
 
 # Returns (options hashref or undef, note) from the user's settings file.

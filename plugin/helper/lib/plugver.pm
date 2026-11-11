@@ -125,8 +125,9 @@ sub scope {
     if ($root =~ m{\A(.+)/plugins/cache/([^/]+)/([^/]+)/[^/]+\z}) {
         ($cfg, $mkt, $name, $parent) = ($1, $2, $3, util::dirname($root));
     } elsif ((my $ld = settings::load_source($root))->{kind} eq 'marketplace') {
-        # 0.1.9: read in place from a marketplace's folder: the scope of that install's cache folder
-        ($cfg, $mkt, $name) = (util::clean_path(settings::config_dir()), $ld->{mkt}, ctx::brand());
+        # 0.1.9: read in place from a marketplace's folder: the scope of that install's cache folder,
+        # by the config folder's real path, as the cache branch reads it from the (real) root
+        ($cfg, $mkt, $name) = (util::real_path(settings::config_dir()), $ld->{mkt}, ctx::brand());
         $parent = "$cfg/plugins/cache/$mkt/$name";
     }
     if (defined $cfg) {
