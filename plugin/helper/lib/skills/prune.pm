@@ -1,6 +1,6 @@
 package skills::prune;
-# lib/skills/prune.pm: `prune [--days N] [--min-mb N] [--root DIR]… [--all] [--apply --plan H]` (0.1.6
-# PRUNE, owner 2026-11-08: a handoff folder should not hold a lot of data, and whoever cleans up
+# lib/skills/prune.pm: `prune [--days N] [--min-mb N] [--root DIR]… [--all] [--apply --plan H]` (0.1.6:
+# a handoff folder should not hold a lot of data, and whoever cleans up
 # weeks later must know what is safe to delete, so the small handoff files survive). User-run, and
 # the prune skill's dry run then apply after the user's yes.
 #   - Units: each <handoff_root>/<repo>/<bucket>/evidence/<stem>/ and each folder of a dated
@@ -118,7 +118,7 @@ sub _docs {
                                           bucket => $bucket, key => "$repo/$b", text => $d->{text}, slot => $where,
                                           epoch => $d->{epoch} // (stat $path)[9] // 0 };
             }
-            # an unpublished draft's evidence rows (D-15), with the draft's date (the latest of its begin
+            # an unpublished draft's evidence rows, with the draft's date (the latest of its begin
             # date in settings.json and the mtimes of its folder and of everything in it, so a draft
             # still being worked on is young): a draft newer than the age keeps them
             for my $st (skills::util::list_dir("$bucket/.staging")) {
@@ -452,7 +452,7 @@ sub run {
             push @{ $tot{dirs} }, $x;
         }
     }
-    # 0.1.7 (D-81): the cache state files (lib/cachestate.pm) of sessions that ended, or with no end
+    # 0.1.7: the cache state files (lib/cachestate.pm) of sessions that ended, or with no end
     # were not written, over 7 days ago, whatever --days says
     my @cache = cachestate::stale($now);
     if (@cache) {

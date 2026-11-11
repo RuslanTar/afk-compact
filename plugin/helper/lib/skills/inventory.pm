@@ -1,12 +1,12 @@
 package skills::inventory;
-# lib/skills/inventory.pm: `inventory <handoff>` (resume R5a; RDN; OD-19:
+# lib/skills/inventory.pm: `inventory <handoff>` (resume R5a;
 # no task tools). Prints the last Stop sidecar of the handoff's session,
 # task outputs (size, mtime), In-flight rows with their probe paths, recorded
 # pids with a start-time match, listening ports, recipes and heal counters.
-# 2026-10-21 rulings: the sidecar slot is the one of the highest seq, never the newest
-# mtime (DP-13); each job the plugin recorded for the session prints one `job:` line with
-# its re-verification signals (Dev-1 D3, skills/jobs.pm; read-only); a document that is
-# not local (a repository export or an imported copy, D-12) is never probed: no pid,
+# The sidecar slot is the one of the highest seq, never the newest
+# mtime; each job the plugin recorded for the session prints one `job:` line with
+# its re-verification signals (skills/jobs.pm; read-only); a document that is
+# not local (a repository export or an imported copy) is never probed: no pid,
 # port, path or start-time matching, since a foreign pid could match an unrelated
 # local process.
 use strict;
@@ -40,7 +40,7 @@ sub run {
         return 0;
     }
 
-    # Sidecar ring of the handoff's session: the slot of the highest seq (DP-13).
+    # Sidecar ring of the handoff's session: the slot of the highest seq.
     my $watch = skills::core::watch_dir() // $ctx->{watch};
     my ($sc, $slot_path) = $hs ne '' ? skills::core::sidecar_newest("$watch/$hs") : ();
     if ($sc && $slot_path) {
@@ -130,7 +130,7 @@ sub run {
 }
 
 # 1 when the path lies under the private handoff root (the store this machine owns), or under the
-# legacy root, which is the own store too (STATE-ROOT).
+# legacy root, which is the own store too.
 sub _under_root {
     my ($ctx, $p) = @_;
     return skills::store::in_store($ctx, $p);

@@ -1,14 +1,13 @@
 package skills::begin;
-# lib/skills/begin.pm: `begin` (HDN §6; BUILD-PLAN §3.1 row; D-14, RV-18,
-# RV-19, RV-26, RV-28, OD-16). Prints one JSON object of at most 3 KB (more only when
+# lib/skills/begin.pm: `begin`. Prints one JSON object of at most 3 KB (more only when
 # no further cut brings it within 3 KB, see _fit) and creates the stage
 # <bucket>/.staging/<sid8>-<nonce>/ (0700) with settings.json.
-# 2026-10-21 rulings: the carry base is the newest handoff in the bucket, whoever
-# wrote it, with previous_kind own|chain|foreign (small-rulings §2.1; a document with
-# imported_from is never the base, DP-6); an open plugin handoff turn of this session
-# is bound to the stage, and a second begin for it returns that stage (D-18 B7);
-# the D-12 mode and, in repo mode, the export target are printed.
-# U-04 (REVIEW-NIGHT-2): the reply names the store root once (`store_root`) and prints the
+# The carry base is the newest handoff in the bucket, whoever
+# wrote it, with previous_kind own|chain|foreign (a document with
+# imported_from is never the base); an open plugin handoff turn of this session
+# is bound to the stage, and a second begin for it returns that stage;
+# the handoff-root mode and, in repo mode, the export target are printed.
+# The reply names the store root once (`store_root`) and prints the
 # other store paths relative to it; `stage` stays whole (a command argument and a Write
 # target). Every entry begin knows goes to <stage>/begin-full.json, and a list the reply
 # shortens is counted in `trimmed` with that file's path: never a silent cut.
@@ -24,9 +23,9 @@ use skills::core;
 use skills::gitfacts;
 use skills::store;
 
-# The HDN §6 keys, plus reuse_window_min (D-14) and store_root (U-04). Exactly these are
-# printed. handoff_turn and resumed only when a plugin handoff turn is open (D-18 B8);
-# trimmed only when the reply leaves list entries out (U-04); plugin_notice only when sessions
+# The begin keys, plus reuse_window_min and store_root. Exactly these are
+# printed. handoff_turn and resumed only when a plugin handoff turn is open;
+# trimmed only when the reply leaves list entries out; plugin_notice only when sessions
 # started since this one run another plugin version (0.1.3, lib/plugver.pm).
 our @KEYS = qw(checked_at session repo worktree branch head porcelain ahead behind in_progress
                store_root bucket stem stage nonce previous_handoff previous_kind previous_sid8 previous_stamp
@@ -37,10 +36,10 @@ our $MAX_BYTES = 3072;
 # The file in the stage that holds begin's whole reply, every newer_foreign entry included.
 our $FULL_NAME = 'begin-full.json';
 # The reply shows at most this many in-flight tasks and tmp candidates; begin-full.json has
-# them all, and `trimmed.cut` counts the rest (U-04 follow-up: never a silent cap).
+# them all, and `trimmed.cut` counts the rest (never a silent cap).
 our $INFLIGHT_SHOW = 8;
 our $TMP_SHOW = 20;
-# paths.jsonl is read from its last this many bytes (U-04 follow-up: the older rows are counted).
+# paths.jsonl is read from its last this many bytes (the older rows are counted).
 our $PATHS_READ_MAX = 1024 * 1024;
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
 
@@ -85,7 +84,7 @@ sub run {
     my $topic = slug($o->{topic});
 
     # Bucket: pin → pin-lineage → branch ticket → topic → general (core seam);
-    # --topic-explicit re-pins to the topic after an ownership check (RV-28).
+    # --topic-explicit re-pins to the topic after an ownership check.
     my $b = skills::core::bucket_resolve($sid, $cwd, $topic, $ctx->{settings});
     my %bucket = (path => $b->{path}, source => $b->{source});
     my $repin;
@@ -101,7 +100,7 @@ sub run {
             }
         }
     }
-    # D-18 B7: the open handoff turn of this session; a stage already bound to it is
+    # The open handoff turn of this session; a stage already bound to it is
     # returned as it is (one handoff per ht), never a second one.
     my $sid_dir = skills::core::sid_dir();
     my $ht = skills::core::ht_open_for_begin($sid_dir);
@@ -141,9 +140,9 @@ sub run {
         }
     }
 
-    # Carry base (small-rulings §2.1, RV-19 refined): the newest handoff in the bucket by
+    # Carry base: the newest handoff in the bucket by
     # frontmatter date, name as tiebreak, whoever wrote it; never one with imported_from.
-    # own_chain = this session or a lineage predecessor (A-6, 3 hops). STATE-ROOT: the bucket's twin in the
+    # own_chain = this session or a lineage predecessor (3 hops). Legacy root: the bucket's twin in the
     # legacy root counts too (read only; the stage and the handoff go to the store root's bucket).
     my $docs = [ sort _newest_first grep { skills::store::is_handoff($_) }
                   map { @{ skills::store::docs_in($_) } } @{ skills::store::twin_buckets($ctx, $bucket) } ];
@@ -156,7 +155,7 @@ sub run {
     my $base = $cands[0];
     my $kind = !$base ? undef : $is_own->($base) ? 'own' : $is_pred->($base) ? 'chain' : 'foreign';
     my $own_prev = ($kind // '') eq 'foreign' ? $own_chain[0] : undef;
-    my $prev = $own_chain[0];    # the own chain's latest file: the commit base (D-21)
+    my $prev = $own_chain[0];    # the own chain's latest file: the commit base
     my %carry = (
         previous_kind        => $kind,
         previous_sid8        => ($base ? skills::ctx::sid8($base->{fm}{session_id}) : undef),
@@ -185,7 +184,7 @@ sub run {
     }
     # newer_foreign: other sessions' files newer than the own chain's latest, minus the
     # base, which is read in full (up to 2 more when the base is foreign). The reply shows
-    # the newest of them; begin-full.json holds them all (U-04). Paths relative to the root.
+    # the newest of them; begin-full.json holds them all. Paths relative to the root.
     my $since = $own[0] ? $own[0]{epoch} : ($prev ? $prev->{epoch} : undef);
     my @foreign = grep {
         my $s = $_->{fm}{session_id} // '';
@@ -211,8 +210,8 @@ sub run {
     }
     if ($repin) { $ownership{repin} = $repin }
 
-    # This session's own GSD line, GSD re-entry line and Active driver line (owner 2026-10-26
-    # 21:37: from its transcript, never the worktree's .planning alone): {line, reentry, driver,
+    # This session's own GSD line, GSD re-entry line and Active driver line (from its
+    # transcript, never the worktree's .planning alone): {line, reentry, driver,
     # workstream, state}.
     my $gs = skills::core::gsd(sid => $sid, cwd => $cwd, worktree => $g->{worktree});
     my $gsd = $gs ? { map { defined $gs->{$_} ? ($_ => $gs->{$_}) : () } qw(line reentry driver workstream state) } : undef;
@@ -234,7 +233,7 @@ sub run {
                    previous_session_id => $lin->{previous_session_id}, lineage_reason => $lin->{lineage_reason} // 'none');
     $session{identity} = "degraded ($id->{degraded})" if $id->{degraded};
 
-    # D-12: the handoff-root mode of this worktree; in repo mode, where publish exports.
+    # the handoff-root mode of this worktree; in repo mode, where publish exports.
     my $m = skills::core::mode($cwd);
     my %mode = (mode => $m->{mode}, reason => $m->{reason});
     my $export_target = ($m->{mode} eq 'repo' && defined $m->{root_rel})
@@ -267,7 +266,7 @@ sub run {
         inflight_measured => $inflight,
         tmp_candidates    => $tmp,
         config            => \%config,
-        reuse_window_min  => ((eval { settings::num_clamped("handoff_reuse_window_min") })[0] // $REUSE_WINDOW_MIN),    # SK-4
+        reuse_window_min  => ((eval { settings::num_clamped("handoff_reuse_window_min") })[0] // $REUSE_WINDOW_MIN),
         mode              => \%mode,
         export_target     => $export_target,
     );
@@ -292,7 +291,7 @@ sub run {
         mode => $m->{mode}, mode_reason => $m->{reason},
         gsd_state => ($gs && defined $gs->{state} && -f $gs->{state} ? $gs->{state} : undef),
         identity_degraded => $id->{degraded},
-        # T-TEXT E6: the Acuity floor code measured (publish's acuity advisory reads it): a
+        # The Acuity floor code measured (publish's acuity advisory reads it): a
         # merge, rebase, cherry-pick or revert in progress -> unstable; a measured in-flight
         # row -> watch; else stable.
         acuity_floor => (@{ $g->{in_progress} || [] } ? 'unstable' : @{ $inflight->{tasks} || [] } ? 'watch' : 'stable'),
@@ -302,13 +301,13 @@ sub run {
         skills::util::write_excl("$stage/settings.json", skills::util::json_encode(\%stage_settings) . "\n", 0600)
             or die "stage settings exist\n";
     } else {
-        # CR-F10: the stage keeps its first settings.json; the checked_at printed now is
+        # The stage keeps its first settings.json; the checked_at printed now is
         # one more helper-printed time, so the publish lint accepts it (stamps.log, as
         # `stamp` writes it).
         skills::util::append_line("$stage/stamps.log", skills::util::iso_local($now) . "\t$out{checked_at}\n");
     }
 
-    # U-04: the printed store paths, relative to store_root (the stage settings above keep
+    # The printed store paths, relative to store_root (the stage settings above keep
     # them whole: publish writes them into the frontmatter). The whole reply, with every
     # newer_foreign entry, goes to the stage before the fit can shorten any list, one entry a
     # line; the paths.jsonl rows begin did not read are counted in both.
@@ -348,14 +347,14 @@ sub _stage_meta {
     return (ref $d eq 'HASH' && $d->{nonce} && $d->{stem} && $d->{bucket}) ? $d : undef;
 }
 
-# A document's frontmatter date as a stamp (RV-24), or its raw date.
+# A document's frontmatter date as a stamp, or its raw date.
 sub _doc_stamp {
     my ($d) = @_;
     return defined $d->{epoch} ? skills::util::stamp($d->{epoch}) : $d->{fm}{date};
 }
 
 # next_ids(docs) -> {U, D, X}: the highest id of each prefix over the documents plus 1,
-# so the model never does id arithmetic (small-rulings §2.1).
+# so the model never does id arithmetic.
 sub next_ids {
     my (@docs) = @_;
     my %max = (U => 0, D => 0, X => 0);
@@ -375,12 +374,12 @@ sub _rel {
     return $p =~ s/\A\Q$r\E\///r;
 }
 
-# Another live session pinned to this bucket holds it (RV-28 ownership check).
+# Another live session pinned to this bucket holds it (ownership check).
 sub _bucket_holder {
     my ($ctx, $bucket, $sid) = @_;
     my %live = map { $_->{session_id} => $_ } @{ skills::ctx::live_peers($ctx, undef, $sid) };
     my %seen;
-    # STATE-ROOT: pins in both read roots (pin_read takes the store root's first)
+    # pins in both read roots (pin_read takes the store root's first)
     for my $f (map { skills::util::list_dir("$_/.sessions") } skills::ctx::read_roots($ctx)) {
         next unless $f =~ /\A(.+)\.json\z/ && $f !~ /\.lineage\.json\z/;
         my $other = $1;
@@ -419,7 +418,7 @@ sub _inflight_line {
     return skills::store::heading_line($d->{text}, $lit);
 }
 
-# D-21: a commit is ours when the chain names its hash or it falls in a
+# A commit is ours when the chain names its hash or it falls in a
 # range between two git_commit values recorded by the chain; else foreign.
 sub _foreign_commits {
     my ($ctx, $g, $prev, $chain_docs, $id) = @_;
@@ -434,7 +433,7 @@ sub _foreign_commits {
              hashes => [ map { $_->{short} } @foreign[0 .. ($#foreign < 4 ? $#foreign : 4)] ] };
 }
 
-# Queue lane (OD-21, TPL §4.6; Q-ADAPTER QA-1, QA-B2): queue::lane is the one list parser.
+# Queue lane: queue::lane is the one list parser.
 # Returns (queued_line, lane, {mode, why}): with queue_cmd empty, mode off and no exec; a
 # reply that breaks the contract gives degraded (<why>) and neither a Queued: line nor a lane.
 sub _queue {
@@ -446,8 +445,8 @@ sub _queue {
     return ($l->{queued_line}, $lane, $m);
 }
 
-# Last background sidecar slot of this session (MOD §7 ring): the highest seq, never the
-# newest mtime (DP-13; sidecar::newest). Every task, for begin-full.json; `gitignored` is
+# Last background sidecar slot of this session (the sidecar ring): the highest seq, never the
+# newest mtime (sidecar::newest). Every task, for begin-full.json; `gitignored` is
 # measured (one git call each) only for the $INFLIGHT_SHOW the reply shows, "unmeasured" after
 # them in a git worktree (null stays "not measured: no git").
 sub _inflight {
@@ -493,7 +492,7 @@ sub sidecar_tasks {
     return \@out;
 }
 
-# Ephemeral paths the mod recorded from this session's tool calls (MOD §10), newest first:
+# Ephemeral paths the mod recorded from this session's tool calls, newest first:
 # every distinct path, for begin-full.json. paths.jsonl only grows, its newest rows last: a
 # file over $PATHS_READ_MAX is read from its last $PATHS_READ_MAX bytes (from the first whole
 # row), and the older rows are counted, not read -> (paths, rows not read).
@@ -580,7 +579,7 @@ sub _json_lines {
     return skills::util::json_encode($v);
 }
 
-# Encode within 3 KB (U-04). What carries no entry goes first: the config source labels, then
+# Encode within 3 KB. What carries no entry goes first: the config source labels, then
 # the two root values in config (whole paths; the handoff root is store_root again). Then
 # lists are shortened in this order: the tails of tmp_candidates, porcelain.first and
 # inflight_measured.tasks, gsd's workstream and state fields (its GSD, re-entry and Active

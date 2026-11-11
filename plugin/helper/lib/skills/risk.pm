@@ -1,10 +1,9 @@
 package skills::risk;
-# lib/skills/risk.pm: `risk --cmd-file FILE [--source own|foreign] [--cwd DIR]` (SR-7; spec §4
-# Real risk, §12, §19 risk_classes; resume Rule 2). Owner: WP-skills.
+# lib/skills/risk.pm: `risk --cmd-file FILE [--source own|foreign] [--cwd DIR]` (spec §4
+# Real risk, §12, §19 risk_classes; resume Rule 2).
 #
 # Classifies one command a handoff holds, never runs it. The command is read from a file the
-# session wrote with its Write tool, so foreign text never reaches a shell line (REVIEW-NIGHT
-# NR-03). Prints
+# session wrote with its Write tool, so foreign text never reaches a shell line. Prints
 #   risk: none (<read-only|recorded|test-build|own>)
 # or
 #   risk: ask (<class>[, <class>…])
@@ -23,32 +22,32 @@ package skills::risk;
 #     home, the root, a parent folder or a real path outside the work tree;
 #   - recorded: a segment byte-identical to a command the plugin recorded in any session's
 #     jobs.jsonl under the watch root lifts only `not-read-only`, and only while the build state
-#     below is clean and known; it never lifts a test_build_re segment (review r2);
+#     below is clean and known; it never lifts a test_build_re segment;
 #   - test-build: a test_build_re segment counts only when the repository defines the target in
 #     a file git tracks (Makefile rule, package.json script, Rakefile, build.gradle*, gradlew), no
-#     test or build definition differs from HEAD in the work tree (NR-23: the exemption ends once
-#     such a file changed), and none differs between the start HEAD and HEAD (owner xxxxxxxx-08,
-#     REVIEW-NIGHT-2 U-05: a commit, merge, checkout or reset since the start); an unknown start
+#     test or build definition differs from HEAD in the work tree (the exemption ends once
+#     such a file changed), and none differs between the start HEAD and HEAD (a commit, merge,
+#     checkout or reset since the start); an unknown start
 #     HEAD (no record for this work tree, a record without one, a commit git no longer has) asks,
-#     and so does a git status or diff that fails, runs out of time or is cut off (MITIGATIONS
-#     4.1). The start HEAD is the oldest of this session and its predecessors through clear and
+#     and so does a git status or diff that fails, runs out of time or is cut off. The start HEAD is
+#     the oldest of this session and its predecessors through clear and
 #     handoff-resume links (start_heads). Stated limits: a fork starts on its own HEAD; a
 #     $BUILD_DEF_RE file git ignores (.bundle/config, .npmrc) and .git/hooks never show in git
 #     status, so a change to one is not seen;
 #   - gate: the explicit gate classes name the first family that matches (env-write, then
 #     infra-write, then deploy); a production class on a command that is not exactly one
 #     production read (_prod_read_cmd) is the prod-write gate; a push whose destination is the remote's default branch, matches
-#     protected_branch_re or an entry of the user's add-only protected_branches setting (owner
-#     xxxxxxxx-29), or cannot be told (--all, --mirror, a detached HEAD) is protected-push;
+#     protected_branch_re or an entry of the user's add-only protected_branches setting,
+#     or cannot be told (--all, --mirror, a detached HEAD) is protected-push;
 #     without a refspec the current branch and its upstream's branch both count.
-# Owner-ruled readings (2026-10-26, night review xxxxxxxx-07 "Risk rules", all four kept): a
+# Readings (all four kept as built): a
 # production command that is not exactly one production read, or that holds a $PROD_WRITE_RE
 # verb or an outward or gate class, is the prod-write gate (R-1); an
 # unknown push destination counts as protected (R-2); a quote or backslash inside a word makes a
-# foreign command ask (R-3, REVIEW-NIGHT-3 R3-01: readonly_cmd_re refuses such a word); the class
-# patterns also match the unquoted, lower-cased form (_forms, R-4, R3-06). The test/build
-# exemption ends on a $BUILD_DEF_RE change in the work tree (NR-23) or since the start HEAD
-# (xxxxxxxx-08). This check in code at all: owner-ruled (O-6, xxxxxxxx-35, as built).
+# foreign command ask (R-3: readonly_cmd_re refuses such a word); the class
+# patterns also match the unquoted, lower-cased form (_forms, R-4). The test/build
+# exemption ends on a $BUILD_DEF_RE change in the work tree or since the start HEAD.
+# This check is in code at all, as built.
 # Source own (an own handoff or this session's summary, resume Rule 2): runs under the normal
 # permission rules, so only gate, outward, production and credential-value ask.
 use strict;
@@ -71,8 +70,8 @@ my %RANK = map { $ORDER[$_] => $_ } 0 .. $#ORDER;
 our %OWN_ASKS = map { $_ => 1 } qw(gate outward production credential-value);
 # The gate families, first match names the gate (AT-AP-07: kubectl create secret is env-write).
 our @GATE_FAMILY = qw(env-write infra-write deploy);
-# Test and build definitions (spec §4 NR-23): a change to one ends the test/build exemption.
-# REVIEW-NIGHT-3 R3-11: also the files that decide what such a run executes besides its target
+# Test and build definitions (spec §4): a change to one ends the test/build exemption.
+# Also the files that decide what such a run executes besides its target
 # (Gemfile for `bundle exec`, .npmrc script-shell, .yarnrc.yml yarnPath, a JS test or build
 # config, .cargo/config runner and rustc-wrapper, build.rs, the Gradle wrapper and *.gradle).
 our $BUILD_DEF_RE = qr{(?:\A|/)(?:GNUmakefile|[Mm]akefile(?:\.[^/]*)?|[^/]*\.mk|package\.json|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.c?js|[^/]*\.config\.[cm]?[jt]s|\.babelrc(?:\.[^/]*)?|[Rr]akefile(?:\.rb)?|[^/]*\.rake|Gemfile|gems\.rb|\.bundle/config|[^/]*\.gradle(?:\.kts)?|gradle\.properties|gradle-wrapper\.properties|gradlew|buildSrc/.*|conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|Cargo\.toml|build\.rs|\.cargo/config(?:\.toml)?|rust-toolchain(?:\.toml)?|go\.mod|go\.work|\.envrc|\.gitlab-ci\.yml|\.husky/.*|\.github/workflows/.*|\.circleci/.*)\z};
@@ -123,8 +122,8 @@ sub run {
 #   -> {result => none|ask, classes => [risk ids in @ORDER], ids => [outward/gate/prod ids],
 #       why => read-only|recorded|test-build|own (none only), notes => [..]}
 # start_heads (start_heads() below): the HEAD this session started on per work tree; without
-# an entry for the command's work tree a test or build run asks (owner xxxxxxxx-08).
-# Also used by heal-check for an own handoff's recipe (HC-1).
+# an entry for the command's work tree a test or build run asks.
+# Also used by heal-check for an own handoff's recipe.
 sub classify {
     my ($cmd, %a) = @_;
     my $source = $a{source} // 'foreign';
@@ -136,7 +135,7 @@ sub classify {
     # Whole-command classes from the literals: outward (gates named), production, HARD secrets,
     # and the risk_classes that carry their own pattern. Each is matched against the command as
     # written and as the shell reads it (_forms: quotes and backslashes removed, command words in
-    # lower case; REVIEW-NIGHT-3 R3-06: `git pu"sh"`, `Git push` on a case-insensitive disk).
+    # lower case: `git pu"sh"`, `Git push` on a case-insensitive disk).
     my @forms = _forms($cmd);
     my $any = sub { my ($re) = @_; return scalar grep { $_ =~ $re } @forms };
     my %gates = map { $_ => 1 } @{ skills::spec::get('explicit_gate_classes') || [] };
@@ -175,7 +174,7 @@ sub classify {
     my $top = $w->{in_git} ? (skills::util::abs_path($w->{worktree}) // $w->{worktree}) : undef;
     my ($recorded, $jobs_read) = (undef, 0);
     my %why;
-    # The build state (NR-23, xxxxxxxx-08, MITIGATIONS 4.1), read once: undef when clean and
+    # The build state, read once: undef when clean and
     # known, else the note why a test or build run asks.
     my ($build_note, $build_read);
     my $build_state = sub {
@@ -209,7 +208,7 @@ sub classify {
         }
         if ($seg =~ $tb) {
             # A test or build run that fails a check asks; a jobs.jsonl record never lifts it
-            # (review r2: a recorded `make test` ran the changed Makefile unasked).
+            # (a recorded `make test` ran the changed Makefile unasked).
             # The build state first: an unreadable index fails the tracked check of
             # _defined_target too, and "could not be checked" is the true note then.
             my $note = $build_state->()
@@ -222,10 +221,10 @@ sub classify {
         }
         if (!$jobs_read) { $recorded = _recorded_commands($a{watch}); $jobs_read = 1 }
         if ($recorded->{$seg} || $recorded->{$cmd}) {
-            # A recorded command lifts only not-read-only: a write outside the tree still asks
-            # (REVIEW-NIGHT-3 R3-09). It lifts nothing while a test or build definition changed,
+            # A recorded command lifts only not-read-only: a write outside the tree still asks.
+            # It lifts nothing while a test or build definition changed,
             # the start HEAD is unknown or git cannot tell: a recorded `make test TEST=x` or
-            # `bundle exec rspec` runs those definitions too (review r2, fail closed).
+            # `bundle exec rspec` runs those definitions too (fail closed).
             my $note = $build_state->();
             if (!defined $note) {
                 $why{recorded} = 1;
@@ -271,8 +270,8 @@ sub classify {
     return { result => 'ask', classes => \@classes, ids => \@ids, why => undef, notes => \@notes };
 }
 
-# R-1 (owner xxxxxxxx-07 "Risk rules", kept): 1 when the command is exactly one production read,
-# the allow list approvals.pm applies to an approval's action (owner xxxxxxxx-28): one segment,
+# R-1: 1 when the command is exactly one production read,
+# the allow list approvals.pm applies to an approval's action: one segment,
 # not starting with a quote, that is one `kubectl` or `helm` read of the read grammar
 # (skills::approvals::_tool_read: listed subcommands and flags, plain words) or matches
 # readonly_cmd_re. Anything else that names production is a write (fail closed).
@@ -286,7 +285,7 @@ sub _prod_read_cmd {
 }
 
 # Word split of one segment with the shell's quote removal: double-quoted and single-quoted
-# parts and backslash escapes anywhere in a word (REVIEW-NIGHT-3 R3-01: `ma"in"` is `main`,
+# parts and backslash escapes anywhere in a word (`ma"in"` is `main`,
 # `src/../"x"` a path), so the path and destination checks see the words the shell passes on.
 sub _words {
     my ($seg) = @_;
@@ -317,7 +316,7 @@ sub _words {
     return @w;
 }
 
-# The forms of a command the class patterns are matched against (REVIEW-NIGHT-3 R3-06): as
+# The forms of a command the class patterns are matched against: as
 # written; with quotes and backslash escapes removed (what the shell runs: `git pu"sh"` is a
 # push); and that with the first two words of each segment in lower case (`Git push`, `RM -rf`:
 # a case-insensitive disk finds the program anyway).
@@ -347,8 +346,8 @@ sub _outside {
 }
 
 # read-outside: an argument of a read-only segment that names an existing path outside the
-# work tree (a symlink out of it included), or that steps out of it with `..` (REVIEW-NIGHT-2
-# R2-04: `cat src/../../x`). An option's attached value counts as an argument (`git blame
+# work tree (a symlink out of it included), or that steps out of it with `..`
+# (`cat src/../../x`). An option's attached value counts as an argument (`git blame
 # --contents=<path>`, `grep -f<path>`). Arguments that name nothing (a search pattern) do not
 # count; home, root and parent-folder arguments never pass readonly_cmd_re.
 sub _read_outside {
@@ -435,8 +434,8 @@ sub _write_outside {
 # The repository defines the target of a test_build_re segment (spec §4: make, npm, pnpm,
 # yarn, rake, gradle); cargo, go and pytest need only to run inside the work tree. The file that
 # defines it (Makefile, package.json, Rakefile, build.gradle*, gradlew) must be tracked: an
-# ignored one never shows in git status, so NR-23 and the start HEAD could not see a change to
-# it (review r2: a Makefile the session wrote in an ignored build/ folder).
+# ignored one never shows in git status, so the build-definition check and the start HEAD could not see a change to
+# it (a Makefile the session wrote in an ignored build/ folder).
 sub _defined_target {
     my ($seg, $cwd, $top) = @_;
     return 0 unless defined $top;
@@ -498,7 +497,7 @@ sub _tracked {
 
 # Test and build definitions that differ from HEAD in the work tree (tracked changes and
 # untracked files), as paths relative to the top; [] outside git (no target is defined there).
-# undef when git status fails, runs out of time or its output was cut off (MITIGATIONS 4.1:
+# undef when git status fails, runs out of time or its output was cut off (
 # unknown, so the caller asks; it read as "nothing changed" before).
 sub _build_dirty {
     my ($top) = @_;
@@ -521,10 +520,10 @@ sub _first3 { my ($l) = @_; return join(', ', @$l[0 .. ($#$l < 2 ? $#$l : 2)]) }
 # start_heads(ctx, sid) -> {real work-tree path => start HEAD or undef}: for each work tree, the
 # head of the oldest record that names it among this session's live records (a resumed session
 # keeps the HEAD it first started on) and the records, live or ended, of its predecessors reached
-# through `clear` and `handoff-resume` links only (ctx::chain, up to 3 hops; review r2: a manual
+# through `clear` and `handoff-resume` links only (ctx::chain, up to 3 hops: a manual
 # /clear re-armed the exemption on the successor's HEAD). A `fork` or `bg-copy` link ends the
 # walk: such a successor starts on its own HEAD (a stated limit). {} for an anonymous session
-# (CW-1) or no record.
+# or no record.
 sub start_heads {
     my ($ctx, $sid) = @_;
     my %h;
@@ -584,7 +583,7 @@ sub _recorded_commands {
 
 # protected-push: the destination branch of a git push is the remote's default branch, matches
 # protected_branch_re (lower-cased) or names an entry of the user's protected_branches setting
-# (owner xxxxxxxx-29: added to the shipped list, never removing from it). Unknown destinations
+# (added to the shipped list, never removing from it). Unknown destinations
 # count as protected.
 sub _protected_push {
     my ($cmd, $cwd, $top) = @_;
@@ -624,7 +623,7 @@ sub _protected_push {
         } else {
             push @dst, 'HEAD';
             # No refspec: push.default may send the branch to its upstream under another name
-            # (`upstream`, `tracking`), so the upstream's branch counts too (REVIEW-NIGHT-2 R2-05).
+            # (`upstream`, `tracking`), so the upstream's branch counts too.
             if (defined $top) {
                 my $u = skills::gitfacts::line(skills::gitfacts::git($cwd, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'));
                 push @dst, $1 if defined $u && $u =~ m{\A[^/]+/(.+)\z};

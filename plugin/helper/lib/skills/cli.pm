@@ -1,6 +1,6 @@
 package skills::cli;
-# lib/skills/cli.pm: shared entry for the WP-skills subcommands. Exit codes
-# (BUILD-PLAN §3.1): 0 result printed · 3 REFUSED printed · 64 usage · 70
+# lib/skills/cli.pm: shared entry for the skill subcommands. Exit codes:
+# 0 result printed · 3 REFUSED printed · 64 usage · 70
 # internal error (one stderr line). Exit 2 is never used.
 use strict;
 use warnings;
@@ -29,7 +29,7 @@ sub opts {
 }
 
 # Run one subcommand body; prints buffered stdout, returns the exit code. The arguments
-# are decoded and the output encoded here, once each (P5-FOLD A4).
+# are decoded and the output encoded here, once each.
 sub main {
     my ($name, $fn, @argv) = @_;
     umask 077;

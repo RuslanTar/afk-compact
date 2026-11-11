@@ -1,30 +1,30 @@
 package skills::jobs;
-# lib/skills/jobs.pm: re-verification of a lost background shell (Dev-1 D3, D4) for
+# lib/skills/jobs.pm: re-verification of a lost background shell for
 # `heal-check` and `inventory`. File reads and stat calls only: no sleep, no command from
-# the handoff, no network, nothing executed. The job record is the plugin's (Dev-1 D1,
-# <watch>/<origin sid>/jobs.jsonl); the handoff recipe only points at it.
+# the handoff, no network, nothing executed. The job record is the plugin's
+# (<watch>/<origin sid>/jobs.jsonl); the handoff recipe only points at it.
 #
 #   V1 record          a job row for the task; its sha matches its command; the origin
 #                      transcript has a Bash tool_use with that command whose result
 #                      carries this backgroundTaskId (bounded scan, no content printed);
 #                      the runtime's own BackgroundTaskSummary.command sha in the sidecar
-#                      agrees when it was kept whole (REVIEW B-16)
+#                      agrees when it was kept whole
 #   V2 owner ended     the origin session's process: an ended- record, or the pid gone or
 #                      restarted; this process in the same session fails (row 2b), and so
 #                      does the same live process under a later session (/clear): shells
-#                      survive /clear (DP-24 (c), P-D1-3), so the job may still run
+#                      survive /clear, so the job may still run
 #   V3 in flight       the origin session's newest sidecar slot (by seq) lists the task running
 #   V4 no completion   the output file exists and its last 200 bytes hold no active end
 #                      marker (spec wait.exit_markers); passes only when a marker is
 #                      expected (an active runtime marker, or the command ends with the
-#                      end suffix); unmeasured while the output path is unknown (P-D1-6).
-#                      A `means: killed` marker (`[killed]`, DP-24 (b)) fails it: KILLED
+#                      end suffix); unmeasured while the output path is unknown.
+#                      A `means: killed` marker (`[killed]`) fails it: KILLED
 #   V5 quiet           output mtime <= owner end + 5 s; end unknown: <= now - relaunch_quiet_s
 #   V6 no effect yet   no recipe `expected outputs:` path has mtime >= launched_at
 #                      (stat only; the recipe's idempotency check is shown, never run)
 #   V7 runnable        the recorded cwd exists; the command's first word resolves on
 #                      PATH, as a path, or is a shell builtin (stat only)
-# Effects class (code-derived, never a score; S-SETTINGS B, C), first match wins: unknown (no
+# Effects class (code-derived, never a score), first match wins: unknown (no
 # record, command withheld) · outward (any outward lint hit, or a secret hit) · prod-write (a
 # production match, the shipped prod_classes plus the user's prod_patterns, and not read-only
 # or sandbox disabled) · prod-read (a production match, read-only) · none (core marked it
@@ -32,7 +32,7 @@ package skills::jobs;
 # with no shell chaining, a recipe with expected outputs) · unknown (everything else). A
 # production match always outranks an allowlist match, and an allow pattern never overrides
 # an outward hit.
-# Status: the Dev-1 D4 table, first match wins, except that a recorded stop (row 7) is
+# Status: the status table, first match wins, except that a recorded stop (row 7) is
 # checked before rows 5 and 6, so a job stopped on purpose is never relaunched, and a
 # `[killed]` output right after row 1 (KILLED: it asks, never LOST, RUNNING or STOPPED).
 # A job of the same live process under a later session (owner state `cleared`, /clear)
@@ -58,7 +58,7 @@ my %BUILTIN = map { $_ => 1 } qw(cd export source . test [ echo exec set true fa
 #        recipe_run => {command, cwd, v1 => [state, detail], effects} | undef)
 #   -> {record, signals => {V1 => [state, detail]…}, status, confidence, effects, marker_rc,
 #       owner_end, run_line, command, cwd, output, run_source}
-# recipe_run (HC-1, ratify R24 overturned): with no job record, an own handoff's recipe stands in
+# recipe_run: with no job record, an own handoff's recipe stands in
 # for it. V1 is the recipe check the caller made (in MANIFEST, class auto: `recipe`); V2 comes
 # from the origin session's process records; V4/V5 read the output path the origin's newest
 # sidecar slot lists for the task; V6 takes the origin session's first process record as the
@@ -92,7 +92,7 @@ sub verify {
             $sig{V1} = ['unmeasured', 'origin transcript not found'];
         } else {
             my $t = transcript_has($tp, $rec->{command_sha256}, $a{task});
-            # CR-F12: a miss in a bounded scan of a longer transcript is not measured.
+            # A miss in a bounded scan of a longer transcript is not measured.
             $sig{V1} = !defined $t ? ['unmeasured', 'transcript unreadable']
                      : $t eq 'partial' ? ['unmeasured', 'no matching Bash call in the scanned tail of the origin transcript']
                      : $t ? ['pass', 'record, sha and transcript agree'] : ['fail', 'no matching Bash call in the origin transcript'];
@@ -170,7 +170,7 @@ sub verify {
     $r{confidence} = $all ? 'high' : 'low';
     my $failed = grep { $sig{$_}[0] eq 'fail' } @SIGNALS;
 
-    # Status: the D4 table.
+    # Status: the status table.
     my $live_here = ($a{origin} eq ($a{current}{sid} // '')) && $sig{V3}[0] eq 'pass' && $own->{state} eq 'this';
     if ($own->{state} eq 'elsewhere') { $r{status} = 'RUNNING-ELSEWHERE' }
     elsif ($r{killed}) { $r{status} = 'KILLED' }
@@ -185,7 +185,7 @@ sub verify {
     elsif ($sig{V2}[0] eq 'pass' && !$failed) { $r{status} = 'LOST' }
     else { $r{status} = 'NOT-LOST' }
 
-    # The line a relaunch runs, byte for byte the recorded command (DP-1).
+    # The line a relaunch runs, byte for byte the recorded command.
     if (defined $cmd) {
         my $here = skills::util::abs_path($a{cwd} // '') // '';
         if (defined $r{cwd} && (skills::util::abs_path($r{cwd}) // $r{cwd}) ne $here) {
@@ -197,14 +197,14 @@ sub verify {
     return \%r;
 }
 
-# signal_line(V, [state, detail, name]) -> "signal: V1 record pass (detail)"; name (HC-1: `recipe`)
+# signal_line(V, [state, detail, name]) -> "signal: V1 record pass (detail)"; name (`recipe`)
 # replaces the signal's own name
 sub signal_line { my ($v, $s) = @_; return "signal: $v " . ($s->[2] // $NAME{$v}) . " $s->[0]" . (defined $s->[1] ? " ($s->[1])" : '') }
 
 sub states { my ($r) = @_; return { map { $_ => $r->{signals}{$_}[0] } @SIGNALS } }
 
 # effects(record, recipe, relaunch settings, production settings) -> unknown | outward |
-#   prod-write | prod-read | none | local (S-SETTINGS B, C: first match wins)
+#   prod-write | prod-read | none | local (first match wins)
 sub effects {
     my ($rec, $recipe, $rl, $prod) = @_;
     return 'unknown' unless $rec;
@@ -236,7 +236,7 @@ sub prod_class {
 }
 
 # chained(command) -> 1 when the recorded command, without the spec's wait.end_suffix at its
-# end, may chain or substitute commands (S-SETTINGS C: a single command with no shell
+# end, may chain or substitute commands (an allowlisted local job is a single command with no shell
 # chaining): an unquoted `;`, `&&`, `||`, `|`, `&` (a `>&`, `<&` or `&>` redirection is not
 # one) or line break; an unquoted `(` or `)` (process substitution `<(…)`/`>(…)`, zsh `=(…)`
 # and glob qualifiers, subshells, extglob: none belongs in a single plain command); a `$(`,
@@ -330,7 +330,7 @@ sub runnable {
 
 # owner_state(ctx, origin sid, record, current {sid, pid, lstart})
 #   -> {state => ended|this|cleared|elsewhere|unverified|unknown, end => epoch|undef}
-#   unverified: the owner pid runs but its start time is missing or unreadable (CR-F11)
+#   unverified: the owner pid runs but its start time is missing or unreadable
 #   cleared: the origin's process is alive under a later session (/clear); end = that
 #   session's start
 sub owner_state {
@@ -354,17 +354,17 @@ sub owner_state {
             # A `gone` record (sessions::close_gone) is stamped when the session started again,
             # not when its process ended: the end time is unknown.
             my $t = ($end->{data}{reason} // '') eq 'gone' ? undef : skills::util::iso_to_epoch($end->{data}{ts});
-            # /clear ends the session, not the process: its shells survive (DP-24 (c)).
+            # /clear ends the session, not the process: its shells survive.
             my $live = ($end->{data}{reason} // '') eq 'clear' ? _cleared($pid, $lstart, $cur, $t) : undef;
             return $live // { state => 'ended', end => $t };
         }
         my $since = skills::util::iso_to_epoch($lrec->{data}{ts}) // 0;
         my @later = sort { $a <=> $b } grep { defined && $_ > $since } map { skills::util::iso_to_epoch($_->{data}{ts}) }
                     grep { $_->{state} eq 'live' && "$_->{pid}" eq "$pid" && $_->{epoch} eq $epoch && ($_->{data}{session_id} // '') ne $origin } @$all;
-        # /clear: the same process under a later session. Its shells survive (DP-24 (c)).
+        # /clear: the same process under a later session. Its shells survive.
         return _cleared($pid, $lstart, $cur, $later[0]) // { state => 'ended', end => $later[0] } if @later;
     }
-    # CR-F11: a live pid whose start time cannot be checked is not proof the owner ended.
+    # a live pid whose start time cannot be checked is not proof the owner ended.
     my $ps = skills::ctx::pid_state($pid, $lstart);
     return { state => 'ended', end => undef } if $ps eq 'gone';
     return { state => 'unverified', end => undef } if $ps eq 'unverified';
@@ -372,7 +372,7 @@ sub owner_state {
     return { state => ($this && ($cur->{sid} // '') eq $origin) ? 'this' : ($this ? 'cleared' : 'elsewhere') };
 }
 
-# HC-1: the earliest time a job of the origin session can have started, the ts of its oldest
+# The earliest time a job of the origin session can have started, the ts of its oldest
 # process record (a /clear successor's record starts that session), or undef.
 sub _origin_start {
     my ($ctx, $origin) = @_;
@@ -382,7 +382,7 @@ sub _origin_start {
 }
 
 # recipe_effects(command, recipe, relaunch settings, cwd, watch) -> effects class of an own
-# handoff's recipe command with no job record (HC-1): the risk classifier (SR-7) as `own` says
+# handoff's recipe command with no job record: the risk classifier as `own` says
 # outward (a gate, an outward class or a credential value), prod-write or prod-read; else
 # `none` only when it is read-only as `foreign` too (readonly_cmd_re: no isReadOnly mark
 # without a record), `local` when an allowlisted single command with expected outputs, else

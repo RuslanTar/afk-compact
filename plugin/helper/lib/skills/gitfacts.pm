@@ -1,7 +1,7 @@
 package skills::gitfacts;
 # lib/skills/gitfacts.pm: git facts for begin, publish, measure <handoff> and
 # locate. Each call is bounded (2 s); on macOS git runs only when the
-# Command Line Tools are present (R-4: /usr/bin/git is a stub without them).
+# Command Line Tools are present (/usr/bin/git is a stub without them).
 use strict;
 use warnings;
 use utf8;
@@ -49,7 +49,7 @@ sub where {
     return { in_git => 1, repo => $repo, worktree => $top, common_dir => $common };
 }
 
-# Full working-state facts (HDN §6 begin; RDN measure).
+# Full working-state facts (begin; measure).
 sub facts {
     my ($cwd) = @_;
     my $w = where($cwd);
@@ -76,7 +76,7 @@ sub facts {
     return $w;
 }
 
-# RV-18: hash of `git diff HEAD` content plus untracked file hashes, so an
+# Hash of `git diff HEAD` content plus untracked file hashes, so an
 # edit to an already-dirty file changes it.
 sub work_hash {
     my ($top) = @_;
@@ -134,7 +134,7 @@ sub worktrees {
     return [ map { /\Aworktree (.+)\z/ ? $1 : () } split /\n/, $r->{out} ];
 }
 
-# SK-1 (S-SETTINGS E1): the ticket id of a branch or name under the ticket_pattern setting.
+# The ticket id of a branch or name under the ticket_pattern setting.
 sub ticket { my ($s) = @_; return settings::ticket($s) }
 
 1;

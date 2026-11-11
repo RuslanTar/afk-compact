@@ -1,14 +1,14 @@
 package skills::wait;
 # lib/skills/wait.pm: `wait --for <cond>... [--while <guard>...] [--max S] [--stall S]
-# [--deadline EPOCH]` (Dev-7 D2; REVIEW A-1 item 3, B-15; DP-14 (4)). A bounded condition
+# [--deadline EPOCH]`. A bounded condition
 # wait the skills run instead of sleeps: in the background in the main session, in the
 # foreground (--max 270) in a subagent, `--max 0` for a one-shot probe.
 #   cond   pid-exit:<pid>[@<start-epoch>] | file:<path> | marker:<path>:<perl-regex> | exit:<path>
 #   guard  pid:<pid>[@<start-epoch>] | file:<path>
 # Met when any --for holds; exit 12 as soon as a --while stops holding. exit: matches the
 # spec's exit_markers whose `active` is true (`__exit N`, the runtime's `[exited with code
-# N]`: rc=N) and, for an entry with `means: killed` (`[killed]`, DP-24 (b)), prints
-# `killed`, never an rc. The runtime writes its trailer without a newline (P-D1-2), so
+# N]`: rc=N) and, for an entry with `means: killed` (`[killed]`), prints
+# `killed`, never an rc. The runtime writes its trailer without a newline, so
 # exit: also reads the last unterminated line. Every grammar, limit and exit code comes
 # from the spec's `wait` object; a missing key refuses (fail closed).
 # Order per tick: conditions, guards, stall, deadline, cap. Polls every 0.25 s for the
@@ -17,7 +17,7 @@ package skills::wait;
 # last line for the next one; a shrink or a new inode rescans from 0; the first scan
 # covers at most first_scan_max_bytes (note first-scan-cut). A path that is not a regular
 # file (FIFO, device, directory) is refused before any open: `REFUSED: not-regular <path>`.
-# Marker regexes (B-15): at most marker_regex_max_chars, none of marker_regex_forbidden,
+# Marker regexes: at most marker_regex_max_chars, none of marker_regex_forbidden,
 # must compile, else exit 64; alarm(max + alarm_slack_s) ends any overrun with exit 70.
 # Guarantees: read-only (no file, row or lock), no child process but `ps`, exactly one
 # stdout line (matched text cut to match_text_max_chars, never the whole line), exits by
@@ -61,8 +61,8 @@ sub run {
     my $deadline = $o->{deadline};
     die skills::cli::usage('--deadline must be an epoch in seconds') if defined $deadline && $deadline !~ /\A[0-9]{1,12}\z/;
 
-    # B-15: no pattern runs past the cap. The regex engine checks signals between steps. Armed
-    # before the conditions are read, so compiling a marker regex is under it too (U-06 review).
+    # No pattern runs past the cap. The regex engine checks signals between steps. Armed
+    # before the conditions are read, so compiling a marker regex is under it too.
     local $SIG{ALRM} = sub { print STDERR "wait: overrun past --max $max s\n"; POSIX::_exit($X{internal}) };
     local $SIG{INT}  = sub { POSIX::_exit(128 + 2) };
     local $SIG{TERM} = sub { POSIX::_exit(128 + 15) };
@@ -126,7 +126,7 @@ sub _end { my ($line, $rc) = @_; skills::cli::say($line); alarm 0; return $rc }
 sub _cut {
     my ($t, $n) = @_;
     my $c = $t;
-    # characters out (P5-FOLD A4); bytes that are not UTF-8 are shown as ASCII only
+    # characters out; bytes that are not UTF-8 are shown as ASCII only
     if (utf8::is_utf8($c) || utf8::decode($c)) { $c = substr($c, 0, $n) if length $c > $n; $c =~ s/[\x00-\x1f\x7f]/?/g; return $c }
     $t = substr($t, 0, $n) if length $t > $n;
     $t =~ s/[^\x20-\x7e]/?/g;

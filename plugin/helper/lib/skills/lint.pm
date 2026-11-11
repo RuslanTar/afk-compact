@@ -1,34 +1,34 @@
 package skills::lint;
-# lib/skills/lint.pm: the publish lint of TPL §7. lint() flags and never edits; fix() (0.1.5, E-3)
+# lib/skills/lint.pm: the publish lint. lint() flags and never edits; fix() (0.1.5)
 # writes the mechanical blocking ones into a copy of the body for publish (see there).
 # Headings, the marker grammar, id_range_re, time_re, claim_tags.verified_re
-# and the clutter classes come from assets/handoff-spec.json (BUILD-PLAN §3.4);
+# and the clutter classes come from assets/handoff-spec.json;
 # the secret rules from the core secrets seam.
 #
 # lint(\%in) → {blocking => [[rule, where]…], advisory => [[rule, where]…]}
 # %in: body, recipes {name => text}, extra {name => text} (ledger, inflight),
 #      previous (text of previous_handoff, the carry base, or undef), times {shown => 1},
-#      evidence [rows], bucket, brand; 2026-10-21 rulings:
+#      evidence [rows], bucket, brand;
 #      previous_kind (own|chain|foreign) and own_previous (text of own_previous_handoff)
-#        for carry-provenance and carry-approval (small-rulings §2.4) and the
-#        carried-stamp exemption (CR-F29);
-#      repo_mode and export_text (the body after the D-12 §1.5.5 rewrite) for
+#        for carry-provenance and carry-approval and the
+#        carried-stamp exemption;
+#      repo_mode and export_text (the body after the export rewrite) for
 #        private-path (repo mode only);
-#      jobs {task id => Dev-1 job row} for the recipe-mismatch advisory (Dev-1 D2);
-#      2026-10-22 (T-TEXT E6): acuity_floor (the stage meta's) for the acuity advisory;
-#      (Q-ADAPTER QA-4) queue_mode (the stage meta's: off|on|degraded) for queue-off;
-#      2026-10-23 (AP-4): approval_chain [{text, checked}] (the own chain's file),
+#      jobs {task id => job row} for the recipe-mismatch advisory;
+#      acuity_floor (the stage meta's) for the acuity advisory;
+#      queue_mode (the stage meta's: off|on|degraded) for queue-off;
+#      approval_chain [{text, checked}] (the own chain's file),
 #        transcript (the writing session's transcript path, undef when not found) and
 #        session_id (rows of another session do not count) for the approval checks
 #        (skills::approvals); quote_floor [ok, epoch] (skills::approvals::quote_floor: a
 #        claimed session counts only rows after the claim).
-#      0.1.2 (D-8): approval_context_only (a stage bound to a plugin handoff turn): every own
+#      0.1.2: approval_context_only (a stage bound to a plugin handoff turn): every own
 #        approval must be the context-only form (approval-plugin-turn).
 #      0.1.3: carried_as {line => draft line} (publish's re-lint after moving approvals: a line
 #        whose draft text was carried stays carried; 0.1.5: after skills::lint::fix too, from the
 #        base and from a foreign base alike; a text two draft lines became, [draft lines]: carried
 #        only when each is).
-#      0.1.5 (E-1, stable ledger): ledger_base (the own chain's previous file: the carry base when
+#      0.1.5 (stable ledger): ledger_base (the own chain's previous file: the carry base when
 #        it is own or chain, own_previous with a foreign base; undef without one) for
 #        ledger-id-reuse, ledger-changed and ledger-carried (lib/ledger.pm); export_fn (repo
 #        mode: text -> its export) for the private-path check of the carried lines.
@@ -49,7 +49,7 @@ use skills::approvals;
 # The most line numbers `ADVISORY secret-warn` names (0.1.3); the rest are counted as +<n>.
 our $WARN_LINES_MAX = 10;
 
-# Ephemeral locations (TPL §5 "Rule").
+# Ephemeral locations.
 my $PATH_CH = qr{[^\s`'"<>()\[\],;]};
 # An ephemeral path starts the path: `/tmp/` inside a longer path is not one.
 my $START = qr{(?<![\w.\/~-])};
@@ -68,7 +68,7 @@ sub lint {
     # (skills::approvals::move_lines); one whose draft text was carried is still carried.
     my $cas = ref $in->{carried_as} eq 'HASH' ? $in->{carried_as} : {};
     $prev_lines{$_} = 1 for grep { my @d = _draft_texts($cas, $_); @d && !grep { !$prev_lines{$_} } @d } keys %$cas;
-    # CR-F29 (DP-27): tagged ledger lines carried from a foreign base keep the base's
+    # Tagged ledger lines carried from a foreign base keep the base's
     # checked/verified stamps verbatim; their times are not checked (a fixed line: its draft's).
     my $carried = _foreign_carried($in, \@lines, $cas);
     my $mains = skills::spec::sections_main();
@@ -225,7 +225,7 @@ sub lint {
         push @block, [ 'unprinted-time', 'line ' . ($i + 1) ] for grep { !$times->{$_} } @t;
     }
 
-    # ---- time-format (RV-24): `checked` or `[verified` with a time that is not a full
+    # ---- time-format: `checked` or `[verified` with a time that is not a full
     # stamp (HH:MM, MM-DD HH:MM, a date without its offset), outside carried lines.
     # Without it a short form would slip past unprinted-time, which reads only stamps.
     my $short = qr/(?:[0-9]{4}-[0-9]{2}-[0-9]{2}[ T])?(?:[0-9]{2}-[0-9]{2} )?[0-9]{1,2}:[0-9]{2}/;
@@ -241,7 +241,7 @@ sub lint {
         push @block, [ 'time-format', 'line ' . ($i + 1) ] if $bad;
     }
 
-    # ---- carry provenance (small-rulings §2.4): with a foreign base, a U-/D-/X- line whose
+    # ---- carry provenance: with a foreign base, a U-/D-/X- line whose
     # content is the foreign base's and not the own chain's needs a `[from …]` tag; a
     # tagged approval is context only. Reworded lines are not detected (stated limit).
     # A line publish rewrote (carried_as) is read as its draft text(s) too (0.1.5 review: a copied
@@ -266,7 +266,7 @@ sub lint {
         }
     }
 
-    # ---- scoped approvals (AP-4; spec §15): approval-shape, approval-quote (own untagged
+    # ---- scoped approvals (spec §15): approval-shape, approval-quote (own untagged
     # lines: carried from an own-chain file that listed the id, else the quote in this
     # session's human-typed rows), approval-unchecked (transcript unreadable). On with a spec
     # that has the section and the three ids.
@@ -277,7 +277,7 @@ sub lint {
     push @block, @{ $approvals->{blocking} };
     push @adv, @{ $approvals->{advisory} };
 
-    # ---- the stable ledger (0.1.5 E-1, spec §7): against the own chain's previous file, an id the
+    # ---- the stable ledger (0.1.5, spec §7): against the own chain's previous file, an id the
     # draft gives to another item blocks (ids stay unique across a chain); a ledger line whose text
     # changed is advisory; the ledger lines the draft dropped without a Superseded line are named,
     # and publish copies them back when it writes the file.
@@ -293,7 +293,7 @@ sub lint {
     my %cid = map { ($_->[0] => ($_->[2] || [])->[0]) } @{ $ledger->{carry} || [] };
     my $cname = sub { 'carried ' . ($cid{ $_[0] } // 'line') };
 
-    # ---- private-path (D-12 Block F; repo mode only): a machine-private path left in the
+    # ---- private-path (repo mode only): a machine-private path left in the
     # text the export would write after its rewrite (own home already ~/). A durable copy
     # or a Volatile: line does not excuse it: the path would reach git.
     if ($in->{repo_mode}) {
@@ -378,9 +378,9 @@ sub lint {
         }
     }
 
-    # ---- queue-off (Q-ADAPTER QA-4): with no queue configured (begin measured mode off),
+    # ---- queue-off: with no queue configured (begin measured mode off),
     # nothing was queued: a typed `Queued:` line anywhere, or a `· queued` mark on an Open
-    # questions row, blocks. On with a spec that lists the id (T-TEXT E2).
+    # questions row, blocks. On with a spec that lists the id.
     if (($in->{queue_mode} // '') eq 'off' && skills::spec::lint_ids()->{blocking}{'queue-off'}) {
         for my $i (0 .. $#lines) {
             push @block, [ 'queue-off', 'line ' . ($i + 1) ] if $lines[$i] =~ /\A[\s>|*-]*Queued:/;
@@ -393,7 +393,7 @@ sub lint {
         }
     }
 
-    # ---- secrets: HARD blocks; WARN is advisory with rule ids (D-13)
+    # ---- secrets: HARD blocks; WARN is advisory with rule ids
     # 0.1.3: a WARN hit names its line numbers too (body.md's bare, another file's as <file>:<n>)
     my (%warn, @warn_at);
     my @texts = ([ 'body.md', $body ], (map { [ "restart/$_", $in->{recipes}{$_} ] } sort keys %{ $in->{recipes} || {} }),
@@ -423,18 +423,18 @@ sub lint {
         $chars += _chars($_->[1]) + 1 for grep { !($skip && _helper_pasted($_->[1])) } @{ $s->{body} };
         push @adv, [ 'section-cap', "## $name $chars>$caps->{$name}" ] if $chars > $caps->{$name};
     }
-    # store-path (PKG-RUNTIME A.4): a body line naming the launcher by its path; handoffs
+    # store-path: a body line naming the launcher by its path; handoffs
     # write the symbolic `<store>` (the path changes with each plugin update and names the
-    # home folder). On with a spec that lists the id (T-TEXT E2).
+    # home folder). On with a spec that lists the id.
     if ($b ne '' && skills::spec::lint_ids()->{advisory}{'store-path'}) {
         my $sp = '/scripts/' . $b . '-store';
         for my $i (0 .. $#lines) {
             push @adv, [ 'store-path', 'line ' . ($i + 1) ] if index($lines[$i], $sp) >= 0;
         }
     }
-    # Acuity (T-TEXT E6): the writer's rating in Resume here (the spec's acuity_re) against the
+    # Acuity: the writer's rating in Resume here (the spec's acuity_re) against the
     # floor `begin` measured (acuity_floor in the stage meta): missing, or below the floor. A
-    # spec without acuity_re (older than T-TEXT E2) has no such check.
+    # spec without acuity_re (an older one) has no such check.
     my $acuity;
     if (my $are = skills::spec::acuity_re()) {
         for my $r (@{ $rh ? $rh->{body} : [] }) { if ($r->[1] =~ $are) { $acuity = $1; last } }
@@ -446,7 +446,7 @@ sub lint {
             push @adv, [ 'acuity', "below $floor" ];
         }
     }
-    # Clutter classes from the spec block (WATCHER M-13): code-block (max_lines),
+    # Clutter classes from the spec block: code-block (max_lines),
     # log-line and stack-line, hash-run (min_run).
     my $cb = skills::spec::clutter_class('code-block');
     if ($cb && defined $cb->{max_lines}) {
@@ -483,7 +483,7 @@ sub lint {
         my @at = @warn_at > $WARN_LINES_MAX ? (@warn_at[0 .. $WARN_LINES_MAX - 1], '+' . (@warn_at - $WARN_LINES_MAX)) : @warn_at;
         push @adv, [ 'secret-warn', 'rules=' . join(',', sort keys %warn) . (@at ? ' lines=' . join(',', @at) : '') ];
     }
-    # Dev-1 D2: a recipe whose command: differs from the plugin's job record of its task.
+    # a recipe whose command: differs from the plugin's job record of its task.
     for my $name (sort keys %{ $in->{recipes} || {} }) {
         my $t = $in->{recipes}{$name};
         my ($rid) = $t =~ /^\s*item:\s*B-\d+.*?runtime id\s+([A-Za-z0-9._:-]+)/m;
@@ -509,7 +509,7 @@ sub lint {
 # The most ids fix() writes for one id range; a longer range is left as written (and blocks).
 our $FIX_RANGE_MAX = 50;
 
-# fix($body, $blocking) (0.1.5, E-3: the usage review counted 14 drafts refused for id ranges,
+# fix($body, $blocking) (0.1.5: a usage review counted 14 drafts refused for id ranges,
 # each round a Write and a publish): the blocking entries of lint() that are mechanical, written
 # into a copy of the body.
 # - id-range: on a flagged line every range is written as its ids (`U-1..U-3` as `U-1, U-2, U-3`;
@@ -519,8 +519,8 @@ our $FIX_RANGE_MAX = 50;
 #   (_list_ranges; review: a rewritten quote lost a real approval, and a rewritten command
 #   changed its arguments); otherwise the line stays as written (and blocks). Nothing is
 #   rewritten in a section skills::approvals::code_sections names (one holding a fence, a quote,
-#   an HTML line or an indented code line: 0.1.6 D-71, no block is guessed at). An approval
-#   line (in `## Approvals`, or any `U-<n>: approval` line) is never rewritten (review: its
+#   an HTML line or an indented code line: 0.1.6, no block is guessed at). An approval
+#   line (in `## Approvals`, or any `U-<n>: approval` line) is never rewritten (its
 #   action and targets are compared with the own chain's file, so a carried approval stopped
 #   being carried); a range there that still blocks once the other lines are listed stays a LINT line.
 #   Step 1 and Next steps item 1 that matched still match: when one of them is rewritten the
@@ -666,7 +666,7 @@ sub _ledger_norm {
     return $c eq '' ? undef : $c;
 }
 
-# {line index => 1} for body lines carried from a foreign base (CR-F29, DP-27): a line
+# {line index => 1} for body lines carried from a foreign base: a line
 # with a `[from …]` tag whose _ledger_norm (no leading id, no tags, spacing folded) equals
 # a base line's. Its stamps are then the base's own; any tag counts, since a base line
 # that already had a tag keeps that tag (template rule 8).
@@ -716,7 +716,7 @@ sub _trim_path { my ($p) = @_; $p =~ s/[.:]+\z//; return $p }
 # command on either side (an extra argument, a glued word, other words) is compared as text,
 # so it blocks unless both sides say the same. The form's marks are not the step's words: a wait
 # mark (`· waits: job`, `— waits: you`, wherever it stands) and a trailing `· todo` or `· done`
-# do not count (0.1.5 E-4).
+# do not count (0.1.5).
 sub _step1_same {
     my ($s1, $n1) = @_;
     return 0 unless defined $s1 && defined $n1;
@@ -764,11 +764,11 @@ sub _step1_same {
 #   value (`prompt="<the brief above>"`), a pointer or part of a path (`<scratch>/out.md`,
 #   `$TMP/<name>.md`);
 # - in `spawns:`, a counter `<n>` that ends an agent's label after `-` (`fix-7c-<n>`: one agent
-#   per round, numbered as it starts; 0.1.5, E-3), not followed by `/`, `.`, `-` or a word
+#   per round, numbered as it starts; 0.1.5), not followed by `/`, `.`, `-` or a word
 #   character (`fix-<n>-final` still counts); the label is one word of letters, digits, `_` and
 #   `-` in a label place: right after `(`, `[`, `,`, `spawns:`, `agent:` or `label` (`label:`,
 #   `label=`), the spec's list and no other word (review: `model claude-<n>` and `output
-#   out-<n>` are stand-ins, not labels; review 5: `agents`, `labels` and a bare `agent` were
+#   out-<n>` are stand-ins, not labels; `agents`, `labels` and a bare `agent` were
 #   label places too), so the end of a path (`$TMP/run-<n>`) still counts.
 # A pointer stands for text stated elsewhere: a `<…>` with a word such as above, same or that
 # (`<the brief above>`, `<same path>`, `<that copy>`).
@@ -858,12 +858,12 @@ sub _covered {
     return 0;
 }
 
-# Characters of a line (text is characters, P5-FOLD A4).
+# Characters of a line (text is characters).
 sub _chars { my ($s) = @_; return length skills::util::text($s) }
 
 sub _norm { my ($l) = @_; $l =~ s/\s+/ /g; $l =~ s/\A | \z//g; return $l }
 
-# A helper-pasted Evidence line (template §4.9): Evidence:, Disposable:, Ref-only: or Volatile:.
+# A helper-pasted Evidence line: Evidence:, Disposable:, Ref-only: or Volatile:.
 sub _pasted { return $_[0] =~ /\A\s*(?:[-*]\s+)?(?:Evidence|Disposable|Ref-only|Volatile):/ ? 1 : 0 }
 
 # Only what the helper itself printed (evidence_cmd.pm): its Volatile: lines end in its own
@@ -876,7 +876,7 @@ sub _helper_pasted {
     return skills::util::text($l) =~ / — (?:missing at |withheld\b)/ ? 1 : 0;
 }
 
-# Lines that count for the overlap advisory (RV-30): not blank, not a
+# Lines that count for the overlap advisory: not blank, not a
 # heading, not a ledger line, not a fixed none-form, not a pasted Evidence
 # line, not a table separator.
 my $NONE;

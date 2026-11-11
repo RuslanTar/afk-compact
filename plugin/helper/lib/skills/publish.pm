@@ -1,34 +1,34 @@
 package skills::publish;
-# lib/skills/publish.pm: `publish --stage DIR --slug S --status …` (HDN §6,
-# TPL §3, §5, §6, §7; D-1, D-13). Lint and secret scan, then in this order:
+# lib/skills/publish.pm: `publish --stage DIR --slug S --status …`. Lint and secret scan, then
+# in this order:
 # file the stage into evidence/<stem>/ (recipes gain sha256 and
 # origin_session_id), MANIFEST.tsv, the handoff by exclusive create, read
 # back, pin under lock, one receipt and one handoff_publish row.
-# 2026-10-21 rulings: the lint also sees the own chain's file when the carry base is
-# foreign (small-rulings §2.4) and, in repo mode, the export text (private-path); the
+# The lint also sees the own chain's file when the carry base is
+# foreign and, in repo mode, the export text (private-path); the
 # frontmatter keys and their order are the spec's frontmatter_keys_handoff (with
-# previous_kind and own_previous_handoff, RV-19); a stage bound to a plugin handoff turn
+# previous_kind and own_previous_handoff); a stage bound to a plugin handoff turn
 # publishes once (`<ht>.published` before the handoff file, else REFUSED: handoff-exists
-# <path>, D-18 B8; a claim whose file was never placed is filled by a retry of the same
-# stage, CR-F9); shell recipes of a recorded job carry `job:` and the recorded
-# command (Dev-1 D2); in repo mode the handoff is then exported (D-12 §1.5.5,
-# skills/export.pm) and one receipt line says what happened to the export.
-# 2026-10-23 (AP-4): the lint checks `## Approvals` (skills/approvals.pm) against the own
+# <path>; a claim whose file was never placed is filled by a retry of the same
+# stage); shell recipes of a recorded job carry `job:` and the recorded
+# command; in repo mode the handoff is then exported
+# (skills/export.pm) and one receipt line says what happened to the export.
+# The lint checks `## Approvals` (skills/approvals.pm) against the own
 # chain's file and this session's transcript; the ids that passed go to frontmatter
 # `approvals_checked`, and the row gains `approvals {lines, checked, unchecked}` and
 # `approval_classes` (counts and class ids only).
-# 0.1.2 (D-8): in a stage bound to a plugin handoff turn every own approval is context only
+# 0.1.2: in a stage bound to a plugin handoff turn every own approval is context only
 # (skills/approvals.pm): no approvals_checked and no line-hash record, so nothing carries; the
-# frontmatter says `requested_by: plugin` (AC-4).
-# 0.1.3 APPROVALS: an own approval line of `## Approvals` failing approval-quote or
+# frontmatter says `requested_by: plugin`.
+# 0.1.3: an own approval line of `## Approvals` failing approval-quote or
 # approval-plugin-turn moves to `## Open questions` as a re-ask instead of refusing (one ADVISORY
 # line each; skills::approvals::move_lines); a written row gains `approvals_moved` (a count).
-# 0.1.5 (E-1, stable ledger): the lint compares the draft's ledger with the own chain's previous
+# 0.1.5 (stable ledger): the lint compares the draft's ledger with the own chain's previous
 # file (an id reused for another item blocks; a changed line is advisory) and names the ledger
 # lines the draft dropped without a Superseded line; publish copies those back, unchanged, into
 # their sections of the written file (skills::core::ledger_carry), and the row gains
 # `ledger {carried, changed, reused}` (counts).
-# 0.1.5 (E-3): the mechanical lints (an id range, a missing Next steps item 1) are fixed instead of
+# 0.1.5: the mechanical lints (an id range, a missing Next steps item 1) are fixed instead of
 # refusing (skills::lint::fix; one ADVISORY line each); a written row gains `lint_fixed` (a count).
 use strict;
 use warnings;
@@ -49,7 +49,7 @@ use skills::approvals;
 
 my %STATUS = map { $_ => 1 } qw(in-progress blocked completed);
 my $LANE_RE = qr/\A(?:lane|auto):[A-Za-z0-9._\/-]+\z/;
-# Frontmatter keys and their order: the spec's frontmatter_keys_handoff (TPL §3); empty
+# Frontmatter keys and their order: the spec's frontmatter_keys_handoff; empty
 # values are omitted. The list is read at publish time (fail closed: spec-missing).
 
 sub run {
@@ -60,7 +60,7 @@ sub run {
     die skills::cli::usage('--slug must be kebab-case') unless defined $o->{slug} && $o->{slug} =~ /\A[a-z0-9]+(?:-[a-z0-9]+)*\z/;
     my ($dir, $s, $ctx) = skills::stage::open_stage($o->{stage});
     my $row = { kind => 'handoff', writer => 'handoff', bytes => 0, lint_rules => [], size_band => undef };
-    # T-TEXT E7 (E-1 counters): every publish call on this stage counts, a refused one too, and
+    # Counters: every publish call on this stage counts, a refused one too, and
     # each row names the built template the skill read.
     $row->{attempt} = _attempt($dir);
     $row->{template_rev} = _template_rev();
@@ -77,11 +77,11 @@ sub run {
     my $need = eval { skills::spec::need(qw(frontmatter_keys_handoff frontmatter_keys_export time_re lint_ids carry.tag_re private_path_classes)); 1 };
     _refuse($ctx, $row, ($@ =~ s/\s+\z//r)) unless $need;
     my $ht = (defined $s->{handoff_ht} && skills::core::ht_valid($s->{handoff_ht})) ? $s->{handoff_ht} : undef;
-    # DP-16: a publish inside a plugin handoff turn names its ht on every handoff_publish row,
+    # A publish inside a plugin handoff turn names its ht on every handoff_publish row,
     # so the watcher's A-18 matches the row to the turn exactly, not by time.
     $row->{ht} = $ht if $ht;
     my $sid_dir = skills::core::sid_dir();
-    # CR-F9: a claim whose file was never placed (the earlier publish of this stage died
+    # A claim whose file was never placed (the earlier publish of this stage died
     # between the claim and the link) is fulfilled by this retry, at the claimed path only;
     # see _claimed_free. Any other claim refuses.
     my $claimed;
@@ -111,22 +111,22 @@ sub run {
         my $od = skills::store::read_doc($s->{own_previous_handoff});
         $own_text = $od->{body} if $od;
     }
-    # D-12: the mode of this worktree, decided again for this call; in repo mode the lint
+    # The handoff-root mode of this worktree, decided again for this call; in repo mode the lint
     # sees the text the export would hold.
     my $m = skills::core::mode($s->{cwd} // $s->{worktree} // $s->{bucket});
     my $repo = $m->{mode} eq 'repo' && defined $m->{root_path};
     my $xplan = $repo ? skills::export::plan($m, "$s->{bucket}/$s->{stem}.md") : undef;
     my $jobs = _jobs($s);
     my $ev = skills::stage::evidence_rows($dir);
-    # AP-4: the own chain's file (its approvals_checked ids carry) and this session's transcript.
+    # The own chain's file (its approvals_checked ids carry) and this session's transcript.
     my $pk = $s->{previous_kind} // '';
     my $own_path = ($pk eq 'own' || $pk eq 'chain') ? $s->{previous_handoff} : $pk eq 'foreign' ? $s->{own_previous_handoff} : undef;
-    # Only a file that is own by spec §4 lends its checked ids (REVIEW-NIGHT-3 R3-03: not a fork's
-    # or bg-copy's base, owner xxxxxxxx-27 revised; not an export, an imported copy or a file
+    # Only a file that is own by spec §4 lends its checked ids (not a fork's
+    # or bg-copy's base; not an export, an imported copy or a file
     # outside the store).
     my @achain = grep { defined } skills::approvals::chain_doc($own_path, $ctx, $s->{session_id});
     my $transcript = skills::approvals::transcript_path($ctx, $s->{session_id}, $s->{cwd}, $s->{worktree});
-    # 0.1.5 (E-1): the ledger's base is the own chain's previous file: the carry base when it is
+    # 0.1.5: the ledger's base is the own chain's previous file: the carry base when it is
     # own or chain, own_previous_handoff when the base is foreign (foreign lines are renumbered and
     # capped by the template, so they are never copied by code).
     my $ledger_base = ($pk eq 'own' || $pk eq 'chain') ? $prev_text : $pk eq 'foreign' ? $own_text : undef;
@@ -149,7 +149,7 @@ sub run {
         return $r;
     };
     my $res = $lint->($body);
-    # 0.1.5 (E-3): the mechanical blocking lints are fixed here instead of refusing
+    # 0.1.5: the mechanical blocking lints are fixed here instead of refusing
     # (skills::lint::fix: an id range written as its ids, Step 1 added as Next steps item 1 when
     # that item is missing); one ADVISORY line per fix says what changed, at the draft's line.
     # The fixed text is linted again (a rewritten line that was carried, from the own chain or a
@@ -162,7 +162,7 @@ sub run {
         $res = $lint->($body, \%cas);
     }
     my $fmap = $fx->{map};
-    # 0.1.3 APPROVALS: an own approval line of `## Approvals` that fails approval-quote or
+    # 0.1.3: an own approval line of `## Approvals` that fails approval-quote or
     # approval-plugin-turn no longer refuses: it moves to `## Open questions` as a re-ask
     # (skills::approvals::move_lines) and one ADVISORY line per moved approval says so, with the
     # draft's line number and the rule in plain words. When nothing else blocks, the moved text is
@@ -170,9 +170,9 @@ sub run {
     # something else blocks, publish refuses as before and the ADVISORY lines say what publish will
     # move once the rest passes.
     # Q numbers go on above the chain's (spec §4): the base, the own file and the stage's ledger.
-    # The reason a quote failed (copy, claim, pasted: review round 2) comes from the lint.
+    # The reason a quote failed (copy, claim, pasted) comes from the lint.
     # A carried line whose only change is that rewrite stays carried for the re-lint (its old stamps
-    # stay exempt, review round 3).
+    # stay exempt).
     my ($mbody, $moved, $keep, $was, $lmap) = skills::approvals::move_lines($body, $res->{blocking}, ($res->{approvals} || {})->{why},
                                                                             $prev_text, $own_text, $extra{'ledger.md'});
     my %rules;
@@ -183,7 +183,7 @@ sub run {
             $body = $mbody;
             # A line move_lines rewrote reads through to its draft text (0.1.5: through a fix too).
             $res = $lint->($body, { %cas, map { ($_ => $cas{ $was->{$_} } // $was->{$_}) } keys %$was });
-            # One numbering per output (0.1.4 A-1): the moved-line ADVISORY lines and the skill's
+            # One numbering per output (0.1.4): the moved-line ADVISORY lines and the skill's
             # "edit those body lines" read the draft (body.md), while the moved text exists only in
             # memory (and the written file adds a header), so every line number the re-lint names,
             # blocking or advisory, is printed as the draft's line (an inserted re-ask item: its
@@ -209,22 +209,22 @@ sub run {
     $rules{ $_->[0] } = 1 for @b, @a;
     $row->{lint_rules} = [ sort keys %rules ];
     $row->{acuity} = $res->{acuity} // '-';
-    # 0.1.5 (E-1): counts only, on a refused row too.
+    # 0.1.5: counts only, on a refused row too.
     my $lg = $res->{ledger} || {};
     my %ln = (carried => scalar(@{ $lg->{ids} || [] }), changed => scalar(@{ $lg->{changed} || [] }), reused => scalar(@{ $lg->{reused} || [] }));
     $row->{ledger} = \%ln if grep { $_ } values %ln;
-    # AP-4: counts and outward class ids only, never a quote, action or target.
+    # counts and outward class ids only, never a quote, action or target.
     my $ap = $res->{approvals} || {};
-    # A plugin handoff turn (0.1.2 D-8): nothing in this file is listed as checked or hashed.
+    # A plugin handoff turn (0.1.2): nothing in this file is listed as checked or hashed.
     $ap = { %$ap, checked => [], origins => {}, classes => [] } if defined $ht;
     if ($ap->{lines}) {
         $row->{approvals} = { lines => $ap->{lines}, checked => scalar(@{ $ap->{checked} || [] }), unchecked => $ap->{unchecked} // 0 };
         $row->{approvals}{context} = $ap->{context} if $ap->{context};
         $row->{approval_classes} = $ap->{classes} || [];
     }
-    # T-TEXT E7: under the first line of each id in this run, its `  why: … · fix: …` line from
+    # Under the first line of each id in this run, its `  why: … · fix: …` line from
     # the spec's lint_texts (an id without one is a build failure, AT-TX-03; a spec without
-    # lint_texts at all, older than T-TEXT E2, prints the first lines only).
+    # lint_texts at all, an older one, prints the first lines only).
     my $texts = skills::spec::lint_texts();
     my %told;
     my $why = sub {
@@ -239,7 +239,7 @@ sub run {
     my $moved_fix = @b ? 'none needed: publish moves the line once the LINT lines are fixed'
                        : 'none needed: the handoff is written with the line moved; list it in the report';
     for (@$moved) {
-        # Review round 2: the draft lines whose references now read the new id or Open questions.
+        # The draft lines whose references now read the new id or Open questions.
         my $refs = $_->{refs} ? sprintf('; line%s %s cite%s %s instead', (@{ $_->{refs} } > 1 ? ('s', join(', ', @{ $_->{refs} }), '') : ('', $_->{refs}[0], 's')), $_->{q}) : '';
         my $see = join '', map { my ($l, $to) = @$_; $l ? sprintf('; line%s %s say%s see %s instead', (@$l > 1 ? ('s', join(', ', @$l), '') : ('', $l->[0], 's')), $to) : '' }
             [ $_->{see}, 'Open questions' ], [ $_->{see_both}, 'Approvals and Open questions' ];
@@ -248,7 +248,7 @@ sub run {
         my $t = $texts->{ $_->{rule} } or die "lint id $_->{rule} has no lint_texts entry in the spec\n";
         skills::cli::say("  why: $t->{why} · fix: $moved_fix");
     }
-    # 0.1.5 (E-3): one line per fix publish made, the same way (no Edit, no second round).
+    # 0.1.5: one line per fix publish made, the same way (no Edit, no second round).
     my $fixed_fix = @b ? 'none needed: publish makes this change once the LINT lines are fixed'
                        : 'none needed: the handoff is written with this change';
     for (@fixed) {
@@ -266,7 +266,7 @@ sub run {
     }
     # Only a written file holds moved lines (a refused draft is kept as written).
     $row->{approvals_moved} = scalar @$moved if @$moved;
-    # 0.1.5 (E-1): the ledger lines the draft dropped go back into the written text (never into
+    # 0.1.5: the ledger lines the draft dropped go back into the written text (never into
     # body.md), after every lint pass, so the line numbers printed above are the draft's.
     if (@{ $lg->{carry} || [] }) {
         $body = skills::core::ledger_carry($body, $lg);
@@ -278,7 +278,7 @@ sub run {
     # ---- file the stage into evidence/<stem>/
     my $now = skills::util::now();
     my $bucket = $s->{bucket};
-    # STATE-ROOT: a stage begun before 0.1.2 publishes into its bucket under the new root (open_stage)
+    # a stage begun before 0.1.2 publishes into its bucket under the new root (open_stage)
     skills::util::mkdir_p($bucket) unless -d $bucket;
     my $edir = "$bucket/evidence/$s->{stem}";
     my @manifest;
@@ -337,7 +337,7 @@ sub run {
         session_id => $s->{session_id}, actor => 'main',
         previous_session_id => $s->{previous_session_id}, lineage_reason => $s->{lineage_reason},
         claude_pid => ($cp ? $cp->{pid} : undef), cc_version => _cc_version($ctx),
-        # 0.1.4 A-10: the plugin copy that wrote it, as a summary copy names it (spec §8).
+        # 0.1.4: the plugin copy that wrote it, as a summary copy names it (spec §8).
         plugin_version => skills::ctx::version(), plugin_root => skills::util::text(skills::ctx::plugin_root()),
         repository => $s->{repo}, bucket => $s->{bucket_rel}, worktree => $g->{worktree} // $s->{worktree},
         branch => $g->{branch} // $s->{branch}, git_commit => $g->{head_full} // $s->{head},
@@ -348,7 +348,7 @@ sub run {
         previous_kind => $s->{previous_kind},
         own_previous_handoff => (($s->{previous_kind} // '') eq 'foreign' ? $s->{own_previous_handoff} : undef),
         approvals_checked => (@{ $ap->{checked} || [] } ? join(', ', @{ $ap->{checked} }) : undef),
-        # 0.1.2 AC-4: the plugin asked for this handoff (a stage bound to a handoff turn), so
+        # 0.1.2: the plugin asked for this handoff (a stage bound to a handoff turn), so
         # `measure` names that reason and none of its approvals carries.
         requested_by => ($ht ? 'plugin' : undef),
     );
@@ -360,7 +360,7 @@ sub run {
     my ($mre, $sre) = (skills::spec::marker_re(), skills::spec::sentinel_re());
     die "marker does not match the spec grammar\n" if ($mre && $marker !~ $mre) || ($sre && $sentinel !~ $sre);
     (my $btxt = $body) =~ s/\s+\z//;
-    # CR-F9 (D-18 B8): the whole file is written and read back under a temp name first;
+    # The whole file is written and read back under a temp name first;
     # only then is the handoff-turn claim made, and the file is linked into place (an
     # exclusive create). A failed write or read-back leaves no claim behind.
     my ($path, $content);
@@ -376,7 +376,7 @@ sub run {
             die "read-back failed: $path\n" unless defined $back && skills::util::sha256_hex($back) eq skills::util::sha256_hex($content)
                 && @tail && $tail[-1] eq $sentinel;
             if ($ht && defined $sid_dir && !defined $claimed) {
-                # One handoff per plugin handoff turn: the claim comes before the file (D-18 B8).
+                # One handoff per plugin handoff turn: the claim comes before the file.
                 my ($ok, $have) = skills::core::ht_mark_published($sid_dir, $ht, $path);
                 if (!$ok) { unlink $tmp; _refuse($ctx, $row, "handoff-exists $have") }
             }
@@ -391,7 +391,7 @@ sub run {
     die "no free handoff name\n" unless $path;
     skills::util::write_excl("$dir/published", "$path\n", 0600);
 
-    # ---- U3-01: the checked approval lines' hashes, read from the placed file, in the store's
+    # ---- the checked approval lines' hashes, read from the placed file, in the store's
     # plugin-owned record; without it every line of this handoff is context only (re-ask).
     if (@{ $ap->{checked} || [] }) {
         my $pd = skills::store::read_doc($path);
@@ -403,7 +403,7 @@ sub run {
         }
     }
 
-    # ---- pin under the TPL §6 lock
+    # ---- pin under the pin lock
     my $wh = $g->{in_git} ? skills::gitfacts::work_hash($g->{worktree}) : undef;
     my ($ok, $err) = skills::ctx::pin_update($ctx, $s->{session_id}, sub {
         my ($pin) = @_;
@@ -425,7 +425,7 @@ sub run {
     $ctx->log('handoff_publish', $row);
     skills::cli::say("Wrote handoff to: $path");
 
-    # ---- D-12 export (repo mode only), after the private handoff is safe.
+    # ---- export (repo mode only), after the private handoff is safe.
     if ($repo) {
         my %pfm = map { $_ => $fm{$_} } grep { defined $fm{$_} } keys %fm;
         my $x = skills::export::export_one(mode => $m, private => $path, fm => \%pfm, body => $btxt,
@@ -473,7 +473,7 @@ sub _draft_lines {
     return \@out;
 }
 
-# Dev-1 job rows of this stage's session, newest per task: {task id => row}.
+# Job rows of this stage's session, newest per task: {task id => row}.
 sub _jobs {
     my ($s) = @_;
     my $d = skills::core::sid_dir() // return {};
@@ -485,7 +485,7 @@ sub _jobs {
     return \%j;
 }
 
-# Dev-1 D2: a recipe for a task the plugin recorded gets `job: <id> · recorded` and the
+# A recipe for a task the plugin recorded gets `job: <id> · recorded` and the
 # recorded command (a withheld one is named, never printed); one with a runtime id and
 # no record gets `job: <id> · not recorded`. Hand-typed text is shown, never run.
 sub _job_lines {
@@ -508,11 +508,11 @@ sub _job_lines {
 # Link the checked temp file to the handoff path, never over an existing file: 1 placed,
 # 0 the name is taken (try the next one; after a handoff-turn claim it dies instead).
 # A file system without hard links falls back to an exclusive create of the same bytes
-# (CR-F9: never a rename, which would replace a file made in the gap), read back.
-# DP-28 (CR-F9 residual): when the fallback's write or read-back fails after its own exclusive
+# (never a rename, which would replace a file made in the gap), read back.
+# When the fallback's write or read-back fails after its own exclusive
 # open made the file, that file (the publish's own partial, checked by device and inode, never
 # anything else) is removed and the publish dies, so a retry of the stage finds the claim with
-# no file and fills it (_claimed_free). A partial left by a killed process stays (D-8):
+# no file and fills it (_claimed_free). A partial left by a killed process stays:
 # handoff-state then answers publish-failed and nothing replaces it.
 # Test seams (STORE_TEST_MODE=1 only): STORE_TEST_PUBLISH_NOLINK=1 takes the fallback as on a
 # file system without hard links; STORE_TEST_PUBLISH_FAIL=after-create fails right after the
@@ -561,7 +561,7 @@ sub _place {
     return 1;
 }
 
-# CR-F9: the handoff-turn claim names a path this retry may still fill: nothing is there
+# The handoff-turn claim names a path this retry may still fill: nothing is there
 # (no file, no link), and it is the name this stage's publish picks (its bucket, its stem,
 # an optional -N), so it was claimed by an earlier publish of the same stage.
 sub _claimed_free {
@@ -572,7 +572,7 @@ sub _claimed_free {
     return File::Basename::basename($p) =~ /\A\Q$s->{stem}\E(?:-[0-9]+)?\.md\z/ ? 1 : 0;
 }
 
-# The 1-based number of this publish call on the stage (T-TEXT E7): one line appended to the
+# The 1-based number of this publish call on the stage: one line appended to the
 # stage's attempts.log (O_APPEND under flock), then the lines counted.
 sub _attempt {
     my ($dir) = @_;
@@ -583,7 +583,7 @@ sub _attempt {
     return $n || undef;
 }
 
-# sha256/8 of the built handoff template the skill reads (T-TEXT E7), or undef without one.
+# sha256/8 of the built handoff template the skill reads, or undef without one.
 sub _template_rev {
     my $h = skills::util::sha256_file(skills::ctx::plugin_root() . '/skills/handoff/references/handoff-template.md');
     return defined $h ? substr($h, 0, 8) : undef;

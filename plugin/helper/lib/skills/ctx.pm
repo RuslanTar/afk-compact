@@ -1,7 +1,7 @@
 package skills::ctx;
 # lib/skills/ctx.pm: per-run context for the skill subcommands: plugin root,
 # brand and version, settings, paths, session identity, per-process records,
-# lineage and pins (TPL §6, MOD §7).
+# lineage and pins.
 use strict;
 use warnings;
 use utf8;
@@ -57,7 +57,7 @@ sub new {
     $ctx->{root}       = $p->{root};
     $ctx->{watch}      = $p->{watch};
     $ctx->{disposable} = $p->{disposable};
-    # STATE-ROOT: the legacy root (~/.claude/handoffs while handoff_root is the default), read only; the run
+    # Legacy root (~/.claude/handoffs while handoff_root is the default), read only; the run
     # context checked it (rc::init), so a refused one is undef here and legacy_refused says why.
     $ctx->{legacy}         = defined &rc::legacy ? rc::legacy() : undef;
     $ctx->{legacy_refused} = defined &rc::legacy_refused ? rc::legacy_refused() : undef;
@@ -84,7 +84,7 @@ sub sid8 { my ($sid) = @_; my $s = $sid // ''; $s =~ s/[^0-9A-Za-z]//g; return l
 
 sub valid_sid { my ($v) = @_; return defined $v && $v =~ /\A[0-9A-Za-z][0-9A-Za-z_-]{7,63}\z/ }
 
-# placeholder_sid(value) -> 1 for a given --sid that is never this session's id (CW-1 review 2):
+# placeholder_sid(value) -> 1 for a given --sid that is never this session's id:
 # the plugin's own placeholders (`anon-*`, this file's identity without a session id, which
 # begin prints and degraded handoffs carry; `unknown`; `smoke`) and a variable name or `$`
 # reference left unsubstituted (a bare `CLAUDE_*`). The same set as lib/args.pm reserved_sid
@@ -99,14 +99,14 @@ sub placeholder_sid {
 
 sub records_dir { my ($ctx) = @_; return "$ctx->{root}/.sessions/by-pid" }
 
-# read_roots(ctx) -> the store root, then the legacy root when there is one (STATE-ROOT). Every reader of
+# read_roots(ctx) -> the store root, then the legacy root when there is one. Every reader of
 # the store's own files looks in both, in this order (the store root's file wins for one name);
 # writers use $ctx->{root} only.
 sub read_roots { my ($ctx) = @_; return grep { defined && $_ ne '' } ($ctx->{root}, $ctx->{legacy}) }
 
 # follow(ctx, path) -> a recorded full path (a MANIFEST.tsv copy, a pin's bucket_path), or, when it is
 # missing under an old default root (~/.claude/handoffs, ~/.claude/trash-staging), the same relative
-# path under the new root where `migrate --apply` copied it (STATE-ROOT; lib/paths.pm follow).
+# path under the new root where `migrate --apply` copied it (lib/paths.pm follow).
 sub follow { my ($ctx, $path) = @_; return paths::follow($ctx->{moved}, $path) }
 
 # All records: [{pid, epoch, state(live|ended), sid8, path, data}], from both read roots (a
@@ -132,7 +132,7 @@ sub records {
 sub _norm_ls { my ($v) = @_; return '' unless defined $v; $v =~ s/\s+/ /g; $v =~ s/\A | \z//g; return $v }
 
 # A recorded session is live when its pid runs with the same start time and
-# it has no ended- record (MOD §7).
+# it has no ended- record.
 sub record_live {
     my ($ctx, $rec, $all) = @_;
     my $sid = $rec->{data}{session_id} // '';
@@ -146,7 +146,7 @@ sub record_live {
 # 1 when the pid runs and its start time equals the recorded one.
 sub pid_matches { return pid_state(@_) eq 'match' ? 1 : 0 }
 
-# CR-F11: match (the pid runs with the recorded start time) | gone (no such pid, or its
+# Start-time check: match (the pid runs with the recorded start time) | gone (no such pid, or its
 # start time differs) | unverified (the pid runs, but the recorded start time is missing
 # or `ps` could not read the current one). Only `gone` proves the recorded process ended.
 sub pid_state {
@@ -161,7 +161,7 @@ sub pid_state {
 }
 
 # The live record of the Claude Code process this helper runs under: a live-
-# record of this pid and start time with no ended- record (MOD §7), newest
+# record of this pid and start time with no ended- record, newest
 # by time (an epoch compare, so a DST change cannot reorder them).
 sub own_record {
     my ($ctx) = @_;
@@ -178,10 +178,10 @@ sub own_record {
     return ($mine[0], $cp);
 }
 
-# Session identity (TPL §6): the record, cross-checked with the passed id.
-# The passed id is a cross-check only (HDN §8): on a mismatch the record
-# wins and the identity is marked degraded. A placeholder (placeholder_sid) is taken as unset
-# (CW-1 review 2): the record, else a fresh anon- id marked degraded (no-session-id).
+# Session identity: the record, cross-checked with the passed id.
+# The passed id is a cross-check only: on a mismatch the record
+# wins and the identity is marked degraded. A placeholder (placeholder_sid) is taken as unset:
+# the record, else a fresh anon- id marked degraded (no-session-id).
 # Returns {sid, sid8, source, degraded, pid, lstart}.
 sub resolve_sid {
     my ($ctx, $flag) = @_;
@@ -205,7 +205,7 @@ sub resolve_sid {
     return \%id;
 }
 
-# Live peers: other sessions with a live record on this worktree (OD-16).
+# Live peers: other sessions with a live record on this worktree.
 sub live_peers {
     my ($ctx, $worktree, $sid) = @_;
     my $all = records($ctx);
@@ -224,7 +224,7 @@ sub live_peers {
 
 # ---------------------------------------------------------------- lineage and pins
 
-# The lineage link of sid: the first read root that holds one (STATE-ROOT: the store root's wins).
+# The lineage link of sid: the first read root that holds one (the store root's wins).
 sub lineage_of {
     my ($ctx, $sid) = @_;
     for my $r (read_roots($ctx)) {
@@ -236,7 +236,7 @@ sub lineage_of {
     return undef;
 }
 
-# Predecessors up to 3 hops, same chain only (A-6).
+# Predecessors up to 3 hops, same chain only.
 sub chain {
     my ($ctx, $sid, $max) = @_;
     $max //= 3;
@@ -256,7 +256,7 @@ sub chain {
 # The pin's path in the store root (where pin_update writes it).
 sub pin_path { my ($ctx, $sid) = @_; return "$ctx->{root}/.sessions/$sid.json" }
 
-# The pin of sid: the store root's, else the legacy root's (STATE-ROOT: a session that started before
+# The pin of sid: the store root's, else the legacy root's (a session that started before
 # 0.1.2 keeps its pin; the store root's wins). pin_update starts from it and writes the store root.
 sub pin_read {
     my ($ctx, $sid) = @_;
@@ -269,7 +269,7 @@ sub pin_read {
     return undef;
 }
 
-# Read-modify-write of .sessions/<sid>.json under the TPL §6 lock.
+# Read-modify-write of .sessions/<sid>.json under the pin lock.
 # $fn receives the current pin (or {}) and returns the new one.
 # Returns ($ok, $pin_or_error).
 sub pin_update {

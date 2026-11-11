@@ -1,7 +1,7 @@
 package skills::spec;
-# lib/skills/spec.pm: reads assets/handoff-spec.json (BUILD-PLAN §3.4), the only
+# lib/skills/spec.pm: reads assets/handoff-spec.json, the only
 # source of heading literals, vocabularies and marker grammar for this code.
-# Shapes are normalised defensively; the §3.4 key list fixes names only.
+# Shapes are normalised defensively; the key list fixes names only.
 use strict;
 use warnings;
 use utf8;
@@ -22,7 +22,7 @@ sub load {
 
 sub available { return eval { load(); 1 } ? 1 : 0 }
 
-# Fail closed on a key this code needs (2026-10-21 build brief): need('a', 'b.c') dies
+# Fail closed on a key this code needs: need('a', 'b.c') dies
 # "spec-missing <key>" when a key (dotted for a nested object) is absent or empty.
 sub need {
     my (@keys) = @_;
@@ -65,7 +65,7 @@ sub lint_ids {
     return \%out;
 }
 
-# private_path_classes -> [{id, re}] (D-12 Block F, the `private-path` patterns).
+# private_path_classes -> [{id, re}] (the `private-path` patterns).
 sub private_path_classes {
     my @out;
     for my $e (@{ _list(get('private_path_classes')) }) {
@@ -184,7 +184,7 @@ sub clutter_class {
     return \%c;
 }
 
-# Outward / destructive command classes (WATCH D-03) → [{class, re}]
+# Outward / destructive command classes → [{class, re}]
 sub outward_classes {
     my $v = load()->{outward_classes};
     my @out;
@@ -207,8 +207,8 @@ sub outward_classes {
     return \@out;
 }
 
-# lint_texts (T-TEXT E2, E7): {id => {why, fix}} for the publish lint's `  why: … · fix: …`
-# lines; {} when the spec has no such key (an asset older than T-TEXT E2: no why lines).
+# lint_texts: {id => {why, fix}} for the publish lint's `  why: … · fix: …`
+# lines; {} when the spec has no such key (an older asset: no why lines).
 sub lint_texts {
     my $v = get('lint_texts');
     return {} unless ref $v eq 'HASH';
@@ -221,7 +221,7 @@ sub lint_texts {
     return \%out;
 }
 
-# acuity_re (T-TEXT E2, E6): the Acuity field of Resume here, group 1 the word; undef when absent.
+# acuity_re: the Acuity field of Resume here, group 1 the word; undef when absent.
 sub acuity_re { return regex('acuity_re') }
 
 # The Acuity words in rising order (stable < watch < unstable): the spec's acuity_words.
@@ -231,7 +231,7 @@ sub acuity_words {
     return @w ? \@w : [qw(stable watch unstable)];
 }
 
-# Section caps {name => chars} (T-TEXT E2 `section_caps`, keys are the heading literals).
+# Section caps {name => chars} (`section_caps`, keys are the heading literals).
 sub section_caps {
     my $v = load()->{section_caps};
     my %out;

@@ -1,6 +1,6 @@
 package skills::stamp;
 # lib/skills/stamp.pm: `stamp --stage DIR` prints a stamp, `YYYY-MM-DD HH:MM ±hhmm`
-# (RV-24: always date, time and zone), and appends it to stamps.log, the list of
+# (always date, time and zone), and appends it to stamps.log, the list of
 # times the publish lint accepts as printed by the helper.
 use strict;
 use warnings;

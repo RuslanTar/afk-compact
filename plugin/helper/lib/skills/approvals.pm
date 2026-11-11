@@ -1,7 +1,6 @@
 package skills::approvals;
 # lib/skills/approvals.pm: scoped approvals (spec §4 Approval (scoped), §8 approvals_checked,
-# §15 approval-shape / approval-quote / approval-unchecked; SPEC-DELTAS AP-4, AP-5). Owner:
-# WP-skills.
+# §15 approval-shape / approval-quote / approval-unchecked).
 #
 #   lint(\@lines, %a)          the publish checks; returns the ids whose quote passed
 #   handoff_lines(doc, ctx, sid) the `Approvals (checked)` lines of `measure <handoff>`, and the
@@ -10,35 +9,33 @@ package skills::approvals;
 #   classes(entry)             the outward class ids an approval's action names, and its gate
 #
 # Quotes are checked in memory against the writing session's human-typed user rows and the
-# user's answers in its AskUserQuestion dialogs (transcript::quotes_found; NR-14, owner
-# xxxxxxxx-23: only the chosen label, the typed Other text, a note or a free-text response, never
+# user's answers in its AskUserQuestion dialogs (transcript::quotes_found: only the chosen
+# label, the typed Other text, a note or a free-text response, never
 # the question, an option description or any other tool output); no quote, action or target text
 # is logged: rows carry counts and class ids only.
 #
-# Readings (REVIEW-NIGHT-2 §3; PROVISIONAL unless a ruling is named: owner decision open,
-# recommended reading built):
-#   O-3   decided (owner 2026-10-26 xxxxxxxx-09, "Quote src" Q-1 kept): code checks the quote
+# Readings (each settled as built):
+#   O-3   code checks the quote
 #         (this module at all);
 #   O-1   only the own chain carries: a foreign handoff's approvals are never listed as checked;
-#   O-12  decided (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"): approvals carry only
+#   O-12  forks re-ask: approvals carry only
 #         from this session and its `clear` / `handoff-resume` predecessors (%CARRY_REASON); a
 #         `fork` or `bg-copy` link, or any other, carries none, though such a predecessor stays own
 #         for running commands (locate, heal-check);
-#   O-2   decided (owner 2026-10-23 xxxxxxxx-28, "Named read carries"): an approval that names one
+#   O-2   a named read carries: an approval that names one
 #         production read and its targets carries like a fresh yes, also under
 #         `unattended_prod_reads: forbid`; a production write, or a production action that is not
 #         one command of the read grammar (an allow list), is the prod-write gate
 #         ($PROD_READ_CARRIES, _prod_read);
-#   claim root reading 2026-10-23 (fail closed; owner 21:47 "1. OK"): once a session claimed an
+#   claims (fail closed): once a session claimed an
 #         ended predecessor (`.sessions/successors/<sid>.json`), that predecessor's handoffs dated
 #         at or before the claim carry approvals only along the claimant's line, the ones dated
 #         after it only along the predecessor's own (_claim_cut), and the resumed predecessor's
 #         quote checks count only rows after the claim (quote_floor);
-#   gates from text (owner xxxxxxxx-10 "Push names", 2026-10-26, confirmed "Keep all four":
-#         all four kept as built, no longer provisional; NIGHT-REVIEW 3.4):
+#   gates from text (all four kept as built):
 #         P-1 $ACTION_WORDS reads a plain-words action ("push feat/x") into outward class ids, and
-#         a gate named in plain words counts beside a class pattern's hit (REVIEW-NIGHT-3 R3-02:
-#         "push feat/x and deploy" never carries a deploy);
+#         a gate named in plain words counts beside a class pattern's hit
+#         ("push feat/x and deploy" never carries a deploy);
 #         P-2 a push approval that names no branch is protected-push ($PUSH_UNNAMED_IS_GATE), as
 #         `risk` counts an unknown push destination: "yes, push it" is re-asked after a
 #         compaction; only a `branch <name>`, a `git push` refspec or a name right after "push"
@@ -50,22 +47,22 @@ package skills::approvals;
 #         P-4 a name after its remote prefix counts as that branch (`team/release` is `release`);
 #         the remote's default branch is protected, as in `risk` (spec §4 Explicit gate, §12
 #         protected-push; not a reading);
-#         owner xxxxxxxx-29: a branch in the user's add-only `protected_branches` setting is
+#         a branch in the user's add-only `protected_branches` setting is
 #         protected too (beside the shipped list, never instead of it);
-#   quotes (transcript::quotes_found): owner xxxxxxxx-09 "Quote src" (2026-10-26) kept all four
-#         rules as built, no longer provisional: Q-1 code checks the quote (O-3, this module at
+#   quotes (transcript::quotes_found): all four
+#         rules as built: Q-1 code checks the quote (O-3, this module at
 #         all), Q-2 a message holding an approval line was pasted and does not count, Q-3 rows of
-#         another session do not count, Q-4 whole words only (R3-04); owner xxxxxxxx-06 "Matching
-#         item": a quote under 4 words is the whole message, or one whole numbered line of it that
+#         another session do not count, Q-4 whole words only; matching
+#         item: a quote under 4 words is the whole message, or one whole numbered line of it that
 #         answers the one item of the closing list naming a target, or, when no numbered item of
 #         the assistant text names one, itself holds an outward verb of the action or a target
-#         (see transcript.pm "Matching item"); owner
-#         xxxxxxxx-12 "Count, log origin": SDK-origin rows count as the user's words, and the
+#         (see transcript.pm "Matching item"); count and log
+#         origin: SDK-origin rows count as the user's words, and the
 #         approvals_carry row counts the carried approvals by the origin of the row their quote
 #         was found in (`origins`, class words only; publish keeps each checked id's origin in
 #         its line-hash record so a handoff's carry can count it too).
 #
-# Line hashes (REVIEW-NIGHT-3 U3-01; root ruling 2026-10-23 11:56, a must-have before unattended
+# Line hashes (needed before unattended
 # use): publish records a SHA-256 of each checked `## Approvals` line, keyed by its id, in a
 # plugin-owned record of the private store (`.sessions/approvals/<sid>.<nonce>.json`, never in
 # the handoff file, never rewritten). Before any carry (`measure <handoff>`, which resume reads,
@@ -74,24 +71,24 @@ package skills::approvals;
 # target or id, a file with no record (published before the hashes) or a record without the id
 # makes the line context only (re-ask).
 #
-# Plugin handoff turns (0.1.2 D-8): a handoff the plugin asked for (a stage bound to a handoff
+# Plugin handoff turns (0.1.2): a handoff the plugin asked for (a stage bound to a handoff
 # turn, `handoff_ht`: reasons halt, precompact and idle) records every own approval as context
 # only, `U-n: approval "<words>" — action <what> · targets <…> ; context only, not valid here;
 # re-ask` (approval_context_re), and its Next step re-asks. The auto-mode classifier blocked the
 # Write of a usable approval in a handoff the user did not ask for (its carve-out for recording
-# at the user's request cannot apply), and passed this shape (probe B, V3 0/9 blocked; X-5: no
+# at the user's request cannot apply), and passed this shape (a probe: 0 of 9 blocked; no
 # denial note on a usable line). lint(context_only => 1) blocks any other own line
 # (`approval-plugin-turn`, also for a second line with one id or a new approval line outside the
-# section: review finding 4) and still checks the quote; publish then lists no id in
-# approvals_checked, records no line hashes and writes `requested_by: plugin` (AC-4), so nothing
+# section) and still checks the quote; publish then lists no id in
+# approvals_checked, records no line hashes and writes `requested_by: plugin`, so nothing
 # in the file can carry. The same context-only line is accepted in any stage (never checked,
 # never carried), and `measure` lists such lines as context only: `(plugin handoff)` in a file
 # marked requested_by: plugin, where no line carries at all, else `(written as context)`.
 #
-# The question (0.1.2 HL-2, X-2): after the words, `(answer to "<question>")` may keep the
+# The question (0.1.2): after the words, `(answer to "<question>")` may keep the
 # question a short answer replies to; the quote check reads the words only. Only a handoff the
-# user asked for may hold it (a plugin handoff turn writes the bare V3 shape). Denied actions
-# (AC-2, mitigation 1): see _denied below; a denial note sits only on a context-only line (X-5).
+# user asked for may hold it (a plugin handoff turn writes the bare context-only shape). Denied actions:
+# see _denied below; a denial note sits only on a context-only line.
 use strict;
 use warnings;
 use utf8;
@@ -104,24 +101,24 @@ use skills::store;
 use skills::gitfacts;
 
 our $HEADING = '## Approvals';
-# Lineage links approvals carry over (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"):
+# Lineage links approvals carry over (forks re-ask):
 # a fork's or bg copy's predecessor, and a link of any other or unknown kind, carries none.
 # SessionStart writes `clear` and `fork` links (sessions::write_lineage); `pin --resumed-from`
-# writes the `handoff-resume` link (skills::session_cmds::link_resume, review of bcdaca6) only
+# writes the `handoff-resume` link (skills::session_cmds::link_resume) only
 # for a fresh session with no link yet that resumes the newest handoff of an ended predecessor
 # with no carrying successor, after claiming that predecessor by exclusive create
 # (`.sessions/successors/<sid>.json`, claim_path), so one handoff never lends its `once`
 # approvals to two sessions.
 our %CARRY_REASON = map { $_ => 1 } qw(clear handoff-resume);
 our $SUCCESSORS_DIR = 'successors';           # under <handoff_root>/.sessions/
-# STATE-ROOT (0.1.2): while handoff_root is the default, the legacy root ~/.claude/handoffs is read too
+# Legacy root (0.1.2): while handoff_root is the default, the legacy root ~/.claude/handoffs is read too
 # (_read_roots). A claim or a hash record found in either root counts, so a predecessor claimed
 # before the upgrade is never claimed again and one handoff still lends its `once` approvals to
 # one session only; new claims and records go to the store root only.
-# Production (owner 2026-10-23 xxxxxxxx-28, "Named read carries. forbid setting is default rule,
-# but user explicit ask/approval always wins"): an approval whose action or targets match a
+# Production (a named read carries; the forbid setting is the default rule, but the user's
+# explicit ask or approval wins): an approval whose action or targets match a
 # production class is the prod-write gate (re-asked) unless it is one production read by an allow
-# list (re-review of the PR-28 build: a list of refused separators and write words let an action
+# list (a list of refused separators and write words let an action
 # with an unlisted separator, or none, read as a read):
 #   - its action, after one pair of quotes or backticks around the whole of it is dropped, is
 #     plain ASCII words of $PROD_READ_WORD_RE separated by spaces (no shell control, separator,
@@ -174,7 +171,7 @@ our $PROD_TARGET_WORDS = 4;
 our %PROD_CLAUSE_WORDS = map { $_ => 1 } qw(and then also plus or after afterwards before so to while if when unless until
     with via using by once xargs tee the a an it them this that);
 our $PROD_WRITE_WORDS = qr/\b(?:fix|change|edit|set|add|remove|enable|disable|rotate|trigger|kill|stop|start|roll[ -]?back|promote|purge|flush|clear|backfill|import|load|sync|send|run|execute|migrat\w*|release|upgrade|downgrade|install|uninstall|drain|cordon|evict|terminate|reboot|shutdown|resize|approve|close|archive|tag|label|annotate|scp|rsync)\b/i;
-# Owner xxxxxxxx-10 "Push names" (P-2 kept, confirmed "Keep all four"): a push approval that
+# Push names (P-2): a push approval that
 # names no branch is protected-push. Only these name a branch (_push_named): a `branch <name>`
 # target or phrase, a refspec of a `git push` command (either side of `src:dst`), or in plain
 # words a name right after "push" ($PUSH_FILLER words aside), each only when the name has a
@@ -194,7 +191,7 @@ our $TAG_NAME = qr/\A[vV]?[0-9]+(?:\.[0-9]+)*(?:[-+][0-9A-Za-z.-]+)?\z/;
 # A tag push in words or flags: `--tags`, `--follow-tags`, `refs/tags/`, or the word "tag" or
 # "tags" (not inside a name such as `fix/tag-parser`).
 our $PUSH_TAG = qr/--(?:follow-)?tags\b|\brefs\/tags\/|(?<![\w\/-])tags?(?![\w\/-])/i;
-# The origin class words the approvals_carry row counts (owner xxxxxxxx-12); anything else is
+# The origin class words the approvals_carry row counts; anything else is
 # `unknown` (a line carried from a record written before the origins were kept).
 our %ORIGIN_WORDS = map { $_ => 1 } qw(human composer bridge sdk none dialog unknown);
 our $ENTRY_MAX = 160;
@@ -210,8 +207,8 @@ our @ACTION_WORDS = (
     [ 'deploy', qr/\bdeploy|\broll[- ]?out\b/i ],
     [ 'env-write', qr/\bsecrets?\b|\benv(?:ironment)?[- ]var|\bconfig[- ]var/i ],
     # Any kubectl or helm action is infrastructure work, except an action that is exactly one
-    # read command of the read grammar (_tool_read in classes; owner xxxxxxxx-28, owner 2026-10-23
-    # 21:47 "1. OK": a READ subcommand is no infra-write gate in any environment).
+    # read command of the read grammar (_tool_read in classes: a READ subcommand is no
+    # infra-write gate in any environment).
     [ 'infra-write', qr/\bterraform|\btofu\b|\bpulumi|\bkubectl|\bhelm\b|\binfra(?:structure)?\b/i ],
     [ 'history-rewrite', qr/\brebase|\bamend|\bsquash|reset --hard/i ],
     [ 'recursive-delete', qr/\bdelete|\bwipe|\bdrop\b|\brm -r/i ],
@@ -225,7 +222,7 @@ my $STATE_WORDS = qr/·[ \t]*(?:once|standing)\b|\bnot yet used\b|\bused[ \t]+[0
 # Loose form for compaction summaries (the summary writes several on one line or a list).
 my $LOOSE_RE = qr/U-([0-9]+):?[ \t]+approval[ \t]+"([^"]+)"[ \t]+—[ \t]+action[ \t]+(.+?)[ \t]+·[ \t]+targets[ \t]+(.+?)[ \t]+·[ \t]+(once|standing(?:[ \t]*\([^)]*\))?)[ \t]+·[ \t]+(not yet used|used[ \t]+[0-9]{4}-[0-9]{2}-[0-9]{2}[ \t]+[0-9]{2}:[0-9]{2}(?:[ \t]+[+-][0-9]{4})?)/;
 
-# The spec knows the section (a spec older than AP-3 has no approvals: nothing is checked).
+# The spec knows the section (a spec older than the approvals section has none: nothing is checked).
 sub enabled {
     return 0 unless eval { skills::spec::need('approval_re'); 1 };
     my $ids = skills::spec::lint_ids();
@@ -268,10 +265,10 @@ sub context_enabled {
     return skills::spec::lint_ids()->{blocking}{'approval-plugin-turn'} ? 1 : 0;
 }
 
-# 1 when the spec has the denied-action rule (0.1.2 AC-2, mitigation 1).
+# 1 when the spec has the denied-action rule (0.1.2).
 sub denied_enabled { return context_enabled() && skills::spec::lint_ids()->{blocking}{'approval-denied'} ? 1 : 0 }
 
-# Denied actions (0.1.2 AC-2, mitigation 1, in the owner's 0.1.2 scope of 2026-10-30): in a
+# Denied actions (0.1.2): in a
 # handoff the user asked for, a usable approval whose action a call of this session (its subagents
 # and workflow agents included) was refused for (the classifier, a deny rule, a denied directory,
 # a built-in safety check, the permission mode or the user at the prompt, not a hook;
@@ -287,7 +284,7 @@ sub denied_enabled { return context_enabled() && skills::spec::lint_ids()->{bloc
 #   - the call names no such token and shares an outward class with the approval (a denied bare
 #     `git push` covers every push approval). A runner's words (`ssh prod-1`, `timeout 300`,
 #     `/bin/bash`; _deny_bash) are match-only tokens: they cover an approval they stand in, and
-#     never stop the class from covering (fail closed; review 6 finding 1).
+#     never stop the class from covering (fail closed).
 # Fail closed: a wrong match costs one re-ask in the next session.
 our %DENY_STOP = map { $_ => 1 } qw(mcp plugin claude server api app get set edit create update delete add remove write
     read list search find send post put patch fetch query run new the issue issues page pages comment comments
@@ -300,22 +297,22 @@ my $DENY_TOKEN_SPLIT = qr/[\s"'`=,;()\[\]{}<>|&\\]+/;
 # below), and quoted text holding a space (a commit message, a title) is masked; the rest splits
 # at `&&`, `||`, `;`, `|`, `&` and line ends, and tokens come only from the parts that are outward (an outward class or action word), and
 # from a quoted command a shell runs (`bash -c "git push origin feat/x"`, `ssh host "kubectl
-# delete pod web-1"`, `eval "…"`; review 3 finding 1) when it is outward on its own, read the
-# same way. A quoted message is never read (review 4 finding 1): when the command is outward only
+# delete pod web-1"`, `eval "…"`) when it is outward on its own, read the
+# same way. A quoted message is never read: when the command is outward only
 # inside such quotes it names no token and covers by class; when it is not outward at all, tokens
 # come from every part. A refused `git commit -m "$(cat <<EOF … EOF)" && git push` names no
 # token, so it covers a push approval by class.
-# The runner's own words count with the command it runs (review 5 finding 1): the part of a
+# The runner's own words count with the command it runs: the part of a
 # shell-run quote (`ssh prod-1 "kubectl delete pod web-1"` names `prod-1`, `docker exec api-3 sh
-# -c "…"` names `api-3`) and the runner of a heredoc a shell runs (review 5 finding 2: `bash
+# -c "…"` names `api-3`) and the runner of a heredoc a shell runs (`bash
 # <<EOF`, `ssh prod-1 <<EOF`, `cat <<EOF | bash`; its body is read as the command, the same way;
 # a heredoc fed to anything else, or to `bash -c …`, stays dropped). Those runner words, and the
 # words of an outward part before its outward command (`timeout 300 git push`, `env A=1 git
-# push`), are the runner text (review 6 finding 1): a shell path or a timeout value names nothing.
-# `bash -s arg… <<EOF` runs its heredoc too (review 6 finding 4).
-# A heredoc starts at a `<<` outside quoted text and outside shell arithmetic (`$((1<<4))`;
-# review 3 finding 3); quoted text may span lines, so a `<<` on a later line of a quoted message
-# starts none (review 5 finding 3).
+# push`), are the runner text: a shell path or a timeout value names nothing.
+# `bash -s arg… <<EOF` runs its heredoc too.
+# A heredoc starts at a `<<` outside quoted text and outside shell arithmetic (`$((1<<4))`);
+# quoted text may span lines, so a `<<` on a later line of a quoted message
+# starts none.
 my $DENY_HEREDOC_SCAN = qr/\G(?:
     ( \$?\(\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)\)
     | "(?:[^"\\]|\\.)*"
@@ -419,7 +416,7 @@ sub _deny_bash {
     }
     return (join(' ', @out), join(' ', @run_words)) if @out;
     # Outward only inside quotes no shell runs (a commit message, a title): no token, the class
-    # covers (fail closed; review 4 finding 1).
+    # covers (fail closed).
     return ('', '') if _deny_outward($whole);
     return (join(' ', @parts), '');
 }
@@ -473,17 +470,16 @@ sub _deny_tokens {
     for my $t (split $DENY_TOKEN_SPLIT, $text // '') {
         $t =~ s/[.:?]+\z//;
         next if length($t) < 3 || $t =~ /\A-/;
-        # `\@` stays escaped: a bare `@_` in a class interpolates the sub's arguments (review
-        # finding 1: `HASH(0x…)` made plain words distinctive, by memory address).
+        # `\@` stays escaped: a bare `@_` in a class interpolates the sub's arguments
+        # (`HASH(0x…)` made plain words distinctive, by memory address).
         next unless $t =~ /[A-Za-z0-9]{2}/ && $t =~ /[0-9\/.:#!\@_-]/;
         push @tok, $t;
-        # The file name of a path: copied out of $1 first, since the next match resets it
-        # (review finding 2).
+        # The file name of a path: copied out of $1 first, since the next match resets it.
         if ($t =~ m{/([^/]{3,})\z}) {
             my $base = $1;
             push @tok, $base if $base =~ /[0-9.:#!\@_-]/ && $base =~ /[A-Za-z0-9]{2}/;
         }
-        # The host of `user@host` (`ssh deploy@prod-1` names `prod-1`; review 5 finding 1).
+        # The host of `user@host` (`ssh deploy@prod-1` names `prod-1`).
         if ($t =~ /\A[^\@\/]+\@([^\@\/]{3,})\z/) {
             my $host = $1;
             push @tok, $host if $host =~ /[0-9.:_-]/ && $host =~ /[A-Za-z0-9]{2}/;
@@ -534,13 +530,13 @@ sub section_lines {
 
 # classes(entry [, cwd]) -> {outward => [class ids], gate => gate id | undef}
 # The outward ids are the class patterns' hits on the action and targets, else the plain
-# words' ($ACTION_WORDS). The gate is read from both (REVIEW-NIGHT-3 R3-02: "git push origin
+# words' ($ACTION_WORDS). The gate is read from both ("git push origin
 # feat/x and deploy" names a deploy although a class pattern matched the push). A push, or a
 # local merge (not a merge request), whose words name a protected branch is protected-push:
-# protected_branch_re, an entry of the user's protected_branches setting (owner xxxxxxxx-29,
+# protected_branch_re, an entry of the user's protected_branches setting (
 # add-only) or the remote default branch of origin or upstream in cwd, each side of a `src:dst`
-# refspec and a name after its remote prefix (`fork/main`) counted. Owner-ruled (xxxxxxxx-10
-# "Push names", all four kept; see the header): P-1 to P-4; what names a branch for P-2:
+# refspec and a name after its remote prefix (`fork/main`) counted. Settled as built
+# (see the header): P-1 to P-4; what names a branch for P-2:
 # _push_named.
 sub classes {
     my ($e, $cwd) = @_;
@@ -550,8 +546,8 @@ sub classes {
         push @ids, $c->{class} if $text =~ $c->{re} && !$seen{ $c->{class} }++;
     }
     for my $w (@ACTION_WORDS) { $word{ $w->[0] } = 1 if $e->{action} =~ $w->[1] }
-    # One kubectl or helm read command is no infrastructure work, in any environment (review of
-    # slice A: a whole-command parse, not a look at the word after the tool).
+    # One kubectl or helm read command is no infrastructure work, in any environment
+    # (a whole-command parse, not a look at the word after the tool).
     delete $word{'infra-write'} if $word{'infra-write'} && $e->{action} !~ $INFRA_OTHER_RE && _tool_read($e->{action});
     if (!@ids) {
         for my $w (@ACTION_WORDS) { push @ids, $w->[0] if $word{ $w->[0] } && !$seen{ $w->[0] }++ }
@@ -561,7 +557,7 @@ sub classes {
     $any{push} = 1 if $any{'force-push'};
     my %gates = map { $_ => 1 } @{ (eval { skills::spec::get(q(explicit_gate_classes)) }) || [] };
     my ($gate) = grep { $gates{$_} } @ids, (grep { $word{$_} } map { $_->[0] } @ACTION_WORDS);
-    # Production (owner xxxxxxxx-28): one named read carries; a write or an unclear action is the
+    # Production: one named read carries; a write or an unclear action is the
     # prod-write gate.
     my $prod;
     my $pp = skills::core::prod();
@@ -683,8 +679,8 @@ sub _ref_names {
     return $REF_NAMES{$cwd};
 }
 
-# 1 when an approval that names production is one production read by the allow list above
-# (owner xxxxxxxx-28; re-review of the PR-28 build): one command of the read grammar in plain
+# 1 when an approval that names production is one production read by the allow list above:
+# one command of the read grammar in plain
 # words, targets of the `<identity> @ <state>` form, and no outward class, plain outward word or
 # write word anywhere in its action or targets. Anything else is 0 (the prod-write gate).
 sub _prod_read {
@@ -817,11 +813,11 @@ sub _default_branches {
 #      quote_floor => [quote_floor(ctx, sid)], context_only => 1 | undef)
 #   -> {blocking => [[rule, where]…], advisory => [...], checked => [U-n…], lines => n,
 #       unchecked => n, context => n, classes => [outward ids of checked approvals],
-#       origins => {U-n => origin class word} for the checked ids (owner xxxxxxxx-12)}
-# context_only (a plugin handoff turn, 0.1.2 D-8): every own line must be the context-only form
+#       origins => {U-n => origin class word} for the checked ids}
+# context_only (a plugin handoff turn, 0.1.2): every own line must be the context-only form
 # (approval-plugin-turn otherwise); its quote is still checked (approval-quote), and no id is
 # returned as checked. Without it a context-only own line is accepted too, never checked, and a
-# usable line whose action this session was refused for is `approval-denied` (AC-2; the
+# usable line whose action this session was refused for is `approval-denied` (the
 # transcript's denied calls, transcript::denied_calls, read in memory only).
 sub lint {
     my ($lines, %a) = @_;
@@ -832,7 +828,7 @@ sub lint {
     my $cx_ok = context_enabled();
     my $cx_only = $a{context_only} && $cx_ok ? 1 : 0;
     # In a plugin handoff turn every shape fault is reported as approval-plugin-turn, whose fix
-    # names the context-only form (review finding 4: approval-shape's fix asks for once or
+    # names the context-only form (approval-shape's fix asks for once or
     # standing and a state, the opposite).
     my $shape = $cx_only ? 'approval-plugin-turn' : 'approval-shape';
     my $dn_ok = !$cx_only && denied_enabled();
@@ -850,32 +846,32 @@ sub lint {
         next unless $l =~ /\S/;
         $r{lines}++;
         if ($tagged) {
-            # In a plugin handoff turn this is approval-plugin-turn too (review finding 7).
+            # In a plugin handoff turn this is approval-plugin-turn too.
             push @{ $r{blocking} }, [ $shape, $where ] unless $l =~ $LINE_RE && $l =~ /"[^"]+"/ && index($l, $note) >= 0;
             next;
         }
         my $e;
         if ($cx_only) {
-            # A plugin handoff turn: only the context-only form of the probe (V3): a usable line,
+            # A plugin handoff turn: only the context-only form of the probe: a usable line,
             # one with a scope or state word, one without the note, and one with the question or
-            # a denial note are blocked (X-2: neither was probed on a plugin handoff).
+            # a denial note are blocked (neither was probed on a plugin handoff).
             $e = parse_context_line($l);
             if (!$e || $e->{question} || $e->{denied}) { push @{ $r{blocking} }, [ 'approval-plugin-turn', $where ]; next }
         } else {
             $e = parse_line($l) // ($cx_ok ? parse_context_line($l) : undef);
             # A denial note on a line that is no context line: the action was denied, so the
-            # line must be context only (X-5: never a denial note on a usable approval).
+            # line must be context only (never a denial note on a usable approval).
             if (!$e) { push @{ $r{blocking} }, [ ($dn_ok && $l =~ /\bdenied\b/i ? 'approval-denied' : 'approval-shape'), $where ]; next }
             # A usable line that parses with a denial note in its action, targets or after
-            # `given` (review finding 6; the user's words and the question are not read).
+            # `given` (the user's words and the question are not read).
             if ($dn_ok && !$e->{context}) {
                 my $at = index($l, " — action $e->{action} · targets ");
                 if ($at >= 0 && substr($l, $at) =~ /·\s*denied\b/i) { push @{ $r{blocking} }, [ 'approval-denied', $where ]; next }
             }
         }
-        # One line per id (REVIEW-NIGHT-3 R3-05): approvals_checked lists ids, so a second line
-        # with a checked line's id would ride on its check. In any handoff turn (0.1.3 APPROVALS,
-        # review round 2: a plugin turn; 0.1.4 A-7: a handoff the user asked for too) such a line
+        # One line per id: approvals_checked lists ids, so a second line
+        # with a checked line's id would ride on its check. In any handoff turn (0.1.3: a
+        # plugin turn; 0.1.4: a handoff the user asked for too) such a line
         # in the plain context-only form (no question, no denial note) waits for the quote check:
         # when the earlier line fails its quote (publish moves it), this one is the id's only line
         # and stays or moves on its own check; while the earlier line stays it refuses as before.
@@ -887,7 +883,7 @@ sub lint {
         }
         push @own, $e;
     }
-    # AC-2: a usable line whose action this session was refused for (see _denied).
+    # A usable line whose action this session was refused for (see _denied).
     if ($dn_ok && grep { !$_->{context} } @own) {
         my $calls = defined $a{transcript} && defined &transcript::denied_calls ? transcript::denied_calls($a{transcript}, $a{sid}) : undef;
         my @keys = map { _deny_keys($_) } @{ $calls || [] };
@@ -949,7 +945,7 @@ sub lint {
     return \%r;
 }
 
-# ---- moved approvals (0.1.3 APPROVALS)
+# ---- moved approvals (0.1.3)
 # On 0.1.2, 8 of 15 publish calls were refused, each by approval-quote or approval-plugin-turn;
 # the model went round between the two rules or deleted the whole section. Publish now moves such
 # a line out of `## Approvals` into `## Open questions` as a re-ask (the user's words kept as
@@ -963,18 +959,18 @@ our $OPEN_HEADING = '## Open questions';
 # code_sections(\@lines) -> {index => 1} for every line (its `## ` heading too) of a section, a
 # `## ` heading to the next (or the text before the first), that holds a line with a run of 3 or
 # more backticks or tildes anywhere in it, a blockquote or HTML line (`>`, or `<` and a letter,
-# `/`, `!` or `?`, first after any indent and list markers: review 9, a list marker in an HTML
+# `/`, `!` or `?`, first after any indent and list markers: a list marker in an HTML
 # block is raw text, so no item starts there) or a line indented 4 or more columns that is not a
 # list continuation (a list item nested less than 4 columns past its parent's text, or a line with
 # no blank line right above it indented less than 4 columns past the text of the list item it is
 # in; tabs to the next column of 4). A line where any of its leading list markers is followed by
-# more than 4 columns counts as code, whether or not that marker starts an item (review 10). No
+# more than 4 columns counts as code, whether or not that marker starts an item. No
 # item starts on a thematic break (`* * *`), a lone marker (an empty item, or a setext underline:
 # `-`) or an ordered marker other than `1.` or `1)` in an open paragraph (CommonMark lets none
 # interrupt one; micromark not `01.` either), so a line under them is measured from the item
-# around them (review 8: each made a 4-column code line pass as a list continuation). Where
-# unsure, the section counts. move_lines and skills::lint::fix rewrite nothing there (0.1.6, D-71:
-# six reviews of 0.1.5 E-3 each found a CommonMark shape that fence_lines misread, and a wrong
+# around them (each made a 4-column code line pass as a list continuation). Where
+# unsure, the section counts. move_lines and skills::lint::fix rewrite nothing there (0.1.6:
+# reviews of 0.1.5 each found a CommonMark shape that fence_lines misread, and a wrong
 # rewrite inside a code block is worse than a refusal, so no block is guessed at).
 sub code_sections {
     my ($lines) = @_;
@@ -993,7 +989,7 @@ sub code_sections {
         if ($l !~ /\S/) { ($blank, $pc) = (1, undef); next }
         if ($l =~ /`{3}|~{3}/ || $l =~ m{\A[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)*(?:>|<[A-Za-z/!?])}) { $bad = 1; next }
         # Any marker of the line's leading markers followed by more than 4 columns, whether or not
-        # it starts an item (review 10: a nested `- 1.      x`, or `2.      x` after a break, a
+        # it starts an item (a nested `- 1.      x`, or `2.      x` after a break, a
         # heading or a lazy line, was read past). A running column keeps a long line linear (0.1.7:
         # re-measuring the prefix took 2.5 s for a 10,001-character `- - … x`).
         my $at = 0;
@@ -1036,8 +1032,8 @@ our %MOVE_WHY = (
 # move_why(rule, line, reason) -> the plain-words reason a line failing `rule` cannot carry. In a
 # plugin handoff turn a line already in the plain context-only form fails only as a second line
 # with one id (lint, "One line per id"), so that is its reason. An approval-quote line whose words
-# are only in a row that does not count for another reason (lint's `why`: copy, claim, pasted;
-# review round 2) gets that reason, else the plain rule (a short quote's, or a longer one's).
+# are only in a row that does not count for another reason (lint's `why`: copy, claim, pasted)
+# gets that reason, else the plain rule (a short quote's, or a longer one's).
 sub move_why {
     my ($rule, $l, $why) = @_;
     if ($rule eq 'approval-plugin-turn') {
@@ -1062,11 +1058,11 @@ sub move_why {
 # that pastes it never counts as the user's words (transcript.pm, $PASTED). Q numbers: the next
 # free one above every Q-<n> in the body and the other texts (the base, the own file and the
 # stage's ledger.md: spec §4 keeps ids across a chain), in line order. A denied context line keeps
-# its denial note (AC-2: the next session sees the action was refused). A lone `none` there is
+# its denial note (the next session sees the action was refused). A lone `none` there is
 # replaced; the item goes before a `Queued:` line (queue.md: that line stays last) and after a
 # table with a blank line between. A section left with no line is dropped. Any other item is
 # kept (it still refuses); without an Open questions section nothing moves.
-# References (review round 2): elsewhere in the file (not in `## Approvals`, not on a tagged line
+# References: elsewhere in the file (not in `## Approvals`, not on a tagged line
 # or a re-ask item, not in a code_sections section) an exact `U-<k>` token of a moved id, outside
 # double quotes and backticks, not an end of an id range, not a file name (`U-7.txt`) and not the
 # second id of a word range (`U-6 to U-7`), now reads its `Q-<m>` (refs: the draft's line
@@ -1074,10 +1070,10 @@ sub move_why {
 # Approvals" pointer reads "see Open questions" on every line once `## Approvals` is dropped;
 # while the section keeps lines, only on a line where a moved id was rewritten, and "see Approvals
 # and Open questions" when that line also cites the id of a kept approval line (see and see_both,
-# on the last moved line's entry; 0.1.4 A-2, A-3). The fourth value maps each line this rewrite
+# on the last moved line's entry; 0.1.4). The fourth value maps each line this rewrite
 # changed to its draft text, so the re-lint keeps a carried line carried (lint `carried_as`); the
 # fifth maps each line of the new body to its draft line, so the re-lint's line numbers can be
-# printed as the draft's (publish, 0.1.4 A-1).
+# printed as the draft's (publish, 0.1.4).
 sub move_lines {
     my ($body, $items, $reasons, @other) = @_;
     my @lines = split /\n/, $body // '', -1;
@@ -1128,7 +1124,7 @@ sub move_lines {
     for my $i (grep { !$mv{$_} } 0 .. $#lines) {
         delete $to{$1} if $lines[$i] =~ /\A\s*(?:[-*+]\s+)?(U-[0-9]+):/;
     }
-    # The ids of the approval lines that stay in `## Approvals` (0.1.4 A-2: a pointer on a line
+    # The ids of the approval lines that stay in `## Approvals` (0.1.4: a pointer on a line
     # citing one of them and a moved id names both sections).
     my %kept_id;
     for my $i (grep { $in->{$_} && !$mv{$_} } 0 .. $#lines) { $kept_id{$1} = 1 if $lines[$i] =~ /\b(U-[0-9]+):\s*approval\b/ }
@@ -1136,7 +1132,7 @@ sub move_lines {
     my (@see, @see2, %was);
     my $codesec = code_sections(\@lines);
     for my $i (0 .. $#lines) {
-        # 0.1.4 A-3: a fenced code block is left alone, its fence lines too (0.1.6 D-71: its whole
+        # 0.1.4: a fenced code block is left alone, its fence lines too (0.1.6: its whole
         # section, and one with a quote, an HTML line or an indented code line).
         next if $codesec->{$i};
         next if $in->{$i} || $mv{$i} || ($tag_re && $lines[$i] =~ $tag_re) || $lines[$i] =~ /\(was U-[0-9]+; not carried:/;
@@ -1146,7 +1142,7 @@ sub move_lines {
         for my $k (@even) {
             my $orig = $seg[$k];
             # Not an end of an id range (`..`, en dash), nor a file name (`U-7.txt`), nor the
-            # second id of a word range (`U-6 to U-7`, 0.1.4 A-3).
+            # second id of a word range (`U-6 to U-7`, 0.1.4).
             $seg[$k] =~ s{(?<![\w-])(?<!\.\.)(?<!–)(U-[0-9]+)(?![\w-])(?!\.\.|–)(?!\.\w)}{
                 my ($id, $at) = ($1, $-[0]);
                 my $m = $to{$id};
@@ -1158,7 +1154,7 @@ sub move_lines {
             }ge;
         }
         # "see Approvals": once the section is dropped, every pointer reads "see Open questions";
-        # while it keeps lines, only a pointer on a line citing a moved id changes (0.1.4 A-2), to
+        # while it keeps lines, only a pointer on a line citing a moved id changes (0.1.4), to
         # "see Approvals and Open questions" when the line cites a kept approval's id too.
         my $both = !$drop && $kept;
         my $pt = 0;
@@ -1174,7 +1170,7 @@ sub move_lines {
     }
     $moved[-1]{see} = \@see if @see;
     $moved[-1]{see_both} = \@see2 if @see2;
-    # Each line's draft line number (0.1.4 A-1: the re-lint's line numbers are printed as the
+    # Each line's draft line number (0.1.4: the re-lint's line numbers are printed as the
     # draft's); an inserted item takes its moved approval's line, a blank line before it the first
     # item's.
     my @org = map { $_ + 1 } 0 .. $#lines;
@@ -1225,7 +1221,7 @@ sub move_lines {
 }
 
 # One quote check's ask: the quote, the targets and the action (the matching-item rule reads the
-# action's words; owner xxxxxxxx-06).
+# action's words).
 sub _ask { my ($e) = @_; return { quote => $e->{quote}, targets => $e->{targets}, action => $e->{action} } }
 
 # An origin class word of %ORIGIN_WORDS, else `unknown`.
@@ -1279,9 +1275,9 @@ sub checked_ids {
 }
 
 # An own-chain document for the carry check: {text, checked, origins}; undef unless the file is own for
-# this session by own_relation (REVIEW-NIGHT-3 R3-03: a fork's or bg-copy's base, an export, an
+# this session by own_relation (a fork's or bg-copy's base, an export, an
 # imported copy or a file outside the store lends no checked approvals to the new handoff).
-# Only checked ids whose line matches the publish record carry (U3-01).
+# Only checked ids whose line matches the publish record carry (line hashes).
 sub chain_doc {
     my ($path, $ctx, $sid) = @_;
     return undef unless defined $path && -f $path;
@@ -1292,7 +1288,7 @@ sub chain_doc {
     return { text => $d->{body} // '', checked => $good, origins => origins_of($ctx, $d) };
 }
 
-# ---- line hashes (U3-01)
+# ---- line hashes
 
 sub line_hash { my ($l) = @_; return skills::util::sha256_hex($l // '') }
 
@@ -1305,7 +1301,7 @@ sub hash_path {
     return "$ctx->{root}/.sessions/$HASH_DIR/$sid.$n.json";
 }
 
-# _read_roots(ctx) -> the store root, then the legacy root (STATE-ROOT). A context without a `legacy`
+# _read_roots(ctx) -> the store root, then the legacy root. A context without a `legacy`
 # key (built from the run context's root, summary_lines) takes the run context's legacy root
 # when its root is the run context's.
 sub _read_roots {
@@ -1347,7 +1343,7 @@ sub _section_entries {
 # record_hashes(ctx, doc, \@ids [, {U-n => origin word}]) -> (n hashed, undef) | (0, why):
 # publish, after the handoff is placed and read back. Exclusive create: an existing record is
 # never rewritten (the same record again, from a retry, is fine). The record also keeps each
-# hashed id's origin class word (`origins`, owner xxxxxxxx-12: no text), so a later carry of
+# hashed id's origin class word (`origins`, no text), so a later carry of
 # the handoff can count it in its approvals_carry row.
 sub record_hashes {
     my ($ctx, $d, $ids, $origins) = @_;
@@ -1378,7 +1374,7 @@ sub record_hashes {
 sub _record_of {
     my ($ctx, $d) = @_;
     my $p = hash_path($ctx, $d->{fm}) or return undef;
-    # STATE-ROOT: the record of a handoff published before the upgrade is in the legacy root
+    # the record of a handoff published before the upgrade is in the legacy root
     (my $rel = $p) =~ s{\A\Q$ctx->{root}\E/\.sessions/}{};
     $p = _found($ctx, $rel);
     return undef unless -f $p && !-l $p;
@@ -1389,7 +1385,7 @@ sub _record_of {
 }
 
 # The origins a handoff's record keeps: {U-n => origin word} ({} for a record without them, or
-# no record; owner xxxxxxxx-12).
+# no record).
 sub origins_of {
     my ($ctx, $d) = @_;
     my $r = _record_of($ctx, $d) or return {};
@@ -1454,9 +1450,9 @@ sub _entry {
 }
 
 # The own relation of a handoff to this session for approval carry (spec §4 Approval (scoped);
-# O-1; owner xxxxxxxx-27 revised): (1, '') when it is own, else (0, why). Own: a handoff in the
-# private store (handoff_root; REVIEW-NIGHT-3 R3-03), not an export or an imported copy,
-# integrity ok (a marker under the former name counts for an own-chain file, owner xxxxxxxx-26),
+# O-1, forks re-ask): (1, '') when it is own, else (0, why). Own: a handoff in the
+# private store (handoff_root), not an export or an imported copy,
+# integrity ok (a marker under the former name counts for an own-chain file),
 # written by this session or by a lineage predecessor reached through `clear` and
 # `handoff-resume` links only (a link of any other kind cuts off every session before it too),
 # and not cut by a successor's claim on a session of this line (_claim_cut: `claimed by a
@@ -1470,7 +1466,7 @@ sub own_relation {
     return (0, 'outside the store') unless _in_store($d->{path}, $ctx);
     my $hs = $fm->{session_id} // '';
     my $chain = defined $sid ? skills::ctx::chain($ctx, $sid) : [];
-    # Owner xxxxxxxx-26 (read-only alias): a file of this session or a lineage predecessor, in the
+    # Read-only alias: a file of this session or a lineage predecessor, in the
     # store, may carry its marker under the plugin's former name.
     my $own_chain = $hs ne '' && defined $sid && ($hs eq $sid || grep { $_->{sid} eq $hs } @$chain) ? 1 : 0;
     my $int = skills::store::integrity($d, alias => $own_chain)->{integrity} // '';
@@ -1498,7 +1494,7 @@ sub own_relation {
 sub claim_path { my ($ctx, $s) = @_; return "$ctx->{root}/.sessions/$SUCCESSORS_DIR/$s.json" }
 
 # claim_found(ctx, sid) -> the path of sid's claim in the first read root that holds one, or undef
-# (STATE-ROOT: the legacy root's claims count).
+# (the legacy root's claims count).
 sub claim_found {
     my ($ctx, $s) = @_;
     return undef unless $ctx && defined $ctx->{root} && skills::ctx::valid_sid($s);
@@ -1511,7 +1507,7 @@ sub claim_found {
 sub successor_claim {
     my ($ctx, $s) = @_;
     return undef unless $ctx && defined $ctx->{root} && skills::ctx::valid_sid($s);
-    # STATE-ROOT: a claim in either read root counts (the store root's first)
+    # a claim in either read root counts (the store root's first)
     my $p = _found($ctx, "$SUCCESSORS_DIR/$s.json");
     return undef unless -e $p || -l $p;
     my $c = eval { skills::util::json_decode(skills::util::read_file($p, 65536)) };
@@ -1521,8 +1517,7 @@ sub successor_claim {
     return { session_id => $cs, epoch => $e };
 }
 
-# Root reading 2026-10-23 (fail closed; owner 2026-10-23 21:47 "1. OK"; review of the HR-1 build
-# and of slice A): a claim by session S on the ended session P (claim_path) splits P's line at the
+# Claims (fail closed): a claim by session S on the ended session P (claim_path) splits P's line at the
 # claim's time, so a `once` approval is never used by both lines. Every session on the reader's
 # line, from the reader up to the writer, is checked (\@line), so a handoff of P's own `/clear`
 # predecessor is split the same way:
@@ -1547,7 +1542,7 @@ sub _claim_cut {
 # quote_floor(ctx, sid) -> (1, undef) | (1, epoch) | (0): the time from which this session's
 # typed rows and dialog answers count for a quote check. A session that another one claimed
 # (claim_path) and that was resumed later counts only rows after the claim: its pre-claim
-# approvals are context only (root reading 2026-10-23, owner 21:47 "1. OK"), as a fork's copied
+# approvals are context only (fail closed), as a fork's copied
 # rows are. (0), the quote unchecked: no store, or a claim that does not read.
 sub quote_floor {
     my ($ctx, $sid) = @_;
@@ -1558,7 +1553,7 @@ sub quote_floor {
 }
 
 # 1 when the file's real path lies under a read root (handoff_root, or the legacy root, which is
-# the own store too, STATE-ROOT), component by component.
+# the own store too), component by component.
 sub _in_store {
     my ($path, $ctx) = @_;
     return 0 unless defined $path && $ctx && defined $ctx->{root};
@@ -1573,7 +1568,7 @@ sub _in_store {
     return 0;
 }
 
-# handoff_lines(doc, ctx, sid) -> (lines, row): `measure <handoff>` (AP-5).
+# handoff_lines(doc, ctx, sid) -> (lines, row): `measure <handoff>`.
 sub handoff_lines {
     my ($d, $ctx, $sid) = @_;
     return ([], undef) unless enabled();
@@ -1582,8 +1577,8 @@ sub handoff_lines {
     my $tag_re = skills::spec::regex_at('carry.tag_re');
     my @own_idx = grep { !($tag_re && $lines[$_] =~ $tag_re) } sort { $a <=> $b } keys %$in;
     my @e = grep { defined } map { parse_line($lines[$_]) } @own_idx;
-    # Context-only own lines (a plugin handoff turn, 0.1.2 D-8): never checked, listed as such.
-    # A file publish wrote in a plugin handoff turn (frontmatter `requested_by: plugin`, AC-4)
+    # Context-only own lines (a plugin handoff turn, 0.1.2): never checked, listed as such.
+    # A file publish wrote in a plugin handoff turn (frontmatter `requested_by: plugin`)
     # names that reason, and none of its lines carries, whatever its approvals_checked says.
     my %cx;
     if (context_enabled()) {
@@ -1597,9 +1592,9 @@ sub handoff_lines {
         return ([ 'Approvals (checked): none (' . $why . ': context only)' ], { source => 'handoff', checked => 0, gate => 0, classes => [] }) if @e || %cx;
         return ([ 'Approvals (checked): none' ], { source => 'handoff', checked => 0, gate => 0, classes => [] });
     }
-    # U3-01: a checked id carries only when its line matches the hash publish recorded.
+    # a checked id carries only when its line matches the hash publish recorded.
     my ($ok, $unver) = verify_checked($ctx, $d, checked_ids($d->{fm}{approvals_checked}));
-    # An id on two lines is no one's check (R3-05; publish refuses it, an edited file may not).
+    # An id on two lines is no one's check (publish refuses it, an edited file may not).
     my %n;
     $n{ $_->{id} }++ for @e;
     my $org = origins_of($ctx, $d);
@@ -1616,7 +1611,7 @@ sub handoff_lines {
     return ($out, $row);
 }
 
-# summary_lines(copy text, transcript path [, cwd, sid]) -> (lines, row): `measure --compact --copy` (AP-5).
+# summary_lines(copy text, transcript path [, cwd, sid]) -> (lines, row): `measure --compact --copy`.
 sub summary_lines {
     my ($text, $transcript, $cwd, $sid) = @_;
     return ([], undef) unless enabled();
@@ -1661,7 +1656,7 @@ sub _report {
     my @out = ('Approvals (checked): ' . (@carry ? join('; ', map { _entry($_) } @carry) : 'none'));
     push @out, 'Approvals (gate, re-ask): ' . join('; ', map { _entry($_) } @gate) if @gate;
     push @out, 'Approvals (unchecked): ' . join(', ', map { $_->{id} } @$no) if @$no;
-    # Owner xxxxxxxx-12 "Count, log origin": the carried approvals by the origin of the row their
+    # The carried approvals by the origin of the row their
     # quote was found in (class words only, never text).
     return (\@out, { source => $source, checked => scalar(@carry), gate => scalar(@gate), unchecked => scalar(@$no),
                      classes => [ sort keys %cls ], (@carry ? (origins => _origin_counts(\@carry)) : ()) });

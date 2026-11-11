@@ -1,6 +1,6 @@
 package skills::session_cmds;
 # lib/skills/session_cmds.pm: `lane adopt`, `pin` and `receipt` (resume R4,
-# R9; TPL §6; D-21 `lane:` ids only; OD-21 queue only when configured).
+# R9; `lane:` ids only; queue only when configured).
 use strict;
 use warnings;
 use utf8;
@@ -15,7 +15,7 @@ use skills::gitfacts;
 my $ADOPT_RE = qr/\Alane:[A-Za-z0-9._\/-]+\z/;
 my $LANE_RE  = qr/(?:lane|auto):[A-Za-z0-9._\/-]+/;
 
-# Q-ADAPTER QA-2: adopt refusals by exit code (the reason line is read from stdout).
+# adopt refusals by exit code (the reason line is read from stdout).
 my %ADOPT_EXIT = (3 => 'held', 4 => 'no-lane', 6 => 'error', 2 => 'unsupported');
 
 # lane adopt --lane ID [--if-free] → `lane: <id>`, a refusal, or `queue: off`. Passes
@@ -78,7 +78,7 @@ sub pin {
     die skills::cli::refuse($rr) if $rr;
     my $p = skills::util::abs_path($o->{'resumed-from'});
     die skills::cli::refuse('not-found') unless defined $p && -f $p;
-    # STATE-ROOT: a handoff in the legacy root can be resumed too; the pin names its bucket under the
+    # a handoff in the legacy root can be resumed too; the pin names its bucket under the
     # store root, where the session's next writes go.
     my $root = skills::util::abs_path($ctx->{root}) // $ctx->{root};
     my ($from) = grep { index($p, "$_/") == 0 } map { skills::util::abs_path($_) // $_ } skills::ctx::read_roots($ctx);
@@ -102,7 +102,7 @@ sub pin {
     });
     die skills::cli::refuse('pin-locked') unless $ok;
     skills::cli::say("pinned $rel");
-    # The handoff-resume link (review of bcdaca6): resuming an ended predecessor's newest handoff
+    # The handoff-resume link: resuming an ended predecessor's newest handoff
     # makes this session its successor, so its file is own from here on (resume Rule 2) and its
     # checked approvals carry (spec §4 Approval (scoped)). The relation and the approvals that now
     # carry are printed; they replace what locate and measure printed before the pin.
@@ -128,10 +128,10 @@ our $FM_READ_MAX = 4096;
 
 # link_resume(ctx, id, handoff path) -> ('linked') | ('none', why) | ('same') | ('chain'):
 # write `.sessions/<sid>.lineage.json` {previous_session_id: the handoff's session,
-# lineage_reason: handoff-resume} (review of bcdaca6; spec §4 Approval (scoped) names the link,
-# nothing wrote it). Fail closed: the link is written only when all hold, else ('none', why):
+# lineage_reason: handoff-resume} (spec §4 Approval (scoped) names the link,
+# nothing else wrote it). Fail closed: the link is written only when all hold, else ('none', why):
 #   - the file is a `kind: handoff` this plugin wrote in the private store, integrity ok (a marker
-#     under the former name counts, owner xxxxxxxx-26), not an export or an imported copy, written
+#     under the former name counts), not an export or an imported copy, written
 #     by another session P;
 #   - this session has a per-process record, every one started as startup or resume (a fork, a
 #     background copy, a /clear successor or a session with no record is never linked), its
@@ -141,8 +141,8 @@ our $FM_READ_MAX = 4096;
 #   - the file is P's newest handoff in the store (an older one may hold approvals P used later).
 #     This compares handoff dates only: a `once` approval P used after writing that handoff (P
 #     kept working, or compacted, before it ended) still reads `not yet used`, and only resume's
-#     effect-absent check (Rule 3) guards it, as for a /clear successor (residual, SPEC-DELTAS
-#     HR-1);
+#     effect-absent check (Rule 3) guards it, as for a /clear successor (a known
+#     residual);
 #   - P is claimed for this session by exclusive create of `.sessions/successors/<P>.json`, so a
 #     second session that resumes P's handoff gets no link (a `once` approval is never lent to two
 #     sessions).
@@ -182,7 +182,7 @@ sub link_resume {
     my $claim = skills::approvals::claim_path($ctx, $ps);
     (my $sdir = $claim) =~ s{/[^/]+\z}{};
     my $json = skills::util::json_encode({ session_id => $sid, lineage_reason => 'handoff-resume', ts => skills::util::iso_local() }) . "\n";
-    # STATE-ROOT: a claim in the legacy root (made before the upgrade) holds as one in the store root; it
+    # a claim in the legacy root (made before the upgrade) holds as one in the store root; it
     # is read, never written, and a new claim goes to the store root only.
     my $prior = skills::approvals::claim_found($ctx, $ps);
     my $made = defined $prior && $prior ne $claim ? 0
@@ -207,7 +207,7 @@ sub _newest_of {
     my $mine = skills::util::abs_path($d->{path}) // $d->{path};
     my $t = $d->{epoch};
     return 0 unless defined $t;
-    for my $rr (@{ skills::store::read_repos($ctx) }) {    # STATE-ROOT: both read roots
+    for my $rr (@{ skills::store::read_repos($ctx) }) {    # both read roots
         for my $b (@{ skills::store::buckets(@$rr) }) {
             for my $f (skills::util::list_dir($b)) {
                 next unless $f =~ /\.md\z/ && -f "$b/$f";
@@ -242,11 +242,11 @@ sub receipt {
     for my $k (qw(calls questions)) {
         die skills::cli::usage("--$k N") unless defined $o->{$k} && $o->{$k} =~ /\A\d{1,4}\z/;
     }
-    # T-TEXT E7: handoff commands shown and asked under Rule 2 (optional; absent = not counted)
+    # Handoff commands shown and asked under Rule 2 (optional; absent = not counted)
     die skills::cli::usage('--cmds-asked N') if defined $o->{'cmds-asked'} && $o->{'cmds-asked'} !~ /\A\d{1,4}\z/;
-    # SR-8 (owner xxxxxxxx-15 + 03:42): handoff commands run without asking (optional, as --cmds-asked)
+    # handoff commands run without asking (optional, as --cmds-asked)
     die skills::cli::usage('--cmds-run N') if defined $o->{'cmds-run'} && $o->{'cmds-run'} !~ /\A\d{1,4}\z/;
-    # SR-8 / AP-6 (D-2 replaced by scoped carry, owner 2026-10-23 01:5x): approvals carried, used and
+    # scoped carry: approvals carried, used and
     # asked again, as counts only. Absent = not counted (null fields).
     my %ap;
     if (defined $o->{approvals} && $o->{approvals} !~ /\A(?:none|-)?\z/) {
