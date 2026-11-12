@@ -1,6 +1,6 @@
 {
  "id": "CACHE-11-keep-warm-off-pending",
- "note": "0.1.11: the cache output says what keep-warm did in the current idle gap. A gap keep-warm refused before its first ping (one keep_warm_stop row, pings 0, refused true; an older plugin's no-idle-path row with no start row counts too) reads keep_warm.off = its reason and `· keep-warm off (<why>)` on the line, until a main request after it. A keep_warm_send row (a ping going out) reads keep_warm.pending true and `· ping pending` until its keep_warm_ping or keep_warm_stop row. A late ping is last_result late. Right after a compaction the context is nearly empty, so the line reads `cache compacted` and the new `label` key reads compacted; `state` stays cold and `why` compacted (v1 stays additive). With no main request time to bound it (caching off, no transcript), keep_warm.off lasts at most an hour after its row. A ping out for over 150 s with no result row (its process died) is no longer pending. A refused gap that a turn with no main request opened keeps the earlier gap's last warm ping and last fork-miss, until a main request: a fork-miss still reads cold, a warm ping still warm.",
+ "note": "0.1.11: the cache output says what keep-warm did in the current idle gap. A gap keep-warm refused before its first ping (one keep_warm_stop row, pings 0, refused true; an older plugin's no-idle-path row with no start row counts too) reads keep_warm.off = its reason and `· keep-warm off (<why>)` on the line, until a main request after it; no-jobs (no background job, the normal idle case) stays off the line and shows only in the JSON, the log row and /status. A keep_warm_send row (a ping going out) reads keep_warm.pending true and `· ping pending` until its keep_warm_ping or keep_warm_stop row. A late ping is last_result late. Right after a compaction the context is nearly empty, so the line reads `cache compacted` and the new `label` key reads compacted; `state` stays cold and `why` compacted (v1 stays additive). With no main request time to bound it (caching off, no transcript), keep_warm.off lasts at most an hour after its row. A ping out for over 150 s with no result row (its process died) is no longer pending. A refused gap that a turn with no main request opened keeps the earlier gap's last warm ping and last fork-miss, until a main request: a fork-miss still reads cold, a warm ping still warm.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
@@ -47,7 +47,7 @@
    }
   },
   {
-   "name": "line: keep-warm off (no-jobs) after the warm reading",
+   "name": "line: no-jobs is the normal idle case, not a refusal to notice: the line leaves it out (the JSON and /status keep it)",
    "argv": [
     "cache",
     "--stdin"
@@ -61,7 +61,7 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "cache 1h warm 25m left · keep-warm off (no-jobs)\n"
+    "stdout": "cache 1h warm 25m left\n"
    }
   },
   {

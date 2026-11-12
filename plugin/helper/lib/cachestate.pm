@@ -536,7 +536,9 @@ sub _span {
 # line(report) -> the one plain line (no newline), or '' when the state is unknown:
 # `cache 1h warm 42m left ↻3/7`, `cache 1h cold (expired 12m ago)`, `cache compacted`; then
 # (0.1.11) ` · ping pending` while a keep-warm ping is out and ` · keep-warm off (<why>)` when
-# keep-warm refused the current idle gap.
+# keep-warm refused the current idle gap, for every reason but no-jobs: no background job is the
+# normal idle case, not a refusal to notice (the JSON's keep_warm.off, the log row and /status
+# still name it).
 sub line {
     my ($r) = @_;
     return '' if $r->{state} eq 'unknown';
@@ -545,7 +547,7 @@ sub line {
     my $ping = $kw && $kw->{active} ? ' ↻' . $kw->{n} . (defined $kw->{max} ? "/$kw->{max}" : '') : '';
     my @x;
     push @x, 'ping pending' if $kw && $kw->{pending};
-    push @x, "keep-warm off ($kw->{off})" if $kw && defined $kw->{off} && !ref $kw->{off};
+    push @x, "keep-warm off ($kw->{off})" if $kw && defined $kw->{off} && !ref $kw->{off} && $kw->{off} ne 'no-jobs';
     my $tail = join('', map { " · $_" } @x);
     return "cache$t warm " . int(($r->{seconds_left} + 59) / 60) . "m left$ping$tail" if $r->{state} eq 'warm';
     return "cache$t cold (expired " . _span($r->{now} - $r->{expires_at}) . " ago)$tail" if $r->{why} eq 'expired';
