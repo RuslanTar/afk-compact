@@ -1,6 +1,6 @@
 {
  "id": "RF-10 (watch report picks its file name by exclusive create)",
- "note": "`watch report` with no --out writes <watch>/reports/<date>_watch-report.md, else the next free -2, -3 ... name. It picked the name by a check, then wrote: two runs on the same date could pick one name, and the second read the clash as `REFUSED: output folder not writable` (exit 73). The name is now taken by an exclusive create and a clash moves on to the next number: 12 runs at once each write their own file, and a name taken by a dangling link (which a check reads as free) is skipped, never written through or replaced.",
+ "note": "`watch report` with no --out writes <watch>/reports/<date>_watch-report.md, else the next free -2, -3 ... name. It picked the name by a check, then wrote: two runs on the same date could pick one name, and the second read the clash as `REFUSED: output folder not writable` (exit 73). The name is now taken by an exclusive create and a clash moves on to the next number: 12 runs at once each write their own file, and a name taken by a dangling link (which a check reads as free) is skipped, never written through or replaced. A file that is already there where --out points (watch report), or a report zip whose name is taken (two runs in one second), is no folder problem: it prints `REFUSED: output file exists`, still exit 73, and the file is left as it was.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {"STORE_TEST_NO_GIT": "1"},
@@ -18,6 +18,26 @@
    "parallel": 12,
    "argv": ["watch", "report"],
    "expect": {"exit": 0, "stdout_has": ["\\AWATCH-REPORT \\S+/reports/2026-10-21_watch-report-([4-9]|1[0-5])\\.md\\n\\z"],
-     "files": [{"path": "$WATCH/reports/2026-10-21_watch-report*.md", "count": 14}]}}
+     "files": [{"path": "$WATCH/reports/2026-10-21_watch-report*.md", "count": 14}]}},
+  {"name": "watch report --out at a file that exists: output file exists, the file kept",
+   "setup": [{"write": "$TMP/mine.md", "content": "mine\n"}],
+   "argv": ["watch", "report", "--out", "$TMP/mine.md"],
+   "expect": {"exit": 73, "stdout": "REFUSED: output file exists\n",
+     "files": [{"path": "$TMP/mine.md", "has": ["\\Amine\\n\\z"]}]}},
+  {"name": "watch report --out at a dangling link: output file exists, nothing written through it",
+   "setup": [{"symlink": "$TMP/link.md", "to": "$TMP/gone/x.md"}],
+   "argv": ["watch", "report", "--out", "$TMP/link.md"],
+   "expect": {"exit": 73, "stdout": "REFUSED: output file exists\n", "absent": ["$TMP/gone"]}},
+  {"name": "a first report zip into a folder",
+   "setup": [{"mkdir": "$TMP/out"}],
+   "argv": ["report", "--out", "$TMP/out"],
+   "expect": {"exit": 0, "stdout_has": ["\\AREPORT \\S+/out/\\S+-report-2026-10-21_14-05-12-[0-9a-f]{8}\\.zip "]}},
+  {"name": "a second one in the same second: the zip name clashes, output file exists",
+   "argv": ["report", "--out", "$TMP/out"],
+   "expect": {"exit": 73, "stdout": "REFUSED: output file exists\n",
+     "files": [{"path": "$TMP/out/*.zip", "count": 1}]}},
+  {"name": "--out at a folder that is missing: still output folder not writable",
+   "argv": ["report", "--out", "$TMP/none"],
+   "expect": {"exit": 73, "stdout": "REFUSED: output folder not writable\n"}}
  ]
 }

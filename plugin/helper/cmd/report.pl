@@ -9,7 +9,9 @@
 #   report verify --zip FILE
 # Exit: 0 written (also when files were withheld) or verified, 1 verify found a problem,
 # 3 REFUSED (not --dry-run, and the watch dir or handoff root is refused),
-# 64 usage, 70 internal error, 73 output folder not writable. No network, no deletion.
+# 64 usage, 70 internal error, 73 not written: `REFUSED: output folder not writable` (the --out
+# folder is missing or not writable, or the fallback folder cannot be made) or `REFUSED: output
+# file exists` (a file or link already has the zip's name). No network, no deletion.
 use strict;
 use warnings;
 use utf8;

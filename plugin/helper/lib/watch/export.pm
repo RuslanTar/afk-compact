@@ -1309,8 +1309,10 @@ sub _file_kind {
 # could pick one name. The data then goes to a temp file beside it, renamed over the claimed
 # name, so a reader never sees part of the data; until the rename it sees an empty file there,
 # and a run killed between the claim and the rename leaves that empty file. With clash => 1 a
-# name that is taken gives -1 and prints nothing, so the caller can pick the next one. On failure only this run's own files (the
-# claimed name and the temp file, at their exact paths) are removed.
+# name that is taken gives -1 and prints nothing, so the caller can pick the next one; without it
+# a taken name prints `REFUSED: output file exists` (the folder is fine, a file or link is already
+# there), any other failure `REFUSED: output folder not writable`. On failure only this run's own
+# files (the claimed name and the temp file, at their exact paths) are removed.
 sub _write_new {
     my ($path, $data, %o) = @_;
     my $old = umask 077;
@@ -1318,6 +1320,7 @@ sub _write_new {
     my $taken = !$claimed && $!{EEXIST};
     umask $old;
     return -1 if $taken && $o{clash};
+    if ($taken) { print "REFUSED: output file exists\n"; return 0 }
     unless ($claimed) { print "REFUSED: output folder not writable\n"; return 0 }
     close $ch;
     my $tmp = sprintf('%s.tmp-%d', $path, $$);
