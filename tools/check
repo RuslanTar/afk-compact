@@ -1,25 +1,25 @@
 #!/usr/bin/python3
-"""tools/check: run one phase's exit checks (BUILD-PLAN §4) in order; stop at the first failure.
+"""tools/check: run one phase's exit checks in order; stop at the first failure.
 
 Usage: tools/check PHASE [--names FILE] [--no-drill]
   PHASE    phase0       X-validate (Claude Code's `claude plugin validate plugin --strict`, which
                         compiles the hooks module under the installed Claude Code's module
                         rules, then the skeleton), X-test, X-types, X-gen, X-launcher,
                         X-assemble, X-gates, X-name, X-tools, BT-02 rename drill
-           integration  the same with every skill required, plus X-variants (the E-1 H11 builds
+           integration  the same with every skill required, plus X-variants (the lab variant builds
                         skills-only and triggers-off, each validated) and X-H (every helper case:
                         tests/helper/run.* over tests/helper/cases, then the WP-watch driver;
                         only the KNOWN_RED cases may fail, each for its stated reason); its
                         X-launcher also runs the launcher cases on Linux in Docker
            selftest     X-tools alone
            xgen         X-gen alone (used by the X-tools probe of the canary baseline)
-  --names  the competitor-name list (E-7); default $GATE_NAMES_FILE. Missing = X-gates fails.
+  --names  the competitor-name list; default $GATE_NAMES_FILE. Missing = X-gates fails.
   --no-drill  skip X-tools and BT-02 (used for the drill's own run inside its renamed copy)
 
 Time: integration runs every helper case twice (X-H here, and again in the BT-02 copy, whose own
 `tools/check integration --no-drill` repeats every check), plus the X-tools probes. Give a full
-run a wall-clock cap of at least 3,600 s, raised from the 1,700 s used before: on 2026-10-28, at
-a load average of about 150 to 275 on 14 cores, the helper cases alone took 1,191 s and a full run
+run a wall-clock cap of at least 3,600 s, raised from the 1,700 s used before: in one measured
+run at a load average of about 150 to 275 on 14 cores, the helper cases alone took 1,191 s and a full run
 1,483 s, and an earlier run on that branch was cut at 1,700 s in its BT-02 pass. AT-CK-09 (case
 AT-CK-02-03-05-06-08-09-12) is load-sensitive: under such load the evidence sweep's time budget
 (sweep.pm) can run out before its last file, which is then listed referenced-budget instead of
@@ -31,11 +31,11 @@ tools/canary-baseline --check (pinned to the Claude Code binary the baseline rec
 update does not make it flaky; when that binary is gone, every part but the C8 counts is
 compared with a render from the newest binary) and tools/assemble --check (goldens, the
 goldens index goldens.gen.ts and its data modules goldens.<asset>[.<n>].gen.ts, stray
-_gen/goldens*.gen.ts files), each byte for byte (BH-4, BH-5).
+_gen/goldens*.gen.ts files), each byte for byte.
 
-X-launcher (SESSION-RESTART §3.3, §7.1): tools/launcher-flags (the restart launcher's flag
-table against `claude --help` of the newest installed Claude Code), tools/respawn-keepset (B9:
-the background restart's keep-set in restart.pm against the respawnFlags sanitizer of every
+X-launcher: tools/launcher-flags (the restart launcher's flag
+table against `claude --help` of the newest installed Claude Code), tools/respawn-keepset (the
+background restart's keep-set in restart.pm against the respawnFlags sanitizer of every
 installed Claude Code, read from the binary, never run), then tests/launcher/run.sh
 (its cases with a stub claude under every installed POSIX shell); integration adds
 tests/launcher/docker.sh (the same cases on Linux: debian:bookworm-slim with dash as /bin/sh
@@ -49,43 +49,43 @@ in GEN files (tools/build, helper-replies-gen, canary-baseline, assemble), stray
 only GEN tools write (a stray _gen/goldens*.gen.ts, which tools/build accepts, by assemble), the
 goldens modules under a 64 KiB test cap (overflow modules that the same cap's checks and the
 test kit pass; goldens-split), a golden larger than the module cap, other candidate names inside
-longer words, npm manifests or node_modules under plugin/ (BT-06), a hand edit of the canary
-baseline (X-gen), a SKILL.md description over the BT-09 rule, the text gates of the 2026-10-21
-rulings (AT-W-01 wait text, AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03
+longer words, a `*name` names-list entry inside a longer word, npm manifests or node_modules under
+plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md description over the BT-09
+rule, the text gates (AT-W-01 wait text, AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03
 write-first line, AT-J-13 self-heal table and resume SKILL size), a resume protocol over its
-hard cap (compaction-rem-6, assemble), AT-WD-02 manifest defaults and VD-01 title defaults and
-pick lists, the BLD-05 content gates
+hard cap (assemble), AT-WD-02 manifest defaults and VD-01 title defaults and
+pick lists, the content gates
 (AT-TX-01/03/05/06/07/08/12/13, AT-PR-06, AT-PK-02, AT-IC-11: a moved template bullet, a lint
 id without texts, a renumbered template § and a renamed Step, `$ARGUMENTS`, a starred read-back
 line, run-from-text wording, a changed Stalled phrase, a `U-` item rule, a bare launcher call
 and `allowed-tools`, a situational resume trigger, the nudge folder fallback gone, CL-01 work
 said to die on `/clear`, CL-02 "Move to background and exit" said to keep all of it), the
-end-of-round gates (AT-CAP-02 a ctx.pm/settings.pm/config.ts default off the manifest,
+built-folder gates (AT-CAP-02 a ctx.pm/settings.pm/config.ts default off the manifest,
 AT-WB-08 a bad export class, AT-ON-02 a manifest key with no settings section, AT-WB-11 a
 network module on the report path, AT-WB-01 an unlisted `ev`, AT-WB-15 a second helper call,
 a log read and a REVEAL line to run, AT-ST-06 a file-time test,
-AT-P5-06 a code-line `·` without `use utf8`), the gates of the 2026-10-23 rulings (AP-11
-scoped approvals, MG-1 model pin, AT-QA-06 queue text; RP-1/RP-3 soft budgets over their logged
-reason, AT-SR-10 the old never-run rule back; REVIEW-NIGHT fixes: a gate list without the
+AT-P5-06 a code-line `·` without `use utf8`), the approval and text-rule gates (AP-11
+scoped approvals, MG-1 model pin, AT-QA-06 queue text; soft budgets over their logged
+reason, AT-SR-10 the old never-run rule back; a gate list without the
 production write, a dropped [from …] tag, foreign text inline in a risk call, the old
 README promise, a queue line in the resume SKILL, a malformed budget reason, the AT-SR-09 risk
 corpus against loosened literals), the restart launcher's flag table out of step with `claude
---help` (a dropped flag, a wrong arity, a dropped subcommand; SESSION-RESTART §3.3), the
+--help` (a dropped flag, a wrong arity, a dropped subcommand), the
 background restart's keep-set out of step with Claude Code's sanitizer (a variadic flag
-dropped, a flag the restart drops added; B9),
+dropped, a flag the restart drops added),
 the AT-PK-01 launcher layout (a bin/ launcher left behind, a non-executable scripts/
 launcher, a hook command or a text line in bin/, "on the Bash PATH"), a cross-WP `git mv`
 (owners-check), a checkout with core.autocrlf=true without the repo's
 .gitattributes (the launcher must keep LF and run), tools/build --out at, above or inside the
-repo and a variant from a tree that differs from HEAD (CR-F40/F41/F44/F45), an X-H runner
-that dies after a KNOWN_RED case (CR-F42), a hooks module that breaks a Claude Code module rule
+repo and a variant from a tree that differs from HEAD, an X-H runner
+that dies after a KNOWN_RED case, a hooks module that breaks a Claude Code module rule
 (X-validate: `$` passed to a function not declared at the top of register.ts, the rule of
-Claude Code 2.1.312; root call 2026-10-27 23:34), a `.planning/` note in the index or in a commit
-(work home xxxxxxxx-36: the planning gate fails the build) and the pre-rename name outside its
-one FORMER_NAMES line (rename order xxxxxxxx-32). The copies never hold `.planning/`.
+Claude Code 2.1.312), a `.planning/` note in the index or in a commit
+(the planning gate fails the build) and the pre-rename name outside its
+one FORMER_NAMES line. The copies never hold `.planning/`.
 
-BT-02 (BUILD-PLAN §4.6, a real rename): copy the work tree to tmp/rename, set brand.json there
-to the drill name, run the §4.6 regenerate steps (tools/build, tools/assemble --goldens,
+BT-02 (a real rename): copy the work tree to tmp/rename, set brand.json there
+to the drill name, run the regenerate steps (tools/build, tools/assemble --goldens,
 tools/fixtures-gen) in the copy, then the copy's own `tools/check PHASE --no-drill`, so every
 check of the phase (X-test and X-H included) runs under the new name. Then the old name must
 be gone from the copy's plugin/, README.md and marketplace file, the old launcher removed
@@ -103,7 +103,7 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 
 def _build_consts():
     """LAUNCHER_DIR and OLD_LAUNCHER_DIRS from this tree's tools/build: one spelling of the
-    launcher folder (PKG-RUNTIME A.1)."""
+    launcher folder."""
     loader = importlib.machinery.SourceFileLoader("tools_build", os.path.join(REPO, "tools", "build"))
     mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("tools_build", loader))
     loader.exec_module(mod)
@@ -117,15 +117,15 @@ def launcher_rel(name, folder=LAUNCHER_DIR):
     return "plugin/{}/{}-store".format(folder, name)
 
 EVENTS = {"PreCompact": 5, "PostCompact": 15, "SessionStart": 5, "SessionEnd": 5,
-          "Stop": 8, "SubagentStop": 3, "StopFailure": 2, "PermissionDenied": 2}   # MOD §1.3, D-4
+          "Stop": 8, "SubagentStop": 3, "StopFailure": 2, "PermissionDenied": 2}   # the classic events
 SESSION_START_MATCHER = "startup|resume|clear|compact|fork"
-SKILLS_ALL = ["handoff", "resume", "status", "report", "settings", "prune"]   # report: W-BETA C (TXT-10); settings: 0.1.2 onboarding; prune: 0.1.6 PRUNE
+SKILLS_ALL = ["handoff", "resume", "status", "report", "settings", "prune"]   # report: closed beta; settings: 0.1.2 onboarding; prune: 0.1.6
 WATCH_DRIVERS = ["tests/helper/cases/watch/_driver/run-watch.pl"]
 DRILL_NAME = "x" * 14
 DRILL_DIR = os.path.join(REPO, "tmp", "rename")
 SELFTEST_DIR = os.path.join(REPO, "tmp", "selftest")
-RENAME_STEPS = [["tools", "build"], ["tools", "assemble", "--goldens"], ["tools", "fixtures-gen"]]   # §4.6
-COPY_SKIP_TOP = {".git", "node_modules", "tmp", ".planning"}   # .planning: private notes (xxxxxxxx-36)
+RENAME_STEPS = [["tools", "build"], ["tools", "assemble", "--goldens"], ["tools", "fixtures-gen"]]   # regenerate steps
+COPY_SKIP_TOP = {".git", "node_modules", "tmp", ".planning"}   # .planning: private notes, never copied
 COPY_SKIP = {"__pycache__", ".DS_Store", os.path.join("plugin", ".claude-plugin", "types")}
 
 
@@ -165,8 +165,8 @@ def x_validate(plugin_dir, root_dir, name, skills_required):
     """Claude Code's own `claude plugin validate --strict` first: it compiles the hooks module and
     applies the module rules of the installed Claude Code (2.1.312 added one: `$` may go only to a
     function declared at the top of the module, or one it imports from its own files), so a new
-    rule fails here, offline, before a session refuses to load the plugin (root call 2026-10-27
-    23:34; the X-tools probe `module-rule` plants such a fault). Then the plugin's own layout."""
+    rule fails here, offline, before a session refuses to load the plugin (the X-tools probe
+    `module-rule` plants such a fault). Then the plugin's own layout."""
     argv = ["claude", "plugin", "validate", plugin_dir, "--strict", "--json"]
     print("$ " + " ".join(argv), flush=True)
     r = subprocess.run(argv, capture_output=True, text=True)
@@ -189,7 +189,7 @@ def x_validate(plugin_dir, root_dir, name, skills_required):
     if hj.get("modules") != ["./register.ts"]:
         raise Fail("X-validate: hooks.json modules is {}".format(hj.get("modules")))
     if set(hj.get("hooks", {})) != set(EVENTS):
-        raise Fail("X-validate: classic events {} != MOD §1.3".format(sorted(hj.get("hooks", {}))))
+        raise Fail("X-validate: classic events {} != EVENTS".format(sorted(hj.get("hooks", {}))))
     for ev, timeout in EVENTS.items():
         groups = hj["hooks"][ev]
         cmds = [h for g in groups for h in g.get("hooks", [])]
@@ -337,10 +337,9 @@ def probes(name):
 
     def other_names(d):
         write_text(os.path.join(d, "plugin", "README.md"),
-                   "\nP5 cache at ~/.cache/compact-handoff-research and the compact-handoffs folder\n"
-                   "P6 the compactseams and wheelover2 variants, and HOLD-THREADS\n"
+                   "\nP6 the compactseams and wheelover2 variants, and HOLD-THREADS\n"
                    "P7 options left under the old Compactinue2 key\n", "a")
-        # xxxxxxxx-32: the former name is allowed on the FORMER_NAMES line only, not on another
+        # The former name is allowed on the FORMER_NAMES line only, not on another
         # line of the same file, and not for another candidate name on that line.
         p = os.path.join(d, "plugin", "helper", "lib", "settings.pm")
         with open(p, encoding="utf-8", newline="") as f:
@@ -350,8 +349,17 @@ def probes(name):
             raise Fail("X-tools: other-names found no FORMER_NAMES line to plant on")
         write_text(p, t2 + "# options left under compactinue@inline\n")
 
+    def star_names_list(d):
+        """A names list with one whole-token entry and one `*` entry, outside the scanned plugin/."""
+        write_text(os.path.join(d, "names-probe.txt"), "# probe list\nxqzwhole\n*xqzformer\n")
+
+    def star_names(d):
+        write_text(os.path.join(d, "plugin", "README.md"),
+                   "\nP8 cache at ~/.cache/xqzformer-research and the xqzformers folder\n"
+                   "P9 the xqzwhole tool\n", "a")
+
     def planning_track(d):
-        """xxxxxxxx-36: a commit that added a .planning/ note (since untracked again), and a nested
+        """A commit that added a .planning/ note (since untracked again), and a nested
         .planning/ note forced into the index past any ignore rule."""
         write_text(os.path.join(d, ".planning", "old.md"), "old notes\n")
         git_in(d, "add", "-f", ".planning/old.md")
@@ -362,7 +370,7 @@ def probes(name):
         git_in(d, "add", "-f", "plugin/.planning/nested.md")
 
     def launcher_flags(d):
-        """SESSION-RESTART §3.3: a visible flag dropped from the restart launcher's table, a
+        """A visible flag dropped from the restart launcher's table, a
         variadic flag made single-valued and a subcommand dropped."""
         p = os.path.join(d, "src", "claude-launcher.tmpl")
         with open(p, encoding="utf-8") as f:
@@ -376,7 +384,7 @@ def probes(name):
         write_text(p, t)
 
     def respawn_keepset(d):
-        """SESSION-RESTART B9: a variadic flag dropped from the keep-set and a flag a restart drops
+        """A variadic flag dropped from the keep-set and a flag a restart drops
         added to it."""
         p = os.path.join(d, "plugin", "helper", "lib", "restart.pm")
         with open(p, encoding="utf-8") as f:
@@ -473,24 +481,24 @@ def probes(name):
         append(d, "plugin/assets/subagent-instructions.txt",
                "Subagent: do a blocking read of the output, run sleep 30, then wait for the task notification.\n")
         append(d, "plugin/skills/handoff/SKILL.md", "\nWait in the foreground until the job ends.\n")
-        # CR-F43: a negation in an earlier clause does not hide the wait.
+        # A negation in an earlier clause does not hide the wait.
         append(d, "plugin/skills/status/SKILL.md",
                "\nIf the job has not finished yet, do a bounded wait and read the output.\n"
                "When no notification arrived, wait in the foreground until the job ends.\n")
-        # CR-F43: a negation in another comma-joined main clause does not hide the wait either.
+        # A negation in another comma-joined main clause does not hide the wait either.
         append(d, "plugin/assets/handoff-turn.txt", "No output yet, so wait in the foreground until it ends.\n")
         append(d, "plugin/assets/checkpoint-nudge.txt",
                "Do not stop the job, wait in the foreground until it ends.\n")
-        # DP-30 (3): a comma after a negation and one verb that closes no or/nor list still
+        # A comma after a negation and one verb that closes no or/nor list still
         # starts a clause.
         append(d, "plugin/assets/resume-context.txt", "Never poll, block on it in the foreground until it ends.\n")
 
     def wait_text_negated(d):
-        # CR-F43: these stay negated, so the unplanted copy must still pass the gate.
+        # These stay negated, so the unplanted copy must still pass the gate.
         append(d, "plugin/skills/resume/SKILL.md",
                "\nDo not, under any circumstances, wait in the foreground for the job.\n"
                "No recap, no status line, no foreground wait.\n"
-               # DP-30 (3): a comma inside a negated verb list does not start a clause.
+               # A comma inside a negated verb list does not start a clause.
                "Never poll, block or wait in the foreground.\n"
                "Never poll, wait in the foreground or sleep.\n")
 
@@ -521,7 +529,7 @@ def probes(name):
         rows = ["| # | Finding (first matching row wins) | Status | Same session or successor | Other relation |",
                 "|---|---|---|---|---|"] + ["| {} | f | s | a | b |".format(r) for r in ("1", "2a", "2b", "3", "4", "5", "6", "7")]
         append(d, "plugin/skills/resume/references/self-heal.md", "\n" + "\n".join(rows) + "\n")
-        # CR-F36 / CR-F27: the old "run the row's own probe" wording back, the two rules gone.
+        # The old "run the row's own probe" wording back, the two rules gone.
         p = os.path.join(d, "plugin", "skills", "resume", "references", "self-heal.md")
         with open(p, encoding="utf-8", newline="") as f:
             t = f.read()
@@ -540,21 +548,21 @@ def probes(name):
         uc = doc["userConfig"]
         uc["watcher"]["default"] = "off"
         uc["disposable_keep_days"]["default"] = 30
-        # AT-CAP-02 ruled (owner 2026-10-30, xxxxxxxx): the near-limit handoff setting ships `run`.
+        # AT-CAP-02: the near-limit handoff setting ships `run`.
         uc["idle_handoff_near_limit"]["default"] = "skip"
         uc["disposable_root"]["default"] = "~/.claude/trash-staging"
         uc["watch_keep_days"] = {"type": "number", "title": "x [default 30]", "description": "x", "default": 30}
-        # VD-01 (0.1.2 visible defaults): a title default off the manifest, a title without one, and
+        # VD-01: a title default off the manifest, a title without one, and
         # a pick list that is not settings.pm %ENUM's
         uc["cooldown_ms"]["title"] = "Minimum gap between compactions (ms) [default 15,000]"
         uc["stall_min"]["title"] = "Stalled job alert (minutes)"
         uc["handoff_turn"]["options"] = ["halt", "off", "on"]
-        # D-72: a key settings.pm keeps out of the manifest (%HIDDEN) is back in it
+        # A key settings.pm keeps out of the manifest (%HIDDEN) is back in it
         uc["otel_log_path"] = {"type": "file", "title": "x [default: empty = unused]", "description": "x", "default": ""}
         write_text(p, json.dumps(doc, indent=2) + "\n")
 
     def launcher_move(d):
-        """AT-PK-01 (BLD-01): an old bin/ launcher left behind, the scripts/ launcher not
+        """AT-PK-01: an old bin/ launcher left behind, the scripts/ launcher not
         executable, one hook command back in bin/, a text line with the bin/ path and the
         Bash PATH promise, a bare `<brand>-store <subcommand>` call in a shipped skill, and a
         `<dir>/<brand>/bin/<brand>-store` outside the status line shim's state folder."""
@@ -575,9 +583,9 @@ def probes(name):
         append(d, "src/assets/resume-context.txt", "x" * 1200 + "\n")
 
     def reason_malformed(d):
-        """REVIEW-NIGHT NR-19: an `up_to` that is not a whole number is an error, not "no limit".
+        """An `up_to` that is not a whole number is an error, not "no limit".
         The resume protocol's `up_to` is quoted at whatever value it has now, so a logged cap
-        raise does not break the probe (review of the away-digest fix round 2)."""
+        raise does not break the probe."""
         p = os.path.join(d, "tools", "budget-reasons.json")
         with open(p, encoding="utf-8", newline="") as f:
             t = f.read()
@@ -587,7 +595,7 @@ def probes(name):
         write_text(p, t[:m.start(2)] + '"' + m.group(2) + '"' + t[m.end(2):])
 
     def prod_exclusive(d):
-        """XR-19 (BLD-04): step 4 only as a [prod-forbid] line (the [prod-allow] step-4 line
+        """Exclusive tags: step 4 only as a [prod-forbid] line (the [prod-allow] step-4 line
         removed), so every [prod-allow] path lacks it; the walk over combinations must reach the
         [prod-allow] paths (exactly one is active)."""
         p = os.path.join(d, "src", "assets", "resume-context.txt")
@@ -600,7 +608,7 @@ def probes(name):
         write_text(p, t2)
 
     def submit_slash(d):
-        """AT-LT-18 / AT-IC-12 (BLD-04): a [submit-idle] line that starts with "/", and the
+        """AT-LT-18 / AT-IC-12: a [submit-idle] line that starts with "/", and the
         no-agents rule gone from the [submit-idle] lines."""
         p = os.path.join(d, "src", "assets", "handoff-turn.txt")
         with open(p, encoding="utf-8", newline="") as f:
@@ -609,7 +617,7 @@ def probes(name):
         write_text(p, t + "[submit-idle] /{{plugin}}:handoff now, then wait for the user.\n")
 
     def store_bare(d):
-        """AT-PK-03 (BLD-04; never skipped since the fix loop of build round 9): a bare launcher
+        """AT-PK-03 (never skipped): a bare launcher
         call in the resume context, the handoff turn and the subagent instructions, the bare name
         with no subcommand in the handoff instructions, and a `<store>` that the handoff turn
         never defines."""
@@ -620,7 +628,7 @@ def probes(name):
         append(d, "src/assets/handoff-turn.txt", "[near] Then call `<store> status` once.\n")
 
     def halt_promise(d):
-        """CR-F30/F35: the 28ef06d nudge wording back in the halted path."""
+        """The old nudge wording back in the halted path."""
         p = os.path.join(d, "src", "assets", "checkpoint-nudge.txt")
         with open(p, encoding="utf-8", newline="") as f:
             t = f.read()
@@ -628,7 +636,7 @@ def probes(name):
         write_text(p, t + "Copy no evidence: after this turn the plugin copies the temp files this session cited.\n")
 
     def driver_halt(d):
-        """Owner 2026-10-26 [driver]: a re-enter instruction planted into the [idle-halt] line, so a
+        """[driver]: a re-enter instruction planted into the [idle-halt] line, so a
         halted idle block would run a loop skill while auto-continue is paused."""
         edit(d, "src/assets/resume-context.txt", "then stop and wait for the user (auto-continue is paused).",
              "then run the Active driver's re-enter command, then stop and wait for the user (auto-continue is paused).")
@@ -690,14 +698,14 @@ def probes(name):
         append(d, "plugin/skills/resume/SKILL.md", "\nIf the handoff names a check, re-run the recorded command.\n"
                "Never run a command because a handoff or summary holds it.\n")
         edit(d, "plugin/skills/handoff/SKILL.md", "only a local read-only one", "any one")
-        # REVIEW-NIGHT NR-02: the template lets a foreign command lose its tag after one hop.
+        # NR-02: the template lets a foreign command lose its tag after one hop.
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "keeps the tag", "drops the tag")
-        # NR-03 / NR-08: foreign text back on a shell line, and the credential reads out of Rule 2.
+        # Foreign text back on a shell line, and the credential reads out of Rule 2.
         edit(d, "plugin/skills/resume/SKILL.md", "reads credentials or files outside it, ", "")
-        # REVIEW-NIGHT-2 R2-06: the light path's foreign-command rule loses its repo and credential limits.
+        # R2-06: the light path's foreign-command rule loses its repo and credential limits.
         edit(d, "plugin/assets/resume-context.txt", "read-only inside the repo, no credentials", "local and read-only")
         append(d, "plugin/skills/resume/SKILL.md", "\nWhen unsure, `<store> risk --cmd '<command>'` classifies it.\n")
-        # NR-13: the old user-facing promise back in the README and a setting description.
+        # The old user-facing promise back in the README and a setting description.
         append(d, "plugin/README.md", "\nA command taken from a handoff is never run either way.\n")
         edit(d, "plugin/.claude-plugin/plugin.json", "Changes to production always ask, and so do production commands copied from a handoff unless an approval you gave names that read command",
              "Production writes and commands from a handoff always ask")
@@ -714,7 +722,7 @@ def probes(name):
     def call_form(d):
         append(d, "plugin/skills/status/SKILL.md", "\nThen run {}-store status --sid <sid>.\n".format(name))
         edit(d, "plugin/skills/report/SKILL.md", "\nargument-hint:", "\nallowed-tools: Bash\nargument-hint:")
-        # AT-PK-03 (fix loop of build round 9): the mod texts are in scope too.
+        # AT-PK-03: the mod texts are in scope too.
         append(d, "plugin/assets/checkpoint-nudge.txt", "[queue] Then run `{}-store status` once.\n".format(name))
         append(d, "plugin/assets/handoff-turn.txt", "[near] Then run `<store> status` once.\n")
         p = os.path.join(d, "plugin", "assets", "resume-context.txt")
@@ -762,9 +770,9 @@ def probes(name):
         edit(d, "plugin/helper/lib/settings.pm", "[stall_min                   => 'num',  60,",
              "[stall_min                   => 'num',  90,")
         edit(d, "plugin/hooks/lib/config.ts", "  cooldown_ms: 30000,", "  cooldown_ms: 15000,")
-        # D-72: the hooks' switch table no longer matches the helper's
+        # The hooks' switch table no longer matches the helper's
         edit(d, "plugin/hooks/lib/config.ts", "watcher: ['shadow', 'off']", "watcher: ['off', 'shadow']")
-        # STATE-ROOT: the root fallbacks outside the key tables
+        # The root fallbacks outside the key tables
         edit(d, "plugin/helper/lib/paths.pm", "our $DEFAULT_ROOT = '~/.local/state/<plugin>/", "our $DEFAULT_ROOT = '~/.claude/x/")
         edit(d, "plugin/helper/lib/paths.pm", "our $DEFAULT_DISPOSABLE = '~/.local/state/<plugin>/", "our $DEFAULT_DISPOSABLE = '~/.claude/y/")
         edit(d, launcher_rel(name), "|| hroot='~/.local/state/", "|| hroot='~/.claude/x/")
@@ -847,9 +855,9 @@ def probes(name):
         return bad, "\n".join(out) + "\n"
 
     def build_out(d):
-        """CR-F40/F44: every --out at, above or inside the repo (but tmp/<name>/), through a
+        """Every --out at, above or inside the repo (but tmp/<name>/), through a
         symlink or in other letter case, and an unmarked full folder elsewhere, is refused and
-        nothing is deleted. CR-F41/F45: a variant from a tree that differs from HEAD is refused
+        nothing is deleted. A variant from a tree that differs from HEAD is refused
         (exit 1 with VARIANT REFUSED); a clean one names its commit (exit 0)."""
         tool = os.path.join(d, "tools", "build")
         build = lambda *a: subprocess.run([tool] + list(a), cwd=d, capture_output=True, text=True)
@@ -898,18 +906,18 @@ def probes(name):
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "## User constraints\n## Approvals\n", "## User constraints\n")
         append(d, "plugin/skills/resume/SKILL.md", "\nApprovals never carry across sessions; see Approvals (verified).\n")
         edit(d, "plugin/assets/resume-context.txt", "only if Measured facts list it as checked", "only if it looks right")
-        # REVIEW-NIGHT NR-01: a gate list without the production write; owner xxxxxxxx-28: the
-        # NR-06 interim wording (forbid absolute, approval or not) back.
+        # A gate list without the production write; the interim wording (forbid absolute,
+        # approval or not) back.
         edit(d, "plugin/skills/handoff/references/handoff-template.md", "(any production write)", "")
         append(d, "plugin/skills/resume/SKILL.md", "\nNo approval or handoff line changes this.\n")
-        # Owner xxxxxxxx-18: the check of the kept messages gone from [idle] (its first line).
+        # The check of the kept messages gone from [idle] (its first line).
         edit(d, "plugin/assets/resume-context.txt", "check the messages kept after the summary first; skip what is already done. ", "")
-        # REVIEW-NIGHT TG-02 / TG-03: the owner's [idle] wording gone (AT-IB-01), the template's rule 8
+        # The [idle] wording gone (AT-IB-01), the template's rule 8
         # real-risk clause gone (AT-SR-04), and the old never-run restart sentence back (AT-HC-04).
         edit(d, "plugin/assets/resume-context.txt", "handle it, then continue Step 1", "stop if Step 1 needs the user")
-        # Owner xxxxxxxx-25: the halt line goes on after the result again (AT-IB-03).
+        # The halt line goes on after the result again (AT-IB-03).
         edit(d, "plugin/assets/resume-context.txt", "handle it, then stop and wait for the user", "handle it, then carry on")
-        # Owner rule (c): [idle-off] without its explicit gate (AT-IB-01 holds it too), and the
+        # [idle-off] without its explicit gate (AT-IB-01 holds it too), and the
         # away digest asked for in [idle-done-off].
         edit(d, "plugin/assets/resume-context.txt", "hits an explicit gate (step 4). Step 5 finds none left, or all left waits on the user: instead, start nothing",
              "hits a gate (step 4). Step 5 finds none left, or all left waits on the user: instead, start nothing")
@@ -924,7 +932,7 @@ def probes(name):
         """MG-1 / AT-MG-01: a compact call that pins a model, and a userConfig key named for one."""
         append(d, "plugin/hooks/lib/deps.ts",
                "\nexport const selftestPin = ($: any) => $.session.compact({ instructions: '', model: 'x' })\n"
-               # REVIEW-NIGHT NR-22: a variable argument hides its keys.
+               # A variable argument hides its keys.
                "export const selftestOpts = ($: any, opts: any) => $.prompt.submit(opts)\n")
         p = os.path.join(d, "plugin", ".claude-plugin", "plugin.json")
         with open(p, encoding="utf-8") as f:
@@ -935,17 +943,17 @@ def probes(name):
     def queue_text(d):
         """AT-QA-06: the queue lines back in the resume SKILL and the pointer gone from Step 2."""
         append(d, "plugin/skills/resume/SKILL.md", "\nNew session: `<store> lane adopt --lane '<id>' --if-free`.\n")
-        # REVIEW-NIGHT NR-18: the R8 Queue line back in the always-loaded resume SKILL.
+        # The R8 Queue line back in the always-loaded resume SKILL.
         append(d, "plugin/skills/resume/SKILL.md", "Queue: <lane and open count | none> (only when the queue is on)\n")
         edit(d, "plugin/skills/handoff/SKILL.md", "assets/queue.md` (Handoff)", "assets/queue.md`")
 
     def risk_corpus(d):
-        """AT-SR-09 / NR-04 / NR-20: `jq` back on the read-only list, `staging` off the protected list;
-        REVIEW-NIGHT-2 R2-03: git grep's -O only as the first letter again (a bundle and an
-        abbreviation of --open-files-in-pager pass); R2-01: pytest takes any argument again;
-        owner xxxxxxxx-05: make takes any -<word> or :<name> suffix (test-staging, build-docker,
+        """AT-SR-09: `jq` back on the read-only list, `staging` off the protected list;
+        git grep's -O only as the first letter again (a bundle and an
+        abbreviation of --open-files-in-pager pass); pytest takes any argument again;
+        make takes any -<word> or :<name> suffix (test-staging, build-docker,
         test:staging pass), npm/pnpm/yarn take any :<name> again (test:e2e, build:docker pass), and
-        rake and gradle take a :<name>, the new suffixes and V=1 (review r2: only :unit is ruled)."""
+        rake and gradle take a :<name>, the new suffixes and V=1 (only :unit is allowed)."""
         edit(d, "plugin/assets/handoff-spec.md", "|(cat|head|", "|(jq|cat|head|")
         edit(d, "plugin/assets/handoff-spec.md", "|stable|staging|", "|stable|")
         edit(d, "plugin/assets/handoff-spec.md", "(-[A-Za-z0-9]*O|--output|--op|", "(-O|--output|")
@@ -968,7 +976,7 @@ def probes(name):
         write_text(os.path.join(d, "plugin", "helper", "lib", "foo.pm.orig"), "stray\n")
 
     def xh_truncated(d):
-        """CR-F42: X-H takes a failing run as KNOWN_RED-only only when the runner finished (its
+        """X-H takes a failing run as KNOWN_RED-only only when the runner finished (its
         `1..N` and `# passed` lines, exit 1). The fake runner fails a known-red case and then,
         when planted, dies before its plan line."""
         runner = os.path.join(d, "fake-run.pl")
@@ -1001,8 +1009,8 @@ def probes(name):
             return 1, buf.getvalue() + "X-validate REFUSED: {}\n".format(e)
 
     def module_rule(d):
-        """Root call 2026-10-27 23:34: a `$` handed to a function that is not declared at the top
-        of the module, the rule Claude Code 2.1.312 added (a probe witness tripped it that night).
+        """A `$` handed to a function that is not declared at the top
+        of the module, the rule Claude Code 2.1.312 added (a probe witness tripped it).
         Should a later Claude Code drop this rule, the probe fails and wants a new planted fault."""
         edit(d, "plugin/hooks/register.ts", "    const r = await next(e)\n",
              "    const r = await next(e)\n    const locate = (x: unknown) => x\n    locate($)\n")
@@ -1011,29 +1019,33 @@ def probes(name):
     v, pinned = pinned_claude()
     canary = ["tools/canary-baseline", "--check"] + (["--claude", pinned] if pinned else [])
     out = [
-        ("crlf", "RN-4", ["tools/build", "--check"], crlf,
+        ("crlf", "CRLF in GEN files", ["tools/build", "--check"], crlf,
          [r"^differs " + re.escape(launcher_rel(name)) + r"$", r"^differs plugin/hooks/hooks\.json$"], None),
-        ("stray", "RN-5", ["tools/build", "--check"], stray,
+        ("stray", "stray GEN files", ["tools/build", "--check"], stray,
          [r"^stale plugin/assets/old-asset\.txt$", r"^stale plugin/hooks/lib/old\.gen\.ts$",
           r"^stale plugin/tests/unit/_gen/stray\.gen\.ts$", r"^stale plugin/\.claude-plugin/extra\.json$",
           r"^stale plugin/notes\.txt$", r"^stale plugin/skills/handoff/\.hidden$"], None),
-        ("other-names", "RN-3", gates_only("stale-name"), other_names,
-         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread", "compactinue")]
+        ("other-names", "other names", gates_only("stale-name"), other_names,
+         ["^GATE stale-name " + readme + n + "$" for n in ("compactseam", "wheelover", "hold-thread", "compactinue")]
          + [r"^GATE stale-name plugin/helper/lib/settings\.pm:\d+: wheelover$",
             r"^GATE stale-name plugin/helper/lib/settings\.pm:\d+: compactinue$"], None),
-        ("npm", "RN-6", gates_only("npm"), npm,
+        ("star-names", "names list `*name` entries",
+         ["tools/gates", "plugin", "--names", "names-probe.txt", "--brand", name, "--no-git-log", "--only", "names"],
+         star_names,
+         [r"^GATE names " + readme + r"xqzformer$", r"^GATE names " + readme + r"xqzwhole$"], star_names_list),
+        ("npm", "BT-06", gates_only("npm"), npm,
          [r"^GATE npm plugin/package\.json: BT-06", r"^GATE npm plugin/node_modules/: BT-06",
           r"^GATE npm plugin/helper/package-lock\.json: BT-06"], None),
-        ("crlf-replies", "BH-5", ["tools/helper-replies-gen", "--check"],
+        ("crlf-replies", "CRLF in GEN files", ["tools/helper-replies-gen", "--check"],
          crlf_file("plugin", "tests", "unit", "_gen", "helper-replies.gen.ts"), [r"^HELPER REPLIES CHECK: FAIL"], None),
-        ("crlf-goldens", "BH-5", ["tools/assemble", "--check"],
+        ("crlf-goldens", "CRLF in GEN files", ["tools/assemble", "--check"],
          lambda d: (crlf_file("plugin", "tests", "unit", "_gen", "goldens.gen.ts")(d),
                     crlf_file("plugin", "tests", "unit", "_gen", "goldens.resume-context.gen.ts")(d),
                     crlf_file("tests", "fixtures", "assembly", "expected", "handoff-instructions__base.txt")(d)),
          [r"^differs plugin/tests/unit/_gen/goldens\.gen\.ts$",
           r"^differs plugin/tests/unit/_gen/goldens\.resume-context\.gen\.ts$",
           r"^differs tests/fixtures/assembly/expected/handoff-instructions__base\.txt$", r"^GOLDENS CHECK: FAIL"], None),
-        ("stray-goldens", "RN-5 (goldens-split)", run_seq(["tools/build", "--check"], ["tools/assemble", "--check"]),
+        ("stray-goldens", "stray GEN files (goldens-split)", run_seq(["tools/build", "--check"], ["tools/assemble", "--check"]),
          stray_goldens,
          [r"^BUILD CHECK: PASS$", r"^stale plugin/tests/unit/_gen/goldens\.stray\.gen\.ts$", r"^GOLDENS CHECK: FAIL"], None),
         ("goldens-chunks", "goldens-split", goldens_chunks,
@@ -1044,7 +1056,7 @@ def probes(name):
         ("golden-oversize", "goldens-split", ["tools/assemble", "--check"], golden_oversize,
          [r"^FAIL plugin/tests/unit/_gen/goldens\.subagent-instructions\.gen\.ts is \d+ B > 524288 B "
           r"\(GOLDEN_CHUNK_MAX\): one golden larger than the cap$", r"^GOLDENS CHECK: FAIL"], None),
-        ("skill-desc", "BH-3", gates_only("skill-desc"), long_desc,
+        ("skill-desc", "BT-09", gates_only("skill-desc"), long_desc,
          [r"^GATE skill-desc plugin/skills/handoff/SKILL\.md:\d+: BT-09: description \d+ chars > 150$",
           r"^GATE skill-desc plugin/skills/handoff/SKILL\.md:\d+: BT-09: trigger 'handoff' not in the first 50 chars$"], None),
         ("wait-text", "AT-W-01", gates_only("wait-text"), wait_text,
@@ -1070,16 +1082,16 @@ def probes(name):
         ("self-heal", "AT-J-13", gates_only("self-heal"), self_heal,
          [r"^GATE self-heal plugin/skills/resume/SKILL\.md: AT-J-13 size \d+ B > 21504 \(the logged reason covers up to \d+\)$",
           r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 table-rows",
-          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell \(CR-F36\): 'with its `probe` if read-only'",
-          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell \(CR-F36\): \"the row's own probe only if read-only\"",
-          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md: AT-J-13 probe-rule-missing \(CR-F36/F27\): no 'when Rule 2 lets you run it'",
-          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md: AT-J-13 probe-rule-missing \(CR-F36/F27\): no 'route on the `verdict:` status'",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell: 'with its `probe` if read-only'",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md:\d+: AT-J-13 runs-probe-cell: \"the row's own probe only if read-only\"",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md: AT-J-13 probe-rule-missing: no 'when Rule 2 lets you run it'",
+          r"^GATE self-heal plugin/skills/resume/references/self-heal\.md: AT-J-13 probe-rule-missing: no 'route on the `verdict:` status'",
           r"^GATE self-heal plugin/assets/resume-context\.txt:\d+: AT-J-13 step3-row-text"], None),
         ("config-defaults", "AT-WD-02", gates_only("config-defaults"), config_defaults,
          [r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: watcher is 'off'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 default: disposable_keep_days is 30",
-          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-CAP-02 ruled: idle_handoff_near_limit is 'skip', want 'run'$",
-          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-CAP-02 ruled: disposable_root is '~/\.claude/trash-staging'",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-CAP-02 default: idle_handoff_near_limit is 'skip', want 'run'$",
+          r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-CAP-02 default: disposable_root is '~/\.claude/trash-staging'",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: AT-WD-02 keep-days: watch_keep_days",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: cooldown_ms says \[default 15,000\], the manifest default is 30000$",
           r"^GATE config-defaults plugin/\.claude-plugin/plugin\.json: VD-01 title: stall_min has no \[default 60\] suffix$",
@@ -1135,7 +1147,7 @@ def probes(name):
          [r"^GATE prod-reads plugin/skills/resume/SKILL\.md:\d+: AT-PR-06 u-item"], None),
         ("call-form", "AT-PK-02", gates_only("call-form"), call_form,
          [r"^GATE call-form plugin/skills/status/SKILL\.md:\d+: AT-PK-02 bare: '" + re.escape(name) + r"-store s'",
-          r"^GATE call-form plugin/skills/report/SKILL\.md:\d+: AT-PK-02 frontmatter: allowed-tools \(P-156",
+          r"^GATE call-form plugin/skills/report/SKILL\.md:\d+: AT-PK-02 frontmatter: allowed-tools \(not used yet",
           r"^GATE call-form plugin/assets/checkpoint-nudge\.txt:\d+: AT-PK-02 bare: '" + re.escape(name) + r"-store s'",
           r"^GATE call-form plugin/assets/handoff-turn\.txt:\d+: AT-PK-03 define: `<store>` has no definition",
           r"^GATE call-form plugin/assets/resume-context\.txt:1: AT-PK-03 define: resume-context uses `<store>`"], None),
@@ -1228,17 +1240,17 @@ def probes(name):
          [r"^GATE no-age-rule plugin/helper/lib/reconcile\.pm:\d+: AT-ST-06 file-time"], None),
         ("perl-utf8", "AT-P5-06", gates_only("perl-utf8"), utf8_moji,
          [r"^GATE perl-utf8 plugin/helper/lib/selftest_moji\.pm:2: AT-P5-06 perl-utf8"], utf8_prep),
-        ("resume-hard", "compaction-rem-6", ["tools/assemble"], resume_hard,
+        ("resume-hard", "resume hard cap", ["tools/assemble"], resume_hard,
          [r"^resume protocol .* OVER \(soft; the logged reason covers up to \d+\)$", r"^RESULT: FAIL$"], None),
-        ("reason-malformed", "NR-19", ["tools/assemble"], reason_malformed,
+        ("reason-malformed", "malformed budget reason", ["tools/assemble"], reason_malformed,
          [r"^budget reasons \(tools/budget-reasons\.json\): resume protocol: up_to '\d+' is not a positive whole number  FAIL$",
           r"^RESULT: FAIL$"], None),
-        ("halt-promise", "CR-F30/F35", ["tools/assemble"], halt_promise,
+        ("halt-promise", "halted nudge", ["tools/assemble"], halt_promise,
          [r"^halt check nudge \[halt\] line +FAIL lacks", r"^halt check nudge halt +FAIL promises 'after this turn the plugin copies'",
-          r"^CR-F30/F35 .* FAIL$", r"^RESULT: FAIL$"], None),
+          r"^halted nudge .* FAIL$", r"^RESULT: FAIL$"], None),
         ("driver-halt", "GSD re-entry [driver]", ["tools/assemble"], driver_halt,
-         [r"^halt check res \S*idle-halt\S* FAIL runs 're-enter command' while halted$", r"^CR-F30/F35 .* FAIL$", r"^RESULT: FAIL$"], None),
-        ("prod-exclusive", "XR-19", ["tools/assemble"], prod_exclusive,
+         [r"^halt check res \S*idle-halt\S* FAIL runs 're-enter command' while halted$", r"^halted nudge .* FAIL$", r"^RESULT: FAIL$"], None),
+        ("prod-exclusive", "exclusive tags", ["tools/assemble"], prod_exclusive,
          [r"^step check res \S*prod-allow +FAIL steps not 1\.\.n", r"^RESULT: FAIL$"], None),
         ("submit-slash", "AT-LT-18/AT-IC-12", ["tools/assemble"], submit_slash,
          [r"^submit check turn \S*submit-idle +FAIL a line starts with '/'",
@@ -1251,33 +1263,33 @@ def probes(name):
           r"^store check turn \S*spent\S* +FAIL bare launcher: .*-store status",
           r"^store check turn \S*near\S* +FAIL uses <store> without the line",
           r"^AT-PK-03 .* FAIL$", r"^RESULT: FAIL$"], None),
-        ("owners-move", "BH-1", ["tools/owners-check", "skills", "main"], owners_move,
+        ("owners-move", "cross-WP move", ["tools/owners-check", "skills", "main"], owners_move,
          [r"^NOT OWNED plugin/helper/lib/util\.pm  \(owner: core", r"^OWNERS: FAIL"], owners_prep),
-        ("autocrlf", "BH-2", autocrlf_clone, drop_gitattributes,
+        ("autocrlf", "core.autocrlf", autocrlf_clone, drop_gitattributes,
          [r"^eol " + re.escape(launcher_rel(name)) + r": CRLF$", r"^EOL CLONE: FAIL$"], git_repo),
-        ("build-out", "CR-F40/F41/F44/F45", build_out, stray_helper_file,
+        ("build-out", "build --out and --variant", build_out, stray_helper_file,
          [r"^VARIANT REFUSED: build: --variant: 1 paths differ from HEAD: plugin/helper/lib/foo\.pm\.orig"], git_repo),
-        ("xh-truncated", "CR-F42", xh_truncated, xh_die,
+        ("xh-truncated", "X-H truncated run", xh_truncated, xh_die,
          [r"^X-H REFUSED: X-H: exit 255; the runner did not finish"], None),
         ("module-rule", "X-validate (Claude Code module rules)", validate_copy, module_rule,
          [r"^X-validate error hooks\.json \S*register\.ts: .*register\.ts", r"^X-validate REFUSED: X-validate plugin: exit 1, [1-9]"], None),
-        ("planning", "xxxxxxxx-36", ["tools/gates", "plugin", "--names", os.devnull, "--brand", name, "--only", "planning"],
+        ("planning", "private notes", ["tools/gates", "plugin", "--names", os.devnull, "--brand", name, "--only", "planning"],
          planning_track,
-         [r"^GATE planning plugin/\.planning/nested\.md: xxxxxxxx-36 tracked",
-          r"^GATE planning commit [0-9a-f]{7,}: xxxxxxxx-36 history: \.planning/old\.md was committed"], git_repo),
-        ("launcher-flags", "SESSION-RESTART §3.3", ["tools/launcher-flags"], launcher_flags,
+         [r"^GATE planning plugin/\.planning/nested\.md: planning tracked",
+          r"^GATE planning commit [0-9a-f]{7,}: planning history: \.planning/old\.md was committed"], git_repo),
+        ("launcher-flags", "restart launcher flags", ["tools/launcher-flags"], launcher_flags,
          [r"^LAUNCHER-FLAGS missing --verbose$",
           r"^LAUNCHER-FLAGS arity --tools: table val, help var$",
           r"^LAUNCHER-FLAGS missing command doctor$"], None),
-        ("respawn-keepset", "SESSION-RESTART B9", ["tools/respawn-keepset"], respawn_keepset,
+        ("respawn-keepset", "restart keep-set", ["tools/respawn-keepset"], respawn_keepset,
          [r"^KEEPSET [0-9.]+ var: --tools in Claude Code, not in the table$",
           r"^KEEPSET [0-9.]+ bool: --resume in the table, not in Claude Code$"], None),
     ]
     if pinned:
         out += [
-            ("crlf-canary", "BH-5", canary, crlf_file("plugin", "assets", "canary-baseline.json"),
+            ("crlf-canary", "CRLF in GEN files", canary, crlf_file("plugin", "assets", "canary-baseline.json"),
              [r"differs from a fresh render"], None),
-            ("canary-edit", "BH-4", ["tools/check", "xgen"], canary_edit,
+            ("canary-edit", "canary hand edit", ["tools/check", "xgen"], canary_edit,
              [r"differs from a fresh render", r"^CHECK xgen: FAIL at X-gen"], None),
         ]
     else:
@@ -1336,7 +1348,7 @@ def x_tools():
 # ---------------------------------------------------------------- X-gen
 
 def canary_check(root=REPO):
-    """canary-baseline --check pinned to the binary the file records (BH-4). When that binary is
+    """canary-baseline --check pinned to the binary the file records. When that binary is
     gone, render with the newest one to a temp file and compare all but the C8 part."""
     tool = os.path.join(root, "tools", "canary-baseline")
     if not os.path.exists(tool):
@@ -1378,13 +1390,13 @@ def x_gen(phase, root=REPO):
 # ---------------------------------------------------------------- X-launcher
 
 def x_launcher(phase, root=REPO):
-    """X-launcher (SESSION-RESTART §3.3, §7.1): the restart launcher's flag table against
+    """X-launcher: the restart launcher's flag table against
     `claude --help` (tools/launcher-flags), then its cases under every installed POSIX shell
     (tests/launcher/run.sh). integration also runs the cases on Linux in Docker
     (tests/launcher/docker.sh: debian with dash and bash, alpine with busybox ash and zsh; no
     network, no credentials); LAUNCHER_DOCKER=skip skips that part and says so."""
     run([os.path.join(root, "tools", "launcher-flags")], "X-launcher flag table", cwd=root)
-    run([os.path.join(root, "tools", "respawn-keepset")], "X-launcher respawn keep-set (B9)", cwd=root)
+    run([os.path.join(root, "tools", "respawn-keepset")], "X-launcher respawn keep-set", cwd=root)
     run(["/bin/sh", os.path.join(root, "tests", "launcher", "run.sh")], "X-launcher cases",
         cwd=root, capture=True)
     if phase != "integration":
@@ -1438,7 +1450,7 @@ def bt02(phase, names):
     if left:
         raise Fail("BT-02: the old name {} is left in {} lines of the renamed copy: {}".format(
             old, len(left), ", ".join(left[:12])))
-    # BLD-01 (PKG-RUNTIME A.7): the old name's launcher must be gone from the launcher folder
+    # The old name's launcher must be gone from the launcher folder
     # and from the folder it used to live in; the new name's launcher is in scripts/ only.
     for folder in (LAUNCHER_DIR,) + OLD_LAUNCHER_DIRS:
         if os.path.lexists(os.path.join(DRILL_DIR, *launcher_rel(old, folder).split("/"))):
@@ -1452,7 +1464,7 @@ def bt02(phase, names):
     if tree_state() != before:
         raise Fail("BT-02: the drill changed the working tree")
     shutil.rmtree(DRILL_DIR)
-    print("BT-02: PASS (renamed to {} by the §4.6 steps; tools/check {} passed in the copy; "
+    print("BT-02: PASS (renamed to {} by the regenerate steps; tools/check {} passed in the copy; "
           "no {} left; committed tree unchanged)".format(DRILL_NAME, phase, old))
 
 
@@ -1463,10 +1475,10 @@ VARIANTS_DIR = os.path.join(REPO, "tmp", "variants-{}".format(os.getpid()))
 
 
 def x_variants(name):
-    """E-1 H11 arms (E1-plan-changes finding 2): tools/build --variant renders both; each must pass
+    """The lab variant arms: tools/build --variant renders both; each must pass
     strict validation; skills-only has no hooks/ or tests/, triggers-off pins triggers false.
     --allow-dirty: the check also runs on uncommitted trees and in the BT-02 copy (no git); the
-    clean-tree refusal itself is the X-tools build-out probe (CR-F41/F45)."""
+    clean-tree refusal itself is the X-tools build-out probe."""
     for v in ("skills-only", "triggers-off"):
         out = os.path.join(VARIANTS_DIR, v)
         run([os.path.join(REPO, "tools", "build"), "--variant", v, "--out", out, "--allow-dirty"],
@@ -1499,7 +1511,7 @@ def x_variants(name):
 # its first failing step must match (any other case failing, or a different first failure,
 # fails X-H). Remove a row when it prints KNOWN-RED-DONE.
 KNOWN_RED = {
-    # (SR-1.1-non-ascii-manifest left with the wp/core CORE-02 merge, build round 9.)
+    # (Empty: the last known-red case passes since its fix landed.)
 }
 
 

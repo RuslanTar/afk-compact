@@ -1,6 +1,5 @@
 #!/usr/bin/python3
-"""tools/launcher-flags: check the restart launcher's flag table against `claude --help`
-(SESSION-RESTART §3.3).
+"""tools/launcher-flags: check the restart launcher's flag table against `claude --help`.
 
 Usage: tools/launcher-flags [--claude BIN | --help-file FILE] [--list]
   The table is the rows of src/claude-launcher.tmpl between `# flag table begin` and

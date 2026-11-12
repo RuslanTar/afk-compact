@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """tools/respawn-keepset: check what the plugin thinks a background restart keeps of a job's
-respawnFlags against Claude Code's own sanitizer (SESSION-RESTART B9, §2.2).
+respawnFlags against Claude Code's own sanitizer.
 
 Usage: tools/respawn-keepset [--claude BIN]... [--record] [--list]
   The table is plugin/helper/lib/restart.pm: @KEEP_VAL (flags kept with their value),

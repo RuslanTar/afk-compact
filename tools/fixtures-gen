@@ -2,7 +2,7 @@
 """tools/fixtures-gen: tests/fixtures -> plugin/tests/unit/_gen/*.gen.ts, and the fixture checks.
 
 Usage:
-  tools/fixtures-gen                 the regenerate step (BUILD-PLAN §4.3, §4.6): refresh the
+  tools/fixtures-gen                 the regenerate step: refresh the
                                      brand-dependent normalized_sha256 column of
                                      summaries/expected.tsv (written only when a value changed),
                                      then write plugin/tests/unit/_gen/{corpus,payloads,paths,brand}.gen.ts
@@ -17,69 +17,70 @@ Usage:
                                      writes)
   tools/fixtures-gen --refresh-sha   only the sha-column refresh of the regenerate step
 
-Checks run by --check (BUILD-PLAN §4.2, WP-fix exit list):
+Checks run by --check (the WP-fix exit list):
   parse     every *.json under tests/fixtures parses; every *.jsonl line parses
   expected  summaries/expected.tsv and each sub-table (p5/, acuity/, idle/, cc311/, unclosed/) equal the reference
-            detector (MOD-SPEC §5.1, with the P5-FOLD A1 sentinel-after-close rule) on every file
+            detector (with the sentinel-after-close rule) on every file
   secrets   no file under tests/fixtures, tools/fixtures-gen or the generated output holds a
             secret-shaped string; every secrets/corpus.json entry hits its declared class once
             its fragments are joined, and no single fragment hits anything
-  bd2       C-STORE D6 (AT-ST-12): each corpus entry, redacted by the reference BD-2 rule with the spec
+  bd2       AT-ST-12: each corpus entry, redacted by the reference redaction rule with the spec
             secret_rules, has no two markers that touch, and matches its `redacted` / `markers` pins
   drift     the generated files are current
   sequences every sequences/<id>/ replays: files exist, payloads match their step, the main
             transcript after each step's appends holds the declared transcript_state, and with
             "order": "S-21" SessionStart(compact) and PostCompact see no boundary row newer than
             PreCompact (lab S-21: the row lands after PostCompact); then every pinned value is
-            recomputed from the replayed transcript and step times: BD-3 proof / proof_lag_ms /
-            settle wait (AT-BD-01), PKG-RUNTIME E.1 turn_kind (AT-WD-10) and the E.2
+            recomputed from the replayed transcript and step times: proof / proof_lag_ms /
+            settle wait (AT-BD-01), turn_kind (AT-WD-10) and the
             compaction_boundary sizes, rollup sizes and joined view (AT-WD-11)
   scope     transcripts/scope-cases.json: expect_scope (at reconcile, every proof) and
-            expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3; F2-1)
-            equal the MOD-SPEC §2.4 rule computed from each row's dispatch, summary and transcripts
-  queue     a JSON queue/<case>/list.out follows the strict v1 contract (Q-ADAPTER QA-2: the
+            expect_scope_postcompact (inside SessionStart(compact)/PostCompact, no P3: the
+            boundary row lands after them) equal the scope rule computed from each row's
+            dispatch, summary and transcripts
+  queue     a JSON queue/<case>/list.out follows the strict v1 contract (the
             `queue-stub/v1` tag required, `lanes` optional in either shape) and gives the mode its
             list.expect names (untagged and v2 replies are degraded on purpose); an adopt answer
-            follows the QA-2 exit table and its adopt.expect the plugin's mapping (AT-QA-04); an
-            add.rc follows the D-10 exit table (small-rulings §1.2); the shipped contract (0.1.6,
+            follows the adopt exit table and its adopt.expect the plugin's mapping (AT-QA-04); an
+            add.rc follows the queue-add exit table; the shipped contract (0.1.6,
             src/assets/queue-contract.md and its two schema files) agrees with this strict contract
             and with the helper's caps: the list schema's required and optional keys, commands and
             lane pattern; the draft schema's byte caps and option count against cmd/queue-add.pl
             (%MAX, %KIND, 2-4 options) and lib/queue.pm ($ADD_MAX), and each cap in the .md table
   setups    every setups/<id>.json builds in a temp dir with the case runner's step vocabulary
-            (repo, git, write, mkdir, symlink, copy, touch), then the result is checked: the D-12
-            repos (worktrees, submodule, symlinked root, declarations, exports against
-            frontmatter_keys_export), the Dev-1 scenarios (job sha, process records, the
+            (repo, git, write, mkdir, symlink, copy, touch), then the result is checked: the
+            repo-mode repos (worktrees, submodule, symlinked root, declarations, exports against
+            frontmatter_keys_export), the job scenarios (job sha, process records, the
             transcript stub as V1 reads it, sidecar seq against mtime, the case clock) and the
-            C-STORE ones (st-05: each record's pid state, host and ended- twin against the §5.8
-            finish reading; st-13: exactly the declared BD-4 detector fires for each task output;
+            store ones (st-05: each record's pid state, host and ended- twin against the
+            finish reading; st-13: exactly the declared task-output detector fires for each task output;
             st-09: each copy is fillable by nonce, and only the sub-unknown one in compact/subagents/
-            may be filled, C-STORE D5 step 5) and the W-BETA one (wb-canary-install: every canary
-            planted; the B.3 identity list recomputed; transform_only canaries hold no identity
+            may be filled) and the closed-beta one (wb-canary-install: every canary
+            planted; the identity list recomputed; transform_only canaries hold no identity
             string; the bucket canary is a bucket folder; `hostname -s` prints the host canary)
   stubs     bin/git-noexclude, installed as git, keeps a path that the real git leaves out under
             ':(top,literal,exclude)' with --no-renames (AT-ST-11), and logs `dropped 1`
   settings  settings/*.json options are userConfig keys of src/plugin.json (when that file exists)
   runtime   assembly/runtime.json has every key of tools/assemble's worst-case RUNTIME (the helper's
-            BT-04-H fills only runtime.json keys, so a missing one makes its render differ)
+            BT-04 half fills only runtime.json keys, so a missing one makes its render differ)
   beta      beta/*.zip (AT-WB-13): each zip's intake (refuse: .. or absolute name, symlink, name
-            outside B.5, entry over 50 MB, total over 200 MB, ratio over 100) and verify (manifest
+            outside the bundle's file list, entry over 50 MB, total over 200 MB, ratio over 100) and verify (manifest
             sha256, pattern classes) verdict equals beta/cases.json; zip members are secret-scanned
-  manifests the FIX-03 transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
+  manifests the transcript manifests (transcripts/P5-replay/replay.json, fill-joins/joins.json,
             idle-cases.json) agree with the payloads, dispatch records and corpus files they name;
-            each fill-joins outcome follows the C-STORE D5 join order over the rows no earlier copy
+            each fill-joins outcome follows the fill join order over the rows no earlier copy
             joined (sha with the engine trailers cut, else by time: candidates within SUB_WINDOW_S
-            on either side, E-C9-10, and a fill only for exactly one whose row is in the P3 sub
+            on either side, and a fill only for exactly one whose row is in the P3 sub
             window [t - TOL_S, t + SUB_WINDOW_S]), and verify-fail is a fill that only its fault
             blocks
   prod     settings/prod-cases.json: each recorded command's effects class, each placement's
             unattended_prod_reads value and each prod_patterns file's kept/dropped list follow a
-            reference of S-SETTINGS B and C (effects order, limits, no chaining after end_suffix)
-  stamps    RV-24: no short time (HH:MM, MM-DD HH:MM, a date and time without the offset) in any
+            reference of the production settings (effects order, limits, no chaining after end_suffix)
+  stamps    no short time (HH:MM, MM-DD HH:MM, a date and time without the offset) in any
             fixture text, except the files listed in LEGACY_TIME_OK, which test the legacy
             reading and must still hold one (a stale list entry fails too)
   rename a temp copy renamed to another brand passes --check after the plain regenerate
-            step alone (BUILD-PLAN §4.6; skipped inside the drill, FIXTURES_GEN_NO_DRILL=1)
+            step alone (skipped inside the drill, FIXTURES_GEN_NO_DRILL=1)
 
 Placeholders (tests/fixtures/README.md): `{{plugin}}` and `{{marketplace}}` are filled from
 brand.json; `$TMP`, `$HOME`, `$WATCH`, `$ROOT`, `$SID` stay for the case runner;
@@ -87,8 +88,8 @@ brand.json; `$TMP`, `$HOME`, `$WATCH`, `$ROOT`, `$SID` stay for the case runner;
 `$SECRET{` token are left out of the generated modules (no secret corpus in U fixtures).
 
 Secret rules: the `secret_rules` (id, class, re) of the spec-literals block in
-src/assets/handoff-spec.md when that file exists (BUILD-PLAN §3.4), else the provisional
-built-in set below, written from MOD-SPEC §10 and the handoff template §5. The file-name
+src/assets/handoff-spec.md when that file exists, else the provisional
+built-in set below, written from the handoff template §5. The file-name
 deny list is always the built-in one below: the spec's `deny_names` is not read yet.
 """
 import datetime, hashlib, json, math, os, re, shutil, stat, subprocess, sys, tempfile, zipfile
@@ -101,11 +102,11 @@ GEN_FILES = ("brand.gen.ts", "corpus.gen.ts", "payloads.gen.ts", "paths.gen.ts")
 SUMMARIES = os.path.join(FIX, "summaries")
 EXPECTED = os.path.join(SUMMARIES, "expected.tsv")
 # Sub-tables (README "Corpus"): summaries/<table>/ with its own expected.tsv, in the same columns,
-# for corpus files that must stay out of the AT-C-03 41-file corpus. p5: P5-FOLD A1 (sentinel after
-# </summary>; the 6 P5 summaries and the AT-P5-02 cases), apart so AT-C-03 stays green until
-# CORE-05 and MOD-05 build the rule; p5/copy_trailers.json lists extra trailers for that table only.
-# acuity: T-TEXT E6 golden summaries with the Acuity field (AT-AC-02, AT-AC-03).
-# idle: the three idle compactions of the 2026-10-23 lab runs on Claude Code 2.1.309 (X1, X4, U1h),
+# for corpus files that must stay out of the AT-C-03 41-file corpus. p5: the sentinel after
+# </summary> (the 6 P5 summaries and the AT-P5-02 cases), apart so AT-C-03 stays green until
+# the detector builds the rule; p5/copy_trailers.json lists extra trailers for that table only.
+# acuity: golden summaries with the Acuity field (AT-AC-02, AT-AC-03).
+# idle: the three idle compactions of lab runs on Claude Code 2.1.309 (X1, X4, U1h),
 # each as the installed message (3 engine trailers after the sentinel) and as the PostCompact
 # compact_summary (an <analysis> block before <summary>); both forms of one run share one body.
 # cc311: corpus file 01 in the Claude Code 2.1.311 installed form (the tools-used block wrapped in a
@@ -146,7 +147,7 @@ def read(path):
         return f.read()
 
 
-# ---------------------------------------------------------------- reference detector (MOD §5.1)
+# ---------------------------------------------------------------- reference detector
 
 _TRAILERS = {}
 
@@ -207,7 +208,7 @@ def normalize(text, name=None, trailers=()):
     `<system-reminder>` block (the installed form wraps the tools-used block in it, 2.1.311); a
     `Summary:` line; a `<summary>` tag (text after the tag on the same line is body).
     Tail: the body ends before the first line holding `</summary>` (text before the tag on that
-    line is body). Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1; needs `name`): when
+    line is body). Sentinel after the close tag (needs `name`): when
     the first non-blank text after `</summary>` (the rest of that line, else the next non-blank
     line) matches the sentinel grammar, that line is appended as the body's last line and the
     lines after it follow it as trailers; any other first line keeps everything after the tag
@@ -312,7 +313,7 @@ def unclosed(lines, scope, sentinel_re):
 
 
 def detect(text, name, dispatch=None, trailers=()):
-    """(verdict, marker_line, sentinel_from_end, nonce, scope, sha256, sentinel_place) per MOD §5.1.
+    """(verdict, marker_line, sentinel_from_end, nonce, scope, sha256, sentinel_place) per the detector rule.
 
     dispatch: None = text alone; "none" = a PostCompact with no dispatch at all; else the
     dispatch record (dict) of this compaction. sentinel_place: `inside`, `after-close` (the
@@ -343,7 +344,7 @@ def detect(text, name, dispatch=None, trailers=()):
             if nonce:
                 verdict = "stale"
         else:
-            # P1 of MOD §2.4: sub = agent_id set; main = agent_id null and a mod channel.
+            # P1 of the scope rule: sub = agent_id set; main = agent_id null and a mod channel.
             # A classic dispatch (actor unknown) proves neither scope.
             sub = dispatch.get("agent_id") is not None
             main = not sub and dispatch.get("channel") in ("mod-hook", "mod-self")
@@ -458,7 +459,7 @@ def refresh_sha(b):
 # ---------------------------------------------------------------- secret rules
 
 BUILTIN_RULES = [
-    # HARD: provider prefixes, PEM, JWT, Bearer/Basic, URL userinfo (MOD §10, template §5).
+    # HARD: provider prefixes, PEM, JWT, Bearer/Basic, URL userinfo (template §5).
     # Ids follow the spec-literals secret_rules, which the corpus `rule` column names.
     ("pem", "HARD", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
     ("jwt", "HARD", r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
@@ -474,7 +475,7 @@ BUILTIN_RULES = [
     ("stripe-key", "HARD", r"\b[sr]k_live_[0-9A-Za-z]{24,}"),
     ("gitlab-token", "HARD", r"\bglpat-[0-9A-Za-z_-]{20,}"),
     # WARN: key=value pairs, prefix-less cloud keys, high-entropy runs, cookies
-    # MOD §10 writes (pass|secret|token|key)\s*[=:]\s*\S{6,}; taken literally it misses its own
+    # The design rule reads (pass|secret|token|key)\s*[=:]\s*\S{6,}; taken literally it misses its own
     # AT-E-04 password example, so the provisional set allows the common suffixes.
     ("key-value", "WARN", r"(?i)(?:pass(?:word|wd)?|secret|token|api[_-]?key|key)\s*[=:]\s*\S{6,}"),
     ("cloud-key-bare", "WARN",
@@ -537,7 +538,7 @@ def load_corpus():
         return json.load(f)
 
 
-# BD-2 reference redaction (C-STORE D6, AT-ST-12): every rule runs on the original text; overlapping
+# Reference redaction (AT-ST-12): every rule runs on the original text; overlapping
 # or touching hits merge into one span, replaced once by `[redacted:<rule>]`, labelled by the first
 # rule of the spec list among the merged hits. A rule's leading `(^|[^…])` or trailing `($|[^…])`
 # guard group is not part of the hit. Corpus entries may pin the result: `redacted` (exact text) and
@@ -722,7 +723,7 @@ def transcript_counts(text):
 
 def main_boundaries(text):
     """Main-thread compact_boundary rows of transcript text: {e, off, meta, version} in file order
-    (off = the byte offset of the row's line, for the 512 KB tail rule of PKG-RUNTIME E.1)."""
+    (off = the byte offset of the row's line, for the 512 KB tail rule of turn_kind)."""
     out, off = [], 0
     for line in text.split("\n"):
         try:
@@ -737,8 +738,8 @@ def main_boundaries(text):
     return out
 
 
-# The reconcile constants the sequence references read (reconcile.pm, MOD-SPEC §5.4; BD-3 keeps
-# them as built, T-TEXT E5), the lab S-21 lag range (AT-BD-01) and the E.1 tail read.
+# The reconcile constants the sequence references read (reconcile.pm; the proof rule keeps
+# them as built), the lab S-21 lag range (AT-BD-01) and the turn_kind tail read.
 SETTLE_S, MAIN_WINDOW_S, TOL_S, SUB_WINDOW_S = 10, 600, 2, 120
 S21_LAG_MS = (12, 42)
 TAIL_BYTES = 512 * 1024
@@ -789,7 +790,7 @@ def seq_boundary(c, comps, st):
 
 
 def seq_bd3(c, comps, st):
-    """BD-3 (T-TEXT E5) rollup fields of compaction c as reconcile decides them at step st."""
+    """The proof rule's rollup fields of compaction c as reconcile decides them at step st."""
     bd = seq_boundary(c, comps, st)
     proof = "P1" if c.get("p1") else ("P3" if bd else "none")
     lag = int(round((bd["e"] - c["post_e"]) * 1000)) if bd and proof != "none" else None
@@ -808,7 +809,7 @@ def seq_copied(c, comps, info, upto):
 
 
 def seq_turn_kind(comps, info, k):
-    """PKG-RUNTIME E.1 for the step index k (no rollup row, receipt or nudge in these sequences):
+    """turn_kind for the step index k (no rollup row, receipt or nudge in these sequences):
     a pending record qualifies when its ts is after the last Stop, it has no copy row yet, and a
     main boundary row inside the last 512 KB lies in [ts - TOL_S, ts + MAIN_WINDOW_S]."""
     stops = [info[j]["now"] for j in range(k) if info[j]["ev"] == "Stop"]
@@ -858,7 +859,7 @@ def seq_reference(where, inp, exp, info):
                 ref = seq_bd3(c, comps, st)
                 for key in ("proof", "proof_lag_ms"):
                     if key in f and f[key] != ref[key]:
-                        p.append("{}: {} is {!r}, the BD-3 reference gives {!r} (boundary row time minus the "
+                        p.append("{}: {} is {!r}, the proof reference gives {!r} (boundary row time minus the "
                                  "PostCompact time)".format(w, key, f[key], ref[key]))
                 if ref["proof"] == "P3" and inp.get("order") == "S-21" and not S21_LAG_MS[0] <= ref["proof_lag_ms"] <= S21_LAG_MS[1]:
                     p.append("{}: proof_lag_ms {} is outside the lab S-21 range {}-{} ms".format(w, ref["proof_lag_ms"], *S21_LAG_MS))
@@ -1014,9 +1015,9 @@ def check_sequences():
     return problems, count
 
 
-# RV-24 (small-rulings §3a): a time in fixture text is a stamp, `YYYY-MM-DD HH:MM ±hhmm`, or an
+# A time in fixture text is a stamp, `YYYY-MM-DD HH:MM ±hhmm`, or an
 # ISO timestamp with seconds. The short forms stay only in the files below, because the case
-# they feed checks that the legacy reading still works (WATCHER-SPEC T-10, M-10 `time_legacy_re`).
+# they feed checks that the legacy reading still works (T-10, `time_legacy_re`).
 WHOLE_TIME_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}"
                            r"|[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:?[0-9]{2})?")
 SHORT_TIME_RE = re.compile(r"(?<![0-9:.+\-])[0-2][0-9]:[0-5][0-9](?![0-9:.])"
@@ -1047,7 +1048,7 @@ def check_stamps():
         if rel in LEGACY_TIME_OK:
             seen_legacy.add(rel)
         else:
-            problems.append("stamps {}: short time {!r} (RV-24: write a stamp `YYYY-MM-DD HH:MM ±hhmm`)".format(rel, hits[0]))
+            problems.append("stamps {}: short time {!r} (write a stamp `YYYY-MM-DD HH:MM ±hhmm`)".format(rel, hits[0]))
     for rel in sorted(LEGACY_TIME_OK - seen_legacy):
         problems.append("stamps {}: listed in LEGACY_TIME_OK but holds no short time any more".format(rel))
     return problems, nfiles, len(seen_legacy)
@@ -1055,8 +1056,8 @@ def check_stamps():
 
 # Setups (README "Setups"): tests/fixtures/setups/<id>.json holds `setup`, a list of the case
 # runner's setup steps (tests/helper/run.pl `setup`) that builds one scenario: temp repos with
-# worktrees and a submodule (D-12), process records, sidecar slots, job rows and transcript
-# stubs (Dev-1). The reference interpreter below runs them in a temp dir with the runner's
+# worktrees and a submodule (repo mode), process records, sidecar slots, job rows and transcript
+# stubs (jobs). The reference interpreter below runs them in a temp dir with the runner's
 # placeholders, so the recipes are proven to build, and then checks what they built.
 SETUPS = os.path.join(FIX, "setups")
 SETUP_ACTIONS = ("write", "repo", "git", "mkdir", "symlink", "copy", "touch")
@@ -1116,7 +1117,7 @@ class Scenario:
         self.tmp = os.path.realpath(tempfile.mkdtemp(prefix="fixtures-gen-setup-"))
         home = self.tmp + "/home"
         os.makedirs(home)
-        root = home + "/.local/state/" + b["name"] + "/handoffs"    # the default handoff_root (STATE-ROOT), as tests/helper/run.pl
+        root = home + "/.local/state/" + b["name"] + "/handoffs"    # the default handoff_root, as tests/helper/run.pl
         self.v = {"TMP": self.tmp, "HOME": home, "ROOT": root, "WATCH": root + "/.watch", "SID": sid, "SID8": sid[:8],
                   "BRAND": b["name"], "FIX": FIX, "FIXTURES": FIX, "LSTART1": process_lstart(1), "HOST": os.uname().nodename}
         self.touched = {}
@@ -1209,7 +1210,7 @@ def read_jsonl(path):
 
 
 def jobs_semantics(doc, sc):
-    """What a Dev-1 setup must have built (AT-J-04 and friends)."""
+    """What a job setup must have built (AT-J-04 and friends)."""
     p = []
     ex = doc.get("expect", {})
     sid = doc["invoke"]["argv"][doc["invoke"]["argv"].index("--origin") + 1]
@@ -1326,7 +1327,7 @@ def jobs_semantics(doc, sc):
 
 
 def rm_declaration_valid(text):
-    """D-12 §1.5.2 declaration validation (the reference reading)."""
+    """Repo-mode declaration validation (the reference reading)."""
     if len(text.encode("utf-8")) > 4096:
         return False
     try:
@@ -1362,14 +1363,14 @@ def rm_semantics(doc, sc):
                 continue
             valid = rm_declaration_valid(read(f))
             if valid != want.startswith("repo ("):
-                p.append("{}: the reference reading of §1.5.2 says valid={}, the recipe expects {!r}".format(name, valid, want))
+                p.append("{}: the reference reading of the declaration rule says valid={}, the recipe expects {!r}".format(name, valid, want))
         return p
     decl = top + "/.claude/handoffs.json"
     if not os.path.exists(decl):
         return ["no declaration at " + decl]
     if id_ == "rm-declared" or id_ == "rm-worktrees" or id_ == "rm-exports":
         if not rm_declaration_valid(read(decl)):
-            p.append("the declaration is not valid by the §1.5.2 reading")
+            p.append("the declaration is not valid by the declaration rule's reading")
         tracked = sc.git(top, "ls-files").split()
         for f in ("README.md", "src/a.rb", ".claude/handoffs.json"):
             if f not in tracked:
@@ -1463,7 +1464,7 @@ def pid_state(pid, lstart):
 
 
 def transcript_row_line(path):
-    """True when the first non-empty line parses as a transcript row (BD-4 detector c)."""
+    """True when the first non-empty line parses as a transcript row (task-output detector c)."""
     for line in read(path).split("\n"):
         if line.strip():
             try:
@@ -1500,7 +1501,7 @@ def st_semantics(doc, sc):
             if "eligible" in want:
                 rule = bool(ended) or (state in ("dead", "restarted") and host is not None)
                 if rule != want["eligible"]:
-                    p.append("{}: the C-STORE §5.8 reading gives eligible={}, the recipe says {}".format(sid8, rule, want["eligible"]))
+                    p.append("{}: the finish reading gives eligible={}, the recipe says {}".format(sid8, rule, want["eligible"]))
     elif doc["id"] == "st-13-agent-output":
         sid = doc["invoke"]["argv"][doc["invoke"]["argv"].index("--sid") + 1]
         slot = json.loads(read(sc.v["WATCH"] + "/" + sid + "/bg/slot-0.json"))
@@ -1528,7 +1529,7 @@ def st_semantics(doc, sc):
             is_b = typ not in ("shell", "monitor")
             fired = sorted(k for k, v in (("a", is_a), ("b", is_b), ("c", is_c)) if v)
             if fired != ([det] if det else []):
-                p.append("{}: BD-4 detectors {} fire, the recipe expects {}".format(tid, fired, [det] if det else []))
+                p.append("{}: task-output detectors {} fire, the recipe expects {}".format(tid, fired, [det] if det else []))
             if want.get("result") == "withheld" and not fired or want.get("result") == "copied" and fired:
                 p.append("{}: result {} does not follow from the detectors {}".format(tid, want.get("result"), fired))
         if sorted(sc.sub(doc["expect"]["paths"])) != sorted(o for _, o in types.values()):
@@ -1540,7 +1541,7 @@ def st_semantics(doc, sc):
 
 def st09_semantics(doc, sc):
     """AT-ST-09 (d): every copy is fillable by nonce (its nonce is the marker nonce of a summary row
-    in a planted agent file), and `filled` follows C-STORE D5 step 5: only a sub-unknown copy in
+    in a planted agent file), and `filled` follows the fill rule: only a sub-unknown copy in
     compact/subagents/ is filled; compact/ and compact/unattributed/ are never touched."""
     p, b = [], sc.b
     subdir = sc.sub("$HOME/.claude/projects/-tmp-example-repo/$SID/subagents")
@@ -1566,7 +1567,7 @@ def st09_semantics(doc, sc):
             p.append("{}: nonce {} is no agent summary row's marker nonce, so a scope bug could not fill it".format(key, c["nonce"]))
         rule = c["slot"] == "subagents" and c["actor"] == "sub-unknown"
         if c.get("filled") != rule:
-            p.append("{}: filled={} but C-STORE D5 step 5 gives {} (only sub-unknown copies in compact/subagents/)".format(
+            p.append("{}: filled={} but the fill rule gives {} (only sub-unknown copies in compact/subagents/)".format(
                 key, c.get("filled"), rule))
         if rule and not c.get("renamed_to", "").endswith("-{}.md".format(c["id6"])):
             p.append("{}: a filled copy names its -a<agent8> renamed_to path".format(key))
@@ -1670,7 +1671,7 @@ def check_stubs(b):
     return problems, 1
 
 
-# Production and relaunch settings (settings/prod-cases.json; S-SETTINGS B, C; BUILD-PLAN §3.7):
+# Production and relaunch settings (settings/prod-cases.json):
 # a reference of the effects order, the prod_patterns validation and the no-chaining rule.
 PROD_TOKEN = [("prod-token", r"(^|[^A-Za-z0-9])([Pp][Rr][Oo][Dd]|[Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn]|[Pp][Rr][Dd])([^A-Za-z0-9]|$)")]
 PATTERN_MAX, PATTERN_CHARS = 32, 200
@@ -1685,8 +1686,8 @@ def options_of(rel):
 
 
 def split_patterns(value, need_caret=False):
-    """(kept regexes, dropped indexes) by the S-SETTINGS limits: at most 32, each <= 200 chars,
-    no Dev-7 forbidden construct, compiles (relaunch_allow also needs a leading ^)."""
+    """(kept regexes, dropped indexes) by the settings limits: at most 32, each <= 200 chars,
+    no forbidden regex construct, compiles (relaunch_allow also needs a leading ^)."""
     forbidden = (literals().get("wait") or {}).get("marker_regex_forbidden") or ["(?{", "(??{", "(*"]
     kept, dropped = [], []
     for i, p in enumerate(x for x in (value or "").split(";") if x != ""):
@@ -1758,7 +1759,7 @@ def check_prod():
         options = options_of(c["settings"]) if c.get("settings") else {}
         got = effects_ref(c, options)
         if got != c["effects"]:
-            p.append("prod {}: the §3.7 order gives {}, the case says {}".format(c["id"], got, c["effects"]))
+            p.append("prod {}: the effects order gives {}, the case says {}".format(c["id"], got, c["effects"]))
     for name, pl in sorted(m["placements"].items()):
         if pl.get("settings_path") is None or name == "foreign":
             got = "forbid"
@@ -1776,8 +1777,8 @@ def check_prod():
     return p, len(m["commands"])
 
 
-# W-BETA fixtures (README "Beta"): the canary install (setups/wb-canary-install.json, AT-WB-02) and
-# the analyzer zips (beta/, AT-WB-13). The zip checks are a reference of W-BETA F.1 intake and F.2
+# Closed-beta fixtures (README "Beta"): the canary install (setups/wb-canary-install.json, AT-WB-02) and
+# the analyzer zips (beta/, AT-WB-13). The zip checks are a reference of the analyzer's intake and
 # verify, read-only (zipfile infolist and member reads; nothing is extracted).
 BETA = os.path.join(FIX, "beta")
 B5_NAME = re.compile(r"^(README\.txt|manifest\.json|config\.json|probes\.json|sizes\.json|rows/[0-9a-f]{12}\.jsonl)$")
@@ -1793,7 +1794,7 @@ def zip_texts(path):
 
 
 def intake_ref(path):
-    """W-BETA F.1: `accept`, or `refuse` with the first reason."""
+    """Bundle intake: `accept`, or `refuse` with the first reason."""
     with zipfile.ZipFile(path) as z:
         infos = z.infolist()
     total = 0
@@ -1804,7 +1805,7 @@ def intake_ref(path):
         if stat.S_ISLNK(i.external_attr >> 16):
             return "refuse", "symlink"
         if not B5_NAME.match(n):
-            return "refuse", "name outside B.5"
+            return "refuse", "name outside the bundle names"
         if i.file_size > 50 * 1024 * 1024:
             return "refuse", "entry over 50 MB"
         if i.compress_size and i.file_size / i.compress_size > 100:
@@ -1816,7 +1817,7 @@ def intake_ref(path):
 
 
 def verify_ref(path):
-    """W-BETA F.2: `valid`, or `quarantined` with the reason (manifest hashes, pattern classes)."""
+    """Bundle verify: `valid`, or `quarantined` with the reason (manifest hashes, pattern classes)."""
     texts = dict(zip_texts(path))
     man = json.loads(texts.get("manifest.json", "{}"))
     with zipfile.ZipFile(path) as z:
@@ -1891,7 +1892,7 @@ def wb_semantics(doc, sc):
 
 
 def wb_identity(doc, sc):
-    """W-BETA B.3 for the built install: the identity list a reference computes ($HOME, the account,
+    """The identity list for the built install, as a reference computes it ($HOME, the account,
     the host as `hostname -s` prints it with the recipe's PATH, every repo_roots entry and its
     basename, the basenames of the repo and bucket folders under the handoff root, the git remote
     hosts and owner paths; strings under 4 characters skipped) must equal expect.identity_list.
@@ -1923,7 +1924,7 @@ def wb_identity(doc, sc):
                 buckets.add(bk)
     ids = sorted(x for x in ids if len(x) >= 4)
     if ids != sorted(sc.sub(e.get("identity_list", []))):
-        p.append("identity_list {} but the B.3 reference gives {}".format(sorted(sc.sub(e.get("identity_list", []))), ids))
+        p.append("identity_list {} but the identity reference gives {}".format(sorted(sc.sub(e.get("identity_list", []))), ids))
     can = e["canaries"]
     if host != can.get("host"):
         p.append("`hostname -s` with the recipe's PATH prints {!r}, not the host canary".format(host))
@@ -1985,7 +1986,7 @@ def assemble_runtime_keys():
 
 
 def check_runtime():
-    """assembly/runtime.json names every token tools/assemble fills (BT-04-H, text-to-fix F-1): the
+    """assembly/runtime.json names every token tools/assemble fills (BT-04): the
     helper's golden check fills only runtime.json keys, so a key tools/assemble fills from its own
     worst case (e.g. idle_min) would make the helper render differ from the goldens."""
     problems = []
@@ -2003,16 +2004,16 @@ def check_runtime():
 
 
 # Canned queue_cmd answers (queue/<case>/<subcommand>.out, read by bin/queue-stub). A JSON `list`
-# answer follows the strict contract of Q-ADAPTER QA-2 (MOD-SPEC §10.3 as amended): `schema`
+# answer follows the strict v1 contract: `schema`
 # `queue-stub/v1` required, `lanes` optional in either shape, unknown keys ignored. `list.expect`
 # names the mode a reply gives (`on: …`, `degraded (untagged)`, `degraded (schema)`); a reply that
 # breaks the contract on purpose must say so there. `adopt.rc` / `adopt.out` / `adopt.expect` are
-# the QA-2 adopt refusals and the plugin's mapping of them (AT-QA-04).
+# the adopt refusals and the plugin's mapping of them (AT-QA-04).
 QUEUE = os.path.join(FIX, "queue")
 QUEUE_V1_REQUIRED = ["schema", "session", "lane", "open", "pending", "preview", "held_by"]
 QUEUE_V1_OPTIONAL = ["label", "commands", "lanes"]
 QUEUE_V1_LANE_KEYS = ["id", "holder", "open", "preview"]
-LANE_RE = re.compile(r"^(lane|auto):[A-Za-z0-9._/-]+$")   # MOD-SPEC §10 checkpoint lane rule
+LANE_RE = re.compile(r"^(lane|auto):[A-Za-z0-9._/-]+$")   # the checkpoint lane rule
 LANE_IN_RE = re.compile(r"(?:lane|auto):[A-Za-z0-9._/-]+")
 
 
@@ -2054,8 +2055,8 @@ def queue_list_mode(doc):
 
 
 def check_queue():
-    """List answers per the strict v1 contract (QA-2) and their list.expect; adopt answers per
-    the QA-2 exit table; add answers per D-10 (small-rulings §1.2): rc 0 prints a queue-add/v1
+    """List answers per the strict v1 contract and their list.expect; adopt answers per
+    the adopt exit table; add answers per the queue-add exit table: rc 0 prints a queue-add/v1
     object, rc 2 has no REFUSED line, rc 5 a `REFUSED: draft: <rule>` line, rc 3, 4 and 6 are the
     other refusals."""
     problems, njson = [], 0
@@ -2093,7 +2094,7 @@ def check_queue():
         err_file = os.path.join(QUEUE, case, "add.err")
         err = read(err_file) if os.path.exists(err_file) else ""
         if not rc.isdigit() or int(rc) > 6:
-            problems.append("{}.rc: {!r} is not an exit code of the D-10 table (0-6)".format(where, rc))
+            problems.append("{}.rc: {!r} is not an exit code of the queue-add table (0-6)".format(where, rc))
             continue
         rc = int(rc)
         if rc == 0:
@@ -2115,7 +2116,7 @@ def check_queue():
 
 
 def check_queue_contract():
-    """0.1.6 (owner 2026-11-08: the plugin shares its queue contract): the shipped contract text and
+    """0.1.6 (the plugin shares its queue contract): the shipped contract text and
     its schema files say what the strict contract above and the helper enforce. Problems, checks."""
     problems, n = [], 0
     src = os.path.join(REPO, "src", "assets")
@@ -2170,7 +2171,7 @@ def check_queue_contract():
 
 
 def check_adopt(case, commands):
-    """QA-2 adopt: rc 0 with the bound lane id in the first stdout line; rc 3/4/6 with one stdout
+    """Adopt: rc 0 with the bound lane id in the first stdout line; rc 3/4/6 with one stdout
     `REFUSED: <kind>: <reason>` line (<= 200 B, no command text); rc 2 usage. adopt.expect is the
     plugin's mapping (AT-QA-04): `lane: <id>`, `held holder=<sid> kind=<k>`, `no-lane`, `error`,
     `unsupported`."""
@@ -2183,7 +2184,7 @@ def check_adopt(case, commands):
     out = read(os.path.join(d, "adopt.out")) if os.path.exists(os.path.join(d, "adopt.out")) else ""
     expect = read(os.path.join(d, "adopt.expect")).strip() if os.path.exists(os.path.join(d, "adopt.expect")) else None
     if rc not in ("0", "2", "3", "4", "6"):
-        return ["{}.rc: {!r} is not a QA-2 adopt exit code (0, 2, 3, 4, 6)".format(where, rc)]
+        return ["{}.rc: {!r} is not an adopt exit code (0, 2, 3, 4, 6)".format(where, rc)]
     rc = int(rc)
     first = out.split("\n", 1)[0]
     if rc == 0:
@@ -2203,15 +2204,15 @@ def check_adopt(case, commands):
     if expect is None:
         p.append("{}: adopt.expect missing".format(where))
     elif want is not None and expect.split(" (")[0] != want:
-        p.append("{}: the QA-2 mapping gives `{}`, adopt.expect says `{}`".format(where, want, expect))
+        p.append("{}: the adopt mapping gives `{}`, adopt.expect says `{}`".format(where, want, expect))
     if "(no --must-exist" in (expect or "") and commands is not None and "adopt:must-exist" in commands:
         p.append("{}: adopt.expect says no --must-exist but the caps hold adopt:must-exist".format(where))
     return p
 
 
-# Transcript manifests (README "Transcripts"): FIX-03 inputs that tie transcripts to payloads, records
-# and corpus files. P5-replay (C-STORE D5 fill, AT-ST-08), fill-joins (AT-ST-09), idle-cases (IC-1 D1,
-# AT-IC-02). Each check proves the pieces agree, so a core case can rely on them.
+# Transcript manifests (README "Transcripts"): inputs that tie transcripts to payloads, records
+# and corpus files. P5-replay (the fill, AT-ST-08), fill-joins (AT-ST-09), idle-cases (the idle
+# rule, AT-IC-02). Each check proves the pieces agree, so a core case can rely on them.
 TRANSCRIPTS = os.path.join(FIX, "transcripts")
 
 
@@ -2281,9 +2282,9 @@ def check_replay(b):
     return p
 
 
-# The engine's trailer lines after a transcript summary row's body (fix-escalations item 1). Core
-# built option (b): the transcript-row reader cuts them itself (transcript.pm @ENGINE_TRAILERS,
-# core-escalations E-C9-12) and the shipped copy_trailers stay empty. The joins reference cuts the
+# The engine's trailer lines after a transcript summary row's body. Core
+# built option (b): the transcript-row reader cuts them itself (transcript.pm @ENGINE_TRAILERS)
+# and the shipped copy_trailers stay empty. The joins reference cuts the
 # same three prefixes, so join (b) is proven the way core reads a row (and under option (a) alike).
 ENGINE_TRAILERS = [re.compile(r"^If you need specific details from before compaction \("),
                    re.compile(r"^Continue the conversation from where it left off without asking"),
@@ -2291,11 +2292,11 @@ ENGINE_TRAILERS = [re.compile(r"^If you need specific details from before compac
 
 
 def join_ref(c, summ, bounds, pay, b, taken=()):
-    """C-STORE D5 join order for an unmarked copy (no nonce, so no join a), over the boundary rows
+    """The fill join order for an unmarked copy (no nonce, so no join a), over the boundary rows
     no earlier copy has joined (`taken`: the case's joined_before agents): (b) one agent whose
     summary row's normalized body (engine trailers cut) has the copy's sha; else (c) by time, with
-    the candidate count of core-escalations E-C9-10 (core-to-fix 3; provisional until the root
-    rules on it): every agent with a free boundary row within SUB_WINDOW_S on either side of the
+    the two-sided candidate count (provisional): every agent with a free boundary row within
+    SUB_WINDOW_S on either side of the
     PostCompact time t counts; exactly one, with its row in the P3 sub window
     [t - TOL_S, t + SUB_WINDOW_S] -> fill; several -> copy_attribution_ambiguous with them;
     else no fill, no row. Returns (outcome, all sha holders, the candidates)."""
@@ -2351,13 +2352,13 @@ def check_joins(b):
             p.append("{}: joined_before names no agent of the manifest: {}".format(w, sorted(set(before) - set(m["agents"]))))
         taken = {m["agents"][k] for k in before if k in m["agents"]}
         ref, holders, cands = join_ref(c, summ, bounds, pay, b, taken)
-        if c["id"] == "two-sided":   # the E-C9-10 pin must separate the readings
+        if c["id"] == "two-sided":   # the two-sided pin must separate the readings
             t = parse_iso(c["postcompact_now"])
             one = [a for a, e in bounds.items() if a not in taken and t is not None and e is not None
                    and t - TOL_S <= e <= t + SUB_WINDOW_S]
             if len(one) != 1 or len(cands) < 2:
                 p.append("{}: the one-sided P3 window must hold exactly one candidate ({}) and the two-sided "
-                         "count several ({}), or the case does not pin E-C9-10".format(w, one, cands))
+                         "count several ({}), or the case does not pin the two-sided count".format(w, one, cands))
         lines = sorted(a for a, r in summ.items() if not body_lines_in(pay["compact_summary"], r, b))
         if lines != holders:
             p.append("{}: every body line is in the rows of {}, but the sha (engine trailers cut) matches {}".format(w, lines, holders))
@@ -2369,11 +2370,11 @@ def check_joins(b):
                     and e.get("old_file", "").startswith("kept") and e.get("new_file") == "absent"
                     and "copy_attributed" in e.get("rows_absent", [])):
                 p.append("{}: a verify failure keeps the old file, leaves no new file and writes copy_attribution_failed "
-                         "and no copy_attributed (C-STORE D5 step 3)".format(w))
+                         "and no copy_attributed (the fill join order)".format(w))
             continue
         got = {k: e.get(k) for k in ref}
         if got != ref or set(e) - set(ref) - {"note"}:
-            p.append("{}: expect {} but the D5 join order gives {} (sha holders {}, window candidates {})".format(
+            p.append("{}: expect {} but the fill join order gives {} (sha holders {}, window candidates {})".format(
                 w, e, ref, holders, cands))
     for need in ("sha-join", "ambiguous", "time-join", "verify-fail", "two-sided"):
         if need not in seen:
@@ -2411,7 +2412,7 @@ def check_idle(b):
         want = {"idle": bool(mod or native), "idle_source": source, "idle_mismatch": int(bool(mod) != bool(native))}
         got = {k: c["expect"].get(k) for k in want}
         if got != want:
-            p.append("{}: expect {} but the IC-1 D1 rule gives {}".format(w, got, want))
+            p.append("{}: expect {} but the idle rule gives {}".format(w, got, want))
         ends = [r for r in rows if r.get("type") == "assistant" and not r.get("isSidechain")]
         if not ends or ends[-1]["timestamp"] != m["last_turn_end"]:
             p.append("{}: the last main assistant row must end at last_turn_end".format(w))
@@ -2433,7 +2434,7 @@ def check_manifests(b):
         except (OSError, ValueError, KeyError, IndexError, TypeError) as e:
             problems.append("manifests transcripts/{}: {}: {}".format(name, type(e).__name__, e))
     return problems, n
-# The scope-proof table (transcripts/scope-cases.json; MOD-SPEC §2.4 as amended by ROOT-RULINGS F2-1).
+# The scope-proof table (transcripts/scope-cases.json; the scope rule).
 SCOPE_CASES = os.path.join(FIX, "transcripts", "scope-cases.json")
 SCOPE_KEYS = {"expect_scope": True, "expect_scope_postcompact": False}   # key -> P3 counted
 
@@ -2443,9 +2444,9 @@ def iso(ts):
 
 
 def ref_scope(case, b, with_p3):
-    """main | sub | unknown by the §2.4 rule: main = P1-main, or P3-main with no subagent signal;
+    """main | sub | unknown by the scope rule: main = P1-main, or P3-main with no subagent signal;
     subagent = P1-sub, P2-sub or P3-sub; both or neither = unknown. with_p3=False is the reading
-    inside SessionStart(compact) and PostCompact (F2-1: the boundary row lands after them)."""
+    inside SessionStart(compact) and PostCompact (the boundary row lands after them)."""
     d = load_dispatch(case["dispatch"]) if case["dispatch"] else None
     name, _, swap = case["summary"].partition("#nonce=")
     text = fill(read(os.path.join(SUMMARIES, name)), b)
@@ -2478,12 +2479,12 @@ def check_scope_cases(b):
         for key, with_p3 in sorted(SCOPE_KEYS.items()):
             want = ref_scope(case, b, with_p3)
             if case.get(key) != want:
-                problems.append("scope-cases {}: {} is {}, the §2.4 rule{} gives {}".format(
-                    case["id"], key, case.get(key), "" if with_p3 else " without P3 (F2-1)", want))
+                problems.append("scope-cases {}: {} is {}, the scope rule{} gives {}".format(
+                    case["id"], key, case.get(key), "" if with_p3 else " without P3", want))
     return problems, len(table["cases"])
 
 
-# The rename drill (BUILD-PLAN §4.6, fixture side): a temp copy with another brand must pass
+# The rename drill (fixture side): a temp copy with another brand must pass
 # --check after the plain regenerate step alone. The corpus sha column depends on the brand
 # (README "Corpus"), so this fails whenever the regenerate step leaves that column stale.
 DRILL_BRAND = {"name": "zq-rename-drill", "marketplace": "zq-rename-market"}
@@ -2615,7 +2616,7 @@ def check(b):
         len(texts), source, len(corpus["entries"]), len(corpus["names"])))
     bd2_problems, nbd2 = check_bd2(corpus)
     problems += bd2_problems
-    print("bd2: every corpus entry redacted once per merged span (C-STORE D6); {} pins checked".format(nbd2))
+    print("bd2: every corpus entry redacted once per merged span; {} pins checked".format(nbd2))
     # sequences
     seq_problems, nseq = check_sequences()
     problems += seq_problems
@@ -2623,34 +2624,34 @@ def check(b):
     # scope
     scope_problems, nscope = check_scope_cases(b)
     problems += scope_problems
-    print("scope: {} scope-cases rows against the §2.4 rule, at reconcile and inside PostCompact".format(nscope))
+    print("scope: {} scope-cases rows against the scope rule, at reconcile and inside PostCompact".format(nscope))
     # queue
     queue_problems, nqueue = check_queue()
     problems += queue_problems
-    print("queue: {} JSON list answers against the strict v1 contract (QA-2), adopt answers per the QA-2 exit table, add answers per D-10".format(nqueue))
+    print("queue: {} JSON list answers against the strict v1 contract, adopt answers per the adopt exit table, add answers per the queue-add exit table".format(nqueue))
     qc_problems, nqc = check_queue_contract()
     problems += qc_problems
     print("queue contract: {} checks of the shipped contract and schemas against the strict contract and the helper's caps".format(nqc))
     # setups, settings
     setup_problems, nsetup = check_setups(b)
     problems += setup_problems
-    print("setups: {} recipes built in temp dirs and checked (D-12 repos, Dev-1 scenarios)".format(nsetup))
+    print("setups: {} recipes built in temp dirs and checked (repo-mode repos, job scenarios)".format(nsetup))
     stub_problems, nstub = check_stubs(b)
     problems += stub_problems
     print("stubs: {} PATH stub proven on a temp repo (bin/git-noexclude keeps a path the real git excludes)".format(nstub))
     settings_problems, nsettings = check_settings()
     prod_problems, nprod = check_prod()
     problems += prod_problems
-    print("prod: {} recorded commands classed by the BUILD-PLAN §3.7 effects order (S-SETTINGS B, C)".format(nprod))
+    print("prod: {} recorded commands classed by the production settings' effects order".format(nprod))
     problems += settings_problems
     print("settings: {} files name only declared userConfig keys".format(nsettings))
     runtime_problems, nruntime = check_runtime()
     problems += runtime_problems
-    print("runtime: assembly/runtime.json's {} keys cover every token tools/assemble fills (BT-04-H)".format(nruntime))
+    print("runtime: assembly/runtime.json's {} keys cover every token tools/assemble fills (BT-04)".format(nruntime))
     # beta
     beta_problems, nbeta = check_beta()
     problems += beta_problems
-    print("beta: {} analyzer zips against the W-BETA F.1 intake and F.2 verify reference".format(nbeta))
+    print("beta: {} analyzer zips against the intake and verify reference".format(nbeta))
     # manifests
     man_problems, nman = check_manifests(b)
     problems += man_problems

@@ -1,10 +1,10 @@
 #!/usr/bin/python3
-"""tools/canary-baseline: write plugin/assets/canary-baseline.json (MOD-SPEC §5.6; E-15).
+"""tools/canary-baseline: write plugin/assets/canary-baseline.json.
 
 Usage: tools/canary-baseline [--types FILE] [--claude BIN] [--out FILE] [--check]
   --types   claude-code.d.ts to read (default: $CC_TYPES_DIR/claude-code.d.ts, else .types/)
   --claude  the Claude Code binary for the C8 string counts (default: the newest installed
-            version in ~/.local/share/claude/versions/, else $CLAUDE_CODE_EXECPATH; E-15)
+            version in ~/.local/share/claude/versions/, else $CLAUDE_CODE_EXECPATH)
   --out     output file (default plugin/assets/canary-baseline.json)
   --check   compare with the existing file instead of writing (exit 1 on drift)
 
@@ -12,8 +12,8 @@ Contents (no timestamps, so a re-run gives the same bytes):
   keysets   C5: per classic event and for the session.compact input, the required and
             optional top-level keys from the type declarations, plus sha8 of the sorted set
             (classic events also take OBSERVED_OPTIONAL as optional: keys sent live but not typed)
-  c8        binary string counts (TECH-FACTS Q6 §3 C8 list) for the tested binary, plus
-            idle_prefixes: the two native idle-compaction notice prefixes (IC-1 D1) that
+  c8        binary string counts (the C8_STRINGS list) for the tested binary, plus
+            idle_prefixes: the two native idle-compaction notice prefixes that
             reconcile matches after a main boundary row (both are counted in `counts` too);
             arm_list: the experiment's arm list as the binary writes it (counted too); rare_max:
             smoke fails on a changed count of the arm list or of a string whose count here is
@@ -22,7 +22,7 @@ Contents (no timestamps, so a re-run gives the same bytes):
   c9        sha256/16 of the declarations C9 names; `specs` holds the start regexes so the
             helper's `smoke` extracts with the same rule (helper/cmd/smoke.pl decl_hash)
   copy_trailers  installed-message trailers the normalizer cuts (none known)
-GEN file: committed by the integrator only (BUILD-PLAN §4.3). Owner: WP-core.
+GEN file: committed by the integrator only. Owner: WP-core.
 """
 import hashlib, json, os, re, sys
 
@@ -50,13 +50,13 @@ RARE_MAX = 16
 # (rare_guard): one that rose above RARE_MAX would silently become information only, and one
 # missing (count 0) would let smoke pass on its absence.
 COMMON_WORDS = ["control", "lean", "short", "capped"]
-# IC-1 D1: the native informational rows after an idle compaction (2.1.306 had only the first;
+# The native informational rows after an idle compaction (2.1.306 had only the first;
 # 2.1.314 has both)
 IDLE_PREFIXES = {"notice": "Compacted while idle",
                  "return": "Compacted using a summary written while you were away"}
 C8_STRINGS += [IDLE_PREFIXES[k] for k in sorted(IDLE_PREFIXES)]
 # Keys Claude Code sends on every classic hook event that the type declarations lack, observed
-# live (P5-FOLD A7: `scratchpad_dir` on all 35 hook payloads of 2.1.307, lab P5 order.log):
+# live (`scratchpad_dir` on all 35 hook payloads of 2.1.307):
 # optional in every C5 key set, so a payload carrying them is not a key-set change.
 OBSERVED_OPTIONAL = ["scratchpad_dir"]
 C9_SPECS = [
@@ -226,7 +226,7 @@ def main(argv):
            "copy_trailers": []}
     text_out = json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     if check:
-        # bytes as written (newline=""): CRLF drift is a difference too (BH-5)
+        # bytes as written (newline=""): CRLF drift is a difference too
         cur = open(out, encoding="utf-8", newline="").read() if os.path.isfile(out) else ""
         if cur != text_out:
             print("canary-baseline: {} differs from a fresh render".format(os.path.relpath(out, REPO)))

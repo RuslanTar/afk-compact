@@ -1,4 +1,4 @@
-# Path glob -> work package (BUILD-PLAN §2). Read by tools/owners-check.
+# Path glob -> work package. Read by tools/owners-check.
 # First matching row wins, so specific rows sit above broader ones.
 # Globs: * = any characters except /, ** = any characters, {a,b} = either.
 # GEN paths (written only by tools/build, tools/assemble, tools/fixtures-gen,
@@ -15,7 +15,7 @@ plugin/hooks/lib/*.gen.ts	build
 plugin/assets/**	build
 plugin/skills/**	build
 plugin/scripts/**	build
-# The launcher leaves plugin/bin/ in the launcher move (BLD-01, PKG-RUNTIME Q-R1); this row stays
+# The launcher leaves plugin/bin/ in the launcher move; this row stays
 # until that move has removed the old folder, so the removal itself is owned.
 plugin/bin/**	build
 plugin/tests/unit/_gen/**	build
@@ -43,16 +43,16 @@ tests/fixtures/**	fix
 tools/fixtures-gen	fix
 tools/beta-analyze	watch
 src/launcher.tmpl	core
-# The opt-in restart launcher (SESSION-RESTART §3, lane RS-B) and its shell cases.
+# The opt-in restart launcher and its shell cases.
 src/claude-launcher.tmpl	core
 tests/launcher/**	core
 plugin/helper/main.*	core
 plugin/helper/lib/watch.*	watch
 plugin/helper/lib/watch/**	watch
-# Design-pass rulings of 2026-10-21 (REVIEW (D) step 1). The lib and case rows below restate
-# the broader rows on purpose, so each note's new path shows its owner: Dev-7 wait, Dev-1
-# jobs, D-12 export/project/repomode, D-18 handoff-turn/handoff-state (one core lib the
-# skills call, DP-6 / B-18), D-10 queue-add.
+# The lib and case rows below restate
+# the broader rows on purpose, so each new path shows its owner: wait, jobs,
+# export/project/repomode, handoff-turn/handoff-state (one core lib the
+# skills call), queue-add.
 plugin/helper/lib/skills/{wait,jobs,export,project_cmd}.pm	skills
 plugin/helper/lib/skills/**	skills
 plugin/helper/lib/{repomode,handoff_turn}.pm	core
@@ -61,13 +61,13 @@ plugin/helper/cmd/{hook,dispatch,ident,prev-copy,checkpoint,save-copy,sweep,clai
 plugin/helper/cmd/{handoff-turn,handoff-state,queue-add}.*	core
 # 0.1.6 queue contract: `queue check` runs the read-only part of the queue_cmd contract (assets/queue-contract.md).
 plugin/helper/cmd/queue.*	core
-# 0.1.7 D-81: `cache`, the status line's read-only cache state (lib/cachestate.pm, assets/cache-contract.md).
+# 0.1.7: `cache`, the status line's read-only cache state (lib/cachestate.pm, assets/cache-contract.md).
 plugin/helper/cmd/cache.*	core
-# 0.1.8 D-83: `usage`, the shared usage record the mod reads and writes (lib/usagerec.pm).
+# 0.1.8: `usage`, the shared usage record the mod reads and writes (lib/usagerec.pm).
 plugin/helper/cmd/usage.*	core
-# The local shadow trial (TRIAL-DUAL-HANDOFF, P-DH-MEAS/P-DH-SAVE): two read/save commands beside lib/trial.pm.
+# The local shadow trial: two read/save commands beside lib/trial.pm.
 plugin/helper/cmd/{trial-measure,trial-save}.*	core
-# Restart on update (SESSION-RESTART §8.1, lane RS-A): the helper's restart command.
+# Restart on update: the helper's restart command.
 plugin/helper/cmd/restart.*	core
 # 0.1.2 visible defaults and the settings writer: settings show, set and reset (lib/settings_write.pm, lib/settings_reset.pm).
 plugin/helper/cmd/settings.*	core
@@ -77,7 +77,7 @@ plugin/helper/cmd/{wait,project}.*	skills
 plugin/helper/cmd/prune.*	skills
 plugin/helper/cmd/{watch,report}.*	watch
 tests/helper/run.*	core
-# HOME-GUARD (0.1.2): the one child-environment guard of the core case runner and the watch driver.
+# The home guard (0.1.2): the one child-environment guard of the core case runner and the watch driver.
 tests/helper/homeguard.pm	core
 tests/matrix/**	core
 tests/helper/cases/core/{AT-Q,AT-RM,AT-RN}-*/**	core
