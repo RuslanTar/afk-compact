@@ -206,6 +206,47 @@
      "^usage: seven_day 90% \\(plugin, 1m ago, resets in 3d; decided by another session's later 95%, time unknown\\); other sessions on this machine: seven_day 95% \\(time unknown, resets in 3d\\)$"
     ]
    }
+  },
+  {
+   "name": "a full tie: own seven_day 97 read 1 min ago and 0aaaaaaa's 97 read at the same time with the same reset (its session id sorts before this one's); the own reading decides, as in the plugin, so no note",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "seven_day",
+        "pct": 97,
+        "resets_at": 1794484800,
+        "at": 1794225540,
+        "src": "plugin",
+        "sid8": "$SID8"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 97,
+        "resets_at": 1794484800,
+        "at": 1794225540,
+        "src": "plugin",
+        "sid8": "0aaaaaaa"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^usage: seven_day 97% \\(plugin, 1m ago, resets in 3d\\); other sessions on this machine: seven_day 97% \\(1m ago, resets in 3d\\)$"
+    ]
+   }
   }
  ]
 }

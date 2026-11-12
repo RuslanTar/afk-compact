@@ -1016,10 +1016,11 @@ sub usage_lines {
     @peer = grep { defined $_->{resets_at} || !$timed{"$_->{sid8}\0$_->{kind}"} } @peer;
     my @win = map { $latest->(@$_) } $windows->(@peer);
     # an own counted reading with a reset: its window's latest beside the other sessions' readings
+    # (the own one first, so on a full tie it stays the latest, as in the plugin)
     my %over;
     for my $g ($windows->(@peer, grep { defined $_->{resets_at} && $counts->($_) } values %mine)) {
         my ($own) = grep { defined $s8 && $_->{sid8} eq $s8 } @$g;
-        my $l = $own && $latest->(@$g);
+        my $l = $own && $latest->($own, grep { $_ != $own } @$g);
         $over{ $own->{kind} } = $l if $l && $l != $own;
     }
     my $ago = sub { my $x = $_[0] < 0 ? 0 : int($_[0]); return $x < 60 ? "${x}s" : $x < 3600 ? int($x / 60) . 'm' : $x < 172800 ? int($x / 3600) . 'h' : int($x / 86400) . 'd' };
