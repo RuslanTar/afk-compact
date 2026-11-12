@@ -8,11 +8,11 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [0.1.10] - 2026-11-12
 
-afk-compact 0.1.10 fixes a hang on resume. On Claude Code 2.1.322 and later, the first prompt after `claude --resume` could hang with no reply, because the plugin waited for a context reading that Claude Code only finishes after that prompt's own hooks. The fault dates from 0.1.4.
+afk-compact 0.1.10 fixes a hang on resume. On Claude Code 2.1.322, the first prompt after `claude --resume` could hang with no reply, because the plugin waited for a context reading that Claude Code only finishes after that prompt's own hooks. The fault dates from 0.1.4.
 
 ### Fixed
 
-- **Resumed sessions no longer hang on the first prompt.** After `claude --resume`, the first prompt could wait forever with no request sent on Claude Code 2.1.322 and later. The plugin no longer waits for the compaction window reading before that prompt; it still reads the window once and uses it as soon as it arrives.
+- **Resumed sessions no longer hang on the first prompt.** After `claude --resume`, the first prompt could wait forever with no request sent (seen on Claude Code 2.1.322). The plugin no longer waits for the compaction window reading before that prompt; it still reads the window once and uses it as soon as it arrives.
 - **Halt mode on resume.** A resumed session now reads halt mode and its idle state from the earlier process before the first prompt is handled, so a note restored on that prompt shows halt mode when it is on.
 
 ### Upgrade notes
