@@ -62,7 +62,8 @@ sub resolve {
     my ($sid, $cwd, $topic, $where) = @_;
     my $root = rc::root();
     $where ||= git::where($cwd);
-    my $repo = $where->{repo} // (defined $cwd ? util::basename($cwd) : 'general');
+    # the name joins the byte root: bytes, whatever its source (a caller's where, a character cwd)
+    my $repo = util::fsb($where->{repo} // (defined $cwd ? util::basename($cwd) : 'general'));
     $repo = 'general' if !defined $repo || $repo eq '' || $repo eq '/';
     my ($rel, $source);
     if (defined(my $b = _pin_of($sid))) {
