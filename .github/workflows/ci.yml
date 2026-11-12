@@ -1,0 +1,142 @@
+# Runs on every push to main and every pull request, on Ubuntu and macOS.
+#
+# Left out on purpose:
+#   tools/typecheck, tools/canary-baseline   need claude-code.d.ts, which only a Claude Code session
+#                                            writes (its plugin-authoring skill); no login-free source
+#   tools/respawn-keepset                    reads a versioned binary under ~/.local/share/claude/versions
+#   tools/check integration                  hours of work; run by a maintainer before a release
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The Claude Code version the README says this release was tested against.
+  CLAUDE_CODE_VERSION: "2.1.319"
+  DISABLE_AUTOUPDATER: "1"
+
+jobs:
+  generated:
+    name: generated files are current (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: tools/build --check
+        run: |
+          tools/build --check || {
+            echo "::error::A generated file is out of date. Edit src/landing.md or src/docs/<page>.md (never README.md or docs/), then run tools/build and commit what it changed."
+            exit 1
+          }
+      - name: tools/fixtures-gen --check
+        run: tools/fixtures-gen --check
+      - name: tools/helper-replies-gen --check
+        run: tools/helper-replies-gen --check
+      - name: tools/assemble --check
+        run: tools/assemble --check
+
+  gates:
+    name: text gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        # tools/gates fails on the name of the folder above the checkout, so the checkout sits in a
+        # folder with a name that appears nowhere in the text.
+        working-directory: ci-parent-8f3a/afk-compact
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: ci-parent-8f3a/afk-compact
+      - name: tools/gates
+        env:
+          # tools/gates fails on the runner's account name; getpass reads LOGNAME first.
+          LOGNAME: ci-account-8f3a
+          USER: ci-account-8f3a
+          # The competitor-name list is kept out of the repository. Pushes to main use it from this
+          # secret; a pull request from a fork gets no secret and runs with a one-line placeholder,
+          # so the maintainer runs the real list before merging an outside pull request.
+          GATE_NAMES: ${{ secrets.GATE_NAMES }}
+        run: |
+          names="$RUNNER_TEMP/names.txt"
+          if [ -n "$GATE_NAMES" ]; then
+            printf '%s\n' "$GATE_NAMES" > "$names"
+          else
+            echo "::notice::GATE_NAMES is not set; the names gate runs with a placeholder list"
+            printf 'ci-placeholder-name\n' > "$names"
+          fi
+          tools/gates plugin README.md docs --names "$names" --no-git-log
+          # The community files and .github get the four gates that apply to hand-written text.
+          for gate in names user-path attribution stale-name; do
+            tools/gates CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md CHANGELOG.md .github \
+              --names "$names" --no-git-log --only "$gate"
+          done
+
+  plugin:
+    name: validate and unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+      - name: Install Claude Code (no login is made or needed)
+        run: npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - run: claude --version
+      - name: Validate the plugin
+        run: claude plugin validate plugin --strict
+      - name: Validate the marketplace
+        run: claude plugin validate . --strict
+      - name: Unit tests (the hooks module under Claude Code's own module rules)
+        run: claude plugin test plugin
+
+  helper:
+    name: helper, watcher and launcher cases (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    env:
+      TMPDIR: ${{ runner.temp }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Helper cases (a case that needs a tool or a Docker image the runner lacks prints "not run")
+        run: perl tests/helper/run.pl tests/helper/cases
+      - name: Watcher cases
+        run: /usr/bin/perl tests/helper/cases/watch/_driver/run-watch.pl
+      - name: Restart launcher cases (every POSIX shell found on the runner)
+        run: sh tests/launcher/run.sh --quick
+
+  # Linux launcher cases in Docker (debian with dash and bash, alpine with busybox ash and zsh).
+  # Manual only: it pulls images, which the suite itself never does.
+  launcher-docker:
+    name: launcher cases in Docker
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker pull debian:bookworm-slim
+      - run: sh tests/launcher/docker.sh --build-alpine
+      - run: sh tests/launcher/docker.sh

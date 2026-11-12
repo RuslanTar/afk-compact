@@ -1,0 +1,106 @@
+name: Bug report
+description: Something in afk-compact did not work as the documentation says
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A good report lets a maintainer see what happened without asking you for more.
+
+        **Security problem?** Do not file it here. Use the Security tab, then "Report a vulnerability" (see SECURITY.md).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the open and closed issues and did not find this one.
+          required: true
+        - label: This is not a security problem (those go through the Security tab).
+          required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: "Run `/afk-compact:status`; it shows the version your session runs. If you just updated, run `/reload-plugins` first."
+      placeholder: "0.1.9"
+    validations:
+      required: true
+  - type: input
+    id: claude-version
+    attributes:
+      label: Claude Code version
+      description: "Run `claude --version` in a shell."
+      placeholder: "2.1.319"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux (glibc)
+        - Linux (Alpine or another musl system)
+        - Windows with WSL 2
+        - Windows, native (not supported yet)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where you run Claude Code
+      options:
+        - Terminal session
+        - Desktop app
+        - Editor extension (VS Code, JetBrains)
+        - Headless (claude -p or the Agent SDK)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, in your own words. Paste the plugin's own lines if there are any (the `Compaction` line after a compaction, the `Resumed` line, a verdict or an alert from `/afk-compact:status`).
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What the docs or the `/afk-compact:status` output led you to expect.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The steps that lead to it, as short as you can make them. Say if it happens every time or only sometimes.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: settings
+    attributes:
+      label: Non-default settings
+      description: "Any plugin setting you changed that could matter (for example `handoff_root`, `idle_compact`, `keep_warm_hours`, `compact_target_tokens`), and whether `\"idleCompaction\": false` is set in your Claude Code settings. `/afk-compact:status` lists every value and where it comes from."
+  - type: textarea
+    id: report-zip
+    attributes:
+      label: Report zip (optional, your decision)
+      description: |
+        Run `/afk-compact:report --since 7d`. It writes one zip on your disk and prints its path. **Nothing is uploaded.**
+
+        The zip holds content-free logs: versions, your settings (paths only as default, custom or unset), recorded probe results and per-session log rows. It holds no conversation text, summaries, commands, file paths or repository and branch names. Open it and read its `README.txt` before you attach it.
+
+        Drag the zip into this box to attach it. The skill asks separately whether to add saved summaries and handoffs, which hold your sessions' text; answer no unless you are happy to share them. If you would rather not attach anything, leave this box empty or say so; the report is still useful.
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Other plugins that run hooks, a managed or Team setup, a proxy, a `--plugin-dir` or local-folder install, a recent Claude Code update.

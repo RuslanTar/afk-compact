@@ -1,0 +1,61 @@
+name: Feature request
+description: Suggest a change or an addition
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Start with the problem you have; the change you have in mind comes second. A change that adds a setting or alters a default is easier to discuss here before any code is written.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the open and closed issues and the docs, and this is not already covered.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What goes wrong or is missing today, in a real session. Who is affected, and how often?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The change you have in mind
+      description: What the plugin should do instead. If it needs a setting, say what the default should be and why.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Another way to solve it, including a setting you already change or a workaround you use now.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Compaction and handoff instructions
+        - Idle compaction, keep-warm and the cache
+        - Resume and the resume block
+        - Skills (handoff, resume, status, report, settings, prune)
+        - Watcher, logs and reports
+        - Background jobs and restart
+        - Repo mode and the question queue
+        - Install, docs or packaging
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to work on it?
+      options:
+        - "No, I am only suggesting it"
+        - "Yes, I would send a pull request"
+        - "Yes, with some guidance"
+    validations:
+      required: true
