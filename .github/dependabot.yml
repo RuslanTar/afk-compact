@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # The workflows pin each action to a commit; this keeps the pins current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci"
+  # TypeScript is the only npm dependency, and it is for tools/typecheck only (never shipped).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "deps"

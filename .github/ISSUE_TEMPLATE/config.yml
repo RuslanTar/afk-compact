@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/RuslanTar/afk-compact/security/advisories/new
+    about: Private reporting. Do not open a public issue for a security problem. See SECURITY.md.
+  - name: Question or idea (Discussions)
+    url: https://github.com/RuslanTar/afk-compact/discussions
+    about: How do I..., is this expected, or an idea that is not ready to be a request.
+  - name: Read the docs first
+    url: https://github.com/RuslanTar/afk-compact/blob/main/docs/README.md
+    about: The README and the pages under docs/ describe every setting, skill and limit.
