@@ -348,7 +348,8 @@ export interface Deps {
 /** What one module load keeps in memory (a reload starts a fresh one). */
 export type LoadState = {
   loadId: string
-  initDone: boolean
+  /** The load's one init run (alive.ts prepare): its halt mode and idle loads, and its thresholds. */
+  init: { loads: Promise<unknown>; thresholds: Promise<unknown> } | undefined
   eff: Effective | undefined
   /** The thresholds' read while it runs (config.ts effective): one read per load. */
   effReading?: Promise<Effective>
@@ -739,7 +740,7 @@ export type Outcome = {
 export function newState(loadId: string): LoadState {
   return {
     loadId,
-    initDone: false,
+    init: undefined,
     eff: undefined,
     ident: undefined,
     ccVersion: null,

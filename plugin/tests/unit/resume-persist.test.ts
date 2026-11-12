@@ -6,6 +6,7 @@
 // re-measured past 600 s. A newer compaction, the load's first turn end and /clear settle a record
 // that was not taken, so it never reaches a later turn or process.
 import { expect, test } from 'claude-code/testing'
+import { hasTag } from '../../hooks/lib/assemble'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, PENDING_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, SID_B, T0, WATCH, World, raiseCompact } from './harness.test'
@@ -348,6 +349,37 @@ test('BG-RESUME-01: session.start first, its threshold read waiting on the conte
   expect(settled).toBe(true)
   expect(started).toBe(true)
   expect(w.rowsOf('config_effective').map(r => [r.window, r.window_from])).toEqual([[800000, 'breakdown']])
+})
+
+test('BG-RESUME-02: session.start first on a resume, its threshold read waiting on the context build: the first prompt.context builds the restored idle block only after halt.json was read ([idle-halt])', async ($, on) => {
+  const w = new World()
+  w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' }))
+  w.files.set(ARMED, seededWith(60, { idle: true }))
+  w.install(on)
+  w.breakdown = BREAKDOWN
+  let built: () => void = () => undefined
+  const building = new Promise<void>(r => {
+    built = r
+  })
+  w.atBreakdown = () => building
+  let started = false
+  void w.start($).then(() => {
+    started = true
+  })
+  await w.settle()
+  let ctx: { blocks: readonly { name: string; text: string }[] } | undefined
+  void $.prompt.context({ blocks: [] }).then(c => {
+    ctx = c
+    built()
+  })
+  await w.settle()
+  expect(ctx).toBeDefined()
+  expect(started).toBe(true)
+  const block = blockOf(w, ctx ?? { blocks: [] }) ?? ''
+  expect(block).toContain(SID_A)
+  // Halt mode the earlier process left: the restored idle block stops after the background result.
+  if (hasTag('resume-context', 'idle-halt')) expect(block).toContain('handle it, then stop and wait for the user')
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([['ab0c0001', 'delivered:prompt.context']])
 })
 
 for (const ageS of [60, 700]) {
