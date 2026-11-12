@@ -215,8 +215,10 @@ sub stats {
 # keep_warm({session => [rows]}) -> the keep-warm statistics of those rows (the live rows or the
 # export-transformed ones; counts, durations, enum reasons and versions only):
 #   gaps {armed, warmed, refused, open}: a gap warmed from its `keep_warm_start` row; a
-#     `keep_warm_stop` row with `refused` true, or with no start row open and pings 0 (an older
-#     version's refusal), is a refused gap; a gap with a start row and no stop row yet is open
+#     `keep_warm_stop` row with `refused` true, or a `no-idle-path` one with no start row open and
+#     pings 0 (the only refusal of versions before 0.1.11), is a refused gap; any other stop with no
+#     start row open is a warmed gap whose start fell outside the window; a gap with a start row
+#     and no stop row yet is open
 #   refused_by, stops_by {why => n}: the refused gaps' reasons; the warmed gaps' stop reasons
 #   pings {sent, hit, missed, late, failed}: sent is the `keep_warm_send` rows (the result rows
 #     where a gap has fewer, an older version); hit `warm`, missed `fork-miss`, late `late`,
@@ -257,11 +259,12 @@ sub keep_warm {
                 $cur->{sent}++ if $ev eq 'keep_warm_send';
                 $cur->{res}{ $w->($r->{result}) }++ if $ev eq 'keep_warm_ping';
             } elsif ($ev eq 'keep_warm_stop') {
-                my $refused = _b($r->{refused}) || (!$cur && !($num->($r->{pings}) // 0));
+                my $refused = _b($r->{refused})
+                    || (!$cur && ($r->{why} // '') eq 'no-idle-path' && !($num->($r->{pings}) // 0));
                 my $new = sub { +{ outcome => $_[0], start_t => $t, sent => 0, res => {},
                                    plugin_version => $r->{plugin_version}, cc_version => $r->{cc_version} } };
                 $close->() if $refused;
-                # a stop with pings and no start row: its start was before the window
+                # any other stop with no start row: a warmed gap whose start was before the window
                 my $g = $refused ? $new->('refused') : $cur // $new->('warmed');
                 @$g{qw(why end_t gap_s)} = ($w->($r->{why}), $t, $num->($r->{gap_s}));
                 $g->{handover} = _b($r->{handover});

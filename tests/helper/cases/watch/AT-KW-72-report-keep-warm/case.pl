@@ -3,8 +3,9 @@
 # refused, refused by reason), the pings sent and how they came back (hit, missed, late, failed),
 # the stops by reason, and for each gap the cache result of the next main request after it (the
 # first `cache_after_gap` row after the gap's last row and before the next gap), with Claude Code's
-# miss reason. A stop row with no start row before it and no `refused` mark (an older version's
-# refusal) counts as refused. `watch report --input` over the zip's rows gives the same section.
+# miss reason. A `no-idle-path` stop row with no start row before it, no `refused` mark and pings 0
+# (an older version's refusal) counts as refused; any other stop with no start row is a warmed gap
+# whose start fell outside the window. `watch report --input` over the zip's rows gives the same section.
 my $kw = sub { my ($ev, $t, %f) = @_; return T::row($ev, $t, %f) };
 my $after = sub {
     my ($t, %f) = @_;
@@ -34,8 +35,8 @@ my @mod = (
     $kw->('keep_warm_send', 23000, n => 1, gap_s => 3000, since_s => 3000),
     $kw->('keep_warm_ping', 23005, n => 1, result => 'fork-miss', cache_read => 25289, cache_creation => 234319, since_s => 3000, gap_s => 3000, ms => 5000),
     $kw->('keep_warm_stop', 23005, why => 'fork-miss', pings => 1, gap_s => 3005, handover => \0),
-    # gap 6: an older version's refusal (no refused mark, no start row, pings 0)
-    $kw->('keep_warm_stop', 27000, why => 'ttl-5m', pings => 0, gap_s => 3000, handover => \1),
+    # gap 6: an older version's refusal (no-idle-path, no refused mark, no start row, pings 0)
+    $kw->('keep_warm_stop', 27000, why => 'no-idle-path', pings => 0, gap_s => 3000, handover => \1),
 );
 my @classic = (
     # a pause before any gap: belongs to none
@@ -84,7 +85,7 @@ my $section = qr/^## Keep-warm\n\n(.*?)(?=^## )/ms;
         $E->ok(defined $live ? 1 : 0, 'the live report has a Keep-warm section') or return;
         my $has = sub { my ($re, $msg) = @_; $E->ok(($live =~ $re ? 1 : 0), "$msg ($live)") };
         $has->(qr/^- Gaps: 6 armed: 3 warmed, 3 refused, 0 open$/m, 'gaps armed, warmed and refused');
-        $has->(qr/^- Refused, by reason: near-limit 1, no-jobs 1, ttl-5m 1$/m, 'refused by reason, an older refusal too');
+        $has->(qr/^- Refused, by reason: near-limit 1, no-idle-path 1, no-jobs 1$/m, 'refused by reason, an older refusal too');
         $has->(qr/^- Pings: 5 sent; 2 hit, 1 missed, 1 late, 1 failed$/m, 'pings sent and how they came back');
         $has->(qr/^- Ping results: api-error 1, fork-miss 1, late 1, warm 2$/m, 'ping results by class');
         $has->(qr/^- Stops, by reason: fork-miss 1, missed 1, turn 1$/m, 'stops by reason');
@@ -92,19 +93,19 @@ my $section = qr/^## Keep-warm\n\n(.*?)(?=^## )/ms;
         $has->(qr/^- Its cache miss reason: none 2, previous_message_not_found 2$/m, 'Claude Code\'s miss reasons');
         $has->(qr/^\| 1 \| warmed \| 2 \| 1 \| missed \| miss \| 6000 \| 0\.10 \| previous_message_not_found \|$/m, 'gap 1 row');
         $has->(qr/^\| 4 \| refused \| 0 \| 0 \| near-limit \| not seen yet \| - \| - \| - \|$/m, 'gap 4: the next request came after gap 5 began');
-        $has->(qr/^\| 6 \| refused \| 0 \| 0 \| ttl-5m \| not seen yet \| - \| - \| - \|$/m, 'gap 6 row');
+        $has->(qr/^\| 6 \| refused \| 0 \| 0 \| no-idle-path \| not seen yet \| - \| - \| - \|$/m, 'gap 6 row');
         $E->is($remote, $live, 'the same section from the zip\'s rows (--input)');
         my $k = $got{kw};
         $E->ok(ref $k eq 'HASH' ? 1 : 0, 'keep-warm.json in the zip') or return;
         $E->is(join(',', map { $k->{gaps}{$_} } qw(armed warmed refused open)), '6,3,3,0', 'json: gaps');
-        $E->is(join(',', map { "$_=$k->{refused_by}{$_}" } sort keys %{ $k->{refused_by} }), 'near-limit=1,no-jobs=1,ttl-5m=1', 'json: refused by reason');
+        $E->is(join(',', map { "$_=$k->{refused_by}{$_}" } sort keys %{ $k->{refused_by} }), 'near-limit=1,no-idle-path=1,no-jobs=1', 'json: refused by reason');
         $E->is(join(',', map { $k->{pings}{$_} } qw(sent hit missed late failed)), '5,2,1,1,1', 'json: pings');
         $E->is(join(',', map { "$_=$k->{stops_by}{$_}" } sort keys %{ $k->{stops_by} }), 'fork-miss=1,missed=1,turn=1', 'json: stops by reason');
         $E->is(join(',', map { $k->{next_request}{$_} } qw(hit miss none not_seen)), '2,2,0,2', 'json: the next request');
         my @g = @{ $k->{gap_list} || [] };
         $E->is(join(',', map { $_->{outcome} . ':' . ($_->{why} // '-') . ':' . (ref $_->{next} eq 'HASH' ? "$_->{next}{result}/$_->{next}{miss_reason}" : 'none') } @g),
                'warmed:missed:miss/previous_message_not_found,refused:no-jobs:hit/none,warmed:turn:hit/none,refused:near-limit:none,'
-               . 'warmed:fork-miss:miss/previous_message_not_found,refused:ttl-5m:none', 'json: each gap and its next request');
+               . 'warmed:fork-miss:miss/previous_message_not_found,refused:no-idle-path:none', 'json: each gap and its next request');
         $E->is(join(',', map { $_->{plugin_version} // '-' } @g[0, 1]), '0.1.0,0.1.0', 'json: the versions of each gap');
         $E->ok((index(watch::json::encode($k), $T::SID) < 0) ? 1 : 0, 'no session id in keep-warm.json');
         $E->ok(($got{readme} =~ /keep-warm\.json/ ? 1 : 0), 'the README names keep-warm.json');
@@ -133,6 +134,17 @@ my $section = qr/^## Keep-warm\n\n(.*?)(?=^## )/ms;
             $E->ok((ref $k3->{gap_list_truncated} && ${ $k3->{gap_list_truncated} }) ? 1 : 0, 'two sessions, cap 2: truncated');
             $E->is($k3->{gaps}{armed}, 4, 'two sessions, cap 2: the counts still cover every gap');
         }
+        # A stop with no start row before it and pings 0 that is not `no-idle-path` (the export's
+        # window or size cut fell between its start and stop rows; a first ping that came back
+        # fork-miss, or a turn during it, stops with pings 0) is a warmed gap, not a refusal.
+        my %cut = (
+            'c1' => [ $kw->('keep_warm_stop', 1000, why => 'fork-miss', pings => 0, gap_s => 3005, handover => \0) ],
+            'c2' => [ $kw->('keep_warm_stop', 2000, why => 'turn', pings => 0, gap_s => 3100, handover => \0) ],
+        );
+        my $k5 = watch::report::keep_warm(\%cut);
+        $E->is(join(',', map { $k5->{gaps}{$_} } qw(armed warmed refused open)), '2,2,0,0', 'a cut-off stop with pings 0 counts as warmed');
+        $E->is(join(',', sort keys %{ $k5->{refused_by} }), '', 'a cut-off stop adds no refusal reason');
+        $E->is(join(',', map { "$_=$k5->{stops_by}{$_}" } sort keys %{ $k5->{stops_by} }), 'fork-miss=1,turn=1', 'a cut-off stop counts by its stop reason');
         # A next-request result outside hit, miss and none (an export's `other`, or a bad word) counts
         # as other, in the totals and the gap list alike.
         my %odd = map {
