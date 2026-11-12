@@ -1286,19 +1286,33 @@ sub _file_kind {
     return $k;
 }
 
-# Exclusive create of a temp file beside the target, then rename; on failure only that
-# temp file (this run's own, at its exact path) is removed.
+# _write_new(path, data [, clash => 1]) -> 1 when written; 0 when refused (the refusal printed).
+# The name is taken by an exclusive create of the target itself (a name that exists, a dangling
+# link too, is never written through or replaced), never by a check and then a write: two runs
+# could pick one name. The data then goes to a temp file beside it, renamed over the claimed
+# name, so a reader never sees part of a file. With clash => 1 a name that is taken gives -1 and
+# prints nothing, so the caller can pick the next one. On failure only this run's own files (the
+# claimed name and the temp file, at their exact paths) are removed.
 sub _write_new {
-    my ($path, $data) = @_;
-    my $tmp = sprintf('%s.tmp-%d', $path, $$);
+    my ($path, $data, %o) = @_;
     my $old = umask 077;
+    my $claimed = sysopen(my $ch, $path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    my $taken = !$claimed && $!{EEXIST};
+    umask $old;
+    return -1 if $taken && $o{clash};
+    unless ($claimed) { print "REFUSED: output folder not writable\n"; return 0 }
+    close $ch;
+    my $tmp = sprintf('%s.tmp-%d', $path, $$);
+    $old = umask 077;
     my $ok = sysopen(my $fh, $tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
     umask $old;
-    unless ($ok) { print "REFUSED: output folder not writable\n"; return 0 }
-    my $n = syswrite($fh, $data);
-    my $closed = close $fh;
-    if (defined $n && $n == length($data) && $closed && !-e $path && rename($tmp, $path)) { chmod 0600, $path; return 1 }
-    unlink $tmp;
+    if ($ok) {
+        my $n = syswrite($fh, $data);
+        my $closed = close $fh;
+        if (defined $n && $n == length($data) && $closed && rename($tmp, $path)) { chmod 0600, $path; return 1 }
+        unlink $tmp;
+    }
+    unlink $path;
     print "REFUSED: output folder not writable\n";
     return 0;
 }
