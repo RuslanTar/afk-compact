@@ -605,13 +605,13 @@ export const SPEC = {
   "wait": {
     "cond_res": {
       "pid-exit": "^pid-exit:([0-9]+)(@([0-9]+))?$",
-      "file": "^file:([^:]+)$",
-      "marker": "^marker:([^:]+):(.+)$",
-      "exit": "^exit:([^:]+)$"
+      "file": "^file:((?:[A-Za-z]:(?=[\\\\/]))?[^:]+)$",
+      "marker": "^marker:((?:[A-Za-z]:(?=[\\\\/]))?[^:]+):(.+)$",
+      "exit": "^exit:((?:[A-Za-z]:(?=[\\\\/]))?[^:]+)$"
     },
     "guard_res": {
       "pid": "^pid:([0-9]+)(@([0-9]+))?$",
-      "file": "^file:([^:]+)$"
+      "file": "^file:((?:[A-Za-z]:(?=[\\\\/]))?[^:]+)$"
     },
     "max_default_s": 270,
     "max_range_s": [

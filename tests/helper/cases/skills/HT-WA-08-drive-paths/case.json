@@ -1,0 +1,139 @@
+{
+ "id": "HT-WA-08",
+ "layer": "H",
+ "owner": "skills",
+ "note": "wait reads a drive path: file:, exit: and marker: conditions and the file: guard take an optional drive prefix (a letter and a colon right before / or \\), as Claude Code hands on Windows. On macOS and Linux C: is a folder of the cwd, so the grammar is the same on every OS. marker:x:a:b is still path x with regex a:b, and file:C:x (no separator after the colon) matches no kind",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$TMP/C:/x",
+     "content": "hi\n"
+    },
+    {
+     "write": "$TMP/C:\\x",
+     "content": "hi\n"
+    },
+    {
+     "write": "$TMP/C:/e",
+     "content": "__exit 3\n"
+    },
+    {
+     "write": "$TMP/C:/m",
+     "content": "one\nre here\n"
+    },
+    {
+     "write": "$TMP/x",
+     "content": "a:b\n"
+    },
+    {
+     "write": "$TMP/C:/g",
+     "content": "g\n"
+    }
+   ]
+  },
+  {
+   "name": "file: with a drive prefix before /",
+   "argv": [
+    "wait",
+    "--for",
+    "file:C:/x",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done file:C:/x after 0s\n"
+   }
+  },
+  {
+   "name": "file: with a drive prefix before a backslash",
+   "argv": [
+    "wait",
+    "--for",
+    "file:C:\\x",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done file:C:\\x after 0s\n"
+   }
+  },
+  {
+   "name": "exit: with a drive prefix",
+   "argv": [
+    "wait",
+    "--for",
+    "exit:C:/e",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done exit:C:/e after 0s rc=3 line=1\n"
+   }
+  },
+  {
+   "name": "marker: with a drive prefix keeps the whole path",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:C:/m:^re",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done marker:C:/m:^re after 0s line=2 match=re\n"
+   }
+  },
+  {
+   "name": "marker: a one-letter name with no separator is no drive",
+   "argv": [
+    "wait",
+    "--for",
+    "marker:x:a:b",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "wait: done marker:x:a:b after 0s line=1 match=a:b\n"
+   }
+  },
+  {
+   "name": "file:C:x is no drive path",
+   "argv": [
+    "wait",
+    "--for",
+    "file:C:x",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": "",
+    "stderr_has": [
+     "bad condition file:C:x"
+    ]
+   }
+  },
+  {
+   "name": "the file: guard takes a drive prefix",
+   "argv": [
+    "wait",
+    "--for",
+    "file:missing",
+    "--while",
+    "file:C:/g",
+    "--max",
+    "0"
+   ],
+   "expect": {
+    "exit": 10,
+    "stdout": "wait: pending after 0s (max 0s); run the same command again\n"
+   }
+  }
+ ]
+}
