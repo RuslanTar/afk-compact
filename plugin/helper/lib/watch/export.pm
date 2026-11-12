@@ -1290,8 +1290,9 @@ sub _file_kind {
 # The name is taken by an exclusive create of the target itself (a name that exists, a dangling
 # link too, is never written through or replaced), never by a check and then a write: two runs
 # could pick one name. The data then goes to a temp file beside it, renamed over the claimed
-# name, so a reader never sees part of a file. With clash => 1 a name that is taken gives -1 and
-# prints nothing, so the caller can pick the next one. On failure only this run's own files (the
+# name, so a reader never sees part of the data; until the rename it sees an empty file there,
+# and a run killed between the claim and the rename leaves that empty file. With clash => 1 a
+# name that is taken gives -1 and prints nothing, so the caller can pick the next one. On failure only this run's own files (the
 # claimed name and the temp file, at their exact paths) are removed.
 sub _write_new {
     my ($path, $data, %o) = @_;
