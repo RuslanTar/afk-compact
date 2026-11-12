@@ -85,7 +85,10 @@
 #     saying so, uses_lstart1); "ps-lstart" skips unless the runner reads its own
 #     start time (ps -o lstart, else /proc). Both are probed only under a Windows Perl ($^O
 #     msys, cygwin or MSWin32); elsewhere they count as met, so a Unix host whose pid 1 or ps
-#     does not read fails those cases instead of skipping them). Not run (a
+#     does not read fails those cases instead of skipping them); "posix-paths" skips under a
+#     Windows Perl, where a drive-letter name (C:/x, C:\x) is an absolute path and no folder
+#     can be named C:, so steps that make or read one in the case folder run on macOS and
+#     Linux only. Not run (a
 #     line `not ok N - id # TODO not run: needs <what> (<why>)`, counted as "not run" in the
 #     summary, never as passed or skipped): "cmd:<name>" while <name> is not on PATH; a case
 #     in a zone (case or step "tz", an env TZ, a builtin's args "tz") whose tz database file
@@ -1661,7 +1664,7 @@ sub missing_needs {
     my ($needs) = @_;
     return grep { $ASSUME_MISSING{$_} || ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
                   || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
-                  || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
+                  || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs()) || ($_ eq 'posix-paths' && windows_perl())
                   || ($_ eq 'unix-pid1' && !unix_pid1()) || ($_ eq 'ps-lstart' && !ps_lstart())
                   || (/^docker-image:(.+)$/ && !docker_image($1)) || ($_ eq 'nonroot' && $> == 0)
                   || (/^docker-image-any:(.+)$/ && !grep { docker_image($_) } split /\|/, $1)

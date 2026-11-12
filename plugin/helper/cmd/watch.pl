@@ -15,7 +15,9 @@
 # prune and a report that writes under the watch dir (the default reports/ folder, or --export's
 # salt) print `REFUSED: <key>: <reason>` and exit 3 when the watch dir or handoff root is
 # refused (watch::ctx::refused); they write and delete nothing then.
-# Exit: 0 ran, 1 audit failed, 3 REFUSED, 64 usage, 70 internal error, 73 output not writable.
+# Exit: 0 ran, 1 audit failed, 3 REFUSED, 64 usage, 70 internal error, 73 not written:
+# `REFUSED: output folder not writable`, or `REFUSED: output file exists` when a file or link
+# is already at --out (the default reports/ name moves on to the next free number instead).
 use strict;
 use warnings;
 use utf8;

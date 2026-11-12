@@ -24,7 +24,7 @@ It exits 0 whatever it reads (a usage error says so on stderr), writes nothing b
 | cold, a keep-warm ping that did not read the conversation | `cache cold (keep-warm ping missed)` |
 | unknown | nothing at all (no line) |
 
-After any of these but unknown, ` · ping pending` while a keep-warm ping is out, and ` · keep-warm off (<why>)` when keep-warm did not start in the current idle gap: `cache 1h warm 8m left ↻2/7 · ping pending`, `cache 1h warm 6m left · keep-warm off (no-jobs)`.
+After any of these but unknown, ` · ping pending` while a keep-warm ping is out, and ` · keep-warm off (<why>)` when keep-warm did not start in the current idle gap, for every reason but `no-jobs`: `cache 1h warm 8m left ↻2/7 · ping pending`, `cache 1h warm 6m left · keep-warm off (near-limit)`. No background job is the normal idle case, not a refusal to notice, so the line leaves `no-jobs` out; `keep_warm.off` in the JSON, the log row and `/afk-compact:status` still name it.
 
 The text may change between versions; read `--json` in anything that parses it.
 
