@@ -6,6 +6,48 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-11-12
+
+afk-compact 0.1.11 makes keep-warm easier to follow. It now says why it stays off for an idle gap, shows a request while it is out, and its results appear in reports. It also reads usage near a limit more strictly, and fixes several problems under Git Bash on Windows.
+
+### Added
+
+- **Keep-warm says why it stays off.** When keep-warm does not start in an idle gap, the log has one `keep_warm_stop` row with `refused: true` and the reason (`no-jobs`, `ttl-5m`, `near-limit`, `no-idle-path`, `cutoff`, …). `/afk-compact:status` shows `keep-warm off (<why>)` for that gap, or `the last gap: keep-warm off (<why>)` once a later request of the session came. The status line command adds ` · keep-warm off (<why>)` to its cache line, except for `no-jobs` (no background job of the session is open), which is the normal idle case.
+- **A request in flight.** While a keep-warm request is out, the status line command adds ` · ping pending`, for at most 150 seconds.
+- **Late requests.** A keep-warm request that reads the cache but takes over about 2 minutes, or comes back more than 58 minutes after the last request that refreshed the cache, counts for nothing: the log's `keep_warm_ping` row says `late`, and keeping warm stops for the gap (`missed`). A slow request that did not read the cache, or that failed, keeps its own result.
+- **Keep-warm statistics in reports.** `/afk-compact:report` adds `keep-warm.json` to its zip, and the helper's `watch report` adds a Keep-warm section. They list the idle gaps that warmed and those refused (by reason), the requests sent and how they came back (`warm`, `fork-miss`, `late` or failed), why warming stopped, the gaps handed back to plugin idle compaction or the idle handoff turn, and for each gap the cache result of the session's next main request. Both are built from the log rows and hold only counts, durations, reasons and versions.
+- **Cache reads after a pause.** The watcher logs one `cache_after_gap` row for the first main response after a pause of 5 minutes or more: the pause, its cache reads, cache writes and uncached input, and `hit`, `miss` or `none`. When Claude Code reports a cache miss reason in the transcript, the row has it, with the missed token count. The row holds no text.
+
+### Changed
+
+- **The status line after a compaction.** The cache line reads `cache compacted` instead of `cache cold (compacted)`: the context is nearly empty then, and the next request writes the cache anew. The JSON output (`cache --stdin --json`) gains a `label` key (`warm`, `compacted`, `cold` or `unknown`), and `keep_warm.pending` and `keep_warm.off` for the two new parts. `state` keeps its old values (`cold` right after a compaction), so scripts should read `label`.
+- **Near a usage limit** (plugin idle compaction, keep-warm and the idle handoff turn):
+  - A reading's time is refreshed only when Claude Code reports that a limit's share moved, or by a response. A report that only the context or the cost moved (after a keep-warm request, say) leaves the reading as old as it was, so going past 90% no longer runs on a reading that says nothing of the usage since.
+  - A reading dated more than a minute ahead of the clock is stale for going past 90%, since its time is not known.
+  - A reset time further ahead than its window is long (a five-hour limit's more than about 5 hours away, a seven-day limit's more than about 7 days away) is not believed. The reading counts as one with no reset time, in the shared usage record too.
+  - When the shared usage record is full, it keeps each period's latest reading by the same rule the plugin's decision uses, so a reading dated ahead of the clock with a smaller share no longer pushes out the real latest one.
+- **Existing output files.** `/afk-compact:report`, and `watch report` with `--out`, never replace a file that is already there. They now print `REFUSED: output file exists` (exit 73) for it, instead of `REFUSED: output folder not writable`.
+- **Report file names.** `watch report` without `--out` claims its file name by exclusive create, and moves on to the next free number when another run took it first. A name held by a broken link is skipped, never written through.
+
+### Fixed
+
+- **Wait paths with a drive letter.** A `wait --for` path that starts with a drive letter (`file:C:/work/out.log`, `exit:C:\…`, `marker:C:/…:<regex>`), as Claude Code gives paths on Windows, was refused as a usage error. It now parses.
+- **GSD state under Git Bash.** Git for Windows gives the worktree's path with a drive letter, so the handoff check read every GSD `STATE.md` as outside the worktree and never read a handoff's GSD state. A nested checkout is still refused.
+- **Folders outside git with non-ASCII names.** In a folder that is not a git work tree and whose name has non-ASCII characters, handoffs were saved under a second, wrongly encoded folder, and the session's own handoff was taken for another session's.
+- **Session identity under Git Bash.** Git Bash's Perl sees every hook's parent as process 1, so the helper took process 1 for Claude Code, and every record kept by process (the session's alive record, sessions, locks) named it. Under Git Bash and Cygwin the helper now goes by Claude Code's own `CLAUDE_PID`. On macOS and Linux a helper whose parent is process 1 is an orphan and keeps process 1, as before.
+- **Report name clashes.** Two `watch report` runs on one date could pick the same file name: one report replaced the other, or the second one said the output folder was not writable.
+- **Own usage readings in `/afk-compact:status`.** Only the other sessions' readings were grouped by period, so a reading of the session that the near-limit rule does not go by looked like the deciding one. The line now says when another session read the same period later, with that share. On a full tie the session's own reading stays the latest, as in the plugin, and a reading dated more than a minute ahead of the clock shows as of unknown time.
+
+### Upgrade notes
+
+- Status-line scripts that matched `cold (compacted)` should read the JSON `label` key, which is `compacted` right after a compaction. The plain line now reads `cache compacted`; `state` still reads `cold`.
+- No other action is required.
+
+### Compatibility
+
+- Requires Claude Code 2.1.287 or newer. The one-line install needs 2.1.292 or newer.
+- Tested against Claude Code 2.1.322.
+
 ## [0.1.10] - 2026-11-12
 
 afk-compact 0.1.10 fixes a hang on resume. On Claude Code 2.1.322, the first prompt after `claude --resume` could hang with no reply, because the plugin waited for a context reading that Claude Code only finishes after that prompt's own hooks. The fault dates from 0.1.4.
@@ -389,7 +431,8 @@ This is an early (0.x) version. Some parts that need a live session or a managed
 - `git` for the git measurements.
 - Supported: macOS 13 or newer, and Linux with glibc. Expected to work but not yet tested in a session: Alpine/musl and WSL 2. Native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.11
 [0.1.10]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.10
 [0.1.9]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.9
 [0.1.8]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.8
