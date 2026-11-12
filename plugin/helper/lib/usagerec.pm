@@ -23,7 +23,8 @@ package usagerec;
 # entry stays until its `resets_at`, however old; one with none only $FRESH_S after it was last
 # read or seen), keep at most $MAX_ENTRIES, a session's entries together (the sessions last read or
 # seen first), never dropping for room the session and kind whose entry is the latest of a window
-# (_deciding(): the reading a near-limit decision goes by), and rename a temp file over it
+# (_deciding(): the reading a near-limit decision goes by, by the same rule, limits.ts latestOf),
+# and rename a temp file over it
 # (cachestate::_put: never inside a git work tree or a .planning folder, so with the state folder
 # in one there is no record). Two writers at once: the last one wins, and the lost entry comes
 # back at that session's next write.
@@ -105,21 +106,40 @@ sub kept {
     return [ grep { defined $_->{resets_at} ? $_->{resets_at} > $now : $now - _last($_) <= $FRESH_S } @$all ];
 }
 
-# _deciding(entries) -> { "sid8\0kind" => 1 }: per window (a kind, its entries' resets within
-# $SAME_RESET_S of the window's earliest) the session whose reading is the latest (dated(); the
-# larger share on a tie): the one that decides for that window
+# _latest(now, entry...) -> the latest of one window's entries (limits.ts latestOf): the dated one
+# read last (a time up to $SAME_RESET_S ahead of `now` reads as `now`; at the same time, the larger
+# share), unless one of unknown time (more than $SAME_RESET_S ahead: a clock that stepped back) has
+# a larger share, as the share only grows until the reset
+sub _latest {
+    my ($now, @es) = @_;
+    my $t = sub { my ($e) = @_; return $e->{at} - $now > $SAME_RESET_S ? undef : $e->{at} < $now ? $e->{at} : $now };
+    my ($dated, $undated);
+    for my $e (@es) {
+        my $x = $t->($e);
+        if (!defined $x) { $undated = $e if !$undated || $e->{pct} > $undated->{pct}; next }
+        my $y = $dated ? $t->($dated) : undef;
+        $dated = $e if !$dated || $x > $y || ($x == $y && $e->{pct} > $dated->{pct});
+    }
+    return $undated && (!$dated || $undated->{pct} > $dated->{pct}) ? $undated : $dated;
+}
+
+# _deciding(entries, now) -> { "sid8\0kind" => 1 }: per window (a kind, its entries' resets within
+# $SAME_RESET_S of the window's earliest) the session whose reading is the latest at `now` (dated(),
+# then _latest()): the one that decides for that window
 sub _deciding {
-    my ($all) = @_;
-    my (%out, $win, $first);
+    my ($all, $now) = @_;
+    my (%out, @win, $first);
+    my $close = sub { my $w = _latest($now, @win); $out{"$w->{sid8}\0$w->{kind}"} = 1 if $w };
     for my $e (sort { $a->{kind} cmp $b->{kind} || $a->{resets_at} <=> $b->{resets_at} } grep { defined $_->{resets_at} } @{ dated($all) }) {
-        if (!$win || $win->{kind} ne $e->{kind} || $e->{resets_at} - $first > $SAME_RESET_S) {
-            $out{"$win->{sid8}\0$win->{kind}"} = 1 if $win;
-            ($win, $first) = ($e, $e->{resets_at});
+        if (!@win || $win[0]{kind} ne $e->{kind} || $e->{resets_at} - $first > $SAME_RESET_S) {
+            $close->() if @win;
+            @win = ($e);
+            $first = $e->{resets_at};
             next;
         }
-        $win = $e if $e->{at} > $win->{at} || ($e->{at} == $win->{at} && $e->{pct} > $win->{pct});
+        push @win, $e;
     }
-    $out{"$win->{sid8}\0$win->{kind}"} = 1 if $win;
+    $close->() if @win;
     return \%out;
 }
 
@@ -146,7 +166,7 @@ sub note {
     for my $e (@live) { $grp{ $e->{sid8} } = _last($e) if !defined $grp{ $e->{sid8} } || _last($e) > $grp{ $e->{sid8} } }
     my @keep = sort { $grp{ $b->{sid8} } <=> $grp{ $a->{sid8} } || $a->{sid8} cmp $b->{sid8} || _last($b) <=> _last($a) || _key($a) cmp _key($b) } @live;
     if (@keep > $MAX_ENTRIES) {
-        my $dec = _deciding(\@keep);
+        my $dec = _deciding(\@keep, $now);
         my $room = $MAX_ENTRIES - grep { $dec->{"$_->{sid8}\0$_->{kind}"} } @keep;
         @keep = grep { $dec->{"$_->{sid8}\0$_->{kind}"} || $room-- > 0 } @keep;
         splice(@keep, $MAX_ENTRIES) if @keep > $MAX_ENTRIES;
