@@ -215,14 +215,20 @@ sub _apply {
     }
     # keep_warm_stop (one with no start before it, a gap keep-warm refused, is a gap of its own)
     my $gs = $t - $gap;
-    $kw = $s->{keep_warm} = { started_at => undef, gap_start => _t($gs), hours => undef, n => 0, warm_at => _t($gs) }
-        unless $kw && _same_gap($kw, $gs);
+    my $same = $kw && _same_gap($kw, $gs) ? 1 : 0;
     my $why = !ref $r->{why} && defined $r->{why} && $r->{why} =~ /\A[a-z0-9-]{1,40}\z/ ? $r->{why} : 'other';
-    my $pings = _num($r->{pings}) // $kw->{n} // 0;
+    my $pings = _num($r->{pings}) // ($same ? $kw->{n} : undef) // 0;
     # 0.1.11: refused before warming (`refused: true`; an older plugin wrote only `no-idle-path` so,
     # with pings 0 and no start row)
     my $refused = (jsonc::is_bool($r->{refused}) && $r->{refused})
-                  || (!defined $kw->{started_at} && $why eq 'no-idle-path' && $pings == 0) ? 1 : 0;
+                  || ((!$same || !defined $kw->{started_at}) && $why eq 'no-idle-path' && $pings == 0) ? 1 : 0;
+    unless ($same) {
+        my $old = $kw;
+        $kw = $s->{keep_warm} = { started_at => undef, gap_start => _t($gs), hours => undef, n => 0, warm_at => _t($gs) };
+        # a refused gap sent no ping: the cache is the one the earlier gap's last warm ping or
+        # fork-miss left, so the new gap keeps both (report() drops them once a main request is later)
+        if ($refused && $old) { ref $old->{$_} eq 'ARRAY' and $kw->{$_} = $old->{$_} for qw(warm_ping miss_ping) }
+    }
     $kw->{stop} = { why => $why, pings => $pings, at => _t($t), ($refused ? (refused => jsonc::true()) : ()) };
     delete $kw->{sent_at};
     $kw->{last_at} = _t($t);

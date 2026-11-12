@@ -1,6 +1,6 @@
 {
  "id": "CACHE-11-keep-warm-off-pending",
- "note": "0.1.11: the cache output says what keep-warm did in the current idle gap. A gap keep-warm refused before its first ping (one keep_warm_stop row, pings 0, refused true; an older plugin's no-idle-path row with no start row counts too) reads keep_warm.off = its reason and `· keep-warm off (<why>)` on the line, until a main request after it. A keep_warm_send row (a ping going out) reads keep_warm.pending true and `· ping pending` until its keep_warm_ping or keep_warm_stop row. A late ping is last_result late. Right after a compaction the context is nearly empty, so the line reads `cache compacted` and the new `label` key reads compacted; `state` stays cold and `why` compacted (v1 stays additive). With no main request time to bound it (caching off, no transcript), keep_warm.off lasts at most an hour after its row. A ping out for over 150 s with no result row (its process died) is no longer pending.",
+ "note": "0.1.11: the cache output says what keep-warm did in the current idle gap. A gap keep-warm refused before its first ping (one keep_warm_stop row, pings 0, refused true; an older plugin's no-idle-path row with no start row counts too) reads keep_warm.off = its reason and `· keep-warm off (<why>)` on the line, until a main request after it. A keep_warm_send row (a ping going out) reads keep_warm.pending true and `· ping pending` until its keep_warm_ping or keep_warm_stop row. A late ping is last_result late. Right after a compaction the context is nearly empty, so the line reads `cache compacted` and the new `label` key reads compacted; `state` stays cold and `why` compacted (v1 stays additive). With no main request time to bound it (caching off, no transcript), keep_warm.off lasts at most an hour after its row. A ping out for over 150 s with no result row (its process died) is no longer pending. A refused gap that a turn with no main request opened keeps the earlier gap's last warm ping and last fork-miss, until a main request: a fork-miss still reads cold, a warm ping still warm.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
@@ -541,6 +541,243 @@
       "null": true
      }
     }
+   }
+  },
+  {
+   "name": "a fork-miss gap (main request 10:00, its ping at 10:50 found the main cache cold); prompt_cache expires an hour after the fork started, as Claude Code 2.1.319 counts it",
+   "setup": [
+    {
+     "write": "$TMP/proj/$SID-f.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID-f",
+       "id": "req-1",
+       "timestamp": "2026-11-09T10:00:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-f",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T10:50:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 2}\n{\"v\": 1, \"ts\": \"2026-11-09T10:50:03.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 0, \"result\": \"fork-miss\", \"cache_read\": 100, \"cache_creation\": 90000, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 3000}\n{\"v\": 1, \"ts\": \"2026-11-09T10:50:04.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"fork-miss\", \"pings\": 0, \"gap_s\": 3004, \"handover\": false}\n",
+   "now": "2026-11-09T11:00:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "line: cold, the ping missed",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-f",
+    "transcript_path": "$TMP/proj/$SID-f.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794225000
+    }
+   },
+   "now": "2026-11-09T11:00:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": "cache cold (keep-warm ping missed)\n"
+   }
+  },
+  {
+   "name": "a later gap, opened at 10:56 by a turn with no main request, refused fork-miss at 11:45",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-f",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:45:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-f\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 4, \"why\": \"fork-miss\", \"pings\": 0, \"gap_s\": 2940, \"handover\": false, \"refused\": true}\n",
+   "now": "2026-11-09T11:45:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "line: the refused gap keeps the earlier fork-miss: still cold, and keep-warm off",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-f",
+    "transcript_path": "$TMP/proj/$SID-f.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794225000
+    }
+   },
+   "now": "2026-11-09T11:46:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": "cache cold (keep-warm ping missed) · keep-warm off (fork-miss)\n"
+   }
+  },
+  {
+   "name": "json: cold fork-miss, off fork-miss",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-f",
+    "transcript_path": "$TMP/proj/$SID-f.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794225000
+    }
+   },
+   "now": "2026-11-09T11:46:00Z",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "cold",
+     "why": "fork-miss",
+     "label": "cold",
+     "keep_warm.off": "fork-miss",
+     "keep_warm.stop.why": "fork-miss",
+     "last.kind": "keep_warm"
+    }
+   }
+  },
+  {
+   "name": "--sid with no transcript and no stdin: the fork-miss still reads cold",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID-f"
+   ],
+   "now": "2026-11-09T11:46:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": "cache cold (keep-warm ping missed) · keep-warm off (fork-miss)\n"
+   }
+  },
+  {
+   "name": "a warmed gap (its ping at 10:50 read the main cache), stopped by a turn with no main request at 10:56",
+   "setup": [
+    {
+     "write": "$TMP/proj/$SID-g.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID-g",
+       "id": "req-1",
+       "timestamp": "2026-11-09T10:00:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-g",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T10:50:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 2}\n{\"v\": 1, \"ts\": \"2026-11-09T10:50:05.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 5000}\n{\"v\": 1, \"ts\": \"2026-11-09T10:56:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 4, \"why\": \"turn\", \"pings\": 1, \"gap_s\": 3360, \"handover\": false}\n",
+   "now": "2026-11-09T11:20:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "line (transcript only): warm until an hour after the warm ping",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-g",
+    "transcript_path": "$TMP/proj/$SID-g.jsonl"
+   },
+   "now": "2026-11-09T11:20:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 30m left\n"
+   }
+  },
+  {
+   "name": "the next gap, opened at 10:56, refused near-limit at 11:30",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-g",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:30:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-g\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 4, \"why\": \"near-limit\", \"pings\": 0, \"gap_s\": 2040, \"handover\": false, \"refused\": true, \"windows\": [\"five_hour:95\"], \"rule\": \"90\"}\n",
+   "now": "2026-11-09T11:30:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "line: the refused gap keeps the earlier warm ping: still warm until 11:50",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-g",
+    "transcript_path": "$TMP/proj/$SID-g.jsonl"
+   },
+   "now": "2026-11-09T11:31:00Z",
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 19m left · keep-warm off (near-limit)\n"
    }
   }
  ]
