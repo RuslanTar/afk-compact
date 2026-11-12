@@ -23,8 +23,10 @@
 //   anything (that would spend usage on every absence). Nor a gap no idle path can take
 //   over (`no-idle-path`): no idle record armed or held for the session (`idle_handoff_turn` and
 //   `idle_compact` both off, or no kind at this context size), or `triggers` off (every idle path
-//   refuses then); warming would run to the cutoff with nothing compacting after it. That reason,
-//   unlike the others, logs one stop row for a gap that never warmed (`refuse`, once per gap).
+//   refuses then); warming would run to the cutoff with nothing compacting after it. Every reason
+//   a gap may not warm (this one, `no-jobs`, `near-limit`, `ttl-5m`, the cutoff, …) logs one stop
+//   row for a gap that never warmed (`refuse`, once per gap, `refused: true`), so a status line
+//   can say why keep-warm is off.
 // - While it warms, the idle timer's handoff turn (49 min), its compaction (54 min) and the
 //   55.5-min check wait (one `handoff_skipped {why: keep-warm}` row; idle.ts `fire`); the record
 //   comes back to the idle path when warming stops with the cache still warm (`handOverIdle`).
@@ -36,8 +38,7 @@
 //   (`fork-miss`) with no hand-over, the held record dropped, and the idle path skips a compaction
 //   or turn on that cold cache (`fork-miss`, idle.ts `compactGuards`, `laterChecks`) until the
 //   session's next main request; no gap of the session warms again until then either (a new turn
-//   changes the history; `blocked` turns such a gap `off` with no row, so the one stop row is the
-//   reason, logged once).
+//   changes the history; `blocked` turns such a gap `off` with its refused row).
 //   `nothing-to-fork` with no request of the main session out (the engine keeps no snapshot to
 //   fork: a host that keeps none, a `/clear`) will not change at a retry: warming stops
 //   (`nothing-to-fork`) with the hand-over. While a
@@ -46,6 +47,9 @@
 //   deadline (idle.ts `heldDeadline`: the turn's 55.5 min, the compaction's 58 from the last warm
 //   request): a retry that would pass it stops first (`deadline`) with the hand-over. A fork that
 //   comes back past that deadline (a slow one) hands nothing over: `missed`, the record dropped.
+// - A fork that takes over about 2 minutes, or comes back past the last warm request plus
+//   58 minutes, is `late` (its ping row's result): the cache may have lapsed meanwhile, so it
+//   counts for nothing and the gap stops `missed`, the record dropped.
 // - It stops when a main turn starts (`turn`), the session ends or changes, a compaction ran since
 //   the gap began (`compacted`, Claude Code's own idle one included), no background job is open
 //   (`no-jobs`), the cache is not the one-hour one any more (`ttl-5m`), the main model or Claude
@@ -66,9 +70,10 @@
 // Rows: `keep_warm_start {jobs, gap_s, hours, windows, ping_s}` (`windows`: the usage windows read;
 // 0 means the near-limit guard is skipped; `ping_s`: the ping interval, which the cache state's
 // `next_due_at` follows), one `keep_warm_ping {n, result, cache_read, cache_creation,
-// since_s, gap_s, ms, status?}` per ping, one `keep_warm_wait {n, gap_s, next_s, windows, rule}` per
+// since_s, gap_s, ms, status?}` per ping (after one `keep_warm_send {n, gap_s, since_s}` as it goes
+// out: the cache state shows the ping pending until its result row), one `keep_warm_wait {n, gap_s, next_s, windows, rule}` per
 // wait for a usage window's reset (`next_s`: the seconds to the ping then), one `keep_warm_stop {why, pings, gap_s, handover, windows?}`
-// per gap that warmed or that `no-idle-path` refused before warming (`windows` on a `near-limit`
+// per gap that warmed or that was refused before warming (`refused: true`; `windows` on a `near-limit`
 // stop: each window as `kind:percent`, idle.ts `limitWindows`). The ping state lives in this load;
 // the idle record it holds stays in the store (idle.ts `holdIdle`), so a load that adopts it after
 // a reload ends the warming (`reload`) and fires it at the next ping's due, while the cache is
@@ -90,6 +95,12 @@ export const KEEP_WARM_PING_MS = 50 * 60000
  * IDLE_LAPSE_FRACTION of the cache hour; a literal here, as idle.ts and this module import each other).
  */
 export const KEEP_WARM_LATEST_MS = 58 * 60000
+/**
+ * A fork that takes longer than this (about 2 minutes) is `late`, as is one that comes back past the
+ * last warm request plus KEEP_WARM_LATEST_MS: the gap stops `missed`. Not test-seam-scaled: a fork's
+ * own time is real time (under a small seam the scaled 58-minute bound comes first).
+ */
+export const KEEP_WARM_SLOW_MS = 2 * 60000
 /** A ping that found a request in flight, an API error or an abort is tried again this much later. */
 export const KEEP_WARM_RETRY_MS = 60000
 /** A ping whose cache read share of the cached prefix is below this missed the main prefix (`fork-miss`). */
@@ -406,23 +417,19 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | Wait
 }
 
 /**
- * An `armed` gap may not warm (no row: it never warmed); in the limit band with a job open
- * the idle record that fires next goes back as a job's hand-over (`bandJob`, `holds`).
+ * An `armed` gap may not warm, for any reason `blocked` gives: it turns `off` with one
+ * `keep_warm_stop {why, pings: 0, handover: false, refused: true}` row (no start row before it; a
+ * `near-limit` one with its windows, rule and readings), once per gap (only an `armed` gap comes
+ * here, and it is `off` before the row is written). In the limit band with a job open the idle
+ * record that fires next goes back as a job's hand-over (`bandJob`, `holds`).
  */
-function turnOff(kw: KeepWarm, b: Block): void {
+async function refuse(d: Deps, kw: KeepWarm, b: Block, now: number): Promise<void> {
   kw.phase = 'off'
   if (b.why === 'near-limit' && b.job === true) kw.bandJob = true
-}
-
-/**
- * The gap may not warm for want of an idle path (`no-idle-path`): it turns `off` with one
- * `keep_warm_stop {why: no-idle-path, pings: 0, handover: false}` row (no start row before it),
- * once per gap (only an `armed` gap comes here, and it is `off` before the row is written), unlike
- * the other reasons, which log nothing for a gap that never warmed.
- */
-async function refuse(d: Deps, kw: KeepWarm, now: number): Promise<void> {
-  kw.phase = 'off'
-  await log(d, kw.sid, 'keep_warm_stop', { why: 'no-idle-path', pings: 0, gap_s: secs(now - kw.start), handover: false })
+  await log(d, kw.sid, 'keep_warm_stop', {
+    why: b.why, pings: 0, gap_s: secs(now - kw.start), handover: false, refused: true, ...(b.windows !== undefined ? { windows: b.windows } : {}),
+    ...(b.rule !== undefined ? { rule: b.rule, ...(await tierFields(d)) } : {}), ...b.usage,
+  })
 }
 
 /**
@@ -489,10 +496,7 @@ async function holds(d: Deps, kw: KeepWarm, rec: Due, now: number): Promise<bool
     if (moved()) return false
     if (b !== undefined) {
       // The first ping may have begun warming meanwhile: its own next checks stop it, with its row.
-      if (kw.phase === 'armed') {
-        if (b.why === 'no-idle-path') await refuse(d, kw, now)
-        else turnOff(kw, b)
-      }
+      if (kw.phase === 'armed') await refuse(d, kw, b, now)
       if (kw.bandJob !== true) return false
     } else if (!(await begin(d, kw, now))) return false
     // Begun by the first ping meanwhile: held as well (begin waits for its start row).
@@ -566,7 +570,7 @@ export async function stopKeepWarm(d: Deps, why: 'turn' | 'session-end', ours = 
 }
 
 /** A ping's outcome from the fork's result (content-free: counts, a class, an HTTP status). */
-type Outcome = { result: 'warm' | 'fork-miss' | 'nothing-to-fork' | 'api-error' | 'aborted' | 'error'; read: number | null; created: number | null; status?: number }
+type Outcome = { result: 'warm' | 'fork-miss' | 'nothing-to-fork' | 'api-error' | 'aborted' | 'error' | 'late'; read: number | null; created: number | null; status?: number }
 
 const count = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : null)
 
@@ -626,15 +630,15 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     return
   }
   if (kw.phase === 'armed') {
-    if (b !== undefined) {
-      if (b.why === 'no-idle-path') return refuse(d, kw, now)
-      turnOff(kw, b)
-      return
-    }
+    if (b !== undefined) return refuse(d, kw, b, now)
     // False when the gap moved meanwhile: nothing more here.
     if (!(await begin(d, kw, now))) return
   } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now, false, b)
   if (kw.phase !== 'warming') return
+  // 0.1.11: the ping goes out (a status line shows it pending until its result row); a turn or a
+  // prompt that came during this row's write: no fork.
+  await log(d, kw.sid, 'keep_warm_send', { n: kw.pings, gap_s: secs(now - kw.start), since_s: secs(now - kw.warm) })
+  if (!ours() || kw.phase !== 'warming') return
   // The main requests before the fork: one that comes while it runs already changed the history.
   const reqs = s.mainReqs
   let r: unknown
@@ -644,9 +648,12 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     r = undefined
   }
   const t1 = await d.now()
-  const o = forkOutcome(r)
+  const o0 = forkOutcome(r)
   // Set even when the gap moved meanwhile (a prompt a hook then drops resumes this gap): its next check stops it.
-  if (o.result === 'fork-miss') s.keepWarmForkMiss = { sid: kw.sid, reqs }
+  if (o0.result === 'fork-miss') s.keepWarmForkMiss = { sid: kw.sid, reqs }
+  // 0.1.11: a fork that took over about 2 minutes, or came back past the 58-minute bound of the
+  // last warm request, is `late`: its cache may have lapsed meanwhile, so it counts for nothing.
+  const o: Outcome = t1 - now > KEEP_WARM_SLOW_MS || t1 > kw.warm + KEEP_WARM_LATEST_MS * scale ? { ...o0, result: 'late' } : o0
   const live = ours() && kw.phase === 'warming'
   const since = now - kw.warm
   // A warm ping into the gap undisturbed: the gap counts from it at once (a turn starting during
@@ -675,8 +682,10 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   }
   // A hand-over only while the held record can still fire on a warm cache: a fork that came back
   // past its deadline (a slow one) ends the gap `missed`, with the record dropped.
-  const late = kw.deferred !== undefined && t1 > heldDeadline(kw.deferred, kw.warm, scale)
-  const handOver = (why: string, job = false): Promise<void> => (late ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1, false, { job }))
+  // A late fork ends the gap `missed`, with no hand-over and the held record dropped.
+  if (o.result === 'late') return stop(d, kw, 'missed', false, t1)
+  const pastDeadline = kw.deferred !== undefined && t1 > heldDeadline(kw.deferred, kw.warm, scale)
+  const handOver = (why: string, job = false): Promise<void> => (pastDeadline ? stop(d, kw, 'missed', false, t1) : stop(d, kw, why, true, t1, false, { job }))
   // No more pings in this gap: `fork-miss`, the main cache is cold (the fork read only the shared
   // prefix), so nothing goes back to the idle path, whose compaction or turn would read it cold too
   // (it skips `fork-miss` until the next main request, `forkMissed`); `error`, a fork the engine

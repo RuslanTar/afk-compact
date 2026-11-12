@@ -1,0 +1,429 @@
+{
+ "id": "CACHE-11-keep-warm-off-pending",
+ "note": "0.1.11: the cache output says what keep-warm did in the current idle gap. A gap keep-warm refused before its first ping (one keep_warm_stop row, pings 0, refused true; an older plugin's no-idle-path row with no start row counts too) reads keep_warm.off = its reason and `· keep-warm off (<why>)` on the line, until a main request after it. A keep_warm_send row (a ping going out) reads keep_warm.pending true and `· ping pending` until its keep_warm_ping or keep_warm_stop row. A late ping is last_result late. Right after a compaction the context is nearly empty, so the line reads `cache compacted` and the new `label` key reads compacted; `state` stays cold and `why` compacted (v1 stays additive).",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "a refused gap: one stop row, why no-jobs, refused",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:50:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"no-jobs\", \"pings\": 0, \"gap_s\": 3000, \"handover\": false, \"refused\": true}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "json: keep_warm.off names the reason for the current gap; not active, nothing pending",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794227100
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "label": "warm",
+     "keep_warm.active": false,
+     "keep_warm.pending": false,
+     "keep_warm.off": "no-jobs",
+     "keep_warm.n": 0,
+     "keep_warm.stop.why": "no-jobs",
+     "keep_warm.stop.pings": 0
+    }
+   }
+  },
+  {
+   "name": "line: keep-warm off (no-jobs) after the warm reading",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794227100
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 25m left · keep-warm off (no-jobs)\n"
+   }
+  },
+  {
+   "name": "a main request after the refused row: no longer the current gap",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228900
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.off": {
+      "null": true
+     },
+     "keep_warm.stop.why": "no-jobs"
+    }
+   }
+  },
+  {
+   "name": "line: no keep-warm part",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228900
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 55m left\n"
+   }
+  },
+  {
+   "name": "a newer refused gap: near-limit, with its windows",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:58:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"near-limit\", \"pings\": 0, \"gap_s\": 180, \"handover\": false, \"refused\": true, \"windows\": [\"five_hour:95\"], \"rule\": \"90\"}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "line: keep-warm off (near-limit)",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228900
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 55m left · keep-warm off (near-limit)\n"
+   }
+  },
+  {
+   "name": "an older row: no-idle-path with pings 0 and no start row, no refused field",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-l",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:50:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-l\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"no-idle-path\", \"pings\": 0, \"gap_s\": 3000, \"handover\": false}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "json: keep_warm.off no-idle-path",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-l",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794227100
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.off": "no-idle-path"
+    }
+   }
+  },
+  {
+   "name": "a warmed gap that stopped (cutoff)",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-w",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:40:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-w\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 2, \"ping_s\": 3000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:40:05.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-w\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 5000}\n{\"v\": 1, \"ts\": \"2026-11-09T11:50:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-w\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"cutoff\", \"pings\": 1, \"gap_s\": 3600, \"handover\": true}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "json: a stopped gap that warmed: off null",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-w",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794227100
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.off": {
+      "null": true
+     },
+     "keep_warm.stop.why": "cutoff"
+    }
+   }
+  },
+  {
+   "name": "a warming gap: its start row, then a ping goes out (keep_warm_send)",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-p",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T12:00:00.000Z\", \"ev\": \"keep_warm_start\", \"sid\": \"$SID-p\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"jobs\": 1, \"gap_s\": 3000, \"hours\": 6, \"windows\": 2, \"ping_s\": 3000}\n{\"v\": 1, \"ts\": \"2026-11-09T12:00:01.000Z\", \"ev\": \"keep_warm_send\", \"sid\": \"$SID-p\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 0, \"gap_s\": 3000, \"since_s\": 3000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "json: pending while the ping is out",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-p",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": true,
+     "keep_warm.pending": true,
+     "keep_warm.off": {
+      "null": true
+     }
+    }
+   },
+   "now": "2026-11-09T12:00:30Z"
+  },
+  {
+   "name": "line: ping pending",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-p",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 10m left ↻0/7 · ping pending\n"
+   },
+   "now": "2026-11-09T12:00:30Z"
+  },
+  {
+   "name": "its result row: warm",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-p",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T12:00:06.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-p\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"warm\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3000, \"gap_s\": 3000, \"ms\": 5000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "json: nothing pending after the result row",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-p",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": true,
+     "keep_warm.pending": false,
+     "keep_warm.n": 1,
+     "keep_warm.last_result": "warm"
+    }
+   },
+   "now": "2026-11-09T12:00:30Z"
+  },
+  {
+   "name": "the next ping goes out and comes back late",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-p",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T12:50:01.000Z\", \"ev\": \"keep_warm_send\", \"sid\": \"$SID-p\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"gap_s\": 6000, \"since_s\": 3000}\n{\"v\": 1, \"ts\": \"2026-11-09T12:53:01.000Z\", \"ev\": \"keep_warm_ping\", \"sid\": \"$SID-p\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"n\": 1, \"result\": \"late\", \"cache_read\": 90000, \"cache_creation\": 12, \"since_s\": 3000, \"gap_s\": 6000, \"ms\": 180000}\n{\"v\": 1, \"ts\": \"2026-11-09T12:53:01.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-p\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"missed\", \"pings\": 1, \"gap_s\": 6180, \"handover\": false}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "json: a late ping: last_result late, stop missed, nothing pending, not off",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-p",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": false,
+     "keep_warm.pending": false,
+     "keep_warm.last_result": "late",
+     "keep_warm.stop.why": "missed",
+     "keep_warm.off": {
+      "null": true
+     },
+     "keep_warm.n": 1
+    }
+   },
+   "now": "2026-11-09T12:54:00Z"
+  },
+  {
+   "name": "a compaction at 11:55, after the last request (11:40)",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-c",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:55:00.000Z\", \"ev\": \"compacted\", \"sid\": \"$SID-c\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"nonce\": \"1a2b3c4d\", \"skip\": null, \"tokens_before\": 300000, \"tokens_after\": 20000, \"usage_present\": true, \"ms\": 40000}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "json: state cold and why compacted as before (v1), label compacted",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-c",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228000
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "cold",
+     "why": "compacted",
+     "label": "compacted"
+    }
+   }
+  },
+  {
+   "name": "line: cache compacted",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-c",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228000
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache compacted\n"
+   }
+  },
+  {
+   "name": "unknown: label unknown, no line",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-u"
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "unknown",
+     "label": "unknown"
+    }
+   }
+  }
+ ]
+}

@@ -924,9 +924,10 @@ sub idle_lines {
 # Keep-warm (the mod's keepwarm.ts): on or off by keep_warm_hours (0 = off), and,
 # with a session id, this session's current idle gap from its last keep_warm_start, keep_warm_ping
 # and keep_warm_stop rows: warming with the pings that kept the cache warm so far, or not warming
-# (with the last warmed gap's pings and its stop reason, or the last gap refused before its first
-# ping for want of an idle path: `no-idle-path`, a stop row with no start row; a newer gap with no
-# row yet reads as that one did, hence "the last"). A headless session never warms.
+# (with the last warmed gap's pings and its stop reason), or (0.1.11) keep-warm off with the reason
+# it refused the last gap before its first ping: a stop row with `refused` true and no start row (an
+# older plugin wrote one only for `no-idle-path`, with no `refused` field; a newer gap with no row
+# yet reads as that one did). A headless session never warms.
 sub keep_warm_lines {
     my ($headless, $sid, $mod) = @_;
     my ($h) = eval { settings::num_clamped('keep_warm_hours') };
@@ -940,15 +941,18 @@ sub keep_warm_lines {
         my $ev = $r->{ev} // '';
         if ($ev eq 'keep_warm_start') { ($pings, $state, $why) = (0, 'warming', undef) }
         elsif ($ev eq 'keep_warm_ping') { $pings++ if $state eq 'warming' && ($r->{result} // '') eq 'warm' }
+        # A gap keep-warm refused: its one stop row, with no start row before it.
+        elsif ($ev eq 'keep_warm_stop' && $r->{refused} && !ref $r->{why}) { ($pings, $state, $why) = (0, 'refused', $r->{why}) }
         elsif ($ev eq 'keep_warm_stop' && $state eq 'warming') { ($state, $why) = ('stopped', $r->{why}) }
-        # A gap no idle path could take over: its one stop row, with no start row before it.
         elsif ($ev eq 'keep_warm_stop' && ($r->{why} // '') eq 'no-idle-path') { ($pings, $state, $why) = (0, 'refused', 'no-idle-path') }
     }
     my $n = $pings == 1 ? '1 ping' : "$pings pings";
     return ("$on · this gap: warming, $n so far") if $state eq 'warming';
-    return ("$on · this gap: not warming (the last refused gap: stopped before its first ping: no-idle-path, no plugin idle compaction or idle handoff turn to take it over)")
-        if $state eq 'refused';
     $why = 'other' unless defined $why && !ref $why && $why =~ /\A[a-z0-9-]{1,24}\z/;
+    if ($state eq 'refused') {
+        return ("$on · this gap: keep-warm off (no-idle-path): no plugin idle compaction or idle handoff turn to take it over") if $why eq 'no-idle-path';
+        return ("$on · this gap: keep-warm off ($why)");
+    }
     return ("$on · this gap: not warming (the last warmed gap: $n, stopped: $why)") if $state eq 'stopped';
     return ("$on · this gap: not warming");
 }

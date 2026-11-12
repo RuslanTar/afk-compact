@@ -39,7 +39,8 @@ our $PRUNE_DAYS = 7;
 # the mod rows note_rows reads (keepwarm.ts; boundary.ts and compact.ts write `compacted` once the
 # compaction ran or was skipped). Not idle.ts's `idle_compact`: it comes before the attempt, which
 # may then be skipped or never run, and a compaction that runs writes its own `compacted` row.
-our %ROWS = map { $_ => 1 } qw(keep_warm_start keep_warm_ping keep_warm_wait keep_warm_stop compacted);
+# 0.1.11: keep_warm_send, a ping going out (pending until its keep_warm_ping or keep_warm_stop row).
+our %ROWS = map { $_ => 1 } qw(keep_warm_start keep_warm_send keep_warm_ping keep_warm_wait keep_warm_stop compacted);
 
 sub schema       { return ctx::brand() . '-cache/v1' }
 sub state_schema { return ctx::brand() . '-cache-state/v1' }
@@ -183,6 +184,7 @@ sub _apply {
             unless $kw && _same_gap($kw, $gs);
         my $res = !ref $r->{result} && defined $r->{result} && $r->{result} =~ /\A[a-z-]{1,40}\z/ ? $r->{result} : 'error';
         @$kw{qw(n result last_at)} = (_num($r->{n}) // $kw->{n} // 0, $res, _t($t));
+        delete $kw->{sent_at};
         $kw->{warm_at} = _t($start) if $res eq 'warm';
         # a warm ping sets the next due itself (50 min after it): a reset wait before it is over
         delete $kw->{next_at} if $res eq 'warm';
@@ -190,6 +192,13 @@ sub _apply {
         # cache outlives a later ping that failed (api-error, aborted, error, nothing-to-fork)
         $kw->{warm_ping} = [_t($start), _t($t)] if $res eq 'warm';
         $kw->{miss_ping} = [_t($start), _t($t)] if $res eq 'fork-miss';
+        return 1;
+    }
+    if ($ev eq 'keep_warm_send') {
+        # 0.1.11: a ping of this gap went out; it is pending until its result or the gap's stop
+        my $gs = $t - $gap;
+        return $ch unless $kw && _same_gap($kw, $gs);
+        @$kw{qw(sent_at last_at)} = (_t($t), _t($t));
         return 1;
     }
     if ($ev eq 'keep_warm_wait') {
@@ -201,12 +210,18 @@ sub _apply {
         @$kw{qw(next_at last_at)} = (_t($t + $n), _t($t));
         return 1;
     }
-    # keep_warm_stop (one with no start before it, `no-idle-path`, is a gap of its own)
+    # keep_warm_stop (one with no start before it, a gap keep-warm refused, is a gap of its own)
     my $gs = $t - $gap;
     $kw = $s->{keep_warm} = { started_at => undef, gap_start => _t($gs), hours => undef, n => 0, warm_at => _t($gs) }
         unless $kw && _same_gap($kw, $gs);
     my $why = !ref $r->{why} && defined $r->{why} && $r->{why} =~ /\A[a-z0-9-]{1,40}\z/ ? $r->{why} : 'other';
-    $kw->{stop} = { why => $why, pings => _num($r->{pings}) // $kw->{n} // 0, at => _t($t) };
+    my $pings = _num($r->{pings}) // $kw->{n} // 0;
+    # 0.1.11: refused before warming (`refused: true`; an older plugin wrote only `no-idle-path` so,
+    # with pings 0 and no start row)
+    my $refused = (jsonc::is_bool($r->{refused}) && $r->{refused})
+                  || (!defined $kw->{started_at} && $why eq 'no-idle-path' && $pings == 0) ? 1 : 0;
+    $kw->{stop} = { why => $why, pings => $pings, at => _t($t), ($refused ? (refused => jsonc::true()) : ()) };
+    delete $kw->{sent_at};
     $kw->{last_at} = _t($t);
     return 1;
 }
@@ -364,7 +379,7 @@ sub _ping {
 sub report {
     my (%o) = @_;
     my $now = $o{now} // util::now();
-    my %r = (schema => schema(), sid => undef, now => int($now), state => 'unknown', why => 'no-data', ttl => undef, source => undef,
+    my %r = (schema => schema(), sid => undef, now => int($now), state => 'unknown', label => 'unknown', why => 'no-data', ttl => undef, source => undef,
              last => undef, expires_at => undef, seconds_left => undef, age_s => undef, keep_warm => undef, ended_at => undef,
              plugin_version => ctx::version());
     my $in = ref $o{input} eq 'HASH' ? $o{input} : undef;
@@ -441,15 +456,25 @@ sub report {
         $r{seconds_left} = $exp > $now ? int($exp - $now) : 0;
         @r{qw(state why)} = $exp > $now ? ('warm', undef) : ('cold', 'expired');
     }
-    return _with_kw(\%r, $kw, $st, $now, $main_at, defined $pc);
+    return _with_kw(\%r, $kw, $st, $now, $main_at, defined $pc, $anchor);
 }
 
-# _with_kw(report, kw state, state, now, last main request, live): keep_warm and ended_at
+# 0.1.11: the state in one word for a status bar: `state`, except right after a compaction, when
+# the context is nearly empty and the next request writes the cache anew: `compacted`, not cold.
+sub _label {
+    my ($r) = @_;
+    return 'compacted' if ($r->{state} // '') eq 'cold' && ($r->{why} // '') eq 'compacted';
+    return $r->{state} // 'unknown';
+}
+
+# _with_kw(report, kw state, state, now, last main request, live, its bound from prompt_cache):
+# keep_warm, ended_at and label
 sub _with_kw {
-    my ($r, $kw, $st, $now, $main_at, $live) = @_;
+    my ($r, $kw, $st, $now, $main_at, $live, $anchor) = @_;
     my $end = $st ? _num($st->{ended_at}) : undef;
     $end = undef if $live || (defined $end && defined $main_at && $main_at > $end);
     $r->{ended_at} = _int($end);
+    $r->{label} = _label($r);
     return $r unless $kw;
     my $hours = _num($kw->{hours});
     my $max = defined $hours ? int(($hours * 60 - 1) / 50) : undef;
@@ -470,11 +495,19 @@ sub _with_kw {
     my $active = defined $started && !$stop && !defined $end && defined $warm && $now <= $warm + $LATEST_S * $scale + 120
                  && (!defined $hours || $now < (_num($kw->{gap_start}) // $started) + $hours * 3600 * $scale + 600)
                  && !(defined $main_at && $main_at > (_num($kw->{last_at}) // $started)) ? 1 : 0;
+    # 0.1.11: a ping of the gap is out (its keep_warm_send row, no result row yet) while it warms
+    my $pending = $active && defined _num($kw->{sent_at}) ? 1 : 0;
+    # 0.1.11: keep-warm refused the current gap before warming: its reason, until a main request
+    # after that row (the transcript's, else the one prompt_cache bounds) opens a new gap
+    my $at = $stop ? _num($stop->{at}) : undef;
+    my $ref = $main_at // $anchor;
+    my $off = $stop && $stop->{refused} && !defined $end && defined $at && !(defined $ref && $ref > $at) ? $stop->{why} : undef;
     $r->{keep_warm} = {
         active => jsonc::bool($active), n => _num($kw->{n}) // 0, max => $max, hours => $hours,
         gap_started_at => _int(_num($kw->{gap_start})), next_due_at => ($active ? int($next // $warm + $ping) : undef),
         last_result => (defined $kw->{result} && !ref $kw->{result} ? $kw->{result} : undef),
-        stop => ($stop ? { why => $stop->{why}, pings => _num($stop->{pings}) // 0, at => _int(_num($stop->{at})) } : undef),
+        stop => ($stop ? { why => $stop->{why}, pings => _num($stop->{pings}) // 0, at => _int($at) } : undef),
+        pending => jsonc::bool($pending), off => $off,
     };
     return $r;
 }
@@ -487,16 +520,23 @@ sub _span {
 }
 
 # line(report) -> the one plain line (no newline), or '' when the state is unknown:
-# `cache 1h warm 42m left ↻3/7`, `cache 1h cold (expired 12m ago)`, `cache cold (compacted)`.
+# `cache 1h warm 42m left ↻3/7`, `cache 1h cold (expired 12m ago)`, `cache compacted`; then
+# (0.1.11) ` · ping pending` while a keep-warm ping is out and ` · keep-warm off (<why>)` when
+# keep-warm refused the current idle gap.
 sub line {
     my ($r) = @_;
     return '' if $r->{state} eq 'unknown';
     my $t = defined $r->{ttl} ? " $r->{ttl}" : '';
     my $kw = $r->{keep_warm};
     my $ping = $kw && $kw->{active} ? ' ↻' . $kw->{n} . (defined $kw->{max} ? "/$kw->{max}" : '') : '';
-    return "cache$t warm " . int(($r->{seconds_left} + 59) / 60) . "m left$ping" if $r->{state} eq 'warm';
-    return "cache$t cold (expired " . _span($r->{now} - $r->{expires_at}) . ' ago)' if $r->{why} eq 'expired';
-    return 'cache cold (' . ($r->{why} eq 'fork-miss' ? 'keep-warm ping missed' : $r->{why}) . ')';
+    my @x;
+    push @x, 'ping pending' if $kw && $kw->{pending};
+    push @x, "keep-warm off ($kw->{off})" if $kw && defined $kw->{off} && !ref $kw->{off};
+    my $tail = join('', map { " · $_" } @x);
+    return "cache$t warm " . int(($r->{seconds_left} + 59) / 60) . "m left$ping$tail" if $r->{state} eq 'warm';
+    return "cache$t cold (expired " . _span($r->{now} - $r->{expires_at}) . " ago)$tail" if $r->{why} eq 'expired';
+    return "cache compacted$tail" if _label($r) eq 'compacted';
+    return 'cache cold (' . ($r->{why} eq 'fork-miss' ? 'keep-warm ping missed' : $r->{why}) . ")$tail";
 }
 
 1;
