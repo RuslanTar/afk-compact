@@ -6,6 +6,7 @@
  "steps": [
   {
    "name": "reused",
+   "needs": ["ps-lstart"],
    "argv": [
     "wait",
     "--for",
@@ -69,6 +70,7 @@
   },
   {
    "name": "guard pid reused",
+   "needs": ["ps-lstart"],
    "argv": [
     "wait",
     "--for",

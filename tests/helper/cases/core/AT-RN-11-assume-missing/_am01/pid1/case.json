@@ -1,0 +1,7 @@
+{
+ "id": "AT-RN-11-inner-pid1",
+ "note": "run by AT-RN-11 only (discovery skips _ folders): a case that stands pid 1 in for a live Claude Code; with unix-pid1 missing it skips, so its failing step never runs",
+ "needs": ["unix-pid1"],
+ "exec": ["/bin/sh", "-c", "exit 1"],
+ "expect": {"exit": 0}
+}

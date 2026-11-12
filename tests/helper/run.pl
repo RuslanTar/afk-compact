@@ -4,7 +4,13 @@
 # given on the command line (files or folders), each case in a fresh temporary HOME
 # with STORE_TEST_MODE=1, and asserts exit codes, stdout, files, log rows and traces.
 #
-# Usage: tests/helper/run.pl [--filter RE] [--keep] [-v] [--fixtures DIR] <case dir|case.json|cases root>...
+# Usage: tests/helper/run.pl [--filter RE] [--keep] [-v] [--fixtures DIR] [--assume-missing LIST]
+#                            <case dir|case.json|cases root>...
+#   --assume-missing LIST  test the runner as another machine sees it: the comma-separated need
+#                tokens (e.g. unix-pid1,ps-lstart) count as missing whatever this machine has,
+#                and the token exact-modes makes expected file modes compare the owner write
+#                bit only, as on Git for Windows' noacl mounts. Only the runner's view changes;
+#                the helper still sees this machine.
 #
 # Case file (JSON): {"id", "sid"?, "tz"?, "env"?, "path_prepend"?, "needs"?: ["baseline","spec"],
 #   "steps": [step...]}  or the one-step form (argv, stdin, setup, expect, then).
@@ -72,12 +78,23 @@
 #     where the temp folder is case-sensitive; "docker-image:<ref>" skips unless a Docker daemon
 #     answers and holds that image locally; "docker-image-any:<ref>|<ref>" unless it holds one;
 #     "nonroot" skips the whole case when the runner
-#     runs as root, its mode-free steps too, so a root run does not cover them). Not run (a
+#     runs as root, its mode-free steps too, so a root run does not cover them; "unix-pid1"
+#     skips unless pid 1 runs and its start time reads (the cases that stand pid 1 in for a
+#     live Claude Code; MSYS has no pid 1); "ps-lstart" skips unless the runner reads its own
+#     start time (ps -o lstart, else /proc). Both are probed only under a Windows Perl (darwin
+#     msys, cygwin or MSWin32); elsewhere they count as met, so a Unix host whose pid 1 or ps
+#     does not read fails those cases instead of skipping them). Not run (a
 #     line `not ok N - id # TODO not run: needs <what> (<why>)`, counted as "not run" in the
 #     summary, never as passed or skipped): "cmd:<name>" while <name> is not on PATH; a case
 #     in a zone (case or step "tz", an env TZ, a builtin's args "tz") whose tz database file
 #     the host lacks, "needs tzdata", with no "needs" entry, unless the zone has an exact
 #     POSIX form (Etc/GMT-3 is "<+03>-3"), which its helper calls then get (host_zone).
+# Step "needs": the skip tokens above for one step: a step whose needs this machine lacks is not
+#   run (no options, setup or call; `#   not run here: <step> (needs ...)` under the case line,
+#   and a `# steps not run here` count), and the steps after it run as they are
+# Expected file modes (expect files mode): under a Windows Perl whose chmod does not set the
+#   mode stat reads back (Git for Windows' noacl mounts), only the owner write bit is compared,
+#   and the run ends with a `# modes compared by the owner write bit only` count
 #   builtin hook_lazy_audit {}: main.pl's per-event library sets (the staged copy) hold every library whose
 #     package variables or `defined &` guards a loaded library, the watcher or the event's path in
 #     cmd/hook.pl refers to (T-12)
@@ -170,6 +187,9 @@ my ($RUN_TMP, $REPO_TMP, $SHORT_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
 # 27 bytes on the Linux rows) put a reply trimmed to its real 3,072 B over the cap.
 our $TMP_REF_BYTES = 82;
 my ($FILTER, $KEEP, $VERBOSE, $PLUGIN_SRC, $REPO_TMP_BASE, $FIXTURES_DIR, @ARGS);
+# --assume-missing tokens; owner-write-bit mode compares made (noacl_modes), for the summary line
+my %ASSUME_MISSING;
+my $NOACL_CHECKS = 0;
 $SIG{$_} = sub { exit 130 } for qw(INT TERM HUP);
 END {
     my $code = $?;
@@ -189,6 +209,7 @@ while (@ARGV) {
     # Check a fixture set before it merges: read tests/fixtures/ from DIR (an export of
     # that branch's tests/fixtures), for "fixture:" needs, $FIX, $FIXTURES, stdin and copy sources.
     if ($a eq '--fixtures') { $FIXTURES_DIR = Cwd::abs_path(shift @ARGV); next }
+    if ($a eq '--assume-missing') { $ASSUME_MISSING{$_} = 1 for grep { length } split /,/, (shift @ARGV // ''); next }
     push @ARGS, $a;
 }
 @ARGS = ("$HERE/cases") unless @ARGS;
@@ -491,8 +512,8 @@ sub find_cases {
 }
 
 my @CASES = map { find_cases(Cwd::abs_path($_) // $_) } @ARGS;
-my ($N, $FAILED, $SKIPPED, $NOTRUN) = (0, 0, 0, 0);
-my (@FAIL_IDS, @NOTRUN_IDS, %NOTRUN_WHAT);
+my ($N, $FAILED, $SKIPPED, $NOTRUN, $STEPS_NOT_RUN) = (0, 0, 0, 0, 0);
+my (@FAIL_IDS, @NOTRUN_IDS, %NOTRUN_WHAT, @STEP_NOT_RUN);
 print "# stage: spec $STAGE_INFO{spec}; baseline $STAGE_INFO{baseline}\n";
 
 for my $cf (@CASES) {
@@ -502,12 +523,7 @@ for my $cf (@CASES) {
     my $id = $case->{id} // File::Basename::basename(File::Basename::dirname($cf));
     next if defined $FILTER && $id !~ /$FILTER/;
     $N++;
-    my $miss = grep { ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
-                      || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
-                      || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
-                      || (/^docker-image:(.+)$/ && !docker_image($1)) || ($_ eq 'nonroot' && $> == 0)
-                      || (/^docker-image-any:(.+)$/ && !grep { docker_image($_) } split /\|/, $1)
-                      || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ $case->{needs} || [] };
+    my $miss = missing_needs($case->{needs});
     # "nonroot": the case makes a file or folder unwritable or unreadable by its mode, which
     # uid 0 ignores; as root it skips with that reason (run the suite as a normal user).
     my $why = $> == 0 && grep({ $_ eq 'nonroot' } @{ $case->{needs} || [] }) ? ' (running as root, which ignores file modes)' : '';
@@ -530,8 +546,10 @@ for my $cf (@CASES) {
         print "not ok $N - $id # TODO not run: " . join('; ', map { "needs $_->[0] ($_->[1])" } @nr) . "\n";
         next;
     }
+    @STEP_NOT_RUN = ();
     my @errs = eval { run_case($case, File::Basename::dirname($cf)) };
     push @errs, "runner error: $@" if $@;
+    $STEPS_NOT_RUN += @STEP_NOT_RUN;
     # The case's work dirs: c<N> under the system temp folder and, for tmp_base "repo"
     # cases, under the repo's tmp/.
     my @cdirs = grep { -d } map { "$_/c$N" } grep { defined } ($RUN_TMP, $REPO_TMP, $SHORT_TMP);
@@ -541,13 +559,17 @@ for my $cf (@CASES) {
         push @FAILED_DIRS, @cdirs;
         print "not ok $N - $id\n";
         print map { "#   $_\n" } @errs;
+        print map { "#   not run here: $_\n" } @STEP_NOT_RUN;
     } else {
         print "ok $N - $id\n";
+        print map { "#   not run here: $_\n" } @STEP_NOT_RUN;
         # R1: a passing case's dirs go now, so a kill later leaves at most the case in flight.
         remove_in(util::dirname($_), util::basename($_)) for $KEEP ? () : @cdirs;
     }
 }
 print "1..$N\n";
+print "# steps not run here (their needs): $STEPS_NOT_RUN\n" if $STEPS_NOT_RUN;
+print "# modes compared by the owner write bit only (chmod does not set modes here): $NOACL_CHECKS checks\n" if $NOACL_CHECKS;
 print "# passed " . ($N - $FAILED - $SKIPPED - $NOTRUN) . ", failed $FAILED, skipped $SKIPPED, not run $NOTRUN\n";
 print "# failed: @FAIL_IDS\n" if @FAIL_IDS;
 print "# not run (" . join(', ', map { "needs $_: $NOTRUN_WHAT{$_}" } sort keys %NOTRUN_WHAT) . "): @NOTRUN_IDS\n" if @NOTRUN_IDS;
@@ -802,14 +824,17 @@ sub run_case {
         lstart_zone_check(\%V, $label);
         my $now = $st->{now} // $case->{now};
         $V{TODAY} = defined $now ? substr($now, 0, 10) : POSIX::strftime('%Y-%m-%d', localtime);
+        # a step "needs" what this machine lacks: not run (its index stays, so later steps keep theirs)
+        my @miss = missing_needs($st->{needs});
         # "options": {key: value} (case level before step 1, and per step): plugin options in
         # the case's settings file, pluginConfigs["<brand>@m"].options, merged into the file.
         # The way to give a file-only key (consent keys, queue_cmd, prod_patterns).
-        for my $o (($i == 1 ? $case->{options} : undef), $st->{options}) {
+        for my $o (($i == 1 ? $case->{options} : undef), (@miss ? undef : $st->{options})) {
             next unless ref $o eq 'HASH';
             my $e = eval { write_options(subst_deep($o, \%V), \%V); 1 };
             if (!$e) { push @errs, "$label options: $@"; last STEP }
         }
+        if (@miss) { push @STEP_NOT_RUN, "step $i" . (defined $st->{name} ? " ($st->{name})" : '') . " (needs @miss)"; next }
         for my $s (@{ $st->{setup} || [] }) {
             my $e = eval { setup($s, \%V, $case, $st, $cdir); 1 };
             if (!$e) { push @errs, "$label setup: $@"; last STEP }
@@ -1412,11 +1437,24 @@ sub setup {
     die "unknown setup action: " . join(',', keys %$s) . "\n";
 }
 
+# The helper's git under MSYS (Git for Windows' Perl): git.exe lives in Git's mingw64/bin (and
+# cmd, bin), not in MSYS /usr/bin, so the fixed PATH below would hide it and every git fact,
+# root check and repo mode would read "git unavailable". The folder of the git this runner
+# finds on its own PATH (the one setup's git steps use), else /mingw64/bin, goes after the
+# case's path_prepend (a case's own git stub still wins) and before /usr/bin. Elsewhere the
+# PATH stays as it is: /usr/bin holds git on macOS and Linux.
+my $CHILD_GIT_DIR;
+sub child_git_dir {
+    return () unless $^O eq 'msys';
+    $CHILD_GIT_DIR //= do { my $g = util::which('git'); defined $g ? util::dirname($g) : '/mingw64/bin' };
+    return $CHILD_GIT_DIR;
+}
+
 sub child_env {
     my ($st, $case, $V, $i) = @_;
     my %e;
     my @pre = map { subst($_, $V) } (@{ $case->{path_prepend} || [] }, @{ $st->{path_prepend} || [] });
-    $e{PATH} = join(':', @pre, '/usr/bin', '/bin', '/usr/sbin', '/sbin');
+    $e{PATH} = join(':', @pre, child_git_dir(), '/usr/bin', '/bin', '/usr/sbin', '/sbin');
     $e{HOME} = $V->{HOME};
     $e{TMPDIR} = "$V->{TMP}/tmpdir";
     $e{TZ} = $st->{tz} // $case->{tz} // 'UTC';
@@ -1579,6 +1617,61 @@ sub _libs {
 
 # nocase_fs() -> 1 when the system temp folder (where the cases run) ignores letter case
 # (macOS default APFS): a case "needs": ["nocase-fs"] skips elsewhere.
+# missing_needs([needs]) -> the needs (a case's or a step's) this machine does not meet, in order.
+# Unknown tokens count as met. "nonroot" is missing when the runner runs as root.
+sub missing_needs {
+    my ($needs) = @_;
+    return grep { $ASSUME_MISSING{$_} || ($_ eq 'baseline' && $STAGE_INFO{baseline} eq 'unavailable') || ($_ eq 'claude' && !$CLAUDE_BIN)
+                  || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
+                  || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs())
+                  || ($_ eq 'unix-pid1' && !unix_pid1()) || ($_ eq 'ps-lstart' && !ps_lstart())
+                  || (/^docker-image:(.+)$/ && !docker_image($1)) || ($_ eq 'nonroot' && $> == 0)
+                  || (/^docker-image-any:(.+)$/ && !grep { docker_image($_) } split /\|/, $1)
+                  || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ ref $needs eq 'ARRAY' ? $needs : [] };
+}
+
+# windows_perl() -> 1 under a Perl for Windows (Git for Windows' MSYS, Cygwin, a native build):
+# the machines whose missing pid 1 and `ps -o` are limits of the platform, not of the host.
+sub windows_perl { return $^O =~ /\A(?:msys|cygwin|MSWin32)\z/ ? 1 : 0 }
+
+# unix_pid1() -> 1 when pid 1 runs (kill 0 works, or is refused with EPERM) and its start time
+# reads ($LSTART1): the cases that stand pid 1 in for a live Claude Code ("needs": ["unix-pid1"]).
+# MSYS (Git for Windows) has no pid 1. Probed under a Windows Perl only: on a Unix host the need
+# counts as met, so a pid 1 or ps that does not read fails the cases loudly instead of skipping.
+my $UNIX_PID1;
+sub unix_pid1 {
+    return $UNIX_PID1 if defined $UNIX_PID1;
+    return $UNIX_PID1 = 1 unless windows_perl();
+    my $live = kill(0, 1) || $!{EPERM} ? 1 : 0;
+    return $UNIX_PID1 = $live && lstart_in(1, 'UTC') =~ $LSTART_RE ? 1 : 0;
+}
+
+# ps_lstart() -> 1 when the runner reads its own start time (ps -o lstart, else /proc;
+# "needs": ["ps-lstart"]: steps whose outcome rests on a start time, e.g. a pid reused at another
+# one). Probed under a Windows Perl only, as unix_pid1.
+my $PS_LSTART;
+sub ps_lstart {
+    return $PS_LSTART //= windows_perl() ? (lstart_in($$, 'UTC') =~ $LSTART_RE ? 1 : 0) : 1;
+}
+
+# noacl_modes() -> 1 under a Windows Perl when chmod does not set the mode stat reads back (a file
+# chmodded 0600 reads another mode): Git for Windows' noacl mounts, where a file mode is 0444 or
+# 0644 plus x from its name or first bytes. Expected modes (expect files mode) then compare the
+# owner write bit only, and the run ends with a `# modes compared by the owner write bit only`
+# count. On a Unix host a TMPDIR that ignores chmod (exFAT, SMB) fails the mode checks instead.
+# --assume-missing exact-modes turns it on anywhere.
+my $NOACL;
+sub noacl_modes {
+    return $NOACL if defined $NOACL;
+    return $NOACL = 1 if $ASSUME_MISSING{'exact-modes'};
+    return $NOACL = 0 unless windows_perl();
+    my $f = "$RUN_TMP/mode-probe";
+    write_text($f, "x\n", '0600');
+    my $m = (stat $f)[2];
+    unlink $f;
+    return $NOACL = (defined $m && ($m & 07777) != 0600) ? 1 : 0;
+}
+
 sub nocase_fs {
     my $d = $RUN_TMP // ($ENV{TMPDIR} || "/tmp");
     my $u = uc $d;
@@ -4606,7 +4699,18 @@ sub check {
                 push @e, "$p: no snapshot $f->{same_mtime_as}" unless defined $was;
                 push @e, "$p: mtime $now differs from snapshot $f->{same_mtime_as} ($was)" if defined $was && $now != $was;
             }
-            if (defined $f->{mode}) { my $mode = sprintf('%04o', (stat $p)[2] & 07777); push @e, "$p: mode $mode, want $f->{mode}" if $mode ne $f->{mode} }
+            if (defined $f->{mode}) {
+                my $m = (stat $p)[2] & 07777;
+                my $mode = sprintf('%04o', $m);
+                if (noacl_modes()) {
+                    # MSYS/Cygwin noacl mounts: a mode reads 0444 or 0644 plus x from the name or
+                    # "#!"; only the owner write bit (the DOS read-only attribute) is real
+                    $NOACL_CHECKS++;
+                    push @e, "$p: mode $mode, want $f->{mode} (owner write bit, noacl)" if !!($m & 0200) != !!(oct($f->{mode}) & 0200);
+                } elsif ($mode ne $f->{mode}) {
+                    push @e, "$p: mode $mode, want $f->{mode}";
+                }
+            }
             # mtime_at <ISO>: the file's modification time (a copy that keeps its source's; touch sets it)
             if (defined $f->{mtime_at}) {
                 my $want = util::parse_iso($f->{mtime_at});
