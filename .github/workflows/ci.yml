@@ -117,10 +117,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-    env:
-      TMPDIR: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The cases write under TMPDIR. A job-level env cannot read the runner context, so set it here.
+      - name: Point TMPDIR at the runner's temp folder
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Helper cases (a case that needs a tool or a Docker image the runner lacks prints "not run")
         run: perl tests/helper/run.pl tests/helper/cases
       - name: Watcher cases
