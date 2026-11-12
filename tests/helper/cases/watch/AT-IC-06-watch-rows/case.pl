@@ -82,6 +82,6 @@ my %got;
         my @o = $E->outputs;
         my ($path) = $o[0]{stdout} =~ /\AWATCH-REPORT (\S+)/;
         my $md = defined $path ? watch::io::slurp($path) // '' : '';
-        $E->ok(($md =~ /^Idle compactions \(the rollup `idle` field, IC-1\): 1 of 1$/m ? 1 : 0), 'the report counts idle compactions');
+        $E->ok(($md =~ /^Idle compactions \(the rollup `idle` field\): 1 of 1$/m ? 1 : 0), 'the report counts idle compactions');
     },
 };

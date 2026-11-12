@@ -61,7 +61,7 @@ my %got;
         for my $c ([ 'live', $got{md} ], [ 'remote', $remote // '' ]) {
             my ($k, $md) = @$c;
             my $has = sub { my ($re, $msg) = @_; $E->ok(($md =~ $re ? 1 : 0), "$k: $msg") };
-            $has->(qr/^## Denials \(permission_denied rows, D-13\)$/m, 'Denials section');
+            $has->(qr/^## Denials \(permission_denied rows\)$/m, 'Denials section');
             $has->(qr/^- Total: 4; control \(reason classifier-unavailable, kept apart\): 1$/m, 'total and control');
             $has->(qr/^- By turn kind: nudge 1, other 1, post-compaction 2$/m, 'turn_kind counts');
             $has->(qr/^- By cause: plugin 2, session 2$/m, 'caused_by counts');
