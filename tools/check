@@ -1452,10 +1452,11 @@ def x_launcher(phase, root=REPO):
 def old_name_left(root, old):
     """Lines in the renamed copy's shipped files, README.md and docs/ that still hold the old name (substring)."""
     targets = [os.path.join(root, "README.md"), os.path.join(root, ".claude-plugin", "marketplace.json")]
-    for d, dirs, files in [w for top in ("plugin", "docs") for w in os.walk(os.path.join(root, top))]:
-        dirs[:] = sorted(x for x in dirs if x not in ("node_modules", ".git") and
-                         not (x == "types" and os.path.basename(d) == ".claude-plugin"))
-        targets += [os.path.join(d, f) for f in sorted(files)]
+    for top in ("plugin", "docs"):
+        for d, dirs, files in os.walk(os.path.join(root, top)):
+            dirs[:] = sorted(x for x in dirs if x not in ("node_modules", ".git") and
+                             not (x == "types" and os.path.basename(d) == ".claude-plugin"))
+            targets += [os.path.join(d, f) for f in sorted(files)]
     left = []
     for p in targets:
         if not os.path.isfile(p):
