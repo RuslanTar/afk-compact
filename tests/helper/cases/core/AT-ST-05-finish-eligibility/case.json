@@ -1,5 +1,6 @@
 {
  "id": "AT-ST-05 b, c, d, f (finish eligibility)",
+ "needs": ["unix-pid1"],
  "note": "Each foreign session leaves an unproven stash and its marker; B's SessionStart(startup) pass must leave them untouched: (b) a live- record whose pid runs with the same start time and no ended- twin; (c) an ended session whose reconcile.lock is held by a live owner (taken without waiting: skipped); (d) no per-process record at all; (f) an ended session that goes live between the eligibility check and the lock (TOCTOU re-check under the lock). Then the lock is free and (c) is finished.",
  "tz": "Etc/GMT-3",
  "vars": {"B5": "b5b5b5b5-1111-4222-8333-444444444444", "C5": "c5c5c5c5-1111-4222-8333-444444444444", "D5": "d5d5d5d5-1111-4222-8333-444444444444", "F5": "f5f5f5f5-1111-4222-8333-444444444444"},

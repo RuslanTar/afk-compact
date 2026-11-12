@@ -1,5 +1,6 @@
 {
  "id": "AT-M5-04",
+ "needs": ["unix-pid1"],
  "note": "two processes, same sid, concurrent saves: seqs unique; then a lock owner record with a dead pid, then a live pid with a wrong start time: both stale owners are taken over and logged lock_stale; then a live pid whose start time this call cannot read (MSYS perl without a readable /proc/<pid>/stat: seams STORE_TEST_OS, STORE_TEST_PROC_ROOT): alive-unknown, so the record is kept and the save gives up at lock-timeout, never breaking a live holder's lock (RF-3)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",

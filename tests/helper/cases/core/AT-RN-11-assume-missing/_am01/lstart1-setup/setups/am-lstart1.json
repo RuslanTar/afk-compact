@@ -1,0 +1,4 @@
+{
+ "id": "am-lstart1",
+ "setup": [{"write": "$TMP/pid1-start", "text": "$LSTART1\n"}]
+}

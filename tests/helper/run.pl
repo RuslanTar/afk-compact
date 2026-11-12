@@ -9,8 +9,9 @@
 #   --assume-missing LIST  test the runner as another machine sees it: the comma-separated need
 #                tokens (e.g. unix-pid1,ps-lstart) count as missing whatever this machine has,
 #                and the token exact-modes makes expected file modes compare the owner write
-#                bit only, as on Git for Windows' noacl mounts. Only the runner's view changes;
-#                the helper still sees this machine.
+#                bit only, as on Git for Windows' noacl mounts. With unix-pid1 the runner reads
+#                no start time for pid 1 ($LSTART1). Only the runner's view changes; the helper
+#                still sees this machine.
 #
 # Case file (JSON): {"id", "sid"?, "tz"?, "env"?, "path_prepend"?, "needs"?: ["baseline","spec"],
 #   "steps": [step...]}  or the one-step form (argv, stdin, setup, expect, then).
@@ -80,8 +81,9 @@
 #     "nonroot" skips the whole case when the runner
 #     runs as root, its mode-free steps too, so a root run does not cover them; "unix-pid1"
 #     skips unless pid 1 runs and its start time reads (the cases that stand pid 1 in for a
-#     live Claude Code; MSYS has no pid 1); "ps-lstart" skips unless the runner reads its own
-#     start time (ps -o lstart, else /proc). Both are probed only under a Windows Perl (darwin
+#     live Claude Code; MSYS has no pid 1; a case whose text uses $LSTART1 needs it without
+#     saying so, uses_lstart1); "ps-lstart" skips unless the runner reads its own
+#     start time (ps -o lstart, else /proc). Both are probed only under a Windows Perl ($^O
 #     msys, cygwin or MSWin32); elsewhere they count as met, so a Unix host whose pid 1 or ps
 #     does not read fails those cases instead of skipping them). Not run (a
 #     line `not ok N - id # TODO not run: needs <what> (<why>)`, counted as "not run" in the
@@ -351,7 +353,7 @@ sub step_tz {
 sub lstart_var {
     my ($name, $V) = @_;
     my $pid = $name eq 'LSTART1' ? 1 : $$;
-    my $v = lstart_in($pid, $V->{' tz'});
+    my $v = $pid == 1 && $ASSUME_MISSING{'unix-pid1'} ? '' : lstart_in($pid, $V->{' tz'});
     die "\$$name: no start time for pid $pid (ps gives no lstart, /proc/$pid/stat unreadable)\n" if $v eq '';
     $V->{' lstart_before_steps'} = 1 if $V->{' before_steps'};
     return $v;
@@ -523,11 +525,17 @@ for my $cf (@CASES) {
     my $id = $case->{id} // File::Basename::basename(File::Basename::dirname($cf));
     next if defined $FILTER && $id !~ /$FILTER/;
     $N++;
-    my $miss = missing_needs($case->{needs});
+    # A case whose text uses $LSTART1 needs unix-pid1 whether or not it says so (uses_lstart1): on a
+    # host without pid 1 (MSYS) it skips instead of dying on the start time it cannot read.
+    my @needs = @{ ref $case->{needs} eq 'ARRAY' ? $case->{needs} : [] };
+    my $implied = !grep({ $_ eq 'unix-pid1' } @needs) && uses_lstart1($case, File::Basename::dirname($cf));
+    push @needs, 'unix-pid1' if $implied;
+    my $miss = missing_needs(\@needs);
     # "nonroot": the case makes a file or folder unwritable or unreadable by its mode, which
     # uid 0 ignores; as root it skips with that reason (run the suite as a normal user).
-    my $why = $> == 0 && grep({ $_ eq 'nonroot' } @{ $case->{needs} || [] }) ? ' (running as root, which ignores file modes)' : '';
-    if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @{ $case->{needs} }) . "$why\n"; next }
+    my $why = $> == 0 && grep({ $_ eq 'nonroot' } @needs) ? ' (running as root, which ignores file modes)' : '';
+    $why .= ' (the case uses $LSTART1)' if $implied;
+    if ($miss) { $SKIPPED++; print "ok $N - $id # SKIP needs " . join(',', @needs) . "$why\n"; next }
     # Not run: the host lacks a tool the case tests with, so neither a pass nor a skip. The
     # line is `not ok N - id # TODO not run: needs <what> (<why>)` (a TAP TODO: the run does
     # not fail on it), counted apart in the summary. "cmd:<name>" in "needs": <name> is not
@@ -743,7 +751,7 @@ sub run_case {
     # for Claude Code. $V{LSTART1} and $V{RUNNER_LSTART}: both start times in the runner's
     # own zone ($RUN_TZ); the placeholders follow the zone in force, until step 1 the case's.
     $V{RUNNER_PID} = $$;
-    $V{LSTART1} = lstart_in(1, $RUN_TZ);
+    $V{LSTART1} = $ASSUME_MISSING{'unix-pid1'} ? '' : lstart_in(1, $RUN_TZ);
     $V{RUNNER_LSTART} = lstart_in($$, $RUN_TZ);
     lstart_zone(\%V, step_tz(undef, $case, \%V));
     $V{' case_tz'} = $V{' tz'};
@@ -1615,8 +1623,34 @@ sub _libs {
     $LIBS_READY = 1;
 }
 
-# nocase_fs() -> 1 when the system temp folder (where the cases run) ignores letter case
-# (macOS default APFS): a case "needs": ["nocase-fs"] skips elsewhere.
+# uses_lstart1(data, case dir) -> 1 when a string in a case uses $LSTART1, or a file the runner
+# fills placeholders in does: a setups/<id>.json a "fixture_setup" runs, a "copy" with "subst",
+# an "append" source (found as src_file finds them). Such a case needs unix-pid1 (the case loop).
+# A use this scan misses still fails loudly on a host without pid 1 (lstart_var).
+sub uses_lstart1 {
+    my ($d, $cdir, $seen) = @_;
+    $seen //= {};
+    my $re = qr/\$LSTART1(?![A-Z0-9_])/;
+    if (ref $d eq 'HASH') {
+        if (defined $d->{fixture_setup} && !ref $d->{fixture_setup} && !$seen->{"setups/$d->{fixture_setup}"}++) {
+            my $f = eval { src_file("setups/$d->{fixture_setup}", $cdir) };
+            my $rc = defined $f ? eval { jsonc::decode(util::read_file($f)) } : undef;
+            return 1 if defined $rc && uses_lstart1($rc, $cdir, $seen);
+        }
+        # read into scalars first: a hash element in grep's list would be created (as undef)
+        my ($ap, $cp) = (exists $d->{append} ? $d->{append} : undef, $d->{subst} && exists $d->{copy} ? $d->{copy} : undef);
+        for my $src (grep { defined && !ref } $ap, $cp) {
+            next if $seen->{$src}++;
+            my $f = eval { src_file($src, $cdir) };
+            my $text = defined $f && -f $f ? util::read_file($f) : undef;
+            return 1 if defined $text && $text =~ $re;
+        }
+        return (grep { uses_lstart1($_, $cdir, $seen) } values %$d) ? 1 : 0;
+    }
+    return (grep { uses_lstart1($_, $cdir, $seen) } @$d) ? 1 : 0 if ref $d eq 'ARRAY';
+    return defined $d && $d =~ $re ? 1 : 0;
+}
+
 # missing_needs([needs]) -> the needs (a case's or a step's) this machine does not meet, in order.
 # Unknown tokens count as met. "nonroot" is missing when the runner runs as root.
 sub missing_needs {
@@ -1672,6 +1706,8 @@ sub noacl_modes {
     return $NOACL = (defined $m && ($m & 07777) != 0600) ? 1 : 0;
 }
 
+# nocase_fs() -> 1 when the system temp folder (where the cases run) ignores letter case
+# (macOS default APFS): a case "needs": ["nocase-fs"] skips elsewhere.
 sub nocase_fs {
     my $d = $RUN_TMP // ($ENV{TMPDIR} || "/tmp");
     my $u = uc $d;
