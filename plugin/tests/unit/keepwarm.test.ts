@@ -2481,7 +2481,7 @@ for (const c of [
     w.rateLimits = [{ kind: 'five_hour', percentUsed: 93, resetsAt: R } as never, { kind: 'seven_day', percentUsed: 30 }]
     await measured($, w)
     await until(w, t0, 95)
-    w.tokens += 1000
+    w.tokens = (w.tokens ?? 0) + 1000
     if (c.move) w.rateLimits = [{ kind: 'five_hour', percentUsed: 94, resetsAt: R } as never, { kind: 'seven_day', percentUsed: 30 }]
     await $.session.measure({ context: { tokens: w.tokens, window: 1000000 }, rateLimits: w.rateLimits, changed: c.changed } as never)
     await w.settle()
