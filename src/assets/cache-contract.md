@@ -20,9 +20,11 @@ It exits 0 whatever it reads (a usage error says so on stderr), writes nothing b
 |---|---|
 | warm | `cache 1h warm 42m left`, then ` ↻3/7` while keep-warm runs (ping 3 of at most 7) |
 | cold, expired | `cache 1h cold (expired 12m ago)` |
-| cold, compacted | `cache cold (compacted)` |
+| compacted (the context is nearly empty; the next request writes the cache anew) | `cache compacted` |
 | cold, a keep-warm ping that did not read the conversation | `cache cold (keep-warm ping missed)` |
 | unknown | nothing at all (no line) |
+
+After any of these but unknown, ` · ping pending` while a keep-warm ping is out, and ` · keep-warm off (<why>)` when keep-warm did not start in the current idle gap: `cache 1h warm 8m left ↻2/7 · ping pending`, `cache 1h warm 6m left · keep-warm off (no-jobs)`.
 
 The text may change between versions; read `--json` in anything that parses it.
 
@@ -36,13 +38,14 @@ One line, `"schema": "{{plugin}}-cache/v1"`. Times are whole epoch seconds.
 | `sid` | the session id read, or `null` |
 | `now` | the time of the reading |
 | `state` | `warm`, `cold` or `unknown` |
+| `label` | the state in one word for a status bar: `warm`, `compacted`, `cold` or `unknown`. It is `state`, except right after a compaction (`state` `cold`, `why` `compacted`), where it is `compacted`: the context is nearly empty then, and the next request writes the cache anew |
 | `why` | `null` while warm; `expired`, `compacted` or `fork-miss` when cold; `no-data`, `caching-off` or `bad-sid` when unknown |
 | `ttl` | the cache tier the last request wrote, `"1h"` or `"5m"`, or `null` |
 | `source` | where the reading came from: `claude-code` (`prompt_cache` on stdin), `transcript` (its last main `api-request` line), `plugin` (a keep-warm ping alone), or `null` |
 | `last` | the last request that read or wrote the cache: `{"kind": "main" \| "keep_warm", "at", "source"}` (a `keep_warm` one's source is `plugin`), or `null` |
 | `expires_at`, `seconds_left` | when the cache expires, and the seconds left (0 once past); `null` unless the state is warm or `expired` |
 | `age_s` | seconds since `last.at`, or `null` |
-| `keep_warm` | `null` when the plugin logged no keep-warm row for the session (a `keep_warm_stop` with `no-idle-path`, for an idle gap keep-warm did not start, is one); else `{"active", "n", "max", "hours", "gap_started_at", "next_due_at", "last_result", "stop"}`: `active` true while it keeps the cache warm; `n` the pings that read the cache in this idle gap; `max` the most a gap can send, `floor((keep_warm_hours × 60 − 1) / 50)` (7 at 6 hours; drift or a retry can leave it at 6); `next_due_at` the next ping while active (when keep-warm waits for a usage limit's reset, the request just after it), else `null`; `last_result` the last ping's result (`warm`, `fork-miss`, `nothing-to-fork`, `api-error`, `aborted`, `error`); `stop` the last stop, `{"why", "pings", "at"}` (`why` as the log's `keep_warm_stop` row: `turn`, `cutoff`, `no-jobs`, `no-idle-path`, …), or `null` |
+| `keep_warm` | `null` when the plugin logged no keep-warm row for the session (a refused `keep_warm_stop`, for an idle gap keep-warm did not start, is one); else `{"active", "n", "max", "hours", "gap_started_at", "next_due_at", "last_result", "stop", "pending", "off"}`: `active` true while it keeps the cache warm; `n` the pings that read the cache in this idle gap; `max` the most a gap can send, `floor((keep_warm_hours × 60 − 1) / 50)` (7 at 6 hours; drift or a retry can leave it at 6); `next_due_at` the next ping while active (when keep-warm waits for a usage limit's reset, the request just after it), else `null`; `last_result` the last ping's result (`warm`, `fork-miss`, `nothing-to-fork`, `api-error`, `aborted`, `error`, or `late`: the fork took over about 2 minutes or came back more than 58 minutes after the last request that warmed the cache, so the gap stopped, `missed`); `stop` the last stop, `{"why", "pings", "at"}` (`why` as the log's `keep_warm_stop` row: `turn`, `cutoff`, `no-jobs`, `no-idle-path`, …), or `null`; `pending` true while a ping is out (sent, no result yet); `off` the reason keep-warm did not start in the current idle gap (`no-jobs`, `ttl-5m`, `near-limit`, `no-idle-path`, `cutoff`, …, as that gap's refused `keep_warm_stop` row names it), until the next main request, else `null` |
 | `ended_at` | when the session ended (SessionEnd), or `null`; a resume clears it |
 | `plugin_version` | the plugin version that answered |
 
@@ -52,7 +55,7 @@ A later version may add keys to `v1`; ignore the ones you do not know. A change 
 
 1. **The main session's last request.** With `--stdin`, Claude Code's own `prompt_cache` (Claude Code 2.1.312 and later; absent until a session's first response, also after a resume): its `ttl` and `expires_at`. Otherwise the last main `api-request` line of the transcript (its time and the TTL of its last cache breakpoint), read from the end: 256 KiB, then 2 MiB.
 2. **The plugin's keep-warm ping** counts only when it started after that request. A ping that read the cache makes `last` a `keep_warm` one and, on the one-hour tier, moves `expires_at` to its start plus one hour. Claude Code 2.1.319 already does the same in `prompt_cache` (a fork of the main conversation that reads the cache moves `expires_at` to its start plus the TTL, and is not counted as a request); the plugin takes the later of the two, so a version that does not still reads warm. On the five-minute tier it changes `last` but not `expires_at`. A later ping of the same idle gap that failed (an API error, an abort) changes neither. A ping that did not read the conversation (`fork-miss`) reads as cold: in such cases the next main request missed the cache too (17 of 17 measured).
-3. **A compaction** after the last request (the plugin's `compacted` row of the main session, written once the compaction ran; a skipped one does not count, nor the `idle_compact` row written before plugin idle compaction is tried) reads as cold, `compacted`, until the next request.
+3. **A compaction** after the last request (the plugin's `compacted` row of the main session, written once the compaction ran; a skipped one does not count, nor the `idle_compact` row written before plugin idle compaction is tried) reads as `compacted` until the next request: `label` `compacted`, with `state` `cold` and `why` `compacted` as before.
 4. Otherwise the cache is warm until `expires_at`, then cold, `expired`. `caching_observed: false` in `prompt_cache` reads as unknown, `caching-off`.
 
 ## The usage record
