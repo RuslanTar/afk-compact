@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Project copy: project copy --from repo --all is a dry run by default; --apply copies 2 exports with no private twin into the private bucket with imported_from: repo:<rel path>, and skips a third with a HARD secret hit (skip secret, rules named, in the dry run too; CR-F14, DP-27); the exports are untouched; a re-run finds the twins (exists); resume still reads the copies as foreign (relation other, from session) and heal-check refuses recipe-not-local",
+ "note": "Project copy: project copy --from repo --all is a dry run by default; --apply copies 2 exports with no private twin into the private bucket with imported_from: repo:<rel path>, and skips a third with a HARD secret hit (skip secret, rules named, in the dry run too); the exports are untouched; a re-run finds the twins (exists); resume still reads the copies as foreign (relation other, from session) and heal-check refuses recipe-not-local",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -58,7 +58,7 @@
    }
   },
   {
-   "name": "dry run; CR-F14: a HARD secret hit is skipped",
+   "name": "dry run; a HARD secret hit is skipped",
    "cwd": "$TMP/repo",
    "argv": [
     "project",
@@ -80,7 +80,7 @@
    }
   },
   {
-   "name": "apply imports 2; CR-F14: the export with a HARD secret hit is not copied",
+   "name": "apply imports 2; the export with a HARD secret hit is not copied",
    "cwd": "$TMP/repo",
    "argv": [
     "project",

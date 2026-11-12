@@ -1,9 +1,9 @@
 {
- "id": "HL-07, HL-08, HL-09 guards (0.1.5 E-3 review: what publish leaves as written)",
+ "id": "HL-07, HL-08, HL-09 guards (0.1.5: what publish leaves as written)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.5 E-3 review findings. HL-07: a range in double quotes (an approval's words), a code span (a command's argument), a fenced code block or a file name is left as written and still blocks, as move_lines leaves quotes, code and file names; Step 1 and Next steps item 1 that match stay matched: when one is rewritten the other is too, or neither is. HL-08: an item 1 written `1)` or `1.do` counts as present (no item added, step1-mismatch blocks); an added item counts as carried when Step 1 is, and goes before the first list line (below a lead-in). HL-09: a `<n>` ending a path in spawns: still counts.",
+ "note": "HL-07: a range in double quotes (an approval's words), a code span (a command's argument), a fenced code block or a file name is left as written and still blocks, as move_lines leaves quotes, code and file names; Step 1 and Next steps item 1 that match stay matched: when one is rewritten the other is too, or neither is. HL-08: an item 1 written `1)` or `1.do` counts as present (no item added, step1-mismatch blocks); an added item counts as carried when Step 1 is, and goes before the first list line (below a lead-in). HL-09: a `<n>` ending a path in spawns: still counts.",
  "needs": [
   "nonroot"
  ],

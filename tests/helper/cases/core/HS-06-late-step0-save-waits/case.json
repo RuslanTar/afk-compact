@@ -1,6 +1,6 @@
 {
  "id": "HS-06-late-step0-save-waits",
- "note": "0.1.3 hook speed (lib/reconcile.pm SWEEP_MIN_MS), review round 2 probe ZZ-P0: the wait covers reconcile's step 0 too, the save of a PostCompact deferred for want of a scope proof (classic fallback, RR-S21-02). Its boundary row proves it main at a Stop that starts 1.7 s late: the save and its sweep wait (no copy, no swept claim, no sweep_evidence; the stash stays in pending/; stop_timing names reconcile as cut, and gsd too, with status no-time, when a loaded host left the catch-up no time). The next Stop, on time, saves the copy and sweeps it: the planted evidence file is copied (referenced_budget 0)",
+ "note": "0.1.3 hook speed (lib/reconcile.pm SWEEP_MIN_MS), the wait covers reconcile's step 0 too, the save of a PostCompact deferred for want of a scope proof (classic fallback, RR-S21-02). Its boundary row proves it main at a Stop that starts 1.7 s late: the save and its sweep wait (no copy, no swept claim, no sweep_evidence; the stash stays in pending/; stop_timing names reconcile as cut, and gsd too, with status no-time, when a loaded host left the catch-up no time). The next Stop, on time, saves the copy and sweeps it: the planted evidence file is copied (referenced_budget 0)",
  "tz": "Etc/GMT-3",
  "steps": [
   {

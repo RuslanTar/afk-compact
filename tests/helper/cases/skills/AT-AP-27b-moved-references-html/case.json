@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-27b (moved approvals: a section holding an HTML block is left as written, 0.1.6 D-71 review 9)",
+ "id": "AT-AP-27b (moved approvals: a section holding an HTML block is left as written)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.6 D-71 review 9. code_sections did not know HTML blocks, so a list marker line inside `<details>` was read as a list item and the marker line 4 columns in after a blank line as a nested item, where CommonMark reads an indented code block: move_lines rewrote the U-7 in it (and in the HTML block) to Q-1. A section holding a line whose first text is `<` and a letter, `/`, `!` or `?` is now left as written: the references in Work done stay U-7; the one in Next steps cites Q-1.",
+ "note": "code_sections did not know HTML blocks, so a list marker line inside `<details>` was read as a list item and the marker line 4 columns in after a blank line as a nested item, where CommonMark reads an indented code block: move_lines rewrote the U-7 in it (and in the HTML block) to Q-1. A section holding a line whose first text is `<` and a letter, `/`, `!` or `?` is now left as written: the references in Work done stay U-7; the one in Next steps cites Q-1.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -77,7 +77,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "U-7 moves for its quote; the references in Work done, which holds an HTML block, stay; the one in Next steps cites its Q (D-71, review 9)",
+   "name": "U-7 moves for its quote; the references in Work done, which holds an HTML block, stay; the one in Next steps cites its Q",
    "expect": {
     "exit": 0,
     "stdout_has": [

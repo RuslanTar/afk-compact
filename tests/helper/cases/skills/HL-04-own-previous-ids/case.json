@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "HL-04 id-range with a foreign carry base: the ids a ledger line of the own previous file defines are carry-chain ids too. A range hiding them blocks until the draft names them alone. Ids compare without leading zeros on both sides of a range, and a range in a leading id list joined by `and` leads its line. 0.1.5 (E-3): publish lists a flagged range's ids itself (ADVISORY), so each detection step keeps the stage open with a range it cannot fix (D-2..X-3).",
+ "note": "HL-04 id-range with a foreign carry base: the ids a ledger line of the own previous file defines are carry-chain ids too. A range hiding them blocks until the draft names them alone. Ids compare without leading zeros on both sides of a range, and a range in a leading id list joined by `and` leads its line. 0.1.5: publish lists a flagged range's ids itself (ADVISORY), so each detection step keeps the stage open with a range it cannot fix (D-2..X-3).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

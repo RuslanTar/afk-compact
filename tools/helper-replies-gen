@@ -33,9 +33,9 @@ CLAUDE_PID = "424242:Tue Oct 21 09:00:00 2026"
 # and one never opened.
 HT_OPEN, HT_NONE, HT_DRAFT, HT_NOFINISH, HT_PUBLISHED, HT_FAILED, HT_UNKNOWN = (
     "0a0b0c01", "0a0b0c02", "0a0b0c03", "0a0b0c04", "0a0b0c05", "0a0b0c06", "0a0b0c09")
-# Stage nonces of the published and publish-failed hts (the sentinel's n= must match, CR-F9).
+# Stage nonces of the published and publish-failed hts (the sentinel's n= must match).
 NONCE_PUBLISHED, NONCE_FAILED = "3c4d5e6f", "4d5e6f70"
-# CR-F9 follow-up: the recorded reply of these rows must start so, else the generator fails
+# The recorded reply of these rows must start so, else the generator fails
 # (a claim alone answers publish-failed, so the published row needs its handoff file in place).
 EXPECT_PREFIX = {"handoff-state-published": "published ", "handoff-state-publish-failed": "publish-failed "}
 
@@ -66,7 +66,7 @@ def ht_setup(tmp, home):
             f.write("# LAB-42 retry\n" if ht == HT_DRAFT else "")
         with open(os.path.join(d, ht + ".stage"), "w", encoding="utf-8") as f:
             f.write(st + "\n")
-    # Published (CR-F9): a bound stage with its nonce, the claim, and the handoff file in place
+    # Published: a bound stage with its nonce, the claim, and the handoff file in place
     # as publish writes it (frontmatter, marker, body, the stage's sentinel last). Publish-failed:
     # a bound stage and a claim whose file was never placed.
     name = brand()

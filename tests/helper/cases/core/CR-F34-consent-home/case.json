@@ -1,5 +1,5 @@
 {
- "id": "CR-F34 (DP-3, A-3)",
+ "id": "CR-F34",
  "note": "The consent keys (repo_roots, relaunch_auto, relaunch_allow) come from the account's ~/.claude/settings.json, the home of the user database (getpwuid), not $HOME. This case runs without the runner's consent seam (consent_home account), so its fresh HOME is not the account home: a settings file under HOME that accepts the repository, turns relaunch on and allows every command grants nothing. Each key takes its safe value with the note '<key>: HOME is not the account home, safe value used' and one config_note {note: home-not-account} row; with CLAUDE_CONFIG_DIR naming HOME/.claude the note names CLAUDE_CONFIG_DIR. The account's own settings file is not read for these keys here, so the result does not depend on it",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",

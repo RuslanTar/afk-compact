@@ -1,6 +1,6 @@
 {
  "id": "CACHE-06-shim-dev-load",
- "note": "0.1.7 D-81 (critique 7): a copy outside Claude Code's plugin cache (a --plugin-dir load, as this staged copy) never writes or moves the status line's shim; the cache state is still kept.",
+ "note": "A copy outside Claude Code's plugin cache (a --plugin-dir load, as this staged copy) never writes or moves the status line's shim; the cache state is still kept.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [

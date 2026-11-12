@@ -1,9 +1,9 @@
 {
- "id": "HL-07, HL-08, HL-09 guards, round 3 (0.1.5 E-3 review: approval lines, guards, Step 1 as lint reads it)",
+ "id": "HL-07, HL-08, HL-09 guards (0.1.5: approval lines, guards, Step 1 as lint reads it)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.5 E-3 review round 3. HL-07: a range after `=` (a command's argument), in single quotes, in an indented code block or followed by `-` (a longer word) is left as written and blocks; an approval line is never rewritten: alone it blocks (beside a fold line: HL-07-13). HL-08: with an empty `Step 1:` before a filled one, publish reads Step 1 as lint() does and adds no item (step1-mismatch blocks). HL-09: `fix-<n>-final` in spawns: is a placeholder (the counter does not end the label).",
+ "note": "HL-07: a range after `=` (a command's argument), in single quotes, in an indented code block or followed by `-` (a longer word) is left as written and blocks; an approval line is never rewritten: alone it blocks (beside a fold line: HL-07-13). HL-08: with an empty `Step 1:` before a filled one, publish reads Step 1 as lint() does and adds no item (step1-mismatch blocks). HL-09: `fix-<n>-final` in spawns: is a placeholder (the counter does not end the label).",
  "needs": [
   "nonroot"
  ],

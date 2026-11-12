@@ -49,13 +49,13 @@ describe('resume line (A): Step 1 as code reads it', () => {
     expect(step1Of('## Resume here\nStatus: working\n## Next steps\nStep 1: later')).toBeUndefined()
     expect(step1Of('Summary:\nStep 1: `git status`\n')).toBeUndefined()
     // The template's other tail, `— proposed…` or `| proposed`, is cut too (seen in a real copy).
-    expect(step1Of('## Resume here\nStep 1: `catchup.py answers` — proposed: read the answers; if none, wait\n')).toBe('`catchup.py answers`')
+    expect(step1Of('## Resume here\nStep 1: `answers.py` — proposed: read the answers; if none, wait\n')).toBe('`answers.py`')
     expect(step1Of('## Resume here\nStep 1: `make lint` | proposed\n')).toBe('`make lint`')
     expect(step1Of('## Resume here\nStep 1:\nGate: none')).toBeUndefined()
     expect(step1Of('no step here')).toBeUndefined()
   })
 
-  // Review round 2: 5 of 89 real copies write the tail freely (`— for the 0.1.1 gate…`).
+  // 5 of 89 real copies write the tail freely (`— for the 0.1.1 gate…`).
   test('a free `— for the …` tail is cut too; `— for each …` inside the step is kept', () => {
     expect(step1Of('## Resume here\nStep 1: `make gate` — for the 0.1.1 gate (U-3) | proposed\n')).toBe('`make gate`')
     expect(step1Of('## Resume here\nStep 1: report — for the owner\'s "ship it?"\n')).toBe('report')
@@ -66,11 +66,11 @@ describe('resume line (A): Step 1 as code reads it', () => {
     expect(step1Of('## Resume here\nStep 1: ping the owners — for these two lanes\n')).toBe('ping the owners — for these two lanes')
   })
 
-  test('a summary with CRLF line ends gives its Step 1 (review round 2)', () => {
+  test('a summary with CRLF line ends gives its Step 1', () => {
     expect(step1Of('## Resume here\r\nStatus: working\r\nStep 1: `npm test`\r\nGate: none\r\n')).toBe('`npm test`')
   })
 
-  test('a double quote of the Step 1 shows as a single one inside the quoted line (review round 2)', () => {
+  test('a double quote of the Step 1 shows as a single one inside the quoted line', () => {
     expect(resumeLine('act per that row\'s "on finish" in In flight')).toBe('Resumed · step 1: act per that row\'s \'on finish\' in In flight')
   })
 
@@ -150,7 +150,7 @@ describe('resume line (A): the block', () => {
     expect(resumedLine(b)).toBe(RESUMED ? lineFor('Resumed after compaction') : undefined)
   })
 
-  // Review round 2: the mod found no summary, but the classic PostCompact hook saved a copy of this
+  // The mod found no summary, but the classic PostCompact hook saved a copy of this
   // compaction first (the block takes its path and verdict): its Step 1 fills the line.
   test('summary not found, the hooks side\'s copy of this nonce: the line takes that copy\'s Step 1', async ($, on) => {
     const w = new World().install(on)
@@ -170,7 +170,7 @@ describe('resume line (A): the block', () => {
     expect(resumedLine(b)).toBe(RESUMED ? lineFor('Resumed · step 1: `make check`') : undefined)
   })
 
-  // Review round 2: a headless load (`claude -p`, the Agent SDK: session.start `isInteractive`
+  // A headless load (`claude -p`, the Agent SDK: session.start `isInteractive`
   // false) gets no [resumed] line; a script reads its reply. 0.1.4: only with no surface (a
   // `-p` load has none, as a probe showed).
   test('a headless load with no surface (`claude -p`): the block has no [resumed] line', async ($, on) => {
@@ -404,7 +404,7 @@ describe('no re-ask after a timeout (B)', () => {
     expect(b).not.toContain(TIMED)
   })
 
-  // Review round 2 (mutant b6: restore dropping the mark survived): a restored record with the mark
+  // A mutant that drops the mark on restore once survived: a restored record with the mark
   // beside a question renders [question-timeout] when a turn no person started takes it.
   test('a restored record with the mark and its question: a background turn\'s block carries [question-timeout]', async ($, on) => {
     const w = new World().install(on)
@@ -423,7 +423,7 @@ describe('no re-ask after a timeout (B)', () => {
     if (TIMEOUT) expect(lines[q + 1]).toBe(TIMED)
   })
 
-  // Review round 2: the person came back, so they wrote since the timeout; the question stays listed.
+  // The person came back, so they wrote since the timeout; the question stays listed.
   test('the block on the person\'s own prompt after the build: the question, no [question-timeout]; a restored record too', async ($, on) => {
     const w = new World().install(on)
     dialogs(w, 'timeout')
@@ -472,7 +472,7 @@ describe('no re-ask after a timeout (B)', () => {
     expect(again).not.toContain(TIMED)
   })
 
-  // Review round 3: a person who types into the running result turn wrote too (AT-ID-03 "typed over
+  // A person who types into the running result turn wrote too (AT-ID-03 "typed over
   // it"): the block again beside that prompt drops the mark as well.
   test('the block again beside a prompt the person typed into the running result turn drops the mark too', async ($, on) => {
     const w = new World().install(on)

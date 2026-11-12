@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "begin: JSON <=3 KB with every begin key (+ reuse_window_min, D-14; + store_root, with bucket.path and the other store paths relative to it, U-04; no trimmed key when nothing is cut); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted, and also when the flag differs from it (degraded sid-mismatch); --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket; no queue_cmd: \"queue\": {\"mode\": \"off\"}, no Queued: line, no queue call",
+ "note": "begin: JSON <=3 KB with every begin key (+ reuse_window_min; + store_root, with bucket.path and the other store paths relative to it, U-04; no trimmed key when nothing is cut); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted, and also when the flag differs from it (degraded sid-mismatch); --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket; no queue_cmd: \"queue\": {\"mode\": \"off\"}, no Queued: line, no queue call",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {

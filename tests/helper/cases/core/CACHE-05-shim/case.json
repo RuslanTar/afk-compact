@@ -1,6 +1,6 @@
 {
  "id": "CACHE-05-shim",
- "note": "0.1.7 D-81 (critique 7): SessionStart of an installed copy (Claude Code's plugin cache layout) writes ${XDG_STATE_HOME:-~/.local/state}/<plugin>/bin/<plugin>-store, a #!/bin/sh exec of its own launcher (temp + rename, 0755), which runs `cache` under sh; it points it here again when its target is gone or older, keeps one that runs a newer version that still exists, and leaves a file that is not such a shim (the user's own) alone. XDG_STATE_HOME moves it.",
+ "note": "SessionStart of an installed copy (Claude Code's plugin cache layout) writes ${XDG_STATE_HOME:-~/.local/state}/<plugin>/bin/<plugin>-store, a #!/bin/sh exec of its own launcher (temp + rename, 0755), which runs `cache` under sh; it points it here again when its target is gone or older, keeps one that runs a newer version that still exists, and leaves a file that is not such a shim (the user's own) alone. XDG_STATE_HOME moves it.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "plugin_at": "$HOME/.claude/plugins/cache/m/$BRAND/9.0.0",

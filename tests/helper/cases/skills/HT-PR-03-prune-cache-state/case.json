@@ -2,7 +2,7 @@
  "id": "HT-PR-03-prune-cache-state (prune lists the cache state files of sessions ended, or with no end not written, over 7 days ago, whatever --days, and --apply deletes them with the plan)",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.7 D-81: `prune` adds the status line's cache state files (<state>/<plugin>/cache/<sid>.v1.json) of sessions that ended more than 7 days ago (ended_at), or with no end were not written for as long (the file's modification time: a crashed session never records an end), and temp files left that long, to its plan; --apply deletes them. A session that ended 2 days ago, or one still writing, stays.",
+ "note": "`prune` adds the status line's cache state files (<state>/<plugin>/cache/<sid>.v1.json) of sessions that ended more than 7 days ago (ended_at), or with no end were not written for as long (the file's modification time: a crashed session never records an end), and temp files left that long, to its plan; --apply deletes them. A session that ended 2 days ago, or one still writing, stays.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [

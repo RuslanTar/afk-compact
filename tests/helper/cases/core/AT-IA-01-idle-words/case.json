@@ -216,7 +216,7 @@
    }
   },
   {
-   "name": "the old on still reads as auto (true), with the D-72 warning: a form from before 0.1.6",
+   "name": "the old on still reads as auto (true), with the old-word warning: a form from before 0.1.6",
    "options": {
     "idle_handoff_turn": "on"
    },

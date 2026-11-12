@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "CR-F13 (DP-27: Dev-5 wins over the old same-session restart gate): heal-check never hands back a recipe that came only from handoff text as runnable. With no job record, a same-session `class auto` recipe whose script sha matches MANIFEST, the same with --bump, its B-n handle, other processes of the session, a `class ask` recipe, another session (relation), a changed script and an unknown item are all refused, with no `ok`, no `run:` and no counter written; a recipe's hand-written command is asked with ask-source: handoff; a bad item is a usage error",
+ "note": "Heal-check never hands back a recipe that came only from handoff text as runnable. With no job record, a same-session `class auto` recipe whose script sha matches MANIFEST, the same with --bump, its B-n handle, other processes of the session, a `class ask` recipe, another session (relation), a changed script and an unknown item are all refused, with no `ok`, no `run:` and no counter written; a recipe's hand-written command is asked with ask-source: handoff; a bad item is a usage error",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {

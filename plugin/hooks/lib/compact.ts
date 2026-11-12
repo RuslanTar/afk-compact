@@ -473,7 +473,7 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
       notSaved = undefined
       verdict = hooks.verdict
       counted = true
-      // Review round 2: the `[resumed]` line's Step 1 from that copy too.
+      // The `[resumed]` line's Step 1 from that copy too.
       step1 = step1Of(hooks.body)
     } else escalate(d, 'copy-failed')
   } else {

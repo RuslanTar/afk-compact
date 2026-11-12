@@ -271,7 +271,7 @@ test('CC311-01: the Claude Code 2.1.311 installed form (tools-used block in a <s
   expect(w.toasts.some(t => t.includes('not in handoff format'))).toBe(false)
 })
 
-test('RRP-04: after EXISTS sha-differs the mod neither rewrites its .mod.md stash nor retries save-copy (the helper settles the stash)', async ($, on) => {
+test('After EXISTS sha-differs the mod neither rewrites its .mod.md stash nor retries save-copy (the helper settles the stash)', async ($, on) => {
   const w = new World().install(on)
   w.saveLine = `EXISTS: ${ROOT}/r/x.md sha-differs`
   await raiseCompact($, { trigger: 'auto' })

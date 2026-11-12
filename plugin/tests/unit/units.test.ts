@@ -221,7 +221,7 @@ describe('AT-P-07 assembler (14-character name)', () => {
   // since the 0.1.2 question carry's [question] line quotes an open question of up to 240 chars;
   // 5,580 since the [auto-mode] line; 5,846 since the 0.1.3 resume-text lane's
   // [resumed] first line, step 6's no-dialog clause and the [question-timeout] note; 5,874 since its
-  // review round 1's edits to [handoff-ack], [handoff-partial] and [question-timeout]; 5,894 since
+  // first fixes to [handoff-ack], [handoff-partial] and [question-timeout]; 5,894 since
   // 0.1.4 names in [auto-mode] the classes still blocked; 6,114 since the gate rule:
   // step 4 says the gate asks even when an approval carries and names protected branches, 240
   // chars on a worst path measured at 5,871 before it; 6,127 since 0.1.5 gives the digest's
@@ -303,7 +303,7 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const s = assembleText(text('resume-context'), ['handoff', 'handoff-ack', 'prod-forbid'], r)
     const line = s.split('\n').find(l => l.startsWith('Its report was not sent: ')) ?? ''
     expect(line).toContain('that report is only `✓ Handoff saved: ' + path + '` (+ ` · Needs you: <n> questions (in the handoff)` for open user-owned questions), as your first line')
-    // 0.1.3 resume-text review round 1: the ack replaces [resumed], so it too comes before any tool call.
+    // 0.1.3 resume-text: the ack replaces [resumed], so it too comes before any tool call.
     expect(line).toContain('as your first line, before any tool call; no recap of it; the rest of this block applies.')
     // Review of the first build: the ack limits the report, never the reply (auto-continue's
     // "Continue from Step 1", an idle line and a new prompt still apply).
@@ -315,7 +315,7 @@ describe('AT-P-07 assembler (14-character name)', () => {
     expect(idle).toContain(line)
     const p = assembleText(text('resume-context'), ['handoff-partial', 'prod-forbid'], { ...WORST, draft_state: 'present', handoff_finish: '`fin`' })
     const pl = p.split('\n').find(l => l.startsWith('Compaction cut off the plugin\'s handoff turn')) ?? ''
-    // 0.1.3 resume-text review round 1: the finish is the first call, so its receipt is the first line after one call.
+    // 0.1.3 resume-text: the finish is the first call, so its receipt is the first line after one call.
     expect(pl).toContain('run `fin` once, as your first call, and relay its receipt; `Wrote handoff to: <path>` as only `✓ Handoff saved: <path>`')
     expect(pl).toContain('as your first line. Never start a second handoff.')
     // Without either tag, no ack rule.
@@ -442,7 +442,7 @@ test('small helpers: token format, question end, temp paths', () => {
   expect(tempPaths({ command: 'cat repo/src/main.ts' })).toEqual([])
 })
 
-test('RRP-08 temp paths: a temp root counts only at a path start; a URL path, query or fragment is never recorded', () => {
+test('Temp paths: a temp root counts only at a path start; a URL path, query or fragment is never recorded', () => {
   expect(tempPaths({ url: 'https://bucket.s3.example.invalid/tmp/upload.zip?X-Amz-Credential=abc%2F20261021' })).toEqual([])
   expect(tempPaths({ command: 'curl -s https://api.example.invalid/v1/tmp/export?access_token=abc -o out.json' })).toEqual([])
   expect(tempPaths({ command: 'open https://h.example.invalid/x/scratchpad/notes.md#top' })).toEqual([])

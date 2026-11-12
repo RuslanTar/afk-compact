@@ -1,9 +1,9 @@
 {
- "id": "HL-07 a section holding a fence, a quote or an indented code line is left as written, and a plain section beside it is still fixed (0.1.6 D-71)",
+ "id": "HL-07 a section holding a fence, a quote or an indented code line is left as written, and a plain section beside it is still fixed",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.6 D-71. Six reviews of 0.1.5 E-3 each found a CommonMark shape that fence_lines misread (the last: a fence opened on a list item's line and a quote inside a list item, where a range inside the block was listed and published while 0.1.4 refused it). 0.1.6 D-71: fix() and move_lines rewrite nothing in a section (a ## heading to the next) that holds a line with a run of 3 or more backticks or tildes, a blockquote line or a line indented 4 or more columns that is not a list continuation; such a section keeps 0.1.4 behaviour (the lint blocks, the draft is kept), so no code block is guessed at. Each shape is in Work done next to a plain range; a plain range in Next steps is listed in each refused step (review 8), and the last step shows a plain Next steps after a fenced Work done is still fixed.",
+ "note": "Six reviews of the 0.1.5 fix each found a CommonMark shape that fence_lines misread (the last: a fence opened on a list item's line and a quote inside a list item, where a range inside the block was listed and published while 0.1.4 refused it). fix() and move_lines rewrite nothing in a section (a ## heading to the next) that holds a line with a run of 3 or more backticks or tildes, a blockquote line or a line indented 4 or more columns that is not a list continuation; such a section keeps 0.1.4 behaviour (the lint blocks, the draft is kept), so no code block is guessed at. Each shape is in Work done next to a plain range; a plain range in Next steps is listed in each refused step, and the last step shows a plain Next steps after a fenced Work done is still fixed.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -79,7 +79,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "D-71: Work done holds a fence opened on a list item's line (`- ```` and `1. ```text`): nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed",
+   "name": "Work done holds a fence opened on a list item's line (`- ```` and `1. ```text`): nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed",
    "expect": {
     "exit": 3,
     "stdout_has": [
@@ -122,7 +122,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "D-71: Work done holds a quote inside a list item (`- > ````): nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "name": "Work done holds a quote inside a list item (`- > ````): nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
    "expect": {
     "exit": 3,
     "stdout_has": [
@@ -162,7 +162,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "D-71: Work done holds a ~~~ block holding a ``` line: nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "name": "Work done holds a ~~~ block holding a ``` line: nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
    "expect": {
     "exit": 3,
     "stdout_has": [
@@ -202,7 +202,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "D-71: Work done holds an opening fence indented 4 columns: nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "name": "Work done holds an opening fence indented 4 columns: nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
    "expect": {
     "exit": 3,
     "stdout_has": [
@@ -242,7 +242,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "D-71: Work done holds a plain quote line: nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "name": "Work done holds a plain quote line: nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
    "expect": {
     "exit": 3,
     "stdout_has": [
@@ -282,7 +282,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "D-71: Work done holds an indented code line after a list item and a blank line: nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
+   "name": "Work done holds an indented code line after a list item and a blank line: nothing in the section is rewritten, so the range in it and the plain one beside it block, while the range in a plain Next steps is listed (same stage, the refused draft rewritten)",
    "expect": {
     "exit": 3,
     "stdout_has": [
@@ -322,7 +322,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "D-71: a plain Next steps after a fenced Work done is still fixed: its range is listed and the handoff is written with the block as written (same stage, the refused draft rewritten)",
+   "name": "a plain Next steps after a fenced Work done is still fixed: its range is listed and the handoff is written with the block as written (same stage, the refused draft rewritten)",
    "expect": {
     "exit": 0,
     "stdout_has": [

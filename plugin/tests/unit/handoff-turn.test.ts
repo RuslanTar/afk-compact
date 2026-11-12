@@ -699,7 +699,7 @@ test('handoff_turn off: thrash found at a capped nudged turn\'s end: skip why=ha
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-LT-05 (2-nonok): H < 20K: why=headroom, then no plugin compaction (E-M-3)', async ($, on) => {
+test('AT-LT-05 (2-nonok): H < 20K: why=headroom, then no plugin compaction', async ($, on) => {
   const w = new World({ window: 800000 }).install(on)
   await w.start($)
   await haltTwoNonOk($, w)
@@ -1326,7 +1326,7 @@ test('claimTurn: the first turn is ours with no other prompt entering; beside on
 
 // The hourly stamp is written once per handoff turn, so a turn deferred for a prompt
 // that then never entered, and run again, still leaves the second hourly slot free.
-test('DP-30: our submit dropped for an entering user prompt, that prompt dropped too, the delay runs again: one hourly stamp, so the next last cycle still promises its handoff turn', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
+test('Our submit dropped for an entering user prompt, that prompt dropped too, the delay runs again: one hourly stamp, so the next last cycle still promises its handoff turn', { options: { max_auto_continues_per_hour: 0 } }, async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await lastCycleTurn($, w)
@@ -1371,7 +1371,7 @@ test('DP-30: our submit dropped for an entering user prompt, that prompt dropped
 
 // A rerun after a wait stop reuses the first checkpoint (its sweep's evidence): no
 // second checkpoint with the same id6, whose sweep would answer `skipped: swept` with no rows.
-test('DP-30: a native compaction that stops the post-handoff compaction after its checkpoint and ends skipped: the rerun reuses that checkpoint (one checkpoint call for the nonce)', { options: { ...CAP3, queue_cmd: '/q/bin/queue' } }, async ($, on) => {
+test('A native compaction that stops the post-handoff compaction after its checkpoint and ends skipped: the rerun reuses that checkpoint (one checkpoint call for the nonce)', { options: { ...CAP3, queue_cmd: '/q/bin/queue' } }, async ($, on) => {
   const w = new World().install(on, CAPPED)
   await w.start($)
   const r = await lastCycleTurn($, w)
@@ -1403,7 +1403,7 @@ test('DP-30: a native compaction that stops the post-handoff compaction after it
   expect(w.callsOf('dispatch').filter(c => w.flag(c, '--channel') === 'mod-self').map(c => w.flag(c, '--nonce'))).toEqual([named])
 })
 
-// DP-29 (the watcher's E-M-15 rule): the post-handoff dispatch record a native compaction made a second one
+// DP-29 (the watcher's rule too): the post-handoff dispatch record a native compaction made a second one
 // is closed by a `compacted` row with `skip: native-ran` and its nonce.
 test('DP-29: a native compaction that starts while the post-handoff dispatch record is written and compacts: no second compaction; compacted skip native-ran with that nonce', { options: CAP3 }, async ($, on) => {
   const w = new World().install(on, CAPPED)

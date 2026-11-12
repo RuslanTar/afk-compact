@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "publish: every ADVISORY rule of the spec is printed and the handoff is still published: size >20 KB, code block >5 lines, log-shaped line, 4 consecutive hash lines, >15 changes, >3 must-read, WARN secret hit as `ADVISORY secret-warn rules=<ids>` (D-13), >=30% non-ledger overlap with previous_handoff; headings and none-forms do not count toward the overlap (RV-30)",
+ "note": "publish: every ADVISORY rule of the spec is printed and the handoff is still published: size >20 KB, code block >5 lines, log-shaped line, 4 consecutive hash lines, >15 changes, >3 must-read, WARN secret hit as `ADVISORY secret-warn rules=<ids>`, >=30% non-ledger overlap with previous_handoff; headings and none-forms do not count toward the overlap (RV-30)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

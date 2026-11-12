@@ -1,9 +1,9 @@
 {
- "id": "HT-LT-05 (CR-F9)",
+ "id": "HT-LT-05",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Code review 2026-10-22, CR-F9 residual: a publish that made the <ht>.published claim and died before its file was placed (link error, kill) leaves a claim naming a missing file; a retry of the same stage places the handoff at the claimed path (exclusive link, never over a file), so the claim is fulfilled; a claim naming any other missing path, or an existing file, is still REFUSED: handoff-exists",
+ "note": "A publish that made the <ht>.published claim and died before its file was placed (link error, kill) leaves a claim naming a missing file; a retry of the same stage places the handoff at the claimed path (exclusive link, never over a file), so the claim is fulfilled; a claim naming any other missing path, or an existing file, is still REFUSED: handoff-exists",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -126,7 +126,7 @@
     "in-progress"
    ],
    "now": "2026-10-21T14:12:00+03:00",
-   "name": "CR-F9: the claim names this stage's missing file: the retry places it there",
+   "name": "the claim names this stage's missing file: the retry places it there",
    "expect": {
     "exit": 0,
     "stdout_has": [

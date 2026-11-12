@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "heal-check and locate: a recorded command that matches a production class (the shipped prod-token, then the user's prod_patterns as user-prod-<n>) is prod-read when read-only and prod-write otherwise, ahead of none and local. prod-read relaunches by itself only with unattended_prod_reads allow, a consent key read from the settings file only (DP-3; env is ignored with a note; a foreign CLAUDE_CONFIG_DIR gets the safe value, CR-F34); prod_patterns is protective: settings file only. Heal rows carry the class id, never the command. locate prints `production: <forbid|allow> · patterns: <shipped ids> + <n> yours`. The successor session (66666666) checks the origin's lost jobs, as in HT-JV-01.",
+ "note": "heal-check and locate: a recorded command that matches a production class (the shipped prod-token, then the user's prod_patterns as user-prod-<n>) is prod-read when read-only and prod-write otherwise, ahead of none and local. prod-read relaunches by itself only with unattended_prod_reads allow, a consent key read from the settings file only (env is ignored with a note; a foreign CLAUDE_CONFIG_DIR gets the safe value, CR-F34); prod_patterns is protective: settings file only. Heal rows carry the class id, never the command. locate prints `production: <forbid|allow> · patterns: <shipped ids> + <n> yours`. The successor session (66666666) checks the origin's lost jobs, as in HT-JV-01.",
  "tz": "Etc/GMT-3",
  "steps": [
   {

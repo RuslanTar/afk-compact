@@ -1,4 +1,4 @@
-# AT-WD-06 (M-17, A-19, A-27; DP-14 (6)): a plugin-origin `user` row that follows an open
+# AT-WD-06 (M-17, A-19, A-27): a plugin-origin `user` row that follows an open
 # handoff-turn record (handoff-turn/<ht>.json) is the plugin-submitted handoff turn: logged
 # as `handoff_turn` (sweep row `handoff_turn`, turns.handoff_turns), never as a continue.
 # It is not an A-27 input (a compaction no nudge drove) and not an A-19 input, even with

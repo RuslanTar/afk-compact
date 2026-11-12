@@ -1,6 +1,6 @@
 {
  "id": "USAGE-04-statusline-dated",
- "note": "0.1.8 D-83 (review 2 of the usage lane): a status line's entry is dated from when a status line first showed it only while it stays in the record; one evicted (64 entries) or pruned (D-88: past its reset, or 10 minutes with none) and shown again comes back dated now. So the record keeps a session's entries together (evicting the sessions read or shown longest ago first, never one session's plugin entry alone), and its readers (status here; the mod's limits.ts recordReadings for every near-limit decision) never date a status line's entry newer than its session's plugin entry of the same kind, and leave one with no such entry out. status counts other sessions' fresh readings once per session and kind.",
+ "note": "A status line's entry is dated from when a status line first showed it only while it stays in the record; one evicted (64 entries) or pruned (past its reset, or 10 minutes with none) and shown again comes back dated now. So the record keeps a session's entries together (evicting the sessions read or shown longest ago first, never one session's plugin entry alone), and its readers (status here; the mod's limits.ts recordReadings for every near-limit decision) never date a status line's entry newer than its session's plugin entry of the same kind, and leave one with no such entry out. status counts other sessions' fresh readings once per session and kind.",
  "now": "2026-11-09T12:51:00Z",
  "tz": "UTC",
  "steps": [
@@ -576,7 +576,7 @@
    }
   },
   {
-   "name": "status of another session: 5e55a0a1's status line entry reads as old as its plugin entry (12:00; D-88: it still counts, its window resets in 3 days); the 31 status-line-only sessions have no plugin entry, so no reading",
+   "name": "status of another session: 5e55a0a1's status line entry reads as old as its plugin entry (12:00; it still counts, its window resets in 3 days); the 31 status-line-only sessions have no plugin entry, so no reading",
    "argv": [
     "status",
     "--sid",
@@ -657,7 +657,7 @@
    }
   },
   {
-   "name": "status of another session: 5e55a0b2's reading is dated 12:11:30 (50 min old; D-88: it still counts until its reset), 5e55a0c3's 30 s",
+   "name": "status of another session: 5e55a0b2's reading is dated 12:11:30 (50 min old; it still counts until its reset), 5e55a0c3's 30 s",
    "now": "2026-11-09T13:01:30Z",
    "argv": [
     "status",

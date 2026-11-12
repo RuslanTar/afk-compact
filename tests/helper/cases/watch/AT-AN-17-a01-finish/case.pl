@@ -1,4 +1,4 @@
-# AT-AN-17 (0.1.3 review round 3, F1): AT-AN-16 when the session ends with no SessionEnd (its
+# AT-AN-17: AT-AN-16 when the session ends with no SessionEnd (its
 # process gone): the next session's start finishes it across sessions (lib/orphans.pm), and the
 # watcher's end pass runs for it there, in its context, as its own SessionEnd would have.
 my $case = do {

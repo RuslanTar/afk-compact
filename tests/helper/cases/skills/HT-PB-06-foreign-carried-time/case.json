@@ -1,9 +1,9 @@
 {
- "id": "HT-PB-06 (CR-F29, DP-27)",
+ "id": "HT-PB-06",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Code review 2026-10-22, DP-27, CR-F29 round 3: with a foreign carry base, a line that has a [from …] tag and equals a base line apart from its id, tags and spacing keeps the base's verified/checked stamps without unprinted-time, also when it keeps an older session's tag; the same line untagged (B) or with an altered command (C) is still unprinted-time",
+ "note": "With a foreign carry base, a line that has a [from …] tag and equals a base line apart from its id, tags and spacing keeps the base's verified/checked stamps without unprinted-time, also when it keeps an older session's tag; the same line untagged (B) or with an altered command (C) is still unprinted-time",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

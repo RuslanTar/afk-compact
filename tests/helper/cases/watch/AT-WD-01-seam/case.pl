@@ -1,4 +1,4 @@
-# AT-WD-01-seam (CR-F15):
+# AT-WD-01-seam:
 # core hands the watcher `settings::resolve`'s nested shape {values => {...}, source, notes},
 # and `status` lets the watcher resolve it itself. Values from the user's settings file
 # reach the watcher through both: `watcher` is trimmed and case-folded there too, an
@@ -62,7 +62,7 @@ my $nested = sub { my ($v) = @_; return { values => $v, source => { map { $_ => 
         my @pre = $E->rows('classic', 'precompact');
         $E->count(\@pre, 2, "settings file: 'OFF' writes no precompact row, 'Shadow2' writes one per hook");
         # CR-F34: the driver's staged plugin holds core's test seam, so the consent folder is
-        # this HOME's .claude and the launcher adds no consent config_note rows. D-72: 'OFF', a
+        # this HOME's .claude and the launcher adds no consent config_note rows. 'OFF', a
         # word from before 0.1.6, gets core's legacy-word row (rc::preamble), once per session.
         my @cn = $E->rows('classic', 'config_note');
         $E->count(\@cn, 2, "settings file 'OFF' then 'Shadow2': one config_note row each per session");

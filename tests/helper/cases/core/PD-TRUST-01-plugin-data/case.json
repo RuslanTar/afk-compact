@@ -459,7 +459,7 @@
       }
     },
     {
-      "name": "a synced folder with the ~g<n> suffix Claude Code adds (engineering~g2): still synced, the same record, one hint",
+      "name": "a synced folder with the ~g<n> suffix Claude Code adds (example~g2): still synced, the same record, one hint",
       "env": {
         "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.313",
         "CLAUDE_PLUGIN_DATA": "$TMP/cfg/plugins/data/$BRAND-synced",

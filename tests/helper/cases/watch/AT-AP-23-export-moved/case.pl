@@ -1,6 +1,6 @@
 # AT-AP-23, watcher half (0.1.3 APPROVALS): a written handoff_publish row counts the approval
 # lines publish moved to Open questions in `approvals_moved` (a count, never a quote). The export
-# keeps it as a number, so nothing of the row is dropped as unknown. 0.1.5 (E-3): `lint_fixed`, the
+# keeps it as a number, so nothing of the row is dropped as unknown. 0.1.5: `lint_fixed`, the
 # count of mechanical lints publish fixed itself, is kept the same way.
 my %got;
 my @rows = (

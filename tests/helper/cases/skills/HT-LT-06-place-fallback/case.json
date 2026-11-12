@@ -1,9 +1,9 @@
 {
- "id": "HT-LT-06 (DP-28, CR-F9 residual)",
+ "id": "HT-LT-06",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "DP-28: on a file system without hard links publish places the handoff by an exclusive create plus read-back; when that write fails after its own exclusive open made the file, publish removes that file (its own partial, matched by device and inode) and fails, so handoff-state answers publish-failed and a retry of the stage fills the claim at the claimed path. A partial left by a killed process is never removed or replaced (D-8): the publish is refused handoff-exists and handoff-state answers publish-failed. Test seams: STORE_TEST_PUBLISH_NOLINK, STORE_TEST_PUBLISH_FAIL (test mode only).",
+ "note": "On a file system without hard links publish places the handoff by an exclusive create plus read-back; when that write fails after its own exclusive open made the file, publish removes that file (its own partial, matched by device and inode) and fails, so handoff-state answers publish-failed and a retry of the stage fills the claim at the claimed path. A partial left by a killed process is never removed or replaced (D-8): the publish is refused handoff-exists and handoff-state answers publish-failed. Test seams: STORE_TEST_PUBLISH_NOLINK, STORE_TEST_PUBLISH_FAIL (test mode only).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

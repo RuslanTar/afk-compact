@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "begin: own_latest.unchanged false after an edit to an already-dirty file (RV-18); AT-CF-07: the newest handoff is the carry base whoever wrote it: another session's file is previous_handoff with previous_kind foreign and a carry_notice, and is not repeated in newer_foreign (newer_foreign rows and their In flight line numbers, RV-26: AT-CF-03); age_min and reuse_window_min (D-14)",
+ "note": "begin: own_latest.unchanged false after an edit to an already-dirty file (RV-18); AT-CF-07: the newest handoff is the carry base whoever wrote it: another session's file is previous_handoff with previous_kind foreign and a carry_notice, and is not repeated in newer_foreign (newer_foreign rows and their In flight line numbers, RV-26: AT-CF-03); age_min and reuse_window_min",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

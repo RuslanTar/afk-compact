@@ -1,10 +1,10 @@
 {
- "id": "HT-LT-04 (CR-F9, CR-F10)",
+ "id": "HT-LT-04",
  "needs": ["nonroot"],
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Code review 2026-10-22: a begin that returns the stage already bound to the handoff turn (resumed) appends the checked_at it prints to stamps.log, so a draft citing it publishes (CR-F10); publish writes and reads back the whole handoff under a temp name before the <ht>.published claim, so a write that fails leaves no claim, handoff-state stays staged and a retry publishes (CR-F9)",
+ "note": "A begin that returns the stage already bound to the handoff turn (resumed) appends the checked_at it prints to stamps.log, so a draft citing it publishes; publish writes and reads back the whole handoff under a temp name before the <ht>.published claim, so a write that fails leaves no claim, handoff-state stays staged and a retry publishes",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -106,11 +106,11 @@
      }
     ]
    },
-   "name": "CR-F9: the handoff file cannot be written: no claim is left",
+   "name": "the handoff file cannot be written: no claim is left",
    "now": "2026-10-21T14:10:00+03:00"
   },
   {
-   "name": "CR-F9: handoff-state still reads staged",
+   "name": "handoff-state still reads staged",
    "argv": [
     "handoff-state",
     "--sid",
@@ -134,7 +134,7 @@
    ]
   },
   {
-   "name": "CR-F10: a resumed begin records the checked_at it prints",
+   "name": "a resumed begin records the checked_at it prints",
    "cwd": "$TMP/repo",
    "argv": [
     "begin",
@@ -205,7 +205,7 @@
      }
     ]
    },
-   "name": "CR-F10 + CR-F9: the retry publishes; the draft cites the resumed checked_at; no temp file is left",
+   "name": "the retry publishes; the draft cites the resumed checked_at; no temp file is left",
    "now": "2026-10-21T14:22:00+03:00"
   },
   {

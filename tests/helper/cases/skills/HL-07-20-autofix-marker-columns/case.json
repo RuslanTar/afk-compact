@@ -1,9 +1,9 @@
 {
- "id": "HL-07 a line where any leading list marker is followed by more than 4 columns leaves its section as written, and a plain section beside it is still fixed (0.1.6 D-71, review 10)",
+ "id": "HL-07 a line where any leading list marker is followed by more than 4 columns leaves its section as written, and a plain section beside it is still fixed",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.6 D-71 review 10. code_sections measured the columns after the first list marker of a line only, and only when that marker started an item: a nested marker followed by 5 or more columns (`- 1.      x`, `- -     x`, `1. - <tab>   x`) is an indented code block in the inner item, and `2.` after a thematic break item, a setext or ATX heading or a lazy line was read as paragraph text, though there it starts an item whose text is code. fix() listed the range in such a line and publish wrote the file, while 0.1.5 refused. Every marker of the line's leading markers is now measured, item or not, and one followed by more than 4 columns makes the section count (a fail-safe: a paragraph line that only looks so is left as written too). Each refused step also holds a plain range in Next steps, which is listed. The last step: markers followed by 1 and 4 columns are plain items, so their ranges are listed and the handoff is written.",
+ "note": "code_sections measured the columns after the first list marker of a line only, and only when that marker started an item: a nested marker followed by 5 or more columns (`- 1.      x`, `- -     x`, `1. - <tab>   x`) is an indented code block in the inner item, and `2.` after a thematic break item, a setext or ATX heading or a lazy line was read as paragraph text, though there it starts an item whose text is code. fix() listed the range in such a line and publish wrote the file, while 0.1.5 refused. Every marker of the line's leading markers is now measured, item or not, and one followed by more than 4 columns makes the section count (a fail-safe: a paragraph line that only looks so is left as written too). Each refused step also holds a plain range in Next steps, which is listed. The last step: markers followed by 1 and 4 columns are plain items, so their ranges are listed and the handoff is written.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

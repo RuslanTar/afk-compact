@@ -34,7 +34,7 @@ my $repo = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../..');
             # State root (0.1.2): the default names the plugin ({{plugin}} in src/plugin.json)
             if ($k eq 'handoff_root') { $want =~ s{\A~}{$ENV{HOME}}; $want =~ s/{{plugin}}/$brand/g }
             if ($k eq 'triggers') { $want = $want ? 'true' : 'false' }
-            # D-72: an on/off key's manifest default (true or false) is the word the watcher runs
+            # An on/off key's manifest default (true or false) is the word the watcher runs
             ($want) = settings::switch_read($k, $want) if defined &settings::switch_read && exists $settings::SWITCH{$k};
             $n++;
             $E->is($got, $want, "ctx default for $k equals plugin.json");

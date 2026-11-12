@@ -443,7 +443,7 @@ test('F2-6: one tool call citing three new temp paths: one log --stream paths --
   expect(w.callsOf('log').filter(c => w.flag(c, '--stream') === 'paths').length).toBe(1)
 })
 
-test('PRIV-04: no ident answer (helper failed it): the raw summary is stashed nowhere, not under the configured watch', async ($, on) => {
+test('No ident answer (helper failed it): the raw summary is stashed nowhere, not under the configured watch', async ($, on) => {
   const w = new World().install(on)
   w.replies['ident'] = () => ({ exitCode: 70, stdout: '' })
   await w.start($)
@@ -456,7 +456,7 @@ test('PRIV-04: no ident answer (helper failed it): the raw summary is stashed no
   expect(w.rowsOf('copy_failed').map(r => r.reason)).toEqual(['helper-missing'])
 })
 
-test('PRIV-04: a compaction before any session.start or turn.start in this load asks ident first and stashes under its watch only', async ($, on) => {
+test('A compaction before any session.start or turn.start in this load asks ident first and stashes under its watch only', async ($, on) => {
   const w = new World().install(on)
   const other = HOME + '/.claude/handoffs-default/.watch'
   w.identWatch = other
@@ -469,7 +469,7 @@ test('PRIV-04: a compaction before any session.start or turn.start in this load 
   expect(w.flag(w.callsOf('save-copy')[0], '--from')).toBe(stashed[0])
 })
 
-test('PRIV-04: ident watch null: no stash, copy_failed unsafe-root (row through the helper log)', async ($, on) => {
+test('Ident watch null: no stash, copy_failed unsafe-root (row through the helper log)', async ($, on) => {
   const w = new World().install(on)
   w.identWatch = null
   await w.start($)

@@ -4,7 +4,7 @@
 # watcher would find them and checks the watcher's view:
 # - AT-WD-10: S-21-pd (step 5 post-compaction caused_by plugin, step 7 other), S-21-pd-512k
 #   (post-compaction), and the negatives S-21-pd-noboundary, S-21-pd-sub, S-21-pd-stale
-#   (other): the D-13 counts (watch::rules::deny_summary) match the asserted turn_kind.
+#   (other): the denial counts (watch::rules::deny_summary) match the asserted turn_kind.
 # - AT-WD-11: S-21-mod step 6 (rollup with null sizes + the compaction_boundary row) and
 #   S-21-mod-conflict (rollup pre_tokens 198000 kept, one join_conflict): the watcher's join
 #   (watch::rules::join_rollup) equals the sequence's `joined` reader view.

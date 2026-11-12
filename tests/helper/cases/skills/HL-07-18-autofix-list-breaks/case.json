@@ -1,9 +1,9 @@
 {
- "id": "HL-07 a thematic break, a lone list marker or an ordered marker in a paragraph starts no list item, so a section with a code line under one is left as written (0.1.6 D-71, review 8)",
+ "id": "HL-07 a thematic break, a lone list marker or an ordered marker in a paragraph starts no list item, so a section with a code line under one is left as written",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.6 D-71 review 8. code_sections read `* * *`, `- - -`, a setext underline `-`, an empty item with trailing spaces (`-   `, `1.  `) and an ordered marker other than 1 under paragraph text as list items, or put an empty item's text too deep, so a line 4 columns past the real text column passed as a list continuation where CommonMark reads an indented code block (after the lone `-`, the text of an empty item; the section counts there too, on the safe side): fix() listed the range in it and publish wrote the file, while 0.1.5 refused. None of these lines now starts an item, so the line under it is measured from the item around it (or the margin) and its section is left as written. Each refused step also holds a plain range in Next steps, which is listed. The last step: a numbered list with a sub-item 4 columns in is still a list, so both ranges are listed and the handoff is written.",
+ "note": "code_sections read `* * *`, `- - -`, a setext underline `-`, an empty item with trailing spaces (`-   `, `1.  `) and an ordered marker other than 1 under paragraph text as list items, or put an empty item's text too deep, so a line 4 columns past the real text column passed as a list continuation where CommonMark reads an indented code block (after the lone `-`, the text of an empty item; the section counts there too, on the safe side): fix() listed the range in it and publish wrote the file, while 0.1.5 refused. None of these lines now starts an item, so the line under it is measured from the item around it (or the margin) and its section is left as written. Each refused step also holds a plain range in Next steps, which is listed. The last step: a numbered list with a sub-item 4 columns in is still a list, so both ranges are listed and the handoff is written.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -282,7 +282,7 @@ sub on_SessionStart {
 # (afk-compact@afk-compact -> afk-compact-afk-compact). The marketplace comes from where Claude
 # Code loaded the plugin, CLAUDE_PLUGIN_ROOT (else the helper's own root): an installed plugin's
 # .../plugins/cache/<marketplace>/<name>/<version>, a synced one's .../plugins/synced/<x>/<name>
-# (`synced`; Claude Code may add `~g<n>` to that folder's name, e.g. engineering~g2), a copy read in
+# (`synced`; Claude Code may add `~g<n>` to that folder's name, e.g. example~g2), a copy read in
 # place from a marketplace's folder (0.1.9, a directory marketplace: that marketplace), anything
 # else a --plugin-dir run (`inline`), as settings::load_source reads it.
 sub own_data_name {

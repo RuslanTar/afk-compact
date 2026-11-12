@@ -1,12 +1,12 @@
 {
- "id": "HL-07 fold line beside a carried approval, on its own stage (0.1.5 E-3 review round 4)",
+ "id": "HL-07 fold line beside a carried approval, on its own stage",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
  "needs": [
   "nonroot"
  ],
- "note": "0.1.5 E-3 review rounds 3 and 4. HL-07: with a fold line and a carried approval line both flagged for id-range, publish lists only the fold line; the approval's flag clears on the re-lint, so U-2 stays carried and checked, as written (before: its action was rewritten, it was no longer carried, and with the quote gone from the transcript it moved to Open questions as a re-ask). Split from HL-07-10 so no earlier publish step decides its outcome.",
+ "note": "HL-07: with a fold line and a carried approval line both flagged for id-range, publish lists only the fold line; the approval's flag clears on the re-lint, so U-2 stays carried and checked, as written (before: its action was rewritten, it was no longer carried, and with the quote gone from the transcript it moved to Open questions as a re-ask). Split from HL-07-10 so no earlier publish step decides its outcome.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

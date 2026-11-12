@@ -2,7 +2,7 @@
  "id": "PF-9-begin-pin-lock-held",
  "layer": "H",
  "owner": "skills",
- "note": "PF-9 (small flaw 5; reference scenario pf-begin-pin-lock-held on the port branch): begin's ownership.pin_lock reads the pin lock record's start time from `pid_lstart`, the key the lock writer (lib/lock.pm) puts there. A live holder with its true start time is `held`; a live pid with another start time and a holder that has ended are `stale`; no lock file, or a lock file with no record, is `free`. The runner stands in for the live holder ($RUNNER_PID, $RUNNER_LSTART). Before the fix begin read `lstart`, which the record never holds, so a live holder always read as `stale`",
+ "note": "PF-9: begin's ownership.pin_lock reads the pin lock record's start time from `pid_lstart`, the key the lock writer (lib/lock.pm) puts there. A live holder with its true start time is `held`; a live pid with another start time and a holder that has ended are `stale`; no lock file, or a lock file with no record, is `free`. The runner stands in for the live holder ($RUNNER_PID, $RUNNER_LSTART). Before the fix begin read `lstart`, which the record never holds, so a live holder always read as `stale`",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

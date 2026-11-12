@@ -1,4 +1,4 @@
-# DP-12: watch::io::sha256_hex of a character string with a code point above 0xFF
+# watch::io::sha256_hex of a character string with a code point above 0xFF
 # (an em dash) died in Digest::SHA ("Wide character"). It hashes the UTF-8 bytes now,
 # so a character string and its encoded bytes give the same digest, and a core-supplied
 # sha256 sub is handed bytes too.

@@ -1,4 +1,4 @@
-# AT-AN-16 (0.1.3 review round 3, F1): a held A-01 is settled when the session ends, not only at
+# AT-AN-16: a held A-01 is settled when the session ends, not only at
 # a later Stop of its own. Through the real `hook` entry on the classic path: three compactions
 # whose PostCompact deferred the copy, and the session's last Stop 1.7 s late
 # (STORE_TEST_HOOK_START_AGO_MS), so reconcile leaves the three saves waiting and the watcher

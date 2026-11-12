@@ -1,6 +1,6 @@
 {
  "id": "USAGE-02-status",
- "note": "0.1.8 D-83: `status --sid` shows the session's last usage reading from the shared record: per window kind the newest of its own entries (plugin or status line; a status line's entry dated no later than the session's plugin entry of that kind and left out with none, the plugin's on a tie: USAGE-04), its share, source, age and reset (D-88: a reading counts until its window resets), then the other sessions' readings on this machine that count, as the near-limit rule reads them: per window kind and reset the latest; a session with no entry says so. Read only.",
+ "note": "`status --sid` shows the session's last usage reading from the shared record: per window kind the newest of its own entries (plugin or status line; a status line's entry dated no later than the session's plugin entry of that kind and left out with none, the plugin's on a tie: USAGE-04), its share, source, age and reset (a reading counts until its window resets), then the other sessions' readings on this machine that count, as the near-limit rule reads them: per window kind and reset the latest; a session with no entry says so. Read only.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [

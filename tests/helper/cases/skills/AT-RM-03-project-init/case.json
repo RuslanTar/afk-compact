@@ -228,7 +228,7 @@
    }
   },
   {
-   "name": "DP-5: init in a repository not accepted writes no consent",
+   "name": "init in a repository not accepted writes no consent",
    "cwd": "$TMP/repo",
    "argv": [
     "project",
@@ -337,7 +337,7 @@
    }
   },
   {
-   "name": "DP-5: no enable subcommand",
+   "name": "no enable subcommand",
    "cwd": "$TMP/repo",
    "argv": [
     "project",

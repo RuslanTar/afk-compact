@@ -1,9 +1,9 @@
 {
- "id": "HL-08 an added item 1 stays out of code blocks (0.1.5 E-3 review round 4; 0.1.6 D-71)",
+ "id": "HL-08 an added item 1 stays out of code blocks",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.5 E-3 review round 4. HL-08: the added item 1 goes before the first list line outside a code block, so a diff block's `- old` does not take it (before: it was put inside the fence, and the re-lint read it as item 1); with the fence left open no item is added and step1-mismatch blocks. 0.1.6 D-71: fix() and move_lines rewrite nothing in a section (a ## heading to the next) that holds a line with a run of 3 or more backticks or tildes, a blockquote line or a line indented 4 or more columns that is not a list continuation; such a section keeps 0.1.4 behaviour (the lint blocks, the draft is kept), so no code block is guessed at. A Next steps holding a closed block is now such a section too: no item is added and step1-mismatch blocks; a plain Next steps after a fenced Work done still gets item 1.",
+ "note": "HL-08: the added item 1 goes before the first list line outside a code block, so a diff block's `- old` does not take it (before: it was put inside the fence, and the re-lint read it as item 1); with the fence left open no item is added and step1-mismatch blocks. fix() and move_lines rewrite nothing in a section (a ## heading to the next) that holds a line with a run of 3 or more backticks or tildes, a blockquote line or a line indented 4 or more columns that is not a list continuation; such a section keeps 0.1.4 behaviour (the lint blocks, the draft is kept), so no code block is guessed at. A Next steps holding a closed block is now such a section too: no item is added and step1-mismatch blocks; a plain Next steps after a fenced Work done still gets item 1.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -79,7 +79,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "HL-08: Next steps holds a closed diff block and no item 1: the section holds a fence, so no item is added and step1-mismatch blocks (D-71)",
+   "name": "HL-08: Next steps holds a closed diff block and no item 1: the section holds a fence, so no item is added and step1-mismatch blocks",
    "expect": {
     "exit": 3,
     "stdout_has": [

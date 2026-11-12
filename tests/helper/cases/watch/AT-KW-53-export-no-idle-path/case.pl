@@ -1,4 +1,4 @@
-# Keep-warm (D-14), lane B (export schema): a gap no idle path could take over (no idle record
+# Keep-warm, lane B (export schema): a gap no idle path could take over (no idle record
 # armed or held, or triggers off) refuses before its first ping with one keep_warm_stop row, why
 # `no-idle-path`, pings 0, no start row; a warming gap that stops for it exports alike.
 # Rows are given as the watcher reads them (booleans as 1 and 0).

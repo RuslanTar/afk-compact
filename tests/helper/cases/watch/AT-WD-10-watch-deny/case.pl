@@ -1,7 +1,7 @@
 # AT-WD-10, watcher half: the watcher keeps core's
 # `permission_denied` rows in its row cache and reads `turn_kind` (with `post-compaction`
 # for the first turn after a deferred PostCompact), `caused_by` and `guard_class` into the
-# D-13 counts. Content-free: classes and counts only.
+# denial counts. Content-free: classes and counts only.
 my @rows = (
     T::row('permission_denied', 10, writer => 'classic', tool_name => 'Bash', reason_class => 'rule',
            guard_class => 'sleep-poll', turn_kind => 'post-compaction', caused_by => 'plugin'),
@@ -36,7 +36,7 @@ my %got;
         $E->is($d->{post_compaction_plugin}, 1, 'one post-compaction denial caused by the plugin');
         $E->is($d->{caused_by}{session}, 2, 'caused_by session');
         $E->is($d->{guard_class}{'sleep-poll'}, 1, 'guard_class counted');
-        $E->is($d->{control}, 1, 'the classifier-unavailable reason is the control (D-13)');
+        $E->is($d->{control}, 1, 'the classifier-unavailable reason is the control');
         $E->ok((!exists $d->{guard_class}{other} ? 1 : 0), 'the control row is kept out of the guard classes');
     },
 };

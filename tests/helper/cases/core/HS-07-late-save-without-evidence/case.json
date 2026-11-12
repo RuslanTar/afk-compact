@@ -1,6 +1,6 @@
 {
  "id": "HS-07-late-save-without-evidence",
- "note": "0.1.3 hook speed (lib/reconcile.pm SWEEP_MIN_MS), review round 2 probe ZZ-PAE: a main-proven save waits for its sweep only when there is evidence to copy. With auto_evidence off, HS-05's late Stop (1.7 s late) saves the copy late at once (copy_late), with nothing for the sweep to wait for; stop_timing names nothing as cut (or only gsd, with status no-time, when a loaded host left the catch-up no time)",
+ "note": "0.1.3 hook speed (lib/reconcile.pm SWEEP_MIN_MS), a main-proven save waits for its sweep only when there is evidence to copy. With auto_evidence off, HS-05's late Stop (1.7 s late) saves the copy late at once (copy_late), with nothing for the sweep to wait for; stop_timing names nothing as cut (or only gsd, with status no-time, when a loaded host left the catch-up no time)",
  "tz": "Etc/GMT-3",
  "options": {
   "auto_evidence": false

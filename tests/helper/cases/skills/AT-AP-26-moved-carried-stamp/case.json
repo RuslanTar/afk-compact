@@ -1,12 +1,12 @@
 {
-  "id": "AT-AP-26 (a carried line that cites a moved id keeps its carried-stamp exemption, 0.1.3 APPROVALS review round 3)",
+  "id": "AT-AP-26 (a carried line that cites a moved id keeps its carried-stamp exemption)",
   "needs": [
     "nonroot"
   ],
   "tmp_base": "repo",
   "layer": "H",
   "owner": "skills",
-  "note": "0.1.3 APPROVALS, review round 3 (RV-S2). A line carried byte-identical from the own file keeps an old `checked <stamp>` (lint exempts carried lines from unprinted-time and time-format). When an approval it cites moves to Open questions, publish rewrites its U-<k> to the new Q-<m>; that rewrite alone does not make it a new line, so the re-lint of the moved text still exempts it and publish writes the file, as round 1 did. A line that is not carried, with the same old stamp and the same moved id, still blocks: the first publish refuses with LINT unprinted-time for it; without it the handoff is written with the carried line rewritten.",
+  "note": "A line carried byte-identical from the own file keeps an old `checked <stamp>` (lint exempts carried lines from unprinted-time and time-format). When an approval it cites moves to Open questions, publish rewrites its U-<k> to the new Q-<m>; that rewrite alone does not make it a new line, so the re-lint of the moved text still exempts it and publish writes the file, as round 1 did. A line that is not carried, with the same old stamp and the same moved id, still blocks: the first publish refuses with LINT unprinted-time for it; without it the handoff is written with the carried line rewritten.",
   "now": "2026-10-21T14:05:12+03:00",
   "tz": "Etc/GMT-3",
   "options": {

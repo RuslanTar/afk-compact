@@ -147,7 +147,7 @@ my $DOCKER_CONFIG_DIR = defined $ENV{HOME} && $ENV{HOME} =~ m{\A/} ? "$ENV{HOME}
 homeguard::drop_env(\%ENV);
 my ($REAL_HOME, $REAL_CONFIG_DIR, $ACCOUNT_HOME) = @homeguard::REAL{qw(home config_dir account)};
 
-# DP-12: messages hold characters (decoded case text and helper output); raw bytes are
+# Messages hold characters (decoded case text and helper output); raw bytes are
 # decoded before they are printed (see say_raw), so nothing prints "Wide character".
 binmode(STDOUT, ':encoding(UTF-8)');
 binmode(STDERR, ':encoding(UTF-8)');
@@ -804,7 +804,7 @@ sub run_case {
         $V{TODAY} = defined $now ? substr($now, 0, 10) : POSIX::strftime('%Y-%m-%d', localtime);
         # "options": {key: value} (case level before step 1, and per step): plugin options in
         # the case's settings file, pluginConfigs["<brand>@m"].options, merged into the file.
-        # The way to give a file-only key (DP-3: consent keys, queue_cmd, prod_patterns).
+        # The way to give a file-only key (consent keys, queue_cmd, prod_patterns).
         for my $o (($i == 1 ? $case->{options} : undef), $st->{options}) {
             next unless ref $o eq 'HASH';
             my $e = eval { write_options(subst_deep($o, \%V), \%V); 1 };
@@ -3203,7 +3203,7 @@ sub builtin {
         local *assemble::asset = sub { my ($n, $tags, $rt) = @_; @seen = @{ $tags || [] }; $line = $rt->{resume_line};
                                        return ('P' x ($a->{protocol_chars} // 3000)) . "\n" . ('F' x ($a->{frame_chars} // 300)) . "\n" . ($rt->{remeasure} // '') };
         local %rc::R = (settings => { values => { unattended_prod_reads => $a->{reads} // 'forbid' } });
-        # D-22: a main Stop of this session (restart::note_stop, as on_Stop keeps it) in stop_mode,
+        # A main Stop of this session (restart::note_stop, as on_Stop keeps it) in stop_mode,
         # from a subagent when stop_agent is set; the block reads its mode for [auto-mode].
         if (defined $a->{stop_mode}) {
             require "restart.pm";
@@ -3691,7 +3691,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'hold_parity') {
-        # AD-11 (away digest, review 3): the saved copy's hold of a step
+        # AD-11 (away digest): the saved copy's hold of a step
         # (copies::_hold_of, the staged copy) against the lists the TS lane test checks lane.ts's
         # holdOf with. {file: the test file under the staged plugin, lists: {<const name>: job |
         # user | none}, min: the fewest wordings a list may hold}. Each `const <name> = [` ... `]`
@@ -4204,7 +4204,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'repo_check') {
-        # CR-F1: roots::repo_check(top, root) for each root of `cases` -> 'ok' or the reason
+        # roots::repo_check(top, root) for each root of `cases` -> 'ok' or the reason
         my $c = $a->{cases} || {};
         for my $root (sort keys %$c) {
             my $r = roots::repo_check($a->{top}, $root);

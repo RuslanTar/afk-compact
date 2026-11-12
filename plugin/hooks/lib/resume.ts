@@ -89,7 +89,7 @@ export const STEP1_MAX = 100
 export const RESUMED_FALLBACK = 'Resumed after compaction'
 /**
  * Step 1's tail after the step (and what follows it): `— for "<the user's latest request>"`, as
- * lane.ts cuts it, or its free form `— for the …` (review round 2: 5 of 89 real copies), or the
+ * lane.ts cuts it, or its free form `— for the …` (5 of 89 real copies), or the
  * template's other form, `— proposed…` / `| proposed` (seen in a real copy).
  */
 const STEP1_TAIL = /\s+(?:—\s+(?:for\s+(?:"|the\s)|proposed\b).*|\|\s*proposed\s*)$/
@@ -124,7 +124,7 @@ export function clipStep1(text: string): string {
  * fixed form.
  */
 export function step1Of(summary: string): string | undefined {
-  // CRLF line ends too (review round 2): `Step 1: x\r` misses STEP1_LINE's `$`.
+  // CRLF line ends too: `Step 1: x\r` misses STEP1_LINE's `$`.
   const lines = summary.split(/\r?\n/)
   const at = lines.findIndex(l => l.trim().toLowerCase().startsWith('## resume here'))
   if (at < 0) return undefined
@@ -141,15 +141,15 @@ export function step1Of(summary: string): string | undefined {
 
 /**
  * The `[resumed]` line: `Resumed · step 1: <Step 1>`, or the fixed RESUMED_FALLBACK. The asset puts
- * the line in double quotes, so a double quote of the Step 1 shows as a single one (review round 2:
- * 7 of 89 real Step 1 lines hold one, which nested the quotes).
+ * the line in double quotes, so a double quote of the Step 1 shows as a single one (7 of 89
+ * real Step 1 lines hold one, which nested the quotes).
  */
 export function resumeLine(step1: string | undefined): string {
   return step1 !== undefined && step1 !== '' ? `Resumed · step 1: ${step1.replace(/"/g, "'")}` : RESUMED_FALLBACK
 }
 
 /**
- * 0.1.3 resume-text B (review round 2): the block goes to a person's own prompt written after it
+ * 0.1.3 resume-text B: the block goes to a person's own prompt written after it
  * was built, so the person wrote since the dialog timed out and `[question-timeout]` is stale (step
  * 6 already lets a dialog follow their message). The question itself stays listed.
  */
@@ -700,7 +700,7 @@ export async function againFor(d: Deps, kind: string, startsTurn: boolean): Prom
     // prompt that starts its own turn clears halt at that turn's start, after this hook;
     // one typed into a running turn does not.
     const args = startsTurn ? { ...r.pend.args, ...(r.pend.args.idle === true ? { halt: false } : {}) } : haltNow(d, r.pend.args)
-    // A person's prompt: no timeout mark (review round 2).
+    // A person's prompt: no timeout mark.
     const out = await freshBlock(d, { ...r.pend, remeasure: r.remeasure, measuredAt: r.measuredAt }, personWrote({ ...args, again: r.usedAt }), true)
     return { text: out.block, held: r, row: { nonce: r.pend.nonce, age_s: Math.round(((await d.now()) - r.usedAt) / 1000), remeasured: out.remeasured } }
   } catch {

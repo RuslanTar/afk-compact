@@ -1,9 +1,9 @@
 {
- "id": "HT-JV-05 (CR-F8, CR-F11, CR-F12)",
+ "id": "HT-JV-05",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Code review 2026-10-22: a multi-line recorded command is copied into the recipe in its one-line form and heal-check and the lint compare against that form (no recipe-mismatch), while run: stays the record byte for byte (CR-F8); a Bash call outside the bounded transcript scan leaves V1 unmeasured, so the job is LOST low and asked (CR-F12); a live owner pid whose start time cannot be checked leaves V2 unmeasured, never 'owner ended', so the job is not relaunched (CR-F11)",
+ "note": "A multi-line recorded command is copied into the recipe in its one-line form and heal-check and the lint compare against that form (no recipe-mismatch), while run: stays the record byte for byte; a Bash call outside the bounded transcript scan leaves V1 unmeasured, so the job is LOST low and asked; a live owner pid whose start time cannot be checked leaves V2 unmeasured, never 'owner ended', so the job is not relaunched",
  "tz": "Etc/GMT-3",
  "steps": [
   {
@@ -146,11 +146,11 @@
      }
     ]
    },
-   "name": "CR-F8: a multi-line recorded command: the recipe line is its one-line form, no recipe-mismatch advisory",
+   "name": "a multi-line recorded command: the recipe line is its one-line form, no recipe-mismatch advisory",
    "now": "2026-10-21T14:05:12+03:00"
   },
   {
-   "name": "CR-F8: heal-check takes the published one-line form as the record's; run: is the record byte for byte",
+   "name": "heal-check takes the published one-line form as the record's; run: is the record byte for byte",
    "cwd": "$TMP/repo",
    "argv": [
     "heal-check",
@@ -174,7 +174,7 @@
    }
   },
   {
-   "name": "CR-F12 control: the whole transcript is scanned",
+   "name": "control: the whole transcript is scanned",
    "cwd": "$TMP/repo",
    "argv": [
     "heal-check",
@@ -195,7 +195,7 @@
    }
   },
   {
-   "name": "CR-F12: the Bash call lies before the scan window: V1 unmeasured, LOST low, ask (not a measured fail, not NOT-LOST)",
+   "name": "the Bash call lies before the scan window: V1 unmeasured, LOST low, ask (not a measured fail, not NOT-LOST)",
    "cwd": "$TMP/repo",
    "argv": [
     "heal-check",
@@ -224,7 +224,7 @@
    }
   },
   {
-   "name": "CR-F11: the owner pid is alive and the record has no start time: V2 is not a pass, no relaunch",
+   "name": "the owner pid is alive and the record has no start time: V2 is not a pass, no relaunch",
    "cwd": "$TMP/repo",
    "argv": [
     "heal-check",

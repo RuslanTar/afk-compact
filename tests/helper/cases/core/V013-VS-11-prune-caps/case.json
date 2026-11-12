@@ -1,6 +1,6 @@
 {
  "id": "V013-VS-11-prune-caps",
- "note": "0.1.3 version skew (lib/plugver.pm), review round 2 test gap: the prune's two fixed caps. With the caps set small (STORE_TEST_LOADS_GROUPS 2 for $GROUP_MAX 64, STORE_TEST_LOADS_KEEP 1 for $KEEP_MAX 200), newest first: the newest 0.1.3 record is kept as its group's newest, the next 0.1.3 one as the one recent record allowed, the third 0.1.3 one (recent too) is dropped; the 0.1.2 record is kept as the second group's newest, and the old 0.1.1 record, a third group, is dropped.",
+ "note": "0.1.3 version skew (lib/plugver.pm), the prune's two fixed caps. With the caps set small (STORE_TEST_LOADS_GROUPS 2 for $GROUP_MAX 64, STORE_TEST_LOADS_KEEP 1 for $KEEP_MAX 200), newest first: the newest 0.1.3 record is kept as its group's newest, the next 0.1.3 one as the one recent record allowed, the third 0.1.3 one (recent too) is dropped; the 0.1.2 record is kept as the second group's newest, and the old 0.1.1 record, a third group, is dropped.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "manifest": {

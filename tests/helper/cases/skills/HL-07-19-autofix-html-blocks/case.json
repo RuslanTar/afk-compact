@@ -1,9 +1,9 @@
 {
- "id": "HL-07 a section holding an HTML line, or a code line under `01.` in a paragraph, is left as written, and a plain section beside it is still fixed (0.1.6 D-71, review 9)",
+ "id": "HL-07 a section holding an HTML line, or a code line under `01.` in a paragraph, is left as written, and a plain section beside it is still fixed",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.6 D-71 review 9. code_sections did not know HTML blocks: a list marker line inside one (`<details>`, an HTML comment, at the margin or in a list item) is raw HTML, not a list item, yet it was read as one, so a marker line after a blank line, 4 columns past the end of the block, passed as a nested item where CommonMark reads an indented code block: fix() listed the range in it and publish wrote the file, while 0.1.5 refused. `01.` under text started an item too, which micromark does not read as one. A line whose first text, after any indent and list markers, is `<` and a letter, `/`, `!` or `?` now makes its section count, and only `1.` or `1)` starts an item under text. Each refused step also holds a plain range in Next steps, which is listed. The last step: an HTML block with no range is kept as written and the handoff is written.",
+ "note": "code_sections did not know HTML blocks: a list marker line inside one (`<details>`, an HTML comment, at the margin or in a list item) is raw HTML, not a list item, yet it was read as one, so a marker line after a blank line, 4 columns past the end of the block, passed as a nested item where CommonMark reads an indented code block: fix() listed the range in it and publish wrote the file, while 0.1.5 refused. `01.` under text started an item too, which micromark does not read as one. A line whose first text, after any indent and list markers, is `<` and a letter, `/`, `!` or `?` now makes its section count, and only `1.` or `1)` starts an item under text. Each refused step also holds a plain range in Next steps, which is listed. The last step: an HTML block with no range is kept as written and the handoff is written.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

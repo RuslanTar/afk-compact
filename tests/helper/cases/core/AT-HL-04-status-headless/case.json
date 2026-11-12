@@ -1,6 +1,6 @@
 {
  "id": "AT-HL-04 (status, headless session)",
- "note": "Headless probe 2026-10-27: under claude -p or the Agent SDK, Claude Code rejects $.session.compact, so the mod logs a headless row per session id (via session-start, compact-rejected or same-load) and neither nudges nor arms a pre-idle turn. With compact: command it compacts by running /compact, and status says so; a row without the field, or a later one with compact: none (via command-failed: the /compact path went off), says automatic compaction is not available here. The pre-idle turn is off either way; a later session start row of the same session (an interactive load) clears both.",
+ "note": "A headless probe on Claude Code 2.1.311 showed that under claude -p or the Agent SDK, Claude Code rejects $.session.compact, so the mod logs a headless row per session id (via session-start, compact-rejected or same-load) and neither nudges nor arms a pre-idle turn. With compact: command it compacts by running /compact, and status says so; a row without the field, or a later one with compact: none (via command-failed: the /compact path went off), says automatic compaction is not available here. The pre-idle turn is off either way; a later session start row of the same session (an interactive load) clears both.",
  "now": "2026-10-27T10:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

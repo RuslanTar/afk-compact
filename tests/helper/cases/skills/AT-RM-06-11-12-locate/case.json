@@ -128,7 +128,7 @@
    }
   },
   {
-   "name": "R3-08 setup",
+   "name": "own-file setup",
    "setup": [
     {
      "copy": "$ROOT/m/LAB-7/$STEM.md",
@@ -137,7 +137,7 @@
    ]
   },
   {
-   "name": "R3-08 own handoff by its store path: own, no foreign line",
+   "name": "own handoff by its store path: own, no foreign line",
    "argv": [
     "locate",
     "--sid",
@@ -159,7 +159,7 @@
    }
   },
   {
-   "name": "R3-08 own export by its path: foreign (anyone with push access can edit it)",
+   "name": "own export by its path: foreign (anyone with push access can edit it)",
    "argv": [
     "locate",
     "--sid",
@@ -179,7 +179,7 @@
    }
   },
   {
-   "name": "R3-08 own handoff copied outside the store: foreign",
+   "name": "own handoff copied outside the store: foreign",
    "argv": [
     "locate",
     "--sid",

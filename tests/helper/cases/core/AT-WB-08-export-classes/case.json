@@ -1,6 +1,6 @@
 {
  "id": "AT-WB-08 (helper part)",
- "note": "Export classes: every settings.pm @KEYS row has an export class, and export_view() exports num/bool as is, an enum value only when it is one of the key's values (else other; D-72: an on/off key as true or false, a word from before 0.1.6 too), a path as unset/default/custom-in-home/custom (never the path), a list as its entry count (never the entries); idle_digest takes off (the default of 0.1.1) beside submit and return",
+ "note": "Export classes: every settings.pm @KEYS row has an export class, and export_view() exports num/bool as is, an enum value only when it is one of the key's values (else other; an on/off key as true or false, a word from before 0.1.6 too), a path as unset/default/custom-in-home/custom (never the path), a list as its entry count (never the entries); idle_digest takes off (the default of 0.1.1) beside submit and return",
  "steps": [
   {"name": "classes and values", "lib": "settings_export", "args": {"home": "$TMP/someone",
    "values": {"handoff_root": "$TMP/someone/.local/state/$BRAND/handoffs", "log_dir": "", "disposable_root": "/Volumes/x/trash", "queue_cmd": "$TMP/someone/bin/q",

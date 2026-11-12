@@ -1,4 +1,4 @@
-# AT-WD-07 (A-18, DP-14 (6)): a halt `continue` row, the plugin-submitted handoff turn of
+# AT-WD-07 (A-18): a halt `continue` row, the plugin-submitted handoff turn of
 # the same ht, and a `handoff_publish wrote` row in that turn: no A-18. Before the handoff
 # turn exists (a Stop right after the halt row) nothing is raised either.
 my $ht = 'abcd0007';

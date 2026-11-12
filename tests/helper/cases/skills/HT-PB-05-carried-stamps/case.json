@@ -1,9 +1,9 @@
 {
- "id": "HT-PB-05 (CR-F29, DP-27)",
+ "id": "HT-PB-05",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Code review 2026-10-22, DP-27: with a foreign carry base, a ledger line carried with its [from <sid8> · <base id> · …] tag keeps the base line's [verified …]/checked stamps and is not unprinted-time; an edited stamp is still unprinted-time; [unverified] is always accepted (tag forms: HT-PB-06)",
+ "note": "With a foreign carry base, a ledger line carried with its [from <sid8> · <base id> · …] tag keeps the base line's [verified …]/checked stamps and is not unprinted-time; an edited stamp is still unprinted-time; [unverified] is always accepted (tag forms: HT-PB-06)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -125,7 +125,7 @@
      }
     ]
    },
-   "name": "DP-27: carried foreign lines keep their verified/checked stamps (tagged with the base id), or say [unverified]"
+   "name": "carried foreign lines keep their verified/checked stamps (tagged with the base id), or say [unverified]"
   }
  ]
 }

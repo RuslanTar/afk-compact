@@ -1,9 +1,9 @@
 {
- "id": "HL-07, HL-08, HL-09 (0.1.5 E-3: publish fixes the mechanical lints)",
+ "id": "HL-07, HL-08, HL-09 (0.1.5: publish fixes the mechanical lints)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.5 (E-3, usage review: 14 drafts refused for id ranges, 18 for placeholders, fix-7c-<n> still flagged; a failed handoff turn costs up to 41K tokens). HL-07 id-range: publish writes each flagged range as its ids (two ranges on one line: one ADVISORY line naming both) and publishes; a line holding a range whose ends differ in kind, or one over 50 ids, is left as written and still blocks. HL-08 step1-mismatch: when Next steps has no item 1, publish adds Step 1 there as item 1, before the section's first line; an item 1 that differs still blocks. HL-09 recipe-placeholder: a spawn label's counter (`fix-7c-<n>`, `verify_safety-<n>`) passes; `<n>` before `/` or `.`, a bare `<n>` and another letter (`review-<k>`) still block. Every fix prints one ADVISORY line at the draft's line (a later LINT or ADVISORY line, a moved approval's too, keeps the draft's number), body.md stays as written, and a written row counts `lint_fixed`.",
+ "note": "0.1.5 (usage review: 14 drafts refused for id ranges, 18 for placeholders, fix-7c-<n> still flagged; a failed handoff turn costs up to 41K tokens). HL-07 id-range: publish writes each flagged range as its ids (two ranges on one line: one ADVISORY line naming both) and publishes; a line holding a range whose ends differ in kind, or one over 50 ids, is left as written and still blocks. HL-08 step1-mismatch: when Next steps has no item 1, publish adds Step 1 there as item 1, before the section's first line; an item 1 that differs still blocks. HL-09 recipe-placeholder: a spawn label's counter (`fix-7c-<n>`, `verify_safety-<n>`) passes; `<n>` before `/` or `.`, a bare `<n>` and another letter (`review-<k>`) still block. Every fix prints one ADVISORY line at the draft's line (a later LINT or ADVISORY line, a moved approval's too, keeps the draft's number), body.md stays as written, and a written row counts `lint_fixed`.",
  "needs": [
   "nonroot"
  ],

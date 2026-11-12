@@ -940,7 +940,7 @@ test('NW-BD (0.1.4): the breakdown is read once per load, not again at later tur
 
 // `compacted.ms` has one definition on every path: from the dispatch record written
 // (or reused) to the compaction's answer, as on the mod-hook path.
-test('DP-30: a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'false' } }, async ($, on) => {
+test('A dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   w.atHelper = async (sub) => {
     if (sub === 'dispatch') await w.clock.set(w.clock.now() + 250)

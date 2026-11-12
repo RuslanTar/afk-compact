@@ -1,6 +1,6 @@
 {
  "id": "USAGE-03-statusline-age",
- "note": "0.1.8 D-83 (review of the usage lane): a status line gets the session's usage reading without the time Claude Code took it and shows it again while it is on screen, so `cache --stdin --note-usage` dates a status line's entry from when it first showed that share and reset: the same reading shown again keeps its `at` and moves only `seen` (at most once a minute), so an idle session's old reading keeps its first time while its entry stays in the record (readers also cap it by the session's plugin entry: USAGE-04), and an entry still shown is kept past the hour (`seen` counts for the hour) without being dated anew. A changed share is a new reading, dated now.",
+ "note": "A status line gets the session's usage reading without the time Claude Code took it and shows it again while it is on screen, so `cache --stdin --note-usage` dates a status line's entry from when it first showed that share and reset: the same reading shown again keeps its `at` and moves only `seen` (at most once a minute), so an idle session's old reading keeps its first time while its entry stays in the record (readers also cap it by the session's plugin entry: USAGE-04), and an entry still shown is kept past the hour (`seen` counts for the hour) without being dated anew. A changed share is a new reading, dated now.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [

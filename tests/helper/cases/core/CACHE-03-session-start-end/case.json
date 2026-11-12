@@ -1,6 +1,6 @@
 {
  "id": "CACHE-03-session-start-end",
- "note": "0.1.7 D-81: SessionStart records the transcript path in the cache state, so `cache --sid` without --stdin reads the transcript's last main request; SessionEnd sets ended_at; a resume of the same id clears it (critique 6), and a row after the end does too. A subagent's SessionStart writes nothing.",
+ "note": "SessionStart records the transcript path in the cache state, so `cache --sid` without --stdin reads the transcript's last main request; SessionEnd sets ended_at; a resume of the same id clears it, and a row after the end does too. A subagent's SessionStart writes nothing.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [

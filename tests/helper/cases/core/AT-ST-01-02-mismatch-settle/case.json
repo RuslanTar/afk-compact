@@ -1,5 +1,5 @@
 {
- "id": "AT-ST-01, AT-ST-02 (RRP-04 mismatch settle)",
+ "id": "AT-ST-01, AT-ST-02 (mismatch settle)",
  "note": "AT-ST-01: PostCompact saved the copy; the mod stash has the same body plus an unlisted trailer after the sentinel; the after-step save-copy --from it prints EXISTS sha-differs, the stash is dropped as redundant (stash_dropped), one copy, no keep. AT-ST-02: a stash whose body really differs and holds a JWT is kept redacted (pending/<nonce>.mod.mismatch.md, 0600, [redacted:jwt]) with its sha side file (raw_sha256 = the normalized original); no raw JWT anywhere under the watch dir; the copy is unchanged; a second and third Stop write nothing new",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",

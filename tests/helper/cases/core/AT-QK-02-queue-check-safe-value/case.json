@@ -1,6 +1,6 @@
 {
  "id": "AT-QK-02 (0.1.6 queue check: a queue_cmd the consent rule replaced says why)",
- "note": "Review of the 0.1.6 queue lane: run without a program while HOME is not the account home (CR-F34), queue_cmd takes its safe value (empty), and queue check prints the setting's note as status does (`note queue_cmd (HOME is not the account home, safe value used)`) before its FAIL, so the user learns why the value in their settings file was not used. This case runs without the runner's consent seam (consent_home account), as CR-F34 does",
+ "note": "Run without a program while HOME is not the account home (CR-F34), queue_cmd takes its safe value (empty), and queue check prints the setting's note as status does (`note queue_cmd (HOME is not the account home, safe value used)`) before its FAIL, so the user learns why the value in their settings file was not used. This case runs without the runner's consent seam (consent_home account), as CR-F34 does",
  "now": "2026-11-08T12:00:00+01:00",
  "tz": "Etc/GMT-1",
  "consent_home": "account",

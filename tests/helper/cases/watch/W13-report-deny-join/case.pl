@@ -1,4 +1,4 @@
-# Report and status half (D-13, FR-14) of the denials and the boundary join:
+# Report and status half of the denials and the boundary join:
 # `watch report` reads the `permission_denied`
 # rows' `turn_kind` and `caused_by` into a Denials section, keeps the `classifier-unavailable`
 # reason apart as the control (out of the FR-14 guard classes, into the control bar), and

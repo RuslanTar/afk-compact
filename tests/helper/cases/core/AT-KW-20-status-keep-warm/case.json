@@ -2,7 +2,7 @@
  "id": "AT-KW-20",
  "layer": "H",
  "owner": "core",
- "note": "Keep-warm (D-14, 2026-10-30): /status says whether keep-warm is on (keep_warm_hours, default 6; 0 = off) and, from this session's last keep_warm_start, keep_warm_ping and keep_warm_stop rows, whether the current idle gap is warming with how many pings kept the cache warm so far (a nothing-to-fork ping does not count), or not warming with the last warmed gap's pings and stop reason.",
+ "note": "Keep-warm: /status says whether keep-warm is on (keep_warm_hours, default 6; 0 = off) and, from this session's last keep_warm_start, keep_warm_ping and keep_warm_stop rows, whether the current idle gap is warming with how many pings kept the cache warm so far (a nothing-to-fork ping does not count), or not warming with the last warmed gap's pings and stop reason.",
  "now": "2026-10-30T12:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

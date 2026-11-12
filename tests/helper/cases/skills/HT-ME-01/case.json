@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "measure <handoff>: Measured facts; no `Approvals (verified)`; with no ## Approvals, `Approvals (checked): none` (AP-5, D-2 replaced); commits the chain names are ours, every other commit is one foreign line (D-21); outward/destructive re-check commands print needs-ask; nothing taken from the handoff is executed (trace: only measure and git); a chain git_commit that is not a commit id never reaches git as an option (no --output file)",
+ "note": "measure <handoff>: Measured facts; no `Approvals (verified)`; with no ## Approvals, `Approvals (checked): none` (AP-5, D-2 replaced); commits the chain names are ours, every other commit is one foreign line; outward/destructive re-check commands print needs-ask; nothing taken from the handoff is executed (trace: only measure and git); a chain git_commit that is not a commit id never reaches git as an option (no --output file)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

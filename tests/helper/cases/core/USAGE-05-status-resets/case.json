@@ -1,6 +1,6 @@
 {
  "id": "USAGE-05-status-resets",
- "note": "D-88: a usage reading counts until its window resets, however old (the share only grows until then); one past its reset counts for nothing, and one with no reset time only for 10 minutes. `status --sid` shows each of the session's readings with its age and reset (marked not counted when it does not count), and the other sessions' readings that count as the near-limit rule reads them: per window kind and reset (within a minute) the latest; with no reset time each session's newest. Read only.",
+ "note": "A usage reading counts until its window resets, however old (the share only grows until then); one past its reset counts for nothing, and one with no reset time only for 10 minutes. `status --sid` shows each of the session's readings with its age and reset (marked not counted when it does not count), and the other sessions' readings that count as the near-limit rule reads them: per window kind and reset (within a minute) the latest; with no reset time each session's newest. Read only.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [

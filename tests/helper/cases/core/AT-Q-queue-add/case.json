@@ -1,6 +1,6 @@
 {
  "id": "AT-Q-01..07",
- "note": "D-10: queue-add against stub queue tools that log their argv. 01: draft on stdin -> the tool gets `add --json --session S --client-id ck-<12 hex> --lane-name <pinned bucket slug>` and the queue-add/v1 draft, QUEUED <id>, a ledger row, a queue_add row without the question text. 02: the same draft again -> EXISTS from the ledger, no exec; with the ledger gone the tool answers exists -> EXISTS. 03: queue_cmd unset or not executable -> NOT QUEUED (off), no exec. 04: a v1 tool (add exits 2, no REFUSED line) -> NOT QUEUED (unsupported), caps cache written, the next call execs nothing; a v1 list reply (no commands) cached by measure also gives unsupported with no exec. 05: exits 3/4/5/6 and a 6 s sleep -> held / no-lane / invalid / error / timeout, exit 0, one row each. 06: a HARD secret never reaches the tool (secret); a WARN secret reaches it redacted. 07: queue-add never runs adopt or passes --lane; the checkpoint only lists. Plus: an unbounded draft is NOT QUEUED (invalid) naming the rule",
+ "note": "Queue-add against stub queue tools that log their argv. 01: draft on stdin -> the tool gets `add --json --session S --client-id ck-<12 hex> --lane-name <pinned bucket slug>` and the queue-add/v1 draft, QUEUED <id>, a ledger row, a queue_add row without the question text. 02: the same draft again -> EXISTS from the ledger, no exec; with the ledger gone the tool answers exists -> EXISTS. 03: queue_cmd unset or not executable -> NOT QUEUED (off), no exec. 04: a v1 tool (add exits 2, no REFUSED line) -> NOT QUEUED (unsupported), caps cache written, the next call execs nothing; a v1 list reply (no commands) cached by measure also gives unsupported with no exec. 05: exits 3/4/5/6 and a 6 s sleep -> held / no-lane / invalid / error / timeout, exit 0, one row each. 06: a HARD secret never reaches the tool (secret); a WARN secret reaches it redacted. 07: queue-add never runs adopt or passes --lane; the checkpoint only lists. Plus: an unbounded draft is NOT QUEUED (invalid) naming the rule",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -12,7 +12,7 @@
     },
     {
      "stub": "q-v1",
-     "script": "d=$(dirname \"$0\"); printf '%s\\n' \"$*\" >> \"$d/v1.calls\"\ncase \"$1\" in\n add) echo 'usage: catchup add --file DRAFT' >&2; exit 2;;\n list) printf '{\"schema\":\"queue-stub/v1\",\"lane\":\"lane:repo/lab-123\",\"open\":0,\"pending\":0}\\n'; exit 0;;\nesac\nexit 2"
+     "script": "d=$(dirname \"$0\"); printf '%s\\n' \"$*\" >> \"$d/v1.calls\"\ncase \"$1\" in\n add) echo 'usage: queue-tool add --file DRAFT' >&2; exit 2;;\n list) printf '{\"schema\":\"queue-stub/v1\",\"lane\":\"lane:repo/lab-123\",\"open\":0,\"pending\":0}\\n'; exit 0;;\nesac\nexit 2"
     },
     {
      "stub": "q-list-v1",

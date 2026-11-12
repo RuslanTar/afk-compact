@@ -1,9 +1,9 @@
 {
- "id": "HL-07, HL-08 a section holding a fence is left as written, whatever closes the fence (0.1.5 E-3 review round 5; 0.1.6 D-71)",
+ "id": "HL-07, HL-08 a section holding a fence is left as written, whatever closes the fence",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.5 E-3 review round 5. fix() read any ``` or ~~~ line as a fence that opens or closes a block, so a ``` line inside a ~~~ block ended it: an added item 1 went inside the block (HL-08), and a range inside it was listed and published (HL-07). Fences are now read as CommonMark reads them, as move_lines reads them (skills::approvals::fence_lines): a block closes only on a line of its own character, at least as long, with nothing after it. 0.1.6 D-71: fix() and move_lines rewrite nothing in a section (a ## heading to the next) that holds a line with a run of 3 or more backticks or tildes, a blockquote line or a line indented 4 or more columns that is not a list continuation; such a section keeps 0.1.4 behaviour (the lint blocks, the draft is kept), so no code block is guessed at. The plain range in the same section as the blocks now stays and blocks too. Review 8: each refused step also holds a plain range in another section, which publish lists (an ADVISORY line), so a step tells D-71 apart from a base without fix() as well as from one that rewrites the code section.",
+ "note": "fix() read any ``` or ~~~ line as a fence that opens or closes a block, so a ``` line inside a ~~~ block ended it: an added item 1 went inside the block (HL-08), and a range inside it was listed and published (HL-07). Fences are now read as CommonMark reads them, as move_lines reads them (skills::approvals::fence_lines): a block closes only on a line of its own character, at least as long, with nothing after it. fix() and move_lines rewrite nothing in a section (a ## heading to the next) that holds a line with a run of 3 or more backticks or tildes, a blockquote line or a line indented 4 or more columns that is not a list continuation; such a section keeps 0.1.4 behaviour (the lint blocks, the draft is kept), so no code block is guessed at. The plain range in the same section as the blocks now stays and blocks too. Each refused step also holds a plain range in another section, which publish lists (an ADVISORY line), so a step tells this rule apart from a base without fix() as well as from one that rewrites the code section.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -79,7 +79,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "HL-07: Work done holds a ~~~ block with a ``` line and a ```` block between ``` lines: nothing in the section is rewritten, so the ranges inside the blocks and the plain one above them all block, while the range in a plain Next steps is listed (D-71)",
+   "name": "HL-07: Work done holds a ~~~ block with a ``` line and a ```` block between ``` lines: nothing in the section is rewritten, so the ranges inside the blocks and the plain one above them all block, while the range in a plain Next steps is listed",
    "expect": {
     "exit": 3,
     "stdout_has": [
@@ -122,7 +122,7 @@
     "--status",
     "in-progress"
    ],
-   "name": "HL-08: Next steps holds a ~~~ block with a ``` line and `- old`, and no item 1: no item is added and step1-mismatch blocks, while a range in a plain Work done is listed (same stage, the refused draft rewritten; D-71)",
+   "name": "HL-08: Next steps holds a ~~~ block with a ``` line and `- old`, and no item 1: no item is added and step1-mismatch blocks, while a range in a plain Work done is listed (same stage, the refused draft rewritten)",
    "expect": {
     "exit": 3,
     "stdout_has": [

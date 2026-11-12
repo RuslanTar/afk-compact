@@ -1,9 +1,9 @@
 {
- "id": "HL-07 carry-provenance through a fix, HL-09 spawn label place (0.1.5 E-3 review round 4)",
+ "id": "HL-07 carry-provenance through a fix, HL-09 spawn label place",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.5 E-3 review round 4. HL-07: an untagged line copied from a foreign base still blocks carry-provenance after publish lists its range (the re-lint reads a rewritten line as its draft text too; before: the listed text no longer equalled the base's, and the line was published without its [from …] tag); tagged, it is listed and published with its tag. HL-09: a `-<n>` counter is a label only in a label place, so `model claude-<n>` in spawns: is a placeholder.",
+ "note": "HL-07: an untagged line copied from a foreign base still blocks carry-provenance after publish lists its range (the re-lint reads a rewritten line as its draft text too; before: the listed text no longer equalled the base's, and the line was published without its [from …] tag); tagged, it is listed and published with its tag. HL-09: a `-<n>` counter is a label only in a label place, so `model claude-<n>` in spawns: is a placeholder.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

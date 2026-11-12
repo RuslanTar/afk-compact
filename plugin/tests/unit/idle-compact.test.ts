@@ -1772,7 +1772,7 @@ test('D83-06 (review): the own reading 54 min old, the session\'s status line en
   expect(selfCompacts(w)).toBe(1)
 })
 
-test('D83-08 (review 2): the own reading 54 min old; another session idle 50 min at 95, whose status line entry was dropped from the record and shown again (dated 30 s ago): it is never newer than that session\'s plugin entry, so no fresh reading: the compaction runs (rule no-fresh)', { options: ON }, async ($, on) => {
+test('D83-08: the own reading 54 min old; another session idle 50 min at 95, whose status line entry was dropped from the record and shown again (dated 30 s ago): it is never newer than that session\'s plugin entry, so no fresh reading: the compaction runs (rule no-fresh)', { options: ON }, async ($, on) => {
   const w = world(on)
   await w.start($)
   await humanTurn($, w)
@@ -2300,7 +2300,7 @@ test('D76-03 (check): native on, a spend limit at 95% at the 55.5-min check: the
   expect(nearRows(w)).toEqual([['near-limit', 'check', ['five_hour:12', 'spend_limit:95']]])
 })
 
-test('D76-04 (compact, arm; D-83): an adopted record armed at 95%, no reading yet: the compaction\'s row names the arm-time reading, arm:95, with its age (no fresh reading: rule no-fresh)', { options: ON }, async ($, on) => {
+test('D76-04 (compact, arm): an adopted record armed at 95%, no reading yet: the compaction\'s row names the arm-time reading, arm:95, with its age (no fresh reading: rule no-fresh)', { options: ON }, async ($, on) => {
   const probe = new World()
   const w = world(on, {}, adoptedRecord(probe, { pct: 95.5 }))
   w.rateLimits = []
@@ -2311,7 +2311,7 @@ test('D76-04 (compact, arm; D-83): an adopted record armed at 95%, no reading ye
   expect(ic(w).map(r => [r.rule, r.windows, Object.keys(r.usage_age_s as object)])).toEqual([['no-fresh', ['arm:95'], ['arm']]])
 })
 
-test('D76-05 (turn, skip-spend, arm; D-83): an adopted turn record armed at a 30% top share and a 95% spend share: the spend share is the reading, arm:95, 49 min old: no skip, the turn\'s start row names it (rule no-fresh)', { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
+test('D76-05 (turn, skip-spend, arm): an adopted turn record armed at a 30% top share and a 95% spend share: the spend share is the reading, arm:95, 49 min old: no skip, the turn\'s start row names it (rule no-fresh)', { options: { ...ON, idle_compact: 'false', idle_handoff_near_limit: 'skip-spend' } }, async ($, on) => {
   const w = world(on, {}, adoptedTurn('1h', 30, 95))
   w.rateLimits = []
   w.tokens = undefined
@@ -2405,7 +2405,7 @@ test('D88-13: the same adopted record with only another session\'s entry at 99 (
   expect(selfCompacts(w)).toBe(1)
 })
 
-test('D88-17 (review 3): an adopted compaction record after a plugin reload: the engine still reports seven_day 99 (resets in 3 days) but the load has not stamped it; the session\'s own record entry 99 read 50 min before and another session\'s 40 read 70 min before, the same window: the own entry is the latest: [near-limit, compact] (rule cap, its age logged)', { options: ON }, async ($, on) => {
+test('D88-17: an adopted compaction record after a plugin reload: the engine still reports seven_day 99 (resets in 3 days) but the load has not stamped it; the session\'s own record entry 99 read 50 min before and another session\'s 40 read 70 min before, the same window: the own entry is the latest: [near-limit, compact] (rule cap, its age logged)', { options: ON }, async ($, on) => {
   const probe = new World()
   const w = world(on, {}, adoptedRecord(probe))
   const R = Math.floor(T0 / 1000) + 3 * 86400

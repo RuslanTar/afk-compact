@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "publish: one variant per blocking LINT rule of the spec -> REFUSED: lint (<n> blocking); draft kept at <path>, exit 3, nothing published, one handoff_publish REFUSED:lint row each; the fixed draft then publishes; time-format: the same time in its short form (HH:MM) is caught by time-format, not unprinted-time (AT-TS-02); 0.1.5 (E-3): the id-range variant is one publish cannot list as its ids (ends that differ in kind)",
+ "note": "publish: one variant per blocking LINT rule of the spec -> REFUSED: lint (<n> blocking); draft kept at <path>, exit 3, nothing published, one handoff_publish REFUSED:lint row each; the fixed draft then publishes; time-format: the same time in its short form (HH:MM) is caught by time-format, not unprinted-time (AT-TS-02); 0.1.5: the id-range variant is one publish cannot list as its ids (ends that differ in kind)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

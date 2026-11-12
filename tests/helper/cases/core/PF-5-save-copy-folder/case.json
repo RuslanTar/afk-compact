@@ -1,6 +1,6 @@
 {
  "id": "PF-5-save-copy-folder",
- "note": "PF-5 (small flaw 1; reference scenario pf-save-copy-folder on the port branch): `save-copy --from <folder>` is an unreadable source: `usage: --from cannot be read` on stderr, exit 64, nothing on stdout, no copy written. Before the fix util::read_file opened the folder, read nothing and save-copy saved an empty copy (exit 0). A readable file still saves",
+ "note": "PF-5: `save-copy --from <folder>` is an unreadable source: `usage: --from cannot be read` on stderr, exit 64, nothing on stdout, no copy written. Before the fix util::read_file opened the folder, read nothing and save-copy saved an empty copy (exit 0). A readable file still saves",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

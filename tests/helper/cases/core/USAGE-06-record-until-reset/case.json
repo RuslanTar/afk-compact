@@ -1,6 +1,6 @@
 {
  "id": "USAGE-06-record-until-reset",
- "note": "D-88 (review of the 0.1.9 usage lane): the shared usage record keeps an entry until its window resets, however old, as the plugin counts it (before, every entry not read or seen for an hour was dropped at the next write, so another session's reading counted for an hour only); one past its reset, or one with no reset time read or seen over 10 minutes ago, is dropped, and `usage` without --stdin leaves those out too. At 64 entries the sessions read or shown longest ago still go first, but never the session and kind whose entry is the latest of a window (the reading a near-limit decision goes by).",
+ "note": "The shared usage record keeps an entry until its window resets, however old, as the plugin counts it (before, every entry not read or seen for an hour was dropped at the next write, so another session's reading counted for an hour only); one past its reset, or one with no reset time read or seen over 10 minutes ago, is dropped, and `usage` without --stdin leaves those out too. At 64 entries the sessions read or shown longest ago still go first, but never the session and kind whose entry is the latest of a window (the reading a near-limit decision goes by).",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
