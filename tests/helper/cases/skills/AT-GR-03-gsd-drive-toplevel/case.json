@@ -9,7 +9,7 @@
  "env": {"STORE_TEST_OS": "msys", "STORE_TEST_CYGDRIVE": "$TMP/cyg"},
  "steps": [
   {"setup": [
-    {"stub": "git", "dir": "$TMP/drive-git", "script": "out=$(/usr/bin/git \"$@\"); rc=$?\n[ -n \"$out\" ] && printf '%s\\n' \"$out\" | sed 's#^.*/cyg/c/#C:/#'\nexit $rc"},
+    {"stub": "git", "dir": "$TMP/drive-git", "script": "out=$(PATH=${PATH#*:} git \"$@\"); rc=$?\n[ -n \"$out\" ] && printf '%s\\n' \"$out\" | sed 's#^.*/cyg/c/#C:/#'\nexit $rc"},
     {"repo": {"branch": "main", "commits": [{"files": {"app/retry.rb": "x = 1\n", ".planning/STATE.md": "---\nstatus: executing\ncurrent_phase: 3\nlast_activity: 2026-10-20\n---\n"}, "msg": "seed"}]}, "at": "$TMP/cyg/c/w/rëpo"},
     {"write": "$TMP/cyg/c/w/rëpo/.claude/worktrees/feat/.git", "content": "gitdir: $TMP/cyg/c/w/rëpo/.git/worktrees/feat\n"},
     {"write": "$TMP/cyg/c/w/rëpo/.claude/worktrees/feat/.planning/STATE.md", "content": "---\nstatus: executing\ncurrent_phase: 7\nlast_activity: 2026-10-26\n---\n"},

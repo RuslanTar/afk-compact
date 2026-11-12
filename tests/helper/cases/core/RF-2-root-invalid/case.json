@@ -57,6 +57,9 @@
    "options": {
     "handoff_root": "C:\\h"
    },
+   "env": {
+    "STORE_TEST_OS": "linux"
+   },
    "argv": [
     "hook",
     "PreCompact"
@@ -90,9 +93,12 @@
    }
   },
   {
-   "name": "status names root-invalid for the root and the log_dir that follows it, and the watcher's refusal",
+   "name": "status names root-invalid for the root and the log_dir that follows it, and the watcher's refusal, on macOS or Linux",
    "options": {
     "handoff_root": "C:\\h"
+   },
+   "env": {
+    "STORE_TEST_OS": "linux"
    },
    "argv": [
     "status",
