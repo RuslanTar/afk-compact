@@ -35,6 +35,83 @@ This file is the full reference. The same pages, one by one, and the comparison 
 
 ## Getting started
 
+This page takes you from nothing to a first compaction, a handoff and a resume. It takes a few minutes; nothing here needs a setting changed.
+
+### Before you start
+
+You need Claude Code 2.1.287 or newer and perl 5.28 or newer (already on macOS, Debian and Ubuntu). `git` is optional. The full list is in [Requirements](#requirements).
+
+### Install in one line
+
+At the prompt of a terminal session:
+
+```
+/plugin install afk-compact --marketplace RuslanTar/afk-compact
+```
+
+Answer `y` to add the marketplace, pick a scope (user scope is first), then review the settings screen: every setting has a working default, so you can accept it as it is. From a shell, in the desktop app, and for updates, see [Install](#install).
+
+### Check that it works
+
+Run this in a session:
+
+```
+/afk-compact:status
+```
+
+On a fresh install it starts like this (your plugin folder and times differ):
+
+```
+ok: no compactions this session, no open alerts
+watcher: true · logs 2 KB in 1 sessions · share: /afk-compact:report · off: watcher = false in /config
+notice: afk-compact: local compaction logs are on (content-free; nothing is sent). To share them: /afk-compact:report. To turn them off: set watcher to false in /config.
+plugin: 0.1.9 · <plugin folder>
+thresholds: no mod row yet (settings: target 400000 · soft max 600000 · min_window 329000)
+```
+
+- The first line is the verdict: saved copies and open alerts. After the first compaction it also shows that compaction's verdict and the copy's path.
+- `min_window 329000` is the smallest context window on which the plugin starts compactions of its own with the default settings. Native auto-compaction and `/compact` are shaped on any window; see [Limits](#limits).
+
+### Your first compaction
+
+You do not start anything. The next time Claude Code compacts, whether on its own, by your `/compact`, or by the plugin at a clean turn end past `compact_target_tokens`, this happens:
+
+1. The plugin adds its handoff instructions to the request. Claude Code's own summarizer writes the summary; the plugin never edits it and never blocks the compaction.
+2. A read-only copy of the summary is saved and checked. You see one line, for example `afk-compact: compaction ok · copy saved`, with `· handoff <file>` and `· 2 jobs running` added when they apply. If the summary is not in handoff form, the line says so and names the verdict.
+3. The next turn gets one short resume block, and the first reply opens with one status line before any tool call: `Resumed · step 1: <the summary's Step 1>`.
+
+Run `/afk-compact:status` again to see the verdict and the copy's path. The detail is in [The path of one compaction](#the-path-of-one-compaction).
+
+### Write a handoff, clear, resume
+
+A handoff is a file that a fresh session can resume from. To use one:
+
+1. Run `/afk-compact:handoff`. It writes the file and ends with `✓ Handoff saved: <path>`.
+2. Run `/clear`, or start a new session. After `/clear` the plugin does nothing on its own.
+3. Run `/afk-compact:resume`. It finds the newest fitting file, checks its claims against the live state, reports drift, and continues with the next step.
+
+See [Usage](#skills) for all six skills and [Handoffs and resume](#what-a-handoff-contains) for what a handoff holds.
+
+### Where your files are kept
+
+Everything stays on your machine, in a private store outside any repository:
+
+| Where (defaults) | What |
+|---|---|
+| `~/.local/state/afk-compact/handoffs/<repo>/<ticket-or-topic>/compact/` | Read-only copies of summaries |
+| `~/.local/state/afk-compact/handoffs/<repo>/<ticket-or-topic>/` | Handoff files and their evidence |
+| `~/.local/state/afk-compact/handoffs/.watch/` | Content-free logs |
+| `~/.local/state/afk-compact/disposable/<YYYY-MM-DD>/` | Evidence copies, one folder per compaction |
+
+The full table is in [What it writes](#what-it-writes-on-your-machine). In the default permission mode, a write to these folders asks until you allow it; see [Write prompts for the plugin folders](#write-prompts-for-the-plugin-folders).
+
+### Next pages
+
+- [How it works](#how-it-works): what the plugin does around a compaction.
+- [Idle compaction](#idle-compaction) and [keep-warm](#keeping-the-cache-warm-while-jobs-run): what happens while a session sits idle.
+- [Settings](#settings): every option, with its default.
+- [Troubleshooting](#troubleshooting) and the [FAQ](#faq).
+
 ## Installation
 
 ### Requirements
@@ -62,6 +139,8 @@ In the desktop app, where `/plugin` does not run: click **+** next to the prompt
 
 Answer `y` to add the marketplace, pick a scope (user scope is first), then review the settings screen. Every setting has a working default (see [Settings](#settings)); `/afk-compact:settings` goes through them later, section by section.
 
+### Check the install
+
 To check the install, run `/afk-compact:status` in a session. It prints the effective thresholds and, after the first compaction, its verdict and the copy's path.
 
 ### Update
@@ -76,9 +155,28 @@ claude plugin update afk-compact
 /reload-plugins
 ```
 
-A session keeps the plugin copy it loaded until it reloads. When sessions started later run another version (an update, or a rollback), the session says so in one line, `this session runs 0.1.2; sessions started since 2026-11-01 14:02 +0200 run 0.1.3: /reload-plugins`: in `/afk-compact:status` (which always shows the session's version and plugin folder), in the resume block after a compaction, and in `/afk-compact:handoff`'s report. The other version is the one the newest session start on this machine loaded from the same install: a project pinned to another version (a project-scope install) is compared only with sessions of that project, and a `--plugin-dir` copy only with sessions of that folder. There is no line when that start is more than 7 days old, or when this session's copy was installed after it. Both sessions need 0.1.3 or later: an older session neither records its start nor shows the line, so the first notice comes with the first update after 0.1.3 while a 0.1.3 session still runs. When an update or an uninstall replaces the copy a session runs, Claude Code marks that copy in its plugin cache (and removes it 14 days later), and from 0.1.4 on the session says so at once, with no later session start needed: `this session runs 0.1.4, replaced by an install at 2026-11-01 14:02 +0200: /reload-plugins` (beside a newer start, both parts in one line). After `/reload-plugins` the session runs the new copy, which carries no mark, and the line goes.
+A session keeps the plugin copy it loaded until it reloads.
 
-After a Claude Code update, `/afk-compact:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/afk-compact-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on. In the binary it counts the strings the plugin relies on. It fails only when the count of a rare string changes, or when the compaction experiment's list of arms changes. A rare string is one the tested binary holds at most a few times (the recorded limit is `rare_max` in `assets/canary-baseline.json`), such as the experiment flag, its environment variable and the idle-compaction notices. Common words such as `control` and `short` appear thousands of times in unrelated code, and their counts move with every release. A changed count of a common word prints an `info c8` line and does not fail smoke. The type declarations come from Claude Code's built-in plugin-authoring skill, which writes them to a temporary folder when it loads; Claude Code clears that folder after a few days. If smoke says none were found, type `/plugin-authoring` once in any session (it costs one model turn), then run smoke again while that session is open (or pass `--types FILE`).
+#### When sessions run different versions
+
+When sessions started later run another version (an update, or a rollback), the session says so in one line, `this session runs 0.1.2; sessions started since 2026-11-01 14:02 +0200 run 0.1.3: /reload-plugins`: in `/afk-compact:status` (which always shows the session's version and plugin folder), in the resume block after a compaction, and in `/afk-compact:handoff`'s report.
+
+- The other version is the one the newest session start on this machine loaded from the same install: a project pinned to another version (a project-scope install) is compared only with sessions of that project, and a `--plugin-dir` copy only with sessions of that folder.
+- There is no line when that start is more than 7 days old, or when this session's copy was installed after it.
+- Both sessions need 0.1.3 or later: an older session neither records its start nor shows the line, so the first notice comes with the first update after 0.1.3 while a 0.1.3 session still runs.
+
+#### When an update replaces the copy a session runs
+
+When an update or an uninstall replaces the copy a session runs, Claude Code marks that copy in its plugin cache (and removes it 14 days later), and from 0.1.4 on the session says so at once, with no later session start needed: `this session runs 0.1.4, replaced by an install at 2026-11-01 14:02 +0200: /reload-plugins` (beside a newer start, both parts in one line). After `/reload-plugins` the session runs the new copy, which carries no mark, and the line goes.
+
+#### The smoke check after a Claude Code update
+
+After a Claude Code update, `/afk-compact:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/afk-compact-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on.
+
+- In the binary it counts the strings the plugin relies on. It fails only when the count of a rare string changes, or when the compaction experiment's list of arms changes.
+- A rare string is one the tested binary holds at most a few times (the recorded limit is `rare_max` in `assets/canary-baseline.json`), such as the experiment flag, its environment variable and the idle-compaction notices.
+- Common words such as `control` and `short` appear thousands of times in unrelated code, and their counts move with every release. A changed count of a common word prints an `info c8` line and does not fail smoke.
+- The type declarations come from Claude Code's built-in plugin-authoring skill, which writes them to a temporary folder when it loads; Claude Code clears that folder after a few days. If smoke says none were found, type `/plugin-authoring` once in any session (it costs one model turn), then run smoke again while that session is open (or pass `--types FILE`).
 
 ### Uninstall
 
@@ -86,9 +184,49 @@ After a Claude Code update, `/afk-compact:status` may say a check is due and off
 claude plugin uninstall afk-compact
 ```
 
-Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them. It also leaves `~/.local/state/afk-compact/bin/afk-compact-store`, the fixed path a [status line](#the-cache-state-in-your-status-line) calls, which keeps running the old copy of the plugin: a copy in Claude Code's plugin cache until Claude Code deletes that folder, then it fails; a copy read in place from a local folder marketplace for as long as that folder exists, since Claude Code never deletes it. Delete it and remove the call from your status line.
+Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evidence and logs in place; see [What it writes](#what-it-writes-on-your-machine) to remove them.
+
+#### What an uninstall leaves behind
+
+It also leaves `~/.local/state/afk-compact/bin/afk-compact-store`, the fixed path a [status line](#the-cache-state-in-your-status-line) calls, which keeps running the old copy of the plugin:
+
+- a copy in Claude Code's plugin cache until Claude Code deletes that folder, then it fails;
+- a copy read in place from a local folder marketplace for as long as that folder exists, since Claude Code never deletes it.
+
+Delete it and remove the call from your status line.
 
 ## How it works
+
+### Terms
+
+The names these pages use. Each links to the page that explains it in full.
+
+| Term | Meaning |
+|---|---|
+| **Native auto-compaction** | Claude Code's own compaction when the context nears its limit. The plugin never turns it off; it is the backstop. |
+| **Native idle compaction** | Claude Code's own idle compaction of a long conversation you stepped away from. See [Idle compaction](#idle-compaction). |
+| **Plugin idle compaction** | afk-compact's own idle compaction (`idle_compact`), where native idle compaction is off in your settings or did not run. See [Idle compaction](#idle-compaction). |
+| **Idle handoff turn** | One turn the plugin gives the model to write a handoff before the cache of an idle session expires. It does not compact. See [Idle compaction](#idle-compaction). |
+| **Plugin compaction** | A compaction the plugin starts itself: at a clean turn end once the context passes `compact_target_tokens` (the **planned compaction**), or one of its idle compactions. |
+| **Mod** | The plugin's module that Claude Code loads. It adds the handoff instructions to each compaction, starts plugin compactions, and usually delivers the resume block. |
+| **Hooks** | The plugin's classic command hooks (`PreCompact`, `PostCompact`, `SessionStart` and five more). They save the copies and take over when the mod's hook does not run. See [What it writes on your machine](#what-it-writes-on-your-machine). |
+| **Helper** | One program in the plugin folder, `scripts/afk-compact-store`, that the hooks, the mod and the skills call. It needs perl 5.28 or newer. |
+| **Handoff** | A note a fresh session can pick the work up from: your constraints in your words, approvals, decisions, work in flight, open questions and one exact next step (Step 1). Every compaction summary is asked for in this form, and `/afk-compact:handoff` writes one as a file. See [Handoffs and resume](#handoffs-and-resume). |
+| **Saved copy** | A read-only copy of one compaction summary, with the session, branch, commit, trigger and verdict, written once and never edited. |
+| **Resume block** | The short block the first turn after a compaction gets: the saved copy's path, fresh git and background-work facts, and an unanswered question if there was one. |
+| **Ledger** | Numbered lines that every summary and handoff is told to copy unchanged: `U-` your constraints and asks, `D-` decisions, `X-` rejected options. `B-` lines list the work in flight. See [Usage](#usage). |
+| **Verdict** | One word per compaction that says whether the summary came back complete and in handoff form: `ok`, `ok-trailer`, `ok-unclosed`, `truncated`, `unshaped`, `scope-leak` or `stale`. |
+| **Marker and sentinel** | A one-time marker at the top of the summary and an end line at its bottom. The verdict is read from them. |
+| **Nudge** | One note added to a tool result in a long turn, past `compact_soft_max_tokens`, asking the model to reach a stopping point. See [Nudge, auto-continue and halt](#nudge-auto-continue-and-halt). |
+| **Last cycle** | A nudged cycle that will not be followed by an automatic continue: halt mode, the hourly cap, or auto-continue off. With `handoff_turn` on, the model writes a handoff first. See [Handoffs and resume](#handoffs-and-resume). |
+| **Halt mode** | After two bad verdicts in a row, a compaction loop or the hourly cap: no auto-continue and no plugin compactions until your next message. See [Nudge, auto-continue and halt](#nudge-auto-continue-and-halt). |
+| **Keep-warm** | While one of the session's own background jobs runs, a hidden one-word request about every 50 minutes keeps the one-hour prompt cache warm. See [Keeping the cache warm while jobs run](#keeping-the-cache-warm-while-jobs-run). |
+| **Consent key** | One of the six settings that let the plugin act without asking. They are read from your user settings file only. See [Consent keys](#consent-keys). |
+| **Protective list** | `prod_patterns`, `secret_extra_rules` and `protected_branches`: lists that can only make the plugin ask or withhold more. See [Protective lists](#protective-lists). |
+| **Explicit gate** | A deploy, a change to an environment, its secrets or production data, infrastructure, or a push to a protected branch. It always asks again after a compaction. See [Safety and approvals](#safety-and-approvals). |
+| **Repo mode** | An opt-in export of each published handoff into a repository, when both your settings and the repository agree. See [Handoffs in git](#handoffs-in-git-repo-mode). |
+| **Bucket** | The folder for one repository and one ticket or topic: `<repo>/<ticket-or-topic>` under the handoff folder. |
+| **Evidence** | Copies of temp files a session cited, kept so a later session can still read them. Automatic copies go to dated folders under the disposable folder (`disposable_root`); a handoff's own go beside it. See [Pruning old evidence](#pruning-old-evidence). |
 
 ### What it does
 
@@ -96,7 +234,7 @@ Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evid
 - **Compacts at a clean turn end.** When the context passes a target size and a turn has ended normally, the plugin can compact before native auto-compaction cuts in mid-task. Past a higher soft maximum, it adds one checkpoint nudge to a tool result.
 - **Keeps a copy of every summary.** Each copy is written once, read-only, with frontmatter taken from the plugin's own records (session, branch, commit, trigger, verdict, the plugin version and folder that saved it), never from the summary text.
 - **Checks the result.** A one-time marker at the top of the summary and a sentinel at the end show whether the summary is complete and in handoff form. The result is one verdict per compaction.
-- **Delivers the resume block once.** After a compaction, the next turn gets one short block: the saved copy's path, a fresh git and project-state measurement, and a fallback note when the summary is not in handoff form. When the last turn ended on a question you have not answered (in its text, or in a question dialog that timed out), the block quotes that question, so it is in front of you when you return.
+- **Delivers the resume block once.** After a compaction, the next turn gets one short block: the saved copy's path, a fresh git and project-state measurement, and a fallback note when the summary is not in handoff form. When the last turn ended on a question you have not answered (in its text, or in a question dialog that timed out), the block quotes that question, so it is in front of you when you return. See [Handoffs and resume](#handoffs-and-resume).
 - **Copies evidence.** Temp files that the session cited are copied to a dated disposable folder, with caps and secret checks, so nothing the next window needs lives only in a temp folder.
 - **Writes a handoff before a last compaction.** When a run will not resume by itself (the hourly limit is reached, or auto-continue is off or halted), the plugin asks for one more turn that writes a handoff while the full context is still there. See [The handoff turn of a last cycle](#the-handoff-turn-of-a-last-cycle). By default it does the same before each planned compaction; see [The handoff turn before a planned compaction](#the-handoff-turn-before-a-planned-compaction).
 - **Handles idle compactions.** With `"idleCompaction": false` in your Claude Code settings, the plugin compacts a long idle session itself (plugin idle compaction), about 54 minutes after its last request and before the prompt cache expires, so in sessions that read your `~/.claude/settings.json` idle compaction runs only where the plugin is enabled (terminal sessions; headless and Desktop: see [Limits](#limits)). When Claude Code compacts an idle session itself (native idle compaction), the summary is shaped the same way. Either way the resume block is measured again when you come back. See [Idle compaction](#idle-compaction).
@@ -126,14 +264,60 @@ flowchart TD
 5. **Copy and verdict.** The `PostCompact` hook saves the copy first; the mod saves it only if that did not happen. Both use the same file name, so there is one copy. The marker and sentinel give the verdict: `ok`, `ok-trailer`, `ok-unclosed`, `truncated`, `unshaped`, `scope-leak` or `stale`. `ok-unclosed` is a summary with every required section through its last one (Next steps) but no closing line. It counts as ok: no fallback note, and it never counts toward halt mode. The copy, the log and `/afk-compact:status` show the word. A summary cut off inside its body is still `truncated`.
 6. **Resume.** The first channel that claims the compaction delivers the resume block: the mod's prompt context, the classic `SessionStart` hook, or the auto-continue text. A turn-end check at `Stop` saves anything both savers missed and logs what is still open.
 
-<details>
-<summary>Nudge, auto-continue and halt</summary>
+### When the plugin acts beside Claude Code's compaction
+
+The plugin adds its own steps around Claude Code's compaction; it does not replace it. On a model with a 1M-token window and the default settings:
+
+```
+Size of one main conversation (1M-token window, default settings)
+
+0 ─────────────── 400K ───────────── 600K ──────────────────── ~967K ──── 1M
+                    │                  │                          │
+                    │                  │                          └─ Claude Code's own auto-compaction:
+                    │                  │                             unchanged, the backstop
+                    │                  └─ a turn still running here gets one nudge
+                    │                     to reach a stopping point (compact_soft_max_tokens)
+                    └─ the plugin compacts at the next clean turn end (compact_target_tokens);
+                       by default the model first writes a handoff (precompact_turn)
+```
+
+- Every compaction on this line, the plugin's and Claude Code's, gets the same handoff instructions, a saved copy, a verdict and a resume block.
+- Claude Code compacts at about 967K tokens on models with a native 1M window ([Claude Code docs](https://code.claude.com/docs/en/model-config#default-auto-compact-thresholds)). The plugin keeps its own points below that; [How the thresholds are clamped](#how-the-thresholds-are-clamped) has the rules.
+- On windows under about 329K tokens with the defaults (200K models, for example), plugin compactions and the nudge are off. Claude Code compacts as usual, and the plugin still shapes, saves, checks and resumes each compaction it runs.
+
+### The idle timeline
+
+What happens to a long main conversation that sits idle on the one-hour prompt cache, counted from its last request. The sizes are the defaults (200,000 tokens, the idle-compaction minimum).
+
+```
+Minutes after the last request (one-hour prompt cache)
+
+Nothing running:
+0 ───────────────────── ~49 ────────── ~54 ──────── 55.5 ───────── 60
+                          │              │            │             │
+                          │              │            │             └─ the cache expires
+                          │              │            └─ the plugin checks: no compaction since
+                          │              │               the turn ended? Plugin idle compaction now
+                          │              └─ native idle compaction (Claude Code's own), shaped;
+                          │                 with "idleCompaction": false, plugin idle compaction
+                          └─ the idle handoff turn, only where neither compaction runs
+
+A background job of the session still running (keep-warm):
+0 ─────────────────────── ~50 ──────────── ~100 ─────────── ... up to keep_warm_hours (6 h)
+                            │                │
+                            └─ hidden request └─ again: the cache stays warm for the job's result
+```
+
+- **Nothing running.** With a default install, native idle compaction runs and the plugin shapes it. When it did not run by minute 55.5, plugin idle compaction compacts while the cache is still warm, also while agents run. With `"idleCompaction": false` in your Claude Code settings, the plugin compacts at about 54 minutes instead, so idle compaction runs only in terminal sessions where it is enabled. The idle handoff turn runs only where neither compaction does (for example below the idle-compaction minimum when you lower `idle_handoff_min_tokens`, or with `idle_compact: false`): about 49 minutes in with `"idleCompaction": false`, else at the 55.5-minute check.
+- **A background job running.** While one of the session's own agents, workflows or background shells runs, keep-warm sends a hidden one-word request about every 50 minutes, and plugin idle compaction and the idle handoff turn wait. The turn the job's result opens then reads the conversation from a warm cache. When `keep_warm_hours` runs out with an agent, a workflow or a working teammate still open, plugin idle compaction runs while the cache is warm.
+- **On your return.** The first turn gets an idle resume block, measured again when it is more than 10 minutes old.
+- The native idle compaction path, plugin idle compaction and the idle handoff turn have not been run live yet; see [Limits](#limits). The details, every skip rule and the cost are in [Idle compaction](#idle-compaction), [Keeping the cache warm while jobs run](#keeping-the-cache-warm-while-jobs-run) and [Near a usage limit](#near-a-usage-limit).
+
+### Nudge, auto-continue and halt
 
 - The nudge is added once per main turn, to a main-agent tool result, never to a subagent's or a denied call's.
 - After a compaction that a nudge led to, the plugin submits one short continue note, but only if the turn ended normally, did not end with a question to you, and the hourly cap allows it. A question dialog you answered does not count as a question to you; one still open when the turn ends, or one that closed unanswered (it timed out while you were away, or you dismissed it), does, here and for the handoff turn and restart below.
-- Two non-ok verdicts in a row, a compaction loop, or the hourly cap put the session in **halt mode**: no auto-continue, no plugin compactions, and the nudge says the plugin will not resume the work by itself, and that it compacts afterwards only after a cap or auto-continue-off halt. Your next message clears it: one you type, or send yourself from another client or through the SDK. A background job's or agent's result, a scheduled prompt or another plugin's prompt does not clear it. Native auto-compaction is never touched. A cycle that will not auto-continue also gets a handoff turn; see below.
-
-</details>
+- Two non-ok verdicts in a row, a compaction loop, or the hourly cap put the session in **halt mode**: no auto-continue, no plugin compactions, and the nudge says the plugin will not resume the work by itself, and that it compacts afterwards only after a cap or auto-continue-off halt. Your next message clears it: one you type, or send yourself from another client or through the SDK. A background job's or agent's result, a scheduled prompt or another plugin's prompt does not clear it. Native auto-compaction is never touched. A cycle that will not auto-continue also gets a handoff turn; see [Handoffs and resume](#handoffs-and-resume).
 
 ## Usage
 
@@ -148,21 +332,69 @@ flowchart TD
 | `/afk-compact:report [--since 7d]` | Bundle the plugin's content-free logs, version, settings and recorded probe results into a zip that you can send to the developer yourself. Nothing is uploaded. Use it only when you want to share; see [Sending a report](#sending-a-report). |
 | `/afk-compact:prune [--days N] [--min-mb N] [--root DIR]` | Only when you ask: list the evidence folders of old handoffs and the old dated folders of temporary evidence, with their age, size, bucket and handoff, then delete them after your yes. Handoff files, summary copies and the files a newer handoff cites always stay; see [Pruning old evidence](#pruning-old-evidence). |
 
-**Mechanical fixes when a handoff is saved.** From 0.1.6 the save fixes two format rules itself instead of refusing the handoff: an id range it would refuse (`D-2..D-4` where the handoff chain defines those ids) is written as its ids (`D-2, D-3, D-4`), and when Next steps has no first item, Step 1 is copied there as item 1. It prints one line per change. When another rule still refuses the save, the draft is kept as written and those lines say what the save will change once the rest is fixed. A range whose two ends differ in kind (`D-2..X-4`), one that runs backwards or one over 50 ids, a range in quotes or backticks, after `=` (`--only=D-2..D-4`) or in a file name, a range on an approval line, and a first Next steps item that differs from Step 1, are left as written, and refused while they still break the rule. So is all of a section (a `##` heading to the next) that holds a line with three or more backticks or tildes in a row anywhere in it, a quote line (`>`), an HTML line (one starting with `<` and a letter, `/`, `!` or `?` after any indent and list markers: a tag such as `<details>`, an HTML comment or a `<https://…>` link), or a line indented 4 or more columns that is not a list continuation (a break such as `* * *`, a lone list marker and a numbered item other than `1.` or `1)` right under text start no list; a line where any of its leading list markers is followed by more than 4 columns before its text counts as indented); no item 1 is added when Next steps or Resume here is such a section. A range in other text on a fixed line, a command written without backticks included, is listed too. In a restart recipe, an agent's label may end in a counter after a dash (`fix-<n>`); a model id, an output name or a path ending that way still needs the real value.
+### When to use each skill
+
+- **Before `/clear`, before a break, or when a session is getting long:** `/afk-compact:handoff` writes a file that a fresh session can resume from.
+- **In a fresh session, to pick up where a handoff or a saved compaction copy left off:** `/afk-compact:resume` reads the newest fitting file and continues with the next step.
+- **To see what the plugin is doing:** `/afk-compact:status`.
+- **To change a setting:** `/afk-compact:settings`.
+- **To share logs or free disk space:** `/afk-compact:report` or `/afk-compact:prune`, only when you want to.
+
+### Mechanical fixes when a handoff is saved
+
+From 0.1.6 the save fixes two format rules itself instead of refusing the handoff: an id range it would refuse (`D-2..D-4` where the handoff chain defines those ids) is written as its ids (`D-2, D-3, D-4`), and when Next steps has no first item, Step 1 is copied there as item 1.
+
+- It prints one line per change. When another rule still refuses the save, the draft is kept as written and those lines say what the save will change once the rest is fixed.
+- A range whose two ends differ in kind (`D-2..X-4`), one that runs backwards or one over 50 ids, a range in quotes or backticks, after `=` (`--only=D-2..D-4`) or in a file name, a range on an approval line, and a first Next steps item that differs from Step 1, are left as written, and refused while they still break the rule. So is all of a section (a `##` heading to the next) that holds a line with three or more backticks or tildes in a row anywhere in it, a quote line (`>`), an HTML line (one starting with `<` and a letter, `/`, `!` or `?` after any indent and list markers: a tag such as `<details>`, an HTML comment or a `<https://…>` link), or a line indented 4 or more columns that is not a list continuation (a break such as `* * *`, a lone list marker and a numbered item other than `1.` or `1)` right under text start no list; a line where any of its leading list markers is followed by more than 4 columns before its text counts as indented); no item 1 is added when Next steps or Resume here is such a section.
+- A range in other text on a fixed line, a command written without backticks included, is listed too.
+- In a restart recipe, an agent's label may end in a counter after a dash (`fix-<n>`); a model id, an output name or a path ending that way still needs the real value.
+
+### The shared handoff format
 
 The handoff and the compaction instructions share one format, so `/afk-compact:resume` reads both. A published handoff's frontmatter names the plugin version and folder that wrote it, as a summary copy's does (from 0.1.4).
 
-**The ledger stays (from 0.1.5).** The `U-`, `D-` and `X-` lines (your constraints and asks, the decisions, the rejected options) carry from one handoff to the next, and so do the lines that mark one superseded or moved to `ledger.md`. When a draft drops one without marking it superseded, publish copies it back unchanged and says so. A draft that gives an existing id, or one already superseded or moved to `ledger.md`, to a different item is refused until that item takes a new id; a reworded line or a new status is only reported. A carried line with a private path or a secret is refused too. A saved compaction copy of the main conversation gets the same carry from the session's newest earlier copy that had the expected shape (not when a copy is saved late from a stash), and its frontmatter lists the added lines under `ledger_carried`.
+### The ledger stays (from 0.1.5)
 
-**The helper.** The skills and the plugin call one helper, `scripts/afk-compact-store` in the plugin folder, always by its full path; nothing is added to your `PATH`. Where this page shows a command for you to run, it is written `! "<plugin folder>/scripts/afk-compact-store" …`, and `/afk-compact:status` prints it with the real folder.
+The `U-`, `D-` and `X-` lines (your constraints and asks, the decisions, the rejected options) carry from one handoff to the next, and so do the lines that mark one superseded or moved to `ledger.md`. When a draft drops one without marking it superseded, publish copies it back unchanged and says so. A draft that gives an existing id, or one already superseded or moved to `ledger.md`, to a different item is refused until that item takes a new id; a reworded line or a new status is only reported. A carried line with a private path or a secret is refused too. A saved compaction copy of the main conversation gets the same carry from the session's newest earlier copy that had the expected shape (not when a copy is saved late from a stash), and its frontmatter lists the added lines under `ledger_carried`.
 
-**After `/clear`.** After `/clear` the plugin delivers no resume block, submits no prompt and runs no skill on its own; work resumes only when you ask for it. A continue or handoff turn that was about to start when you cleared is dropped. Background work keeps running (see [Lost background jobs](#lost-background-jobs)).
+### The helper
+
+The skills and the plugin call one helper, `scripts/afk-compact-store` in the plugin folder, always by its full path; nothing is added to your `PATH`. Where this page shows a command for you to run, it is written `! "<plugin folder>/scripts/afk-compact-store" …`, and `/afk-compact:status` prints it with the real folder.
+
+### After /clear
+
+After `/clear` the plugin delivers no resume block, submits no prompt and runs no skill on its own; work resumes only when you ask for it. A continue or handoff turn that was about to start when you cleared is dropped. Background work keeps running (see [Lost background jobs](#lost-background-jobs)).
 
 ## Handoffs and resume
 
+A **handoff** is a file that a fresh session can resume from. The plugin asks for the same form in two places: the compaction summary it shapes, and the file `/afk-compact:handoff` writes. After a compaction it gives the next turn one short **resume block**. This page covers what a handoff holds, what the first reply after a compaction looks like, and the two extra turns in which the plugin asks for a handoff.
+
+### What a handoff contains
+
+Each handoff is a set of short sections, in this order. A section with nothing in it is left out.
+
+- **Resume here:** status, how stable the state is, the next step (**Step 1**: one exact command or edit), the **Gate** (what blocks it, or none), the likeliest mistake to avoid, and what is running now.
+- **User constraints:** your own words and asks, each with its state (open, partly done, done, superseded). Lines carry the id `U-` and a number.
+- **Approvals:** what you approved, for which targets, once or standing. Deploys, production writes and pushes to a protected branch are asked again.
+- **Decisions and do-not-re-raise:** the choices made and why (`D-`), and the options rejected, refuted or failed (`X-`).
+- **In flight:** background work still running (`B-`), with a command to check it and whether it may restart by itself, asks first or never restarts.
+- **Live state:** claims about the outside world, each with when it was last seen and a command to re-check it.
+- **Open questions:** questions only you can answer (`Q-`), with options and a recommendation.
+- **Location, if changed:** the worktree, branch and working folder.
+- **Work done and findings:** what was done, how far it went and the proof for it, plus findings and follow-ups.
+- **Evidence:** the temporary files the work cites.
+- **Next steps:** a numbered list that starts with Step 1.
+
+Every item has one id, ids are never written as a range or renumbered, and a secret is never written, even quoted: the handoff says where it lives. The full format, with every rule, is in [the handoff spec](assets/handoff-spec.md); for how the ids carry from one handoff to the next, see [The ledger stays (from 0.1.5)](#the-ledger-stays-from-015).
+
 ### The first reply after a compaction
 
-The first reply after a compaction opens with one status line, before any tool call: `Resumed · step 1: <the summary's Step 1>`, or `Resumed after compaction` when no Step 1 can be read; after a handoff whose report was cut off, its `✓ Handoff saved: <path>` line takes that place (when the cut-off handoff can still be finished, after the one call that finishes it). When a script reads the reply (`claude -p`, the Agent SDK) the line is left out, so the output a script reads does not start with it; a terminal session, the desktop app, the IDE extensions and Claude Code's other apps where you read the reply (mobile, Slack, Cowork, an SSH remote) keep it. The plugin tells them apart by the `CLAUDE_CODE_ENTRYPOINT` value Claude Code sets and by whether the session draws on any surface; where its classic hooks deliver the block, by `CLAUDE_CODE_ENTRYPOINT` alone, or, when that is not set, by whether the mod has recorded this session as headless. A question whose dialog timed out is not asked again in a dialog until you write: it is listed at the end of the turn instead (after a compaction, the same holds for one whose dialog closed with no answer).
+- The first reply after a compaction opens with one status line, before any tool call: `Resumed · step 1: <the summary's Step 1>`, or `Resumed after compaction` when no Step 1 can be read; after a handoff whose report was cut off, its `✓ Handoff saved: <path>` line takes that place (when the cut-off handoff can still be finished, after the one call that finishes it).
+- When a script reads the reply (`claude -p`, the Agent SDK) the line is left out, so the output a script reads does not start with it; a terminal session, the desktop app, the IDE extensions and Claude Code's other apps where you read the reply (mobile, Slack, Cowork, an SSH remote) keep it.
+- The plugin tells them apart by the `CLAUDE_CODE_ENTRYPOINT` value Claude Code sets and by whether the session draws on any surface; where its classic hooks deliver the block, by `CLAUDE_CODE_ENTRYPOINT` alone, or, when that is not set, by whether the mod has recorded this session as headless.
+- A question whose dialog timed out is not asked again in a dialog until you write: it is listed at the end of the turn instead (after a compaction, the same holds for one whose dialog closed with no answer).
+
+
 
 ### Delivery after a restart
 
@@ -193,7 +425,7 @@ Set `handoff_turn` to `false` to turn this off. `handoff_turn_max_tokens` sets h
 
 ### The handoff turn before a planned compaction
 
-Before each planned compaction the model gets one extra turn to write a handoff (up to `handoff_turn_max_tokens`, 64K by default, and 34 tool calls). Set `precompact_turn` to `false` to save usage: code then records the checkpoint alone. The planned evaluation run measures this turn; if it shows no recall gain worth its cost, the default becomes `false` and this README says why.
+Before each planned compaction the model gets one extra turn to write a handoff (up to `handoff_turn_max_tokens`, 64K by default, and 34 tool calls). Set `precompact_turn` to `false` to save usage: code then records the checkpoint alone. The planned evaluation run measures this turn; if its cost is not worth it, the default becomes `false` and this page says why.
 
 A planned compaction is the one at a clean turn end once the context passes `compact_target_tokens`, in a turn that had no nudge (a nudged turn follows the rules of the last cycle above). With `precompact_turn` set to `true`, the plugin submits one turn of its own before it compacts. It uses the same machinery and limits as the last-cycle handoff turn, and asks for a handoff while the context is still there; the turn ends with the skill's report and does not continue the task.
 
@@ -203,75 +435,124 @@ A planned compaction is the one at a clean turn end once the context passes `com
 
 ## Configuration
 
+Every setting with its default, what it does and what it costs. Change them in `/config`, with `/afk-compact:settings`, or in your user settings file.
+
 ### Settings
 
 Set on the install screen, later in `/config` (rows named `afk-compact.<key>`), or with `/afk-compact:settings`. An empty value means the default.
 
-**On/off settings take `true` or `false` (from 0.1.6).** The seven settings that switch one behaviour on or off (`handoff_turn`, `precompact_turn`, `watcher`, `unattended_prod_reads`, `idle_handoff_turn`, `idle_compact` and `resume_proceed`) take `true` or `false`, and `relaunch_auto`, `restart_on_update`, `idle_handoff_near_limit` and `idle_digest` take one of their words. In `/config` each of them opens a list to pick from, with the setting's description above it (a plain on/off setting flips in place there and shows none; checked on 2.1.319). Releases before 0.1.6 saved other words for the seven, and the plugin still reads them as before: `halt`, `model`, `shadow`, `allow` and `auto` as `true`; `off`, `code`, `forbid` and `confirm` as `false` (the idle settings also take `yes`, `no`, `on`, `1`, `0` and the like); `settings set` takes them too and saves `true` or `false`. Claude Code, though, reads a saved value that is not on the setting's list as unset, so the hooks run the default (the helper steps they run get it too; only `/afk-compact:status`, `settings show` and the skills' own helper steps read your word): a behaviour you turned off would run again (`/config` still shows the saved word on its row, and its list marks no value). `/afk-compact:status` and `settings show` warn when such a value is saved. The same holds for any other value not on a setting's list: where the rules below say what "any other value" counts as, that is how `/afk-compact:status`, `settings show` and the skills' helper steps read it, while the hooks run the default, and the warning says so. `! "<plugin folder>/scripts/afk-compact-store" settings migrate` lists what it would change (for example `idle_compact: "off" -> "false"`), and with `--apply` it saves the new form through the same writer as `settings set`, with its checks and backup (a value equal to its default is removed). It never writes a consent key: for one of those, pick the value again in `/config`. The lists need Claude Code 2.1.271 or newer, which this version's 2.1.287 covers.
+#### On and off words
 
-**Not in `/config` in this version.** `otel_log_path` is left out of the install screen and `/config` because it does nothing yet: the plugin reads no OpenTelemetry file.
+On/off settings take `true` or `false` (from 0.1.6). The seven settings that switch one behaviour on or off (`handoff_turn`, `precompact_turn`, `watcher`, `unattended_prod_reads`, `idle_handoff_turn`, `idle_compact` and `resume_proceed`) take `true` or `false`, and `relaunch_auto`, `restart_on_update`, `idle_handoff_near_limit` and `idle_digest` take one of their words. In `/config` each of them opens a list to pick from, with the setting's description above it (a plain on/off setting flips in place there and shows none; checked on 2.1.319).
 
-**Defaults you can see.** Claude Code fills a setting's default into the install and configure dialogs only for on/off (boolean) settings and settings with a list of values, so every other setting's title ends with its default (the listed ones say it too), for example `[default 400,000]` or `[default: empty = inside the handoff folder]`, and a blank field means that default. (`/config` shows the title on each row, checked on Claude Code 2.1.319. A setting with a list of values opens there as a picker with the setting's description above it in recent Claude Code versions: checked in the code of 2.1.312 to 2.1.319 and seen on 2.1.319; older versions are not checked.) Leave a field blank rather than saving it empty: the plugin reads a saved empty value as the default, but Claude Code's code reads as passing the empty text to the hooks (not tested), and `/afk-compact:status` warns with the command that clears it. `/afk-compact:status` lists every value the plugin uses under `settings values:`. Each one whose value is not its default (wherever it is set) gets a line with where it comes from (`your settings.json`, `plugin option`, `flag` or `safe value`) and the default, for example `compact_target_tokens 350000 (your settings.json; default 400000)`; the rest share one or two `at default:` lines. A clamped number says what it was clamped from. The ticket pattern shows only `built-in`, `custom` or `invalid`, and a list only its entry count. `"<plugin folder>/scripts/afk-compact-store" settings show` prints all of them, one line each, with value, source and default; a value set equal to its default still names where it is set, for example `triggers true (your settings.json; default true)`.
+Releases before 0.1.6 saved other words for the seven, and the plugin still reads them as before: `halt`, `model`, `shadow`, `allow` and `auto` as `true`; `off`, `code`, `forbid` and `confirm` as `false` (the idle settings also take `yes`, `no`, `on`, `1`, `0` and the like); `settings set` takes them too and saves `true` or `false`. Claude Code, though, reads a saved value that is not on the setting's list as unset, so the hooks run the default (the helper steps they run get it too; only `/afk-compact:status`, `settings show` and the skills' own helper steps read your word): a behaviour you turned off would run again (`/config` still shows the saved word on its row, and its list marks no value). `/afk-compact:status` and `settings show` warn when such a value is saved. The same holds for any other value not on a setting's list: where the rules below say what "any other value" counts as, that is how `/afk-compact:status`, `settings show` and the skills' helper steps read it, while the hooks run the default, and the warning says so.
 
-**Changing settings from a session.** `/afk-compact:settings` and the helper's two writing commands change the plugin's saved options for you: `"<plugin folder>/scripts/afk-compact-store" settings set <key>=<value>…` and `settings reset <key>…` (or `--all`). What they may change: only `pluginConfigs["afk-compact@<marketplace>"].options` in `~/.claude/settings.json`, one member per key of this plugin; a missing `options`, plugin entry or `pluginConfigs` is added. Every other key of the file keeps its bytes: the commands edit the text of those members only (a value replaced, a member added after the last one with its spacing, a member removed), and before writing they check that the new text reads back as your settings with exactly those changes. Setting a key to its default, or to an empty value, removes it, so a later release's default still applies; no default is ever written. What they never change: the six consent keys below, from any caller, set or reset alike (the plugin cannot tell a command you typed from one the model ran); a protective list loses no entry and `resume_proceed` goes back from `false` to `true` only by your hand, as with flags; any other file. A value the plugin would not read as written on its own is refused with the reason (not a number, outside its minimum or maximum, not one of its values, a relative path, a pattern the plugin cannot run, over 4,096 bytes, a list over 32 entries). A number the clamp lowers against your other settings (a target over two thirds of the soft maximum, a soft maximum or target over what a set window allows; see "How the thresholds are clamped" below) is written as given with a note, not refused: the window is often the model's own, known only when a session runs, and `/afk-compact:status` shows the value used. Also refused: a file that is not plain JSON (comments, a trailing comma), one that names a member twice, one with two keys for the plugin, a `settings.json` with a second name (a hard link: the write puts a new file under one name only), a `--plugin-dir` run, and a `CLAUDE_CONFIG_DIR` or `HOME` that names another folder than your own `~/.claude` (a command can set both). Each is a dry run unless you add `--apply`: the dry run lists every change as old -> new (never a pattern's or a list's text) and the `--plan` hash of the file, and the apply refuses a file that changed since, or that another program writes while it runs. The apply first saves the whole file next to it as `settings.json.afk-compact-<date>_<time>.bak` (mode 0600, never pruned; it holds any tokens under your `env` too; a backup that fails partway is removed and nothing is written), writes the new text to a temporary file in the same folder with the file's mode and renames it over the file (through a symbolic link, the link stays), so a failed write leaves your file as it was and no partial file; then it reads the file back. It prints each change and the backup's path. The model may run these commands for you after you say yes to the change it showed; the settings skill does. `--all` leaves the consent keys, the three protective lists and `resume_proceed`. The plugin's helper reads the new values at its next call; whether a running Claude Code picks them up for the hooks without a restart is not checked yet, so run `/reload-plugins` or restart it to be sure. By hand: edit or delete the key under `pluginConfigs["afk-compact@<marketplace>"].options` in `~/.claude/settings.json`.
+`! "<plugin folder>/scripts/afk-compact-store" settings migrate` lists what it would change (for example `idle_compact: "off" -> "false"`), and with `--apply` it saves the new form through the same writer as `settings set`, with its checks and backup (a value equal to its default is removed). It never writes a consent key: for one of those, pick the value again in `/config`. The lists need Claude Code 2.1.271 or newer, which this version's 2.1.287 covers.
+
+#### Settings outside /config
+
+`otel_log_path` is left out of the install screen and `/config` because it does nothing yet: the plugin reads no OpenTelemetry file.
+
+#### Defaults you can see
+
+Claude Code fills a setting's default into the install and configure dialogs only for on/off (boolean) settings and settings with a list of values, so every other setting's title ends with its default (the listed ones say it too), for example `[default 400,000]` or `[default: empty = inside the handoff folder]`, and a blank field means that default. (`/config` shows the title on each row, checked on Claude Code 2.1.319. A setting with a list of values opens there as a picker with the setting's description above it in recent Claude Code versions: checked in the code of 2.1.312 to 2.1.319 and seen on 2.1.319; older versions are not checked.) Leave a field blank rather than saving it empty: the plugin reads a saved empty value as the default, but Claude Code's code reads as passing the empty text to the hooks (not tested), and `/afk-compact:status` warns with the command that clears it. `/afk-compact:status` lists every value the plugin uses under `settings values:`. Each one whose value is not its default (wherever it is set) gets a line with where it comes from (`your settings.json`, `plugin option`, `flag` or `safe value`) and the default, for example `compact_target_tokens 350000 (your settings.json; default 400000)`; the rest share one or two `at default:` lines. A clamped number says what it was clamped from. The ticket pattern shows only `built-in`, `custom` or `invalid`, and a list only its entry count. `"<plugin folder>/scripts/afk-compact-store" settings show` prints all of them, one line each, with value, source and default; a value set equal to its default still names where it is set, for example `triggers true (your settings.json; default true)`.
+
+#### Changing settings from a session
+
+`/afk-compact:settings` and the helper's two writing commands change the plugin's saved options for you: `"<plugin folder>/scripts/afk-compact-store" settings set <key>=<value>…` and `settings reset <key>…` (or `--all`).
+
+- What they may change: only `pluginConfigs["afk-compact@<marketplace>"].options` in `~/.claude/settings.json`, one member per key of this plugin; a missing `options`, plugin entry or `pluginConfigs` is added. Every other key of the file keeps its bytes: the commands edit the text of those members only (a value replaced, a member added after the last one with its spacing, a member removed), and before writing they check that the new text reads back as your settings with exactly those changes. Setting a key to its default, or to an empty value, removes it, so a later release's default still applies; no default is ever written.
+- What they never change: the six consent keys below, from any caller, set or reset alike (the plugin cannot tell a command you typed from one the model ran); a protective list loses no entry and `resume_proceed` goes back from `false` to `true` only by your hand, as with flags; any other file.
+- A value the plugin would not read as written on its own is refused with the reason (not a number, outside its minimum or maximum, not one of its values, a relative path, a pattern the plugin cannot run, over 4,096 bytes, a list over 32 entries). A number the clamp lowers against your other settings (a target over two thirds of the soft maximum, a soft maximum or target over what a set window allows; see [How the thresholds are clamped](#how-the-thresholds-are-clamped) below) is written as given with a note, not refused: the window is often the model's own, known only when a session runs, and `/afk-compact:status` shows the value used. Also refused: a file that is not plain JSON (comments, a trailing comma), one that names a member twice, one with two keys for the plugin, a `settings.json` with a second name (a hard link: the write puts a new file under one name only), a `--plugin-dir` run, and a `CLAUDE_CONFIG_DIR` or `HOME` that names another folder than your own `~/.claude` (a command can set both).
+- Each is a dry run unless you add `--apply`: the dry run lists every change as old -> new (never a pattern's or a list's text) and the `--plan` hash of the file, and the apply refuses a file that changed since, or that another program writes while it runs. The apply first saves the whole file next to it as `settings.json.afk-compact-<date>_<time>.bak` (mode 0600, never pruned; it holds any tokens under your `env` too; a backup that fails partway is removed and nothing is written), writes the new text to a temporary file in the same folder with the file's mode and renames it over the file (through a symbolic link, the link stays), so a failed write leaves your file as it was and no partial file; then it reads the file back. It prints each change and the backup's path.
+
+The model may run these commands for you after you say yes to the change it showed; the settings skill does. `--all` leaves the consent keys, the three protective lists and `resume_proceed`. The plugin's helper reads the new values at its next call; whether a running Claude Code picks them up for the hooks without a restart is not checked yet, so run `/reload-plugins` or restart it to be sure.
+
+By hand: edit or delete the key under `pluginConfigs["afk-compact@<marketplace>"].options` in `~/.claude/settings.json`.
+
+#### Consent keys
 
 Five keys let the plugin act without asking: `repo_roots`, `relaunch_auto`, `relaunch_allow`, `unattended_prod_reads` and `restart_on_update`. A sixth, `queue_cmd`, names a program the plugin runs, so it is treated the same way. The plugin reads these six **from your settings file only**: `~/.claude/settings.json`, under the plugin's `options` in `pluginConfigs`. Flags and plugin option values are ignored for these keys, and `/afk-compact:status` prints a note when it ignores one. The plugin itself never sets or removes them, whoever runs its commands: change them in `/config`, in the file by hand, or by typing `! printf '%s' '{"<key>":"<value>"}' | claude plugin configure afk-compact@<marketplace> --values-stdin` (Claude Code's own command; the settings skill and `settings set` print that line with the value filled in, for you to type). These keys are read only from `~/.claude/settings.json`. If `CLAUDE_CONFIG_DIR` names another folder, the plugin uses their safe values (no repository accepted, automatic relaunch off, no allow patterns, production reads asked, no queue, no restart on update) and `/afk-compact:status` prints a note, so a command that sets `CLAUDE_CONFIG_DIR` cannot pick another settings file for these keys. One exception: when that folder's `settings.json` is your `~/.claude/settings.json` itself (a symbolic link to it, or a hard link), it is the same file, so these keys are read from it as usual.
 
+#### Protective lists
+
 `prod_patterns`, `secret_extra_rules` and `protected_branches` can only make the plugin ask or withhold more. Flags and plugin option values are ignored for them too, so a command cannot replace your list with a shorter one, but they are read from the settings file of the folder `CLAUDE_CONFIG_DIR` names, when one is set.
+
+#### Your own regular expressions
 
 Your own regular expressions (`secret_extra_rules`, `prod_patterns`, `ticket_pattern`, `relaunch_allow` and `deny_class_patterns`) run with a time limit. One that runs longer than a second on one text (less inside a hook or a quick plugin call, and a quarter second for `ticket_pattern`; a large file adds 0.3 seconds per MB) is stopped, and all your patterns together get a fixed share of each call's time, so a pattern that backtracks badly cannot hold a hook past its timeout. `ticket_pattern` has a small share of its own, so the folder a copy is filed under does not depend on what ran before it. A pattern that is stopped, or not run because that share is used up, takes the safe side. A stopped secret rule counts as a hit of its kind on the whole text: for a `HARD` rule the text is withheld, and for a `WARN` rule the plugin does what it does with any `WARN` hit (your rules after it still run). A production pattern counts as production, a ticket pattern gives no ticket, and a `relaunch_allow` or `deny_class_patterns` pattern does not match. A pattern stopped for being slow is skipped for the rest of the session on texts as long as the one it was stopped on (a text whose larger size gives it more time gets another try); shorter texts still run it. A pattern with a wildcard property such as `\p{name=/…/}` is refused when the settings are read, because Perl runs it while the pattern is compiled, before any time limit applies. `/afk-compact:status` then prints a warning with the setting and the pattern's position (never the pattern). `deny_class_patterns` takes up to 32 entries of up to 200 characters each, as `prod_patterns` does. Globs (`NAME:` rules and `protected_branches`) cannot run long; a `protected_branches` entry that mixes `*` and `**` gets the same limit and counts as protected when it is stopped.
 
+#### Settings passed with --settings
+
 Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.json`, which `/config` writes) and from a `--settings` file. A `--settings` file works for every other key, but not for these nine: the plugin reads them from the settings file alone. So an opt-out such as `relaunch_auto: "off"` belongs in the user settings file; in a `--settings` file it has no effect, the default stays, and `/afk-compact:status` prints the note. Claude Code does not read `pluginConfigs` from a repository's `.claude/settings.json` or `.claude/settings.local.json`, so a value set there has no effect on any key.
 
-| Key | Default | What it does |
-|---|---|---|
-| `handoff_root` | `~/.local/state/afk-compact/handoffs` | Where the plugin keeps your handoffs (notes a fresh session can pick the work up from) and its saved copy of every compaction summary, in one subfolder per repository and ticket or topic. Default `~/.local/state/afk-compact/handoffs` (`$XDG_STATE_HOME/afk-compact/handoffs` when `XDG_STATE_HOME` is an absolute path), outside `~/.claude`, where Claude Code asks before every write in the default permission mode; while this is unset (or set to that default), handoffs an earlier version saved in `~/.claude/handoffs` are still read, never written (see [The folders moved](#the-handoff-and-evidence-folders-moved-in-012)). Change it to keep them somewhere else, such as a synced drive, but keep it outside any git repository. |
-| `log_dir` | empty = `<handoff_root>/.watch` | Where the plugin keeps its local logs (which hold no conversation text) and its per-compaction records. Empty (the default) means the `.watch` folder inside the handoff folder; set a path only if you want the logs kept apart from the handoffs. |
-| `disposable_root` | `~/.local/state/afk-compact/disposable` | Where the plugin copies temporary files the session referred to (for example test output or logs in a temp folder), in one dated folder per day, so they are still there after the system clears its temp folder. Default `~/.local/state/afk-compact/disposable` (`$XDG_STATE_HOME/afk-compact/disposable` when `XDG_STATE_HOME` is an absolute path), outside `~/.claude`, for the same reason as the handoff folder; while this is unset (or set to that default), copies an earlier version made in `~/.claude/trash-staging` are still read, never written. Nothing in it is deleted automatically; `/afk-compact:prune` lists old folders and deletes them after your yes. |
-| `disposable_keep_days` | `0` (kept until you remove them) | How many days you plan to keep the temporary evidence copies: the handoff reports print it, and `/afk-compact:prune` lists evidence older than it (14 days while it is `0`). The plugin never deletes on its own. Default `0` means "kept until you remove them". |
-| `evidence_quota_mb` | `500` | Size, in MB, at which the plugin warns that the saved evidence and summary copies of one ticket or topic folder have grown large. Default 500 MB; it only warns and never deletes, so raise it if the warning is noise, lower it to hear sooner, or set `0` for no warning. |
-| `queue_cmd` | empty = off | Optional: the path of a program of your own that collects the questions an unattended session needs to ask you, so they wait in one queue as well as in the handoff (the program must follow the contract in `assets/queue-contract.md`; see [Connect your own question queue](#connect-your-own-question-queue)). Empty (the default) turns this off and the plugin calls nothing; only your settings file counts for this option, flags and environment variables are ignored. |
-| `triggers` | `true` | Lets the plugin start compactions itself at a clean point, nudge the model toward one, and tell the session to carry on afterwards. Default `true`; set `false` if you only want every compaction written as a handoff, saved and checked, while Claude Code alone decides when to compact. |
-| `compact_target_tokens` | `400000` (min 100000) | Conversation size, in tokens, at which the plugin compacts (has Claude Code summarize the conversation and continue from the summary) as soon as the model finishes a turn, instead of waiting for Claude Code to compact in the middle of a task. Default 400,000 (minimum 100,000); lower it to compact earlier and more often, raise it to keep more history in view; on smaller context windows the plugin lowers it by itself. |
-| `compact_soft_max_tokens` | `600000` (min 150000) | Conversation size, in tokens, at which the plugin asks the model, once, in the middle of a long turn to reach a stopping point so the compaction can run cleanly. Default 600,000 (minimum 150,000); keep it above the compaction target, and lower it if long turns keep running into Claude Code's own mid-task compaction. |
-| `native_window_tokens` | `0` = the compaction window Claude Code reports | The context size within which Claude Code runs its own automatic compaction; the plugin keeps its own thresholds below Claude Code's compaction point (about 33,000 tokens under this window). Default `0` means the compaction window Claude Code reports (set by `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, your `autoCompactWindow` setting or the model's default), with its own compaction point when it reports one; a Claude Code that reports none: the window your `autoCompactWindow` setting names, else the model's context window. Enter a number only if Claude Code compacts within another window (values under 100,000 count as 100,000). |
-| `boundary_delay_ms` | `2000` | How long, in milliseconds, the plugin waits after a turn ends before it compacts or sends a turn of its own; a message you send during the wait cancels it. Default 2,000 (2 seconds; 500 ms after a nudged turn); raise it if you want more time to step in before the plugin acts. |
-| `cooldown_ms` | `30000` | Shortest time, in milliseconds, between two compactions the plugin starts, so a session that fills up fast cannot compact over and over. Default 30,000 (30 seconds); raise it if you see plugin compactions bunched together. |
-| `max_auto_continues_per_hour` | `6` (0 to 10) | How many times in any one hour the plugin may tell a session to keep working by itself after a compaction. Default 6 (allowed 0 to 10); lower it to limit unattended usage, or set `0` so that every run stops after its compaction and waits for you (by default the model is first given a turn to write a handoff, see `handoff_turn`). |
-| `handoff_turn` | `true` | `true` (the default): when the plugin will not continue the work by itself after the coming compaction, it first gives the model one extra turn to write a handoff you can resume from later; `false` skips that turn, which saves its usage but leaves only the compaction summary. |
-| `handoff_turn_max_tokens` | `64000` (20000 to 150000) | How many tokens the extra handoff-writing turn may use; the plugin keeps that much room free below Claude Code's own compaction point. Default 64,000 (allowed 20,000 to 150,000); raise it if handoffs get cut short, lower it on small context windows, where a large budget makes the plugin compact earlier. |
-| `precompact_turn` | `true` | `true` (the default): before each compaction the plugin starts at the compaction target, the model gets one extra turn to write a handoff while it still sees the whole conversation; `false`: the plugin records its own checkpoint without that turn, which uses less of your usage allowance. |
-| `idle_handoff_turn` | `true` | `true` (the default): if a long session sits idle and nobody will compact it before Claude Code's one-hour prompt cache (the stored conversation that keeps the next request cheap) expires, the plugin gives the model one turn, about 49 to 56 minutes in, to write a handoff (the idle handoff turn, which does not compact; see [Idle compaction](#idle-compaction)); `false` never runs that turn, which saves its usage (it costs several times as much as an idle compaction). |
-| `idle_compact` | `true` | `true` (the default) turns on plugin idle compaction: when a conversation at the idle-compaction minimum or more (200,000 tokens by default) has been idle for about 54 to 56 minutes and native idle compaction (Claude Code's own) has not run, the plugin compacts it itself before the one-hour prompt cache expires, so coming back costs less (terminal sessions only, for now; see [Idle compaction](#idle-compaction)); `false`: the plugin never compacts idle sessions, and the idle handoff turn runs instead where it applies. |
-| `idle_handoff_min_tokens` | `200000` (100000 to 1000000) | The smallest conversation, in tokens, that gets the idle handoff turn; it is not an idle-compaction threshold, except when keep-warm stops at its cutoff, at the last moment the waiting compaction or turn can run, or in the band near a usage limit, with an agent, a workflow or a working teammate still open (see `keep_warm_hours`). That turn writes a handoff without compacting and runs only from this value up to the idle-compaction minimum (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, 200,000 by default), since native or plugin idle compaction takes the sessions above it; when the plugin does not compact (`idle_compact: false`, for example), it runs above it too. Default 200,000 (allowed 100,000 to 1,000,000), the same as that minimum, so by default no session gets the turn while the plugin compacts; lower it to cover medium-size sessions too. A work lane that reads finished after an idle compaction (until your next message) gets the turn at any known size. |
-| `idle_handoff_near_limit` | `run` | `run` (the default): the idle handoff turn runs even when one of your usage limits (the five-hour or seven-day plan window, or a spend limit) is at 90% or more, so you get the handoff anyway; that turn then counts toward a nearly used allowance, and with extra usage on for your plan, usage past the limit may be billed. `skip-spend`: no such turn while a spend limit (a money cap, for example a Claude gateway's) is at 90% or more; it still runs near a plan limit. `skip`: no such turn while any reported limit is at 90% or more, which saves that usage (see [Idle compaction](#idle-compaction)). Both count a reading until its limit resets and skip only when every period of a limit is at 90% or more: one with room, or no reading that counts, lets the turn run (see [Near a usage limit](#near-a-usage-limit)). Plugin idle compaction and keep-warm do not go by this value: see [Near a usage limit](#near-a-usage-limit). |
-| `idle_digest` | `off` | `off` (the default in this version): when a session compacted while you were away has finished its work or is only waiting on you, the plugin sends no turn of its own and asks for no summary; the next reply starts nothing new and says in one line where the work stands, then what needs you. `submit`: with nothing still running, the plugin sends one turn right away that prints a short summary (what is done, what is left, what needs you), ready when you return; `return` sends nothing and puts that summary at the top of the reply to your next message, which saves the turn (see [The away digest](#the-away-digest)). |
-| `keep_warm_hours` | `6` (0 to 24) | How many hours the plugin keeps an idle session's one-hour prompt cache (the stored conversation that keeps the next request cheap) warm while one of that session's own background jobs (an agent, a workflow or a background shell; a teammate only while it works, not while it waits idle for a message) is still running: about every 50 minutes it sends one small hidden request that reads the cache and adds nothing to the conversation, so the turn the job's result opens does not read the whole conversation again at full price. When that time is up and an agent, a workflow or a working teammate is still running (a background shell alone may never end), the plugin compacts the session while the cache is still warm, from `idle_handoff_min_tokens` up, below the idle-compaction minimum too (the idle handoff turn runs there instead where plugin idle compaction is off: `idle_compact: false`, automatic compaction off, or after plugin idle compaction failed twice). It never runs while you are simply away with nothing running, nor with the five-minute cache, and stops near a usage limit (see [Near a usage limit](#near-a-usage-limit)) or when a turn starts. Default 6 (allowed 0 to 24); `0` turns it off, which saves those requests (each one counts toward your usage limits as a cached read of the conversation; see [Keeping the cache warm while jobs run](#keeping-the-cache-warm-while-jobs-run)). |
-| `resume_proceed` | `true` | `true` (the default): when you run `/afk-compact:resume` yourself, it reports what it found and then carries on with the next step; `false`: it stops after the report and waits for your go-ahead. Resumes after the plugin's own compactions are not affected, and when your settings file, a flag and an environment variable disagree, `false` wins. |
-| `handoff_reuse_window_min` | `15` (0 to 60) | When the model starts a handoff on its own less than this many minutes after the last one, and nothing has changed since (same commit, same files, no new decisions), the plugin reuses that handoff instead of writing a new one. Default 15 (allowed 0 to 60); `0` turns this time-based reuse off (a handoff is still reused when nothing at all happened since the last one), a higher value saves usage when handoffs come often. |
-| `ticket_pattern` | `[A-Z][A-Z0-9]+-[0-9]+` | A regular expression that finds a ticket id (such as ABC-123) in the git branch name, so that handoffs for one ticket share one folder; if the pattern has a group in parentheses, that group is the id. Default `[A-Z][A-Z0-9]+-[0-9]+` (ids like ABC-123); change it to match your tracker's ids (an invalid pattern falls back to the default, and folders made earlier are still found). |
-| `secret_extra_rules` | empty | Your own rules for spotting secrets in handoffs and copied files, added to the built-in ones and separated by `;`: `HARD:pattern` blocks the handoff and withholds the file, `WARN:pattern` warns and masks the match (for `HARD` and `WARN` the pattern is a regular expression), and `NAME:wildcard` withholds files whose names match a simple wildcard such as `*.pem` (not a regular expression). Empty (the default) means the built-in rules only; add rules for your own token formats, they can only withhold more (only your settings file counts for this option, flags and environment variables are ignored). |
-| `evidence_total_max_mb` | `50` (10 to 500) | The most data, in MB, that one evidence copy run (after a compaction, or for one handoff) copies in full; files beyond it are listed as withheld and left where they are, and nothing is deleted. Default 50 (allowed 10 to 500); raise it if large logs you need later are being withheld, lower it to save disk space. |
-| `watch_quota_mb` | `50` (0 to 10000) | When the plugin's local logs grow past this size, in MB, it shows a storage warning; nothing is deleted. Default 50 (allowed 0 to 10,000); `0` turns the warning off, raise it if you keep large logs on purpose. |
-| `measured_block` | `false` | When on, the plugin adds freshly measured facts (git branch, commit, changed files, background jobs) to the instructions Claude Code's summarizer gets; this applies only when the plugin's main module shapes the compaction. Default `false`, because the first turn after every compaction gets these facts, measured again, anyway; turn it on if summaries keep getting them wrong. |
-| `auto_evidence` | `true` | After each compaction, copy temporary files the session mentioned (such as logs or test output in a temp folder) into the temporary evidence folder, with size limits and a secret check, so they are still there when the work resumes. Default `true`; set `false` if you do not want these copies on disk. |
-| `warn_ui` | `true` | Show the plugin's short pop-up notices in Claude Code when something needs your attention, for example when it pauses automatic work or saves a handoff, and one dim line in the conversation after each compaction saying whether it went well (the model does not see it). Default `true`; set `false` for fewer interruptions and check `/afk-compact:status` instead. |
-| `watcher` | `true` | `true` (the default) keeps local logs of how each compaction went, without any conversation text, and nothing is ever sent (you can share them yourself with `/afk-compact:report`); `false` stops new log entries and keeps the ones already written. |
-| `stall_min` | `60` | How long, in minutes, a background job must have been running before the local logs may flag it as stalled in `/afk-compact:status`; it is flagged once it has run this long and its output file has not changed for the last 15 minutes; a job whose output cannot be checked is never flagged. Default 60; lower it to hear about stuck jobs sooner, raise it if your jobs normally run for a long time with quiet stretches. |
-| `cache_ttl_s` | `300` | How long, in seconds, the local logs assume Claude Code's prompt cache (the stored conversation that makes the next request cheaper) stays fresh; a large compaction after a longer pause is flagged as likely costly. Default 300 (5 minutes); set `3600` if your sessions use the one-hour cache, so pauses that cost nothing are not flagged. |
-| `deny_class_patterns` | empty = the built-in rules | Your own rules for sorting blocked tool calls (permission denials) into categories in the local logs, written as `category=pattern` pairs (pattern: a regular expression) separated by `;`, where the category is `sleep-poll`, `routing`, `secret`, `write-guard`, `scope` or `other`. Empty (the default) uses the built-in rules; change it only if your own hooks block tools with messages the built-in rules put in the wrong category. |
-| `repo_roots` | empty = no repository | Main checkout folders, separated by `;`, into which each published handoff may also be exported so a team can review and commit it; a repository also has to opt in with a `.claude/handoffs.json` file (see [Handoffs in git](#handoffs-in-git-repo-mode)). Empty (the default) keeps handoffs only in your private handoff folder; only your settings file counts for this option, flags and environment variables are ignored. |
-| `relaunch_auto` | `on` | `on` (the default): when a resumed session finds that a background job (such as a long test run) was lost when Claude Code exited, it starts the job again by itself if the job is read-only or on your allowlist and every safety check passes, otherwise it asks (see [Lost background jobs](#lost-background-jobs)); `shadow` only logs what it would have done and asks; `off` always asks (only your settings file counts for this option, flags and environment variables are ignored). |
-| `relaunch_allow` | empty | Patterns (regular expressions, each starting with `^`), separated by `;`, for commands that are safe to run twice, such as a local test or build, which a resumed session may then restart by itself after a lost-job check. Empty (the default) means only read-only jobs restart by themselves; a command chained with others, one that reaches outside your machine, or a production command always asks (only your settings file counts for this option, flags and environment variables are ignored). |
-| `relaunch_quiet_s` | `120` (30 to 3600) | When the plugin cannot tell when a lost background job ended, the job's output must have been silent for this many seconds before the job counts as stopped and may be restarted. Default 120 (allowed 30 to 3,600); raise it for jobs that normally go quiet for longer. |
-| `restart_on_update` | `off` | `on`: right after a compaction, with nothing running and nobody typing, the plugin restarts the session on a newly installed Claude Code and keeps the same conversation (not active in this version yet, see [Restart on update](#restart-on-update-beta-opt-in) and `/afk-compact:status`); `shadow` only logs what it would do; `off` (the default) never restarts (any other value counts as `off`; only your settings file counts for this option, flags and environment variables are ignored). |
-| `unattended_prod_reads` | `false` | `false` (the default): a resumed session asks before any command that touches production and offers it for you to run, unless an approval you gave names that read-only command; `true`: a read-only production check the session writes itself may run without asking. Changes to production always ask, and so do production commands copied from a handoff unless an approval you gave names that read command (only your settings file counts for this option, flags and environment variables are ignored). |
-| `prod_patterns` | empty = the built-in rule only | Extra patterns (regular expressions), separated by `;`, that mark a command as touching production, on top of the built-in rule, which looks for `prod`, `production` or `prd` as a separate word or part (as in `--context=prod-eu`). Empty (the default) means the built-in rule only; add your own environment or host names so the plugin asks before those commands too (these patterns can only make it ask more). |
-| `protected_branches` | empty = the built-in list only | Branch names or wildcard patterns, separated by `;`, that count as protected on top of the built-in list (the remote's default branch, main, master, develop, staging, release and hotfix branches and similar): a push to one, or a merge into one, always asks you again, whatever you approved before. Empty (the default) means the built-in list only; add your own deployment branches, for example `qa-env;uat/*`, and note that entries can only add, never unprotect a built-in branch (only your settings file counts for this option, flags and environment variables are ignored). |
-| `driver_skills` | empty = the built-in list only | Names of extra skills, separated by `;`, that drive a session as a repeating work loop, like the built-in `gsd-autonomous`, `gsd-execute-phase`, `gsd-manager`, `superpowers:executing-plans` and `superpowers:subagent-driven-development`; when such a loop is clearly still running at a compaction, the plugin starts it again afterwards so the loop goes on. Empty (the default) means the built-in list only; add your own loop skills (a paused, finished or unclear loop is shown to the model but never restarted, and a skill the session never used is never run). |
+### What the settings cost
 
-<details>
-<summary>Exact rules for each setting</summary>
+Most settings cost nothing, or only disk space. These ask Claude Code for model requests, which count toward your usage limits like any turn; each has an off-switch:
+
+| Setting | Default | What it adds | Off |
+|---|---|---|---|
+| `triggers`, `compact_target_tokens` | `true`, `400000` | The plugin's own compactions at a clean turn end, on windows of about 329K tokens or more | `triggers: false` |
+| `precompact_turn` | `true` | One handoff turn before each planned compaction | `false` |
+| `handoff_turn` | `true` | One handoff turn before the last compaction of a run that will not continue | `false` |
+| `max_auto_continues_per_hour` | `6` | Up to 6 automatic continues an hour | `0` |
+| `keep_warm_hours` | `6` | A hidden request about every 50 minutes while a background job runs | `0` |
+| `idle_compact` | `true` | Plugin idle compaction: one summary request on a warm cache | `false` |
+| `idle_handoff_turn`, `idle_handoff_near_limit` | `true`, `run` | The idle handoff turn, several times an idle compaction, also near a usage limit | `false`; `skip` |
+| `idle_digest` | `off` | With `submit`, one turn per finished or blocked idle lane | `off` |
+
+The handoff turns read the context from the cache on each tool call. The dollar figures in [Idle compaction](#idle-compaction) are estimates, not measurements.
+
+### All settings
+
+| Key | Default | What it does | Cost |
+|---|---|---|---|
+| `handoff_root` | `~/.local/state/afk-compact/handoffs` | Where the plugin keeps your handoffs (notes a fresh session can pick the work up from) and its saved copy of every compaction summary, in one subfolder per repository and ticket or topic. Default `~/.local/state/afk-compact/handoffs` (`$XDG_STATE_HOME/afk-compact/handoffs` when `XDG_STATE_HOME` is an absolute path), outside `~/.claude`, where Claude Code asks before every write in the default permission mode; while this is unset (or set to that default), handoffs an earlier version saved in `~/.claude/handoffs` are still read, never written (see [The folders moved](#the-handoff-and-evidence-folders-moved-in-012)). Change it to keep them somewhere else, such as a synced drive, but keep it outside any git repository. | Disk only. |
+| `log_dir` | empty = `<handoff_root>/.watch` | Where the plugin keeps its local logs (which hold no conversation text) and its per-compaction records. Empty (the default) means the `.watch` folder inside the handoff folder; set a path only if you want the logs kept apart from the handoffs. | Disk only. |
+| `disposable_root` | `~/.local/state/afk-compact/disposable` | Where the plugin copies temporary files the session referred to (for example test output or logs in a temp folder), in one dated folder per day, so they are still there after the system clears its temp folder. Default `~/.local/state/afk-compact/disposable` (`$XDG_STATE_HOME/afk-compact/disposable` when `XDG_STATE_HOME` is an absolute path), outside `~/.claude`, for the same reason as the handoff folder; while this is unset (or set to that default), copies an earlier version made in `~/.claude/trash-staging` are still read, never written. Nothing in it is deleted automatically; `/afk-compact:prune` lists old folders and deletes them after your yes. | Disk only; it grows until you prune it. |
+| `disposable_keep_days` | `0` (kept until you remove them) | How many days you plan to keep the temporary evidence copies: the handoff reports print it, and `/afk-compact:prune` lists evidence older than it (14 days while it is `0`). The plugin never deletes on its own. Default `0` means "kept until you remove them". | None. |
+| `evidence_quota_mb` | `500` | Size, in MB, at which the plugin warns that the saved evidence and summary copies of one ticket or topic folder have grown large. Default 500 MB; it only warns and never deletes, so raise it if the warning is noise, lower it to hear sooner, or set `0` for no warning. | None (a warning). |
+| `queue_cmd` | empty = off | Optional: the path of a program of your own that collects the questions an unattended session needs to ask you, so they wait in one queue as well as in the handoff (the program must follow the contract in `assets/queue-contract.md`; see [Connect your own question queue](#connect-your-own-question-queue)). Empty (the default) turns this off and the plugin calls nothing; only your settings file counts for this option, flags and environment variables are ignored. | Runs your program; no model usage. |
+| `triggers` | `true` | Lets the plugin start compactions itself at a clean point, nudge the model toward one, and tell the session to carry on afterwards. Default `true`; set `false` if you only want every compaction written as a handoff, saved and checked, while Claude Code alone decides when to compact. | `true`: the plugin's own compactions, each one summary request, with their handoff turns and continues; on 1M windows they come earlier, and can come more often, than Claude Code's own. `false`: none. |
+| `compact_target_tokens` | `400000` (min 100000) | Conversation size, in tokens, at which the plugin compacts (has Claude Code summarize the conversation and continue from the summary) as soon as the model finishes a turn, instead of waiting for Claude Code to compact in the middle of a task. Default 400,000 (minimum 100,000); lower it to compact earlier and more often, raise it to keep more history in view; on smaller context windows the plugin lowers it by itself. | Lower: more compactions, each one summary request. Higher: fewer. |
+| `compact_soft_max_tokens` | `600000` (min 150000) | Conversation size, in tokens, at which the plugin asks the model, once, in the middle of a long turn to reach a stopping point so the compaction can run cleanly. Default 600,000 (minimum 150,000); keep it above the compaction target, and lower it if long turns keep running into Claude Code's own mid-task compaction. | None beyond one note in a tool result. |
+| `native_window_tokens` | `0` = the compaction window Claude Code reports | The context size within which Claude Code runs its own automatic compaction; the plugin keeps its own thresholds below Claude Code's compaction point (about 33,000 tokens under this window). Default `0` means the compaction window Claude Code reports (set by `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, your `autoCompactWindow` setting or the model's default), with its own compaction point when it reports one; a Claude Code that reports none: the window your `autoCompactWindow` setting names, else the model's context window. Enter a number only if Claude Code compacts within another window (values under 100,000 count as 100,000). | None. |
+| `boundary_delay_ms` | `2000` | How long, in milliseconds, the plugin waits after a turn ends before it compacts or sends a turn of its own; a message you send during the wait cancels it. Default 2,000 (2 seconds; 500 ms after a nudged turn); raise it if you want more time to step in before the plugin acts. | None (a wait). |
+| `cooldown_ms` | `30000` | Shortest time, in milliseconds, between two compactions the plugin starts, so a session that fills up fast cannot compact over and over. Default 30,000 (30 seconds); raise it if you see plugin compactions bunched together. | None; it limits back-to-back compactions. |
+| `max_auto_continues_per_hour` | `6` (0 to 10) | How many times in any one hour the plugin may tell a session to keep working by itself after a compaction. Default 6 (allowed 0 to 10); lower it to limit unattended usage, or set `0` so that every run stops after its compaction and waits for you (by default the model is first given a turn to write a handoff, see `handoff_turn`). | Each continue is unattended work that counts toward your usage. `0`: none. |
+| `handoff_turn` | `true` | `true` (the default): when the plugin will not continue the work by itself after the coming compaction, it first gives the model one extra turn to write a handoff you can resume from later; `false` skips that turn, which saves its usage but leaves only the compaction summary. | One extra model turn before a last compaction; each of its tool calls reads the context from the cache. `false` saves it. |
+| `handoff_turn_max_tokens` | `64000` (20000 to 150000) | How many tokens the extra handoff-writing turn may use; the plugin keeps that much room free below Claude Code's own compaction point. Default 64,000 (allowed 20,000 to 150,000); raise it if handoffs get cut short, lower it on small context windows, where a large budget makes the plugin compact earlier. | The most that turn should use (advice, not enforced). A larger value lowers the soft maximum on small windows. |
+| `precompact_turn` | `true` | `true` (the default): before each compaction the plugin starts at the compaction target, the model gets one extra turn to write a handoff while it still sees the whole conversation; `false`: the plugin records its own checkpoint without that turn, which uses less of your usage allowance. | One extra model turn before each planned compaction; each of its tool calls reads the context from the cache. `false` saves it. |
+| `idle_handoff_turn` | `true` | `true` (the default): if a long session sits idle and nobody will compact it before Claude Code's one-hour prompt cache (the stored conversation that keeps the next request cheap) expires, the plugin gives the model one turn, about 49 to 56 minutes in, to write a handoff (the idle handoff turn, which does not compact; see [Idle compaction](#idle-compaction)); `false` never runs that turn, which saves its usage (it costs several times as much as an idle compaction). | Several times an idle compaction (each tool call reads the context again). `false` saves it. |
+| `idle_compact` | `true` | `true` (the default) turns on plugin idle compaction: when a conversation at the idle-compaction minimum or more (200,000 tokens by default) has been idle for about 54 to 56 minutes and native idle compaction (Claude Code's own) has not run, the plugin compacts it itself before the one-hour prompt cache expires, so coming back costs less (terminal sessions only, for now; see [Idle compaction](#idle-compaction)); `false`: the plugin never compacts idle sessions, and the idle handoff turn runs instead where it applies. | One summary request on a warm cache per long idle gap; coming back then costs less than an expired cache. |
+| `idle_handoff_min_tokens` | `200000` (100000 to 1000000) | The smallest conversation, in tokens, that gets the idle handoff turn; it is not an idle-compaction threshold, except when keep-warm stops at its cutoff, at the last moment the waiting compaction or turn can run, or in the band near a usage limit, with an agent, a workflow or a working teammate still open (see `keep_warm_hours`). That turn writes a handoff without compacting and runs only from this value up to the idle-compaction minimum (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, 200,000 by default), since native or plugin idle compaction takes the sessions above it; when the plugin does not compact (`idle_compact: false`, for example), it runs above it too. Default 200,000 (allowed 100,000 to 1,000,000), the same as that minimum, so by default no session gets the turn while the plugin compacts; lower it to cover medium-size sessions too. A work lane that reads finished after an idle compaction (until your next message) gets the turn at any known size. | Lower: more sessions get the idle handoff turn. |
+| `idle_handoff_near_limit` | `run` | `run` (the default): the idle handoff turn runs even when one of your usage limits (the five-hour or seven-day plan window, or a spend limit) is at 90% or more, so you get the handoff anyway; that turn then counts toward a nearly used allowance, and with extra usage on for your plan, usage past the limit may be billed. `skip-spend`: no such turn while a spend limit (a money cap, for example a Claude gateway's) is at 90% or more; it still runs near a plan limit. `skip`: no such turn while any reported limit is at 90% or more, which saves that usage (see [Idle compaction](#idle-compaction)). Both count a reading until its limit resets and skip only when every period of a limit is at 90% or more: one with room, or no reading that counts, lets the turn run (see [Near a usage limit](#near-a-usage-limit)). Plugin idle compaction and keep-warm do not go by this value: see [Near a usage limit](#near-a-usage-limit). | `run` can use the last of an allowance, and usage past a plan limit may be billed as extra usage. `skip` and `skip-spend` save it. |
+| `idle_digest` | `off` | `off` (the default in this version): when a session compacted while you were away has finished its work or is only waiting on you, the plugin sends no turn of its own and asks for no summary; the next reply starts nothing new and says in one line where the work stands, then what needs you. `submit`: with nothing still running, the plugin sends one turn right away that prints a short summary (what is done, what is left, what needs you), ready when you return; `return` sends nothing and puts that summary at the top of the reply to your next message, which saves the turn (see [The away digest](#the-away-digest)). | `submit`: one turn per finished or blocked idle lane. `off` and `return`: none. |
+| `keep_warm_hours` | `6` (0 to 24) | How many hours the plugin keeps an idle session's one-hour prompt cache (the stored conversation that keeps the next request cheap) warm while one of that session's own background jobs (an agent, a workflow or a background shell; a teammate only while it works, not while it waits idle for a message) is still running: about every 50 minutes it sends one small hidden request that reads the cache and adds nothing to the conversation, so the turn the job's result opens does not read the whole conversation again at full price. When that time is up and an agent, a workflow or a working teammate is still running (a background shell alone may never end), the plugin compacts the session while the cache is still warm, from `idle_handoff_min_tokens` up, below the idle-compaction minimum too (the idle handoff turn runs there instead where plugin idle compaction is off: `idle_compact: false`, automatic compaction off, or after plugin idle compaction failed twice). It never runs while you are simply away with nothing running, nor with the five-minute cache, and stops near a usage limit (see [Near a usage limit](#near-a-usage-limit)) or when a turn starts. Default 6 (allowed 0 to 24); `0` turns it off, which saves those requests (each one counts toward your usage limits as a cached read of the conversation; see [Keeping the cache warm while jobs run](#keeping-the-cache-warm-while-jobs-run)). | One cached read of the conversation about every 50 minutes while a job runs, for up to this many hours. `0` saves it. |
+| `resume_proceed` | `true` | `true` (the default): when you run `/afk-compact:resume` yourself, it reports what it found and then carries on with the next step; `false`: it stops after the report and waits for your go-ahead. Resumes after the plugin's own compactions are not affected, and when your settings file, a flag and an environment variable disagree, `false` wins. | None by itself; the resumed work uses usage as any work does. |
+| `handoff_reuse_window_min` | `15` (0 to 60) | When the model starts a handoff on its own less than this many minutes after the last one, and nothing has changed since (same commit, same files, no new decisions), the plugin reuses that handoff instead of writing a new one. Default 15 (allowed 0 to 60); `0` turns this time-based reuse off (a handoff is still reused when nothing at all happened since the last one), a higher value saves usage when handoffs come often. | Higher saves usage when handoffs come often. |
+| `ticket_pattern` | `[A-Z][A-Z0-9]+-[0-9]+` | A regular expression that finds a ticket id (such as ABC-123) in the git branch name, so that handoffs for one ticket share one folder; if the pattern has a group in parentheses, that group is the id. Default `[A-Z][A-Z0-9]+-[0-9]+` (ids like ABC-123); change it to match your tracker's ids (an invalid pattern falls back to the default, and folders made earlier are still found). | None. |
+| `secret_extra_rules` | empty | Your own rules for spotting secrets in handoffs and copied files, added to the built-in ones and separated by `;`: `HARD:pattern` blocks the handoff and withholds the file, `WARN:pattern` warns and masks the match (for `HARD` and `WARN` the pattern is a regular expression), and `NAME:wildcard` withholds files whose names match a simple wildcard such as `*.pem` (not a regular expression). Empty (the default) means the built-in rules only; add rules for your own token formats, they can only withhold more (only your settings file counts for this option, flags and environment variables are ignored). | None (time-limited checks). |
+| `evidence_total_max_mb` | `50` (10 to 500) | The most data, in MB, that one evidence copy run (after a compaction, or for one handoff) copies in full; files beyond it are listed as withheld and left where they are, and nothing is deleted. Default 50 (allowed 10 to 500); raise it if large logs you need later are being withheld, lower it to save disk space. | Disk: at most this much per copy run. |
+| `watch_quota_mb` | `50` (0 to 10000) | When the plugin's local logs grow past this size, in MB, it shows a storage warning; nothing is deleted. Default 50 (allowed 0 to 10,000); `0` turns the warning off, raise it if you keep large logs on purpose. | None (a warning). |
+| `measured_block` | `false` | When on, the plugin adds freshly measured facts (git branch, commit, changed files, background jobs) to the instructions Claude Code's summarizer gets; this applies only when the plugin's main module shapes the compaction. Default `false`, because the first turn after every compaction gets these facts, measured again, anyway; turn it on if summaries keep getting them wrong. | A few more lines for the summarizer to read. |
+| `auto_evidence` | `true` | After each compaction, copy temporary files the session mentioned (such as logs or test output in a temp folder) into the temporary evidence folder, with size limits and a secret check, so they are still there when the work resumes. Default `true`; set `false` if you do not want these copies on disk. | Disk. |
+| `warn_ui` | `true` | Show the plugin's short pop-up notices in Claude Code when something needs your attention, for example when it pauses automatic work or saves a handoff, and one dim line in the conversation after each compaction saying whether it went well (the model does not see it). Default `true`; set `false` for fewer interruptions and check `/afk-compact:status` instead. | None. |
+| `watcher` | `true` | `true` (the default) keeps local logs of how each compaction went, without any conversation text, and nothing is ever sent (you can share them yourself with `/afk-compact:report`); `false` stops new log entries and keeps the ones already written. | Disk (logs, never pruned on their own). |
+| `stall_min` | `60` | How long, in minutes, a background job must have been running before the local logs may flag it as stalled in `/afk-compact:status`; it is flagged once it has run this long and its output file has not changed for the last 15 minutes; a job whose output cannot be checked is never flagged. Default 60; lower it to hear about stuck jobs sooner, raise it if your jobs normally run for a long time with quiet stretches. | None. |
+| `cache_ttl_s` | `300` | How long, in seconds, the local logs assume Claude Code's prompt cache (the stored conversation that makes the next request cheaper) stays fresh; a large compaction after a longer pause is flagged as likely costly. Default 300 (5 minutes); set `3600` if your sessions use the one-hour cache, so pauses that cost nothing are not flagged. | None. |
+| `deny_class_patterns` | empty = the built-in rules | Your own rules for sorting blocked tool calls (permission denials) into categories in the local logs, written as `category=pattern` pairs (pattern: a regular expression) separated by `;`, where the category is `sleep-poll`, `routing`, `secret`, `write-guard`, `scope` or `other`. Empty (the default) uses the built-in rules; change it only if your own hooks block tools with messages the built-in rules put in the wrong category. | None. |
+| `repo_roots` | empty = no repository | Main checkout folders, separated by `;`, into which each published handoff may also be exported so a team can review and commit it; a repository also has to opt in with a `.claude/handoffs.json` file (see [Handoffs in git](#handoffs-in-git-repo-mode)). Empty (the default) keeps handoffs only in your private handoff folder; only your settings file counts for this option, flags and environment variables are ignored. | None (untracked files in the repository). |
+| `relaunch_auto` | `on` | `on` (the default): when a resumed session finds that a background job (such as a long test run) was lost when Claude Code exited, it starts the job again by itself if the job is read-only or on your allowlist and every safety check passes, otherwise it asks (see [Lost background jobs](#lost-background-jobs)); `shadow` only logs what it would have done and asks; `off` always asks (only your settings file counts for this option, flags and environment variables are ignored). | A job it starts again runs again on your machine. |
+| `relaunch_allow` | empty | Patterns (regular expressions, each starting with `^`), separated by `;`, for commands that are safe to run twice, such as a local test or build, which a resumed session may then restart by itself after a lost-job check. Empty (the default) means only read-only jobs restart by themselves; a command chained with others, one that reaches outside your machine, or a production command always asks (only your settings file counts for this option, flags and environment variables are ignored). | A matching job may run again on your machine. |
+| `relaunch_quiet_s` | `120` (30 to 3600) | When the plugin cannot tell when a lost background job ended, the job's output must have been silent for this many seconds before the job counts as stopped and may be restarted. Default 120 (allowed 30 to 3,600); raise it for jobs that normally go quiet for longer. | None. |
+| `restart_on_update` | `off` | `on`: right after a compaction, with nothing running and nobody typing, the plugin restarts the session on a newly installed Claude Code and keeps the same conversation (not active in this version yet, see [Restart on update](#restart-on-update-beta-opt-in) and `/afk-compact:status`); `shadow` only logs what it would do; `off` (the default) never restarts (any other value counts as `off`; only your settings file counts for this option, flags and environment variables are ignored). | None in this version (not active). |
+| `unattended_prod_reads` | `false` | `false` (the default): a resumed session asks before any command that touches production and offers it for you to run, unless an approval you gave names that read-only command; `true`: a read-only production check the session writes itself may run without asking. Changes to production always ask, and so do production commands copied from a handoff unless an approval you gave names that read command (only your settings file counts for this option, flags and environment variables are ignored). | None; `true` means fewer prompts. |
+| `prod_patterns` | empty = the built-in rule only | Extra patterns (regular expressions), separated by `;`, that mark a command as touching production, on top of the built-in rule, which looks for `prod`, `production` or `prd` as a separate word or part (as in `--context=prod-eu`). Empty (the default) means the built-in rule only; add your own environment or host names so the plugin asks before those commands too (these patterns can only make it ask more). | None; more prompts. |
+| `protected_branches` | empty = the built-in list only | Branch names or wildcard patterns, separated by `;`, that count as protected on top of the built-in list (the remote's default branch, main, master, develop, staging, release and hotfix branches and similar): a push to one, or a merge into one, always asks you again, whatever you approved before. Empty (the default) means the built-in list only; add your own deployment branches, for example `qa-env;uat/*`, and note that entries can only add, never unprotect a built-in branch (only your settings file counts for this option, flags and environment variables are ignored). | None; more prompts. |
+| `driver_skills` | empty = the built-in list only | Names of extra skills, separated by `;`, that drive a session as a repeating work loop, like the built-in `gsd-autonomous`, `gsd-execute-phase`, `gsd-manager`, `superpowers:executing-plans` and `superpowers:subagent-driven-development`; when such a loop is clearly still running at a compaction, the plugin starts it again afterwards so the loop goes on. Empty (the default) means the built-in list only; add your own loop skills (a paused, finished or unclear loop is shown to the model but never restarted, and a skill the session never used is never run). | A loop started again goes on working, which counts toward your usage like any turn. |
+
+### Exact rules for each setting
 
 - `handoff_root`: Folder for handoffs and summary copies. Buckets are `<root>/<repo>/<ticket-or-topic>/`. Unset in every source (flag, environment, settings file), or set to the default path itself (Claude Code fills unset options in with their defaults), the default root is the only one written, and the old default `~/.claude/handoffs`, if it exists, is read too: its buckets, pins, `/clear` lineage, session records, successor claims and approval records count as the private store's. That default root is `$XDG_STATE_HOME/afk-compact/handoffs` when `XDG_STATE_HOME` is set to an absolute path (a relative one is ignored, as the XDG Base Directory rules say), else `~/.local/state/afk-compact/handoffs`. Any other value you set, `~/.claude/handoffs` included, is the only root read.
 - `log_dir`: Watcher logs and per-compaction records.
@@ -318,10 +599,7 @@ Claude Code reads `pluginConfigs` from your user settings (`~/.claude/settings.j
 - `protected_branches`: Extra branch names or globs, separated by `;`, that count as protected beside the shipped list (the remote's default branch, `main`, `master`, `trunk`, `develop`, `development`, `stable`, `staging`, `gh-pages`, `prod`, `production` and their `-`, `_` or `/` children, `release`, `releases` and theirs, `hotfix/…`). A push to one, or a local merge into one, is an explicit gate: it always asks again, whatever you approved before (see Approvals below). `*` matches any characters within one part of the name, `**` any characters across `/`, `?` one character; a leading `refs/heads/` is ignored, and case does not matter. Example: `qa-env;uat/*`. They can only add: there is no exclusion, so no entry can unprotect `main` or any other shipped branch. At most 32 entries, each at most 200 characters. An entry that starts with `!`, `-` or `/`, holds a space, `..`, `:` or a regular-expression character (`^ $ ( ) [ ] { } |` and `\`), or is otherwise no possible branch name is ignored: the rest of your list and the shipped list still apply, the entry is logged by its position, and `/afk-compact:status` prints a warning for it. **Settings file only** (see above).
 - `driver_skills`: Skill names, separated by `;`, that drive a session as a loop, beside the shipped list (`gsd-autonomous`, `gsd-execute-phase`, `gsd-manager`, `superpowers:executing-plans`, `superpowers:subagent-driven-development`). When a session invoked one and the loop is clearly live at the compaction (one of its own steps is mid-turn, or an agent, workflow or teammate it launched still runs), its measured facts carry an `Active driver:` line with the exact command, and the resume after a compaction or a handoff runs that command again (with the session's GSD workstream for a GSD loop). A skill whose own text runs gsd-tools (a GSD loop) counts without being listed; a listed skill typed after a GSD command in one message (`/gsd-resume-work --ws <name> and /<skill> <args>`) counts with its arguments. The driver is the outermost loop the session invoked: a loop that another one runs as its own step (`gsd-autonomous` running `gsd-execute-phase`) never replaces it; another kind of loop invoked after your prompt takes over. A loop that paused itself (`/gsd-pause-work`, or a new HANDOFF.json or .continue-here file of its own) shows as a `Paused driver:` line; one that ended (a finishing skill, GSD work on another workstream) has no line. In every other case a `Was driving:` hint names the command to re-enter only if the next step belongs to it, until the loop is invoked again: its turn ended with none of its agents, workflows or teammates running (a background command, a monitor, a scheduled task or a wake-up may be a server, a watch or a timer that outlives the loop, for example while it waits for you), a single-phase `gsd-execute-phase` marked its phase complete or went on to another GSD command (its own review gate too), it was invoked with arguments the command cannot repeat whole (prose that may limit the run), you interrupted it, you sent a prompt of any kind (also one typed while its turn runs, a status look, `/goal`, `/loop` or one of this plugin's skills), another session sent a message, the session was resumed in a new process, a checkpoint says `Step 1: none: task done`, or the transcript leaves it unclear. A loop that is live but quiet may show as that hint. The plugin's handoff turn never counts as the loop stopping, and neither does the checkpoint turn its nudge asks for when the plugin will resume the work by itself (not when auto-continue is paused, or that turn asks you something). Only an `Active driver:` line is ever run. A skill the session never invoked is never run.
 
-</details>
-
-<details>
-<summary>How the thresholds are clamped</summary>
+### How the thresholds are clamped
 
 The plugin keeps its own thresholds below the point where native auto-compaction fires, which it estimates as your window minus 33,000 tokens:
 
@@ -332,13 +610,22 @@ The plugin keeps its own thresholds below the point where native auto-compaction
 
 Every clamped value is logged, and `/afk-compact:status` marks it with `(clamped from <configured>)`. It never shows a negative threshold: a window too small for plugin compactions is shown as off.
 
-</details>
-
 ## Idle compaction
 
 With `"idleCompaction": false` in your Claude Code settings, afk-compact now compacts long idle sessions itself; before this version that setting meant no idle compaction at all. Set the plugin option `idle_compact` to `false` to keep none.
 
-Three things can happen to a long session that sits idle, and this README keeps their names apart:
+```mermaid
+flowchart LR
+  A["Last request<br/>context at or above the minimum"] --> B{"Native idle compaction<br/>on in your settings?"}
+  B -- yes --> C["about 54 min:<br/>native idle compaction"]
+  B -- no --> D["about 54 min:<br/>plugin idle compaction"]
+  C -- did not run --> E["55.5-minute check:<br/>plugin idle compaction"]
+  A -.->|"between idle_handoff_min_tokens<br/>and the minimum"| F["idle handoff turn<br/>(one turn, no compaction)"]
+```
+
+Illustrative: the default minimum is 200,000 tokens, and the idle handoff turn runs only where neither compaction does.
+
+Three things can happen to a long session that sits idle, and this page keeps their names apart:
 
 - **Native idle compaction** is Claude Code's own: about 54 minutes after the last request of a main conversation at or above the idle-compaction minimum. That minimum is `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`: 200,000 tokens by default, never below 100,000.
 - **Plugin idle compaction** is afk-compact's (`idle_compact`): it compacts the session itself: about 54 minutes after the last request when native idle compaction is off in your settings, or at a check at 55.5 minutes when native idle compaction did not run. It uses the same minimum, read from the same variable, except when keep-warm stops at its cutoff, at the last moment the waiting compaction or turn can run, or in the band near a usage limit, with an agent, a workflow or a working teammate still open: from `idle_handoff_min_tokens` up then (see [Keeping the cache warm while jobs run](#keeping-the-cache-warm-while-jobs-run)).
@@ -374,7 +661,7 @@ It does not run when:
 
 If it fails twice in a row in a session (a hook refused it, or Claude Code did not compact), it stays off until the plugin loads again, and the idle handoff turn below takes its place. `idle_compact: false` turns it off.
 
-**Cost.** One summary call that reads the warm cache (about $0.15–0.35 on Opus at 240,000 tokens), plus a smaller first request when you come back: together about half of what coming back to the same session uncompacted costs once its cache has expired (about $1.95 at 240,000 tokens). The idle handoff turn below costs several times the summary call, so the plugin does not run it before plugin idle compaction.
+**Cost.** One summary call that reads the warm cache (an estimate: about $0.15–0.35 on Opus at 240,000 tokens at list prices, not measured), plus a smaller first request when you come back. Coming back to the same session uncompacted once its cache has expired reads the whole context again (an estimate: about $1.95 at 240,000 tokens). The idle handoff turn below costs several times the summary call, so the plugin does not run it before plugin idle compaction.
 
 What the plugin does with an idle compaction, native or plugin:
 
@@ -399,7 +686,7 @@ It is skipped when:
 - a keep-warm request found the conversation's cache cold, until the session's next request (`fork-miss`);
 - the turn would start after minute 55.5 (for example after the computer slept).
 
-**Cost.** Each tool call of that turn reads the context again from the cache. At 15 calls on a 250,000-token context that is about 3.75 million cached input tokens, roughly 15 times the input of the idle compaction alone. On a subscription it counts toward your usage limits. This is why it runs only as the fallback when native idle compaction is off or did not run; set `idle_handoff_turn` to `false` to save that usage. By default (`idle_handoff_near_limit: run`) it also runs when a limit is at 90% or more, so it counts toward an allowance that is nearly used up and can take you past it; if your plan has extra usage turned on, usage past a plan limit may be billed as extra usage. Set `idle_handoff_near_limit` to `skip` to keep it out near any limit, or to `skip-spend` to keep it out near a spend limit (a money cap) while it still runs near a plan limit.
+**Cost.** Each tool call of that turn reads the context again from the cache. At 15 calls on a 250,000-token context that is about 3.75 million cached input tokens (an estimate), roughly 15 times the input of the idle compaction alone. On a subscription it counts toward your usage limits. This is why it runs only as the fallback when native idle compaction is off or did not run; set `idle_handoff_turn` to `false` to save that usage. By default (`idle_handoff_near_limit: run`) it also runs when a limit is at 90% or more, so it counts toward an allowance that is nearly used up and can take you past it; if your plan has extra usage turned on, usage past a plan limit may be billed as extra usage. Set `idle_handoff_near_limit` to `skip` to keep it out near any limit, or to `skip-spend` to keep it out near a spend limit (a money cap) while it still runs near a plan limit.
 
 **Plugin idle compaction at the 55.5-minute check.** When your settings let Claude Code compact idle sessions (or cannot be read) and, at the 55.5-minute check, the plugin finds no compaction since the turn ended, it compacts the main session itself instead of submitting the turn above, while the cache is still warm: a conversation of 200,000 tokens or more (the idle-compaction minimum, as above), also while agents or workflows run (subagents, teammates, workflow agents), since Claude Code does not compact a session while they run. It is one compaction with the plugin's instructions, shaped, copied and given a verdict like its other compactions. The agents keep running through it. Its resume block is an idle one, so the turn their result opens, or your return, gets it as described above; the plugin sends nothing after the compaction, except, with `idle_digest: submit`, the away digest turn when the work reads finished or blocked and nothing is running. It is skipped for the same reasons as plugin idle compaction above, also when automatic compaction was turned off since the turn ended (`"autoCompactEnabled": false`), and it counts toward the same two failures in a row. A skipped compaction is not followed by the idle handoff turn, except in two cases with no agents or workflows running: halt mode after a thrash or bad summaries, which stops the plugin's compactions but not that turn (with `idle_handoff_near_limit: run` also when a limit is at 90% or more, and with `skip-spend` when that limit is not a spend limit), and automatic compaction turned off; then the check runs the idle handoff turn, as it did before it could compact. Below the minimum it runs the idle handoff turn instead, unless agents or workflows are running (it compacts from `idle_handoff_min_tokens` up when keep-warm stops at its cutoff, at the last moment the waiting compaction or turn can run, or in the band near a usage limit, with an agent, a workflow or a working teammate still open). When Claude Code refuses it (a turn started at that moment, or a headless session such as `claude -p` or the SDK, which cannot compact between turns), the plugin logs the refusal and does not try again before another turn has ended and the next check comes round. With `idle_compact: false` it does not run: the check runs the idle handoff turn, and does nothing while agents or workflows run. While native idle compaction is off in your settings, plugin idle compaction above takes its place.
 
@@ -423,6 +710,22 @@ Every compaction summary carries the work lane's state on its `Status:` line, wh
 ## Keeping the cache warm while jobs run
 
 An agent, a workflow or a background shell that runs for more than an hour while the session waits for it outlives the one-hour prompt cache: the turn its result opens then reads the whole conversation again at full price. With `keep_warm_hours` (6 by default) the plugin keeps that cache warm while the job runs: about 50 minutes after the last request of the main session, and then about every 50 minutes, it sends one hidden request on the session's own conversation ("reply with one word"), which reads the conversation from the cache and refreshes it. The request adds nothing to the conversation, runs no tools, and starts no turn of its own (no Stop or prompt hook runs for it).
+
+```mermaid
+sequenceDiagram
+  participant S as Main session (idle)
+  participant J as Background job
+  participant C as One-hour prompt cache
+  S->>J: waits for the result
+  Note over S,C: about 50 min after the last request
+  S->>C: hidden request, cache refreshed
+  Note over S,C: then about every 50 min, at most 58 min apart
+  S->>C: hidden request, cache refreshed
+  J-->>S: result opens a turn (warming stops)
+  Note over S,C: or keep_warm_hours ends, then plugin idle compaction runs
+```
+
+Illustrative timeline; the times are the defaults.
 
 It runs only:
 
@@ -549,7 +852,7 @@ Resume re-checks seven facts:
 6. nothing the job was expected to write is newer than its start;
 7. the folder exists and the command can be found.
 
-Resume starts the job again by itself only when the relation is the same session or a successor (`/clear` or a proven lineage), and then in two cases: all seven hold, or the job failed (its output ends with a non-zero exit code, so check 4 fails) while checks 1 and 7 hold. Either way it starts a job at most once per resume and twice per chain. It runs the recorded command byte for byte, through the Bash tool, so your permission mode judges it as usual. Otherwise it asks, with the exact command and its source ("recorded by the plugin" or "written in the handoff, not recorded"). A command written in your own handoff's restart recipe, with no record of the job, may start again by itself under the same checks; a teammate's or another session's never does. The command is never run by the helper itself.
+Resume starts the job again by itself only when the relation is the same session or a successor (`/clear` or a verified lineage), and then in two cases: all seven hold, or the job failed (its output ends with a failing exit code, so check 4 fails) while checks 1 and 7 hold. Either way it starts a job at most once per resume and twice per chain. It runs the recorded command byte for byte, through the Bash tool, so your permission mode judges it as usual. Otherwise it asks, with the exact command and its source ("recorded by the plugin" or "written in the handoff, not recorded"). A command written in your own handoff's restart recipe, with no record of the job, may start again by itself under the same checks; a teammate's or another session's never does. The command is never run by the helper itself.
 
 What may start again by itself:
 
@@ -581,6 +884,8 @@ The same production rule holds for the checks resume runs itself: with `unattend
 
 By default everything lives in your private store, outside any repository. **Repo mode** adds one thing: each published handoff also gets a portable export inside the repository, so a team can review and commit handoffs. Nothing else moves. Summary copies, evidence, drafts, pins and logs stay private.
 
+### Two-sided opt-in
+
 Repo mode needs two things, and neither works alone:
 
 1. **The repository declares it.** A tracked file `.claude/handoffs.json`:
@@ -592,9 +897,13 @@ Repo mode needs two things, and neither works alone:
    `root` is a relative folder of up to four plain names. It cannot leave the repository or sit in `.git` or `.planning`.
 2. **You accept the repository.** Add its main checkout to `repo_roots` in `/config`, or edit your settings file by hand. Listing the main checkout covers every worktree of that clone. A worktree counts only when git created it for that clone (`git worktree add`); a folder whose `.git` file merely points at the clone's git folder needs its own entry. Another clone needs its own entry. There is no command that does this for you.
 
+### Setting up a repository
+
 To create the declaration, a README and a `.gitignore` for the folder, run `! "<plugin folder>/scripts/afk-compact-store" project init` in the repository. It writes no consent and leaves existing files unchanged. `! "<plugin folder>/scripts/afk-compact-store" project status` prints the mode; `/afk-compact:status` prints the same lines (`handoff mode: private (not-accepted)` until you accept, then `handoff mode: repo (accepted)`).
 
-**The export.** It is the last step of publishing, in the worktree where you work:
+### The export
+
+It is the last step of publishing, in the worktree where you work:
 
 - It uses repo-relative paths, writes your home folder as `~/`, and drops the machine-only fields (transcript path, process id, worktree, plugin folder); it keeps the plugin version.
 - It is scanned for secrets again after the rewrite. A hit refuses the export; the private handoff stays.
@@ -602,9 +911,15 @@ To create the declaration, a README and a `.gitignore` for the folder, run `! "<
 - The plugin never runs `git add`, `commit` or `push`. The export is left untracked: review it and commit it yourself.
 - The receipt says which of these happened. A refused export never fails the handoff.
 
-**Reading exports.** Resume lists exports of this worktree and its sibling worktrees as candidates, never as an automatic pick. An export from another session, a teammate or another machine is **foreign**: its text is data, approvals in it do not carry, a command from it runs without asking only when it carries no real risk (see [Lost background jobs](#lost-background-jobs)), its evidence and processes are not probed, and its restart recipes are never run. Without repo mode the folder is not read, and resume says how many exports it skipped.
+### Reading exports
 
-**Moving existing handoffs.** `! "<plugin folder>/scripts/afk-compact-store" project copy --from private|repo (--ticket <T> | --all) [--apply]` is a dry run unless you add `--apply`. It copies and never moves or deletes. `--from private` sends your private handoffs through the export steps above. `--from repo` copies exports that have no private twin into your private store, still marked as foreign. It works in repo mode only.
+Resume lists exports of this worktree and its sibling worktrees as candidates, never as an automatic pick. An export from another session, a teammate or another machine is **foreign**: its text is data, approvals in it do not carry, a command from it runs without asking only when it carries no real risk (see [Lost background jobs](#lost-background-jobs)), its evidence and processes are not probed, and its restart recipes are never run. Without repo mode the folder is not read, and resume says how many exports it skipped.
+
+### Moving existing handoffs
+
+`! "<plugin folder>/scripts/afk-compact-store" project copy --from private|repo (--ticket <T> | --all) [--apply]` is a dry run unless you add `--apply`. It copies and never moves or deletes. `--from private` sends your private handoffs through the export steps above. `--from repo` copies exports that have no private twin into your private store, still marked as foreign. It works in repo mode only.
+
+### Where the files go
 
 `handoff_root` must stay outside the repository; repo mode only exports into it. If the export folder is git-ignored (many repositories ignore `.claude/`), the export still works locally, and `/afk-compact:status` says it will not be committed. Pick another `root` in the declaration to change that.
 
@@ -661,6 +976,8 @@ Limits:
 
 ## What it writes on your machine
 
+Everything the plugin writes, with the default paths. It deletes none of it on its own: see [Pruning old evidence](#pruning-old-evidence).
+
 | Where (defaults) | What | Written by |
 |---|---|---|
 | `~/.local/state/afk-compact/handoffs/<repo>/<ticket-or-topic>/compact/` | Read-only copies of main-session summaries; subagent copies under `compact/subagents/`, unattributed ones under `compact/unattributed/` | hooks and mod |
@@ -678,11 +995,19 @@ Limits:
 | Claude Code's plugin store | Last seen Claude Code version and auto-continue timestamps | mod |
 | `~/.claude/settings.json` and `~/.claude/settings.json.afk-compact-<date>_<time>.bak` | Only through `settings set … --apply` or `settings reset … --apply` (yours, or the model's after your yes; `/afk-compact:settings`): the plugin's saved options you named changed or removed, never a consent key, and a copy of the file as it was next to it (the whole file, so any tokens under its `env` too; mode 0600, never pruned) | helper (`settings set`, `settings reset`) |
 
-**Subagent copies may be renamed.** When the agent of a subagent copy is not known at save time, the copy is saved as `sub-unknown`. Once a later turn-end check finds the agent in its transcript, the copy gets a new name with `-a<agent id>` (its first 8 characters) in the same folder: the text stays byte for byte the same, the frontmatter gains the agent id and the old name (`renamed_from`), and the old name is removed only after the new file has been checked. A path you noted before the rename still resolves, because both names end in the same id.
+### Subagent copies
 
-**Kept mismatches.** The raw summary text handed between hooks (under `pending/`) is removed once a copy holds it. If it differs from the saved copy, and the difference is more than Claude Code's own trailer after the end marker, it is kept as `pending/<id>.post.mismatch.md` or `pending/<id>.mod.mismatch.md`, redacted like a copy, with a `.mismatch.json` beside it that holds only hashes and counts. The plugin deletes none of these. `/afk-compact:status` counts them in every session folder, `kept mismatch stashes: <n> (redacted; the plugin never deletes them)`, and lists up to 10 paths. A raw summary that is still unsaved when its session ends is saved at that session's end (under `compact/unattributed/` when its scope cannot be proven), or later by another session's hooks, which take that session's lock first.
+Subagent copies may be renamed. When the agent of a subagent copy is not known at save time, the copy is saved as `sub-unknown`. Once a later turn-end check finds the agent in its transcript, the copy gets a new name with `-a<agent id>` (its first 8 characters) in the same folder: the text stays byte for byte the same, the frontmatter gains the agent id and the old name (`renamed_from`), and the old name is removed only after the new file has been checked. A path you noted before the rename still resolves, because both names end in the same id.
+
+### Kept mismatches
+
+The raw summary text handed between hooks (under `pending/`) is removed once a copy holds it. If it differs from the saved copy, and the difference is more than Claude Code's own trailer after the end marker, it is kept as `pending/<id>.post.mismatch.md` or `pending/<id>.mod.mismatch.md`, redacted like a copy, with a `.mismatch.json` beside it that holds only hashes and counts. The plugin deletes none of these. `/afk-compact:status` counts them in every session folder, `kept mismatch stashes: <n> (redacted; the plugin never deletes them)`, and lists up to 10 paths. A raw summary that is still unsaved when its session ends is saved at that session's end (under `compact/unattributed/` when its scope cannot be established), or later by another session's hooks, which take that session's lock first.
+
+### The hooks it registers
 
 It registers one mod module and eight classic command hooks: `PreCompact`, `PostCompact`, `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop`, `StopFailure` and `PermissionDenied`.
+
+### File modes and where it never writes
 
 Files are private (folders 0700, files 0600, copies 0400). The private store (`handoff_root`, `log_dir` and `disposable_root`) is never written inside a git work tree (unless that path is git-ignored, which the plugin then logs) or inside a `.planning/` folder, in either mode. A root that is not an absolute path (a relative path, or a Windows drive path such as `C:\x` outside Git Bash's perl, which reads it as `/c/x`) is refused as `root-invalid` and nothing is written under it; `/afk-compact:status` shows `root: <key> refused (root-invalid)`. An unset `log_dir` follows `handoff_root` and is refused with it; the logs then go to the default folder. The only thing the plugin writes inside a repository is the repo-mode export described in [Handoffs in git](#handoffs-in-git-repo-mode), and the three files of `project init`.
 
@@ -698,6 +1023,8 @@ Logs, summary copies, drafts under `.staging/` and the old `~/.claude/handoffs` 
 
 ## Upgrading
 
+What changed between 0.1.x releases that you may need to act on. The full notes of every release are in the [changelog](https://github.com/RuslanTar/afk-compact/blob/main/CHANGELOG.md).
+
 ### The handoff and evidence folders moved in 0.1.2
 
 Up to 0.1.1 the default `handoff_root` was `~/.claude/handoffs` and the default `disposable_root` was `~/.claude/trash-staging`. Claude Code treats `~/.claude` as a protected folder and, in the default permission mode, asks before every write there, so each handoff, summary copy and evidence copy asked, and no allow rule stops that prompt (measured). From 0.1.2 the defaults are `~/.local/state/afk-compact/handoffs` and `~/.local/state/afk-compact/disposable` (under `$XDG_STATE_HOME/afk-compact/` when `XDG_STATE_HOME` is an absolute path), outside it, where an allow rule does stop it (below). The move is for that prompt only: in auto mode a write to the new folders still goes through Claude Code's safety checker, as any write does.
@@ -707,14 +1034,21 @@ Up to 0.1.1 the default `handoff_root` was `~/.claude/handoffs` and the default 
 - **To keep the old folders**, set `handoff_root` to `~/.claude/handoffs` and `disposable_root` to `~/.claude/trash-staging`; then only those folders are used, and each write there asks again. A value you set is never changed.
 - **In the default permission mode** a write to the new folders asks until you allow it. This allow rule in your user settings (`~/.claude/settings.json`, under `permissions.allow`) stops the prompt (measured): `Edit(~/.local/state/afk-compact/**)`. A `Write(…)` rule for the same folder does not match these writes. If you set `XDG_STATE_HOME`, name that folder instead.
 - **If your home folder is a git work tree** (a dotfiles repository), a `.gitignore` that ignores only `.claude/` kept the old folders out of git but not the new ones, and the plugin writes nothing (no handoffs, summary copies or logs) in a folder git would show. `/afk-compact:status` then lists the folders as `in git, not ignored` with the fix: add the line `/.local/state/afk-compact/` to `~/.gitignore`, or set `handoff_root` and `disposable_root` to folders outside any git work tree.
-- **To copy the old folders into the new ones**, run `! "<plugin folder>/scripts/afk-compact-store" migrate` (`/afk-compact:status` prints it with the real folder while an old folder is read). It lists what it would copy and writes nothing; add `--apply` to copy. It never deletes, moves or overwrites: a file already in the new folder is left as it is and listed when its bytes differ, links are skipped, and a folder you set yourself is left alone. Each file is written under a temporary name and only then given its own, so a copy that fails part way leaves nothing under that name and the next run copies it again; a file that changes while it is copied (a session still writing it) counts as failed too, and so does a folder it cannot read; it exits 3 when a copy failed. It leaves out what is live or unfinished in the old handoff folder: unfinished drafts (`.staging/`), the watcher's folder (`.watch/`), the per-process records (`.sessions/by-pid/`) and pin locks (`.sessions/*.lock`). It also leaves out the pin and lineage files of a session of an older version that still runs (it has a live record under `.sessions/by-pid/`), lists them by session (`left out: live session <id>: <n>`) and ends by asking you to run it again once those sessions end: a copy made now would hide what such a session writes later. Once no session of an older version runs and you have checked the copies, you may remove the old folders yourself, or keep them: they are still read while the settings are the defaults, and once they are gone, a copy or folder a handoff or pin records under them is read by the same relative path in the new folder (only while the settings are the defaults). Removing `~/.claude/handoffs` also removes the drafts and watcher history `migrate` left out. Without the plugin's command, `mkdir -p ~/.local/state/afk-compact/handoffs ~/.local/state/afk-compact/disposable` and `chmod 700 ~/.local/state/afk-compact/handoffs ~/.local/state/afk-compact/disposable` (the plugin keeps its folders private), then `cp -Rpn ~/.claude/handoffs/. ~/.local/state/afk-compact/handoffs/` and `cp -Rpn ~/.claude/trash-staging/. ~/.local/state/afk-compact/disposable/`, copy much the same way while no session runs (`-n`: no file is overwritten; `cp` may then exit non-zero for the files it left; unlike `migrate`, it also copies drafts, watcher files, records and locks, and a cut-off file stays if it fails part way).
+- **To copy the old folders into the new ones**, run `! "<plugin folder>/scripts/afk-compact-store" migrate` (`/afk-compact:status` prints it with the real folder while an old folder is read). It lists what it would copy and writes nothing; add `--apply` to copy. It never deletes, moves or overwrites: a file already in the new folder is left as it is and listed when its bytes differ, links are skipped, and a folder you set yourself is left alone. Each file is written under a temporary name and only then given its own, so a copy that fails part way leaves nothing under that name and the next run copies it again; a file that changes while it is copied (a session still writing it) counts as failed too, and so does a folder it cannot read; it exits 3 when a copy failed. It leaves out what is live or unfinished in the old handoff folder: unfinished drafts (`.staging/`), the watcher's folder (`.watch/`), the per-process records (`.sessions/by-pid/`) and pin locks (`.sessions/*.lock`). It also leaves out the pin and lineage files of a session of an older version that still runs (it has a live record under `.sessions/by-pid/`), lists them by session (`left out: live session <id>: <n>`) and ends by asking you to run it again once those sessions end: a copy made now would hide what such a session writes later. Once no session of an older version runs and you have checked the copies, you may remove the old folders yourself, or keep them: they are still read while the settings are the defaults, and once they are gone, a copy or folder a handoff or pin records under them is read by the same relative path in the new folder (only while the settings are the defaults). Removing `~/.claude/handoffs` also removes the drafts and watcher history `migrate` left out. Without the plugin's command, `mkdir -p ~/.local/state/afk-compact/handoffs ~/.local/state/afk-compact/disposable` and `chmod 700 ~/.local/state/afk-compact/handoffs ~/.local/state/afk-compact/disposable` (the plugin keeps its folders private), then `cp -Rpn ~/.claude/handoffs/. ~/.local/state/afk-compact/handoffs/` and `cp -Rpn ~/.claude/trash-staging/. ~/.local/state/afk-compact/disposable/`, copy much the same way while no session runs (`-n`: no file is overwritten; `cp` may then exit with an error for the files it left; unlike `migrate`, it also copies drafts, watcher files, records and locks, and a cut-off file stays if it fails part way).
 - **Known limits of the move.** A handoff run begun before the update and published after it puts the handoff, the evidence kept after the update, the pin and records in the new folder; that run's work folder under `.staging/` (its draft and stamps) and the evidence it kept before the update stay in `~/.claude/handoffs`, where they began. Publishing refuses a restart recipe whose script was kept only before the update (`LINT recipe-script`) until the script is kept again. A session still running 0.1.1 reads and writes resume claims only in the old folder, so it cannot see a claim 0.1.2 made in the new one: during the update, a `once` approval could be lent to one session of each version. `/afk-compact:report` leaves out the old folder's handoffs and summaries, and `/afk-compact:status` may list a stash of a session from before the update as one with no process record.
+
+### Other changes from 0.1.x
+
+- **0.1.6: on/off settings take `true` or `false`.** The words older releases saved are still read, but Claude Code runs the default for a word that is not on a setting's list. `settings migrate` rewrites them; see [On and off words](#on-and-off-words).
+- **0.1.5: the ledger stays.** `U-`, `D-` and `X-` lines carry from one handoff to the next, and a saved copy gets back a line its summary dropped; see [Usage](#usage).
+- **0.1.4: version records.** A published handoff names the plugin version and folder that wrote it, and a session whose plugin copy an update or an uninstall replaced says so at once; see [Usage](#usage) and [Installation](#installation).
+- **0.1.3 and 0.1.4: alert rules changed.** On its first turn end after an update, the watcher closes the open alerts an older rule raised and the new one would not; see [Watcher](#watcher).
 
 ## Privacy and logs
 
 ### Privacy
 
-- **Local only.** No network calls and no telemetry. A report is a zip on your disk; whether you send it is up to you (see [Sending a report](#sending-a-report)). The comparison trial, off by default, makes its model calls through Claude Code (see [A local comparison trial](#a-local-comparison-trial-off-by-default)).
+- **Local only.** No telemetry, and the plugin opens no network connection of its own. The extra model requests it asks for (handoff turns, keep-warm, its own compactions) go through Claude Code like any turn. A report is a zip on your disk; whether you send it is up to you (see [Sending a report](#sending-a-report)). The comparison trial, off by default, makes its model calls through Claude Code (see [A local comparison trial](#a-local-comparison-trial-off-by-default)).
 - **Content-free logs.** Log rows never store summary or handoff text, your or the model's messages, commands, file contents, permission-denial reasons, environment values or secrets. An unknown value is logged as the class `other`. The one file with command text is the job record (`jobs.jsonl`), which the plugin needs to start a lost job again byte for byte. A command with a hard secret hit is stored as a hash and rule ids only; a command with only a weaker hit (such as `password=…`) is stored as typed and can appear in a published restart recipe. See [Lost background jobs](#lost-background-jobs).
 - **In-process reading.** Summaries, transcript rows and commands are read in memory to compute classes and counts, then dropped.
 - **Secrets.** Summary copies with a hard secret hit are saved redacted. Evidence files that look like credentials (`.env`, keys, `.netrc` and similar) are withheld; logs and JSON with a hit are copied redacted; other files with a hard hit are withheld. Only rule ids are logged, never values. `/afk-compact:handoff` scans its draft before publishing: a hard hit blocks it, and a warning names the rule ids and the draft's line numbers, never the value.
@@ -756,11 +1090,18 @@ Under `log_dir` (default `<handoff_root>/.watch/`):
 | `export-salt`, `install-id` | Written the first time you make a report: a random salt for the hashed ids in reports, which never leaves your machine, and a random install id |
 | `reports/` | Report zips, when `~/Downloads` is missing, not writable or inside a git work tree |
 
-One file lives outside this folder: `last-version`, the classic hooks' version record. It holds the Claude Code version the last session start ran, for the version change row in the log, and works without the mod. It is kept in this plugin's own data folder, `<config>/plugins/data/<plugin>-<marketplace>` (`<plugin>-inline` for a `--plugin-dir` run), the name Claude Code gives that folder. When `CLAUDE_PLUGIN_DATA` names another plugin's folder (the codex plugin sets its own in session shells), the plugin still uses its own folder beside it, so there is one record and a version change is logged once. Another plugin's folder is never read or written.
+One file lives outside this folder: `last-version`, the classic hooks' version record. It holds the Claude Code version the last session start ran, for the version change row in the log, and works without the mod. It is kept in this plugin's own data folder, `<config>/plugins/data/<plugin>-<marketplace>` (`<plugin>-inline` for a `--plugin-dir` run), the name Claude Code gives that folder. When `CLAUDE_PLUGIN_DATA` names another plugin's folder (another plugin can set its own in session shells), the plugin still uses its own folder beside it, so there is one record and a version change is logged once. Another plugin's folder is never read or written.
 
 Rows hold ids, counts, sizes, times, classes and rule ids. The files under `pending/` and the copies under `compact/` hold summary text, the files under `checkpoint/` hold the measured git file list and project-state lines, a waiting resume block (`resume-pending.json`, `resume-armed.json`) holds its measured lines, the saved copy's path, the text of an open question it quotes and the summary's Step 1 (at most 100 characters), and `jobs.jsonl` holds the command text of background shells; treat them like the summaries themselves.
 
-Alerts are listed in `/afk-compact:status` with their seven-day counts. In this version they are not shown in the chat. The watcher raises no alert for what it could not observe. A compaction from before the session's first plugin row (a session that was already running at the install, or was resumed or forked after it) raises no missing-copy alert (A-01), no band alert (A-05) and no missing-hooks alert (A-15); the other checks still read it. When a session has only the rows its own Stops wrote, the first of those counts as its first plugin row, and when it has no row yet (the plugin was installed or reloaded mid-session and its first hook is a Stop), that Stop's start counts. A-05 also skips an idle compaction, which runs on the idle timer, not at a size; besides the plugin's own records, Claude Code's "Compacted while idle" notice right after a compaction marks it idle. The continue-without-nudge alert (A-27) skips a compaction from before the session's first plugin row and an idle compaction too, and never takes the plugin's handoff-turn message for a continue, also when that turn's record is gone. Without the plugin's mod (only its classic hooks), the band behind A-05 follows Claude Code's `autoCompactWindow` setting when `native_window_tokens` is unset, as the mod does, with the project's settings read from the project root. Claude Code never compacts past the model's own window, which the watcher cannot see, so a setting above 200,000 counts only once the session's context has been above 200,000; until then that band is off. The stalled-item alert (A-11) needs output the watcher can see. A background shell has a file even when its result did not name it: `<tmp>/claude-<uid>/<project>/<session>/tasks/<id>.output`, where `<tmp>` is `CLAUDE_CODE_TMPDIR`, else `/tmp`; for a subagent that file links to its transcript, and a background workflow writes its run journal and its agents' transcripts beside the session's transcript (`<session>/subagents/workflows/<run>/`), so A-11 checks those; a workflow counts as moving while any of them changes. A teammate or monitor has none the watcher can see, so A-11 skips them. The lost-rule alert (A-09) counts a ledger line as lost only when the new summary has neither its id (also when another ledger line carries it, see below) nor a line with the same text under another id (a renumbered line; case, spacing and a trailing check time do not count). Another ledger line carries an id only in the list of ids it starts with (`U-2, U-3: done`), also after a `;` or `·` that joins two entries; an id the text only cites (`per U-3`) carries nothing.
+Alerts are listed in `/afk-compact:status` with their seven-day counts. In this version they are not shown in the chat. The watcher raises no alert for what it could not observe.
+
+- A compaction from before the session's first plugin row (a session that was already running at the install, or was resumed or forked after it) raises no missing-copy alert (A-01), no band alert (A-05) and no missing-hooks alert (A-15); the other checks still read it. When a session has only the rows its own Stops wrote, the first of those counts as its first plugin row, and when it has no row yet (the plugin was installed or reloaded mid-session and its first hook is a Stop), that Stop's start counts.
+- A-05 also skips an idle compaction, which runs on the idle timer, not at a size; besides the plugin's own records, Claude Code's "Compacted while idle" notice right after a compaction marks it idle.
+- The continue-without-nudge alert (A-27) skips a compaction from before the session's first plugin row and an idle compaction too, and never takes the plugin's handoff-turn message for a continue, also when that turn's record is gone.
+- Without the plugin's mod (only its classic hooks), the band behind A-05 follows Claude Code's `autoCompactWindow` setting when `native_window_tokens` is unset, as the mod does, with the project's settings read from the project root. Claude Code never compacts past the model's own window, which the watcher cannot see, so a setting above 200,000 counts only once the session's context has been above 200,000; until then that band is off.
+- The stalled-item alert (A-11) needs output the watcher can see. A background shell has a file even when its result did not name it: `<tmp>/claude-<uid>/<project>/<session>/tasks/<id>.output`, where `<tmp>` is `CLAUDE_CODE_TMPDIR`, else `/tmp`; for a subagent that file links to its transcript, and a background workflow writes its run journal and its agents' transcripts beside the session's transcript (`<session>/subagents/workflows/<run>/`), so A-11 checks those; a workflow counts as moving while any of them changes. A teammate or monitor has none the watcher can see, so A-11 skips them.
+- The lost-rule alert (A-09) counts a ledger line as lost only when the new summary has neither its id (also when another ledger line carries it, see below) nor a line with the same text under another id (a renumbered line; case, spacing and a trailing check time do not count). Another ledger line carries an id only in the list of ids it starts with (`U-2, U-3: done`), also after a `;` or `·` that joins two entries; an id the text only cites (`per U-3`) carries nothing.
 
 On its first Stop after an update, the watcher re-checks the open alerts that an older version wrote under a rule that changed since (A-01, A-05, A-11 and A-15 in 0.1.3; A-09 and A-27 in 0.1.4), in every session's log. It closes the ones the changed rules would not raise, by adding an `alert_closed` row with the reason `superseded: rule changed in <version>`; it deletes no row. A log is checked again when a process still running the older version adds to it. An A-11 alert stays open only when the item's output (a shell's output file; for a workflow, its run journal and its agents' transcripts) had not changed for the 15 minutes before the alert; when it changed after the alert, the watcher cannot tell whether the item was quiet then, so that alert is closed too. The verdict, the list of this session's alerts and the seven-day counts count only open alerts. For 7 days `status` also shows how many alerts were closed this way.
 
@@ -785,7 +1126,9 @@ On its first Stop after an update, the watcher re-checks the open alerts that an
 
 Making a report deletes nothing and leaves the existing logs as they are.
 
-**Reporting problems.** Open an issue at https://github.com/RuslanTar/afk-compact/issues with what you saw and the plugin version (`/afk-compact:status` shows it); attach a report zip only if you want to share the logs.
+### Reporting problems
+
+Open an issue at https://github.com/RuslanTar/afk-compact/issues with what you saw and the plugin version (`/afk-compact:status` shows it); attach a report zip only if you want to share the logs.
 
 ### A local comparison trial (off by default)
 
@@ -796,6 +1139,8 @@ While it is on, at each handoff (and at each compaction when the file says so) t
 To turn it off, delete the file or set `"on": false` in it; the change takes effect from the end of the current turn. The trial also ends by itself after its `trial_until` date.
 
 ## Compatibility
+
+Where the plugin runs: operating systems, Claude Code surfaces, and managed setups.
 
 ### Platforms
 
@@ -813,6 +1158,15 @@ The plugin has never run on native Windows. What follows is expected from the wa
 - **With Git for Windows**, the hooks may reach the helper through Git Bash and its perl, but nothing on that path has been tested: process start times, file locks and paths may be wrong, and the mod's own helper calls are expected to fail.
 
 On Windows, running Claude Code inside WSL 2 is the expected route until native support lands.
+
+### Surfaces
+
+| Where Claude Code runs | What the plugin does there |
+|---|---|
+| Terminal (`claude`) | Everything these pages describe. |
+| Headless: `claude -p`, the Agent SDK, and apps that run Claude Code through it, such as the desktop app | Shaping, saved copies, verdicts and the resume block. Its own compactions run as a plain `/compact` at a turn end; no nudge, handoff turn, idle handoff turn, continue or plugin idle compaction. Not yet checked in a live session. See [Limits](#limits). |
+| claude.ai and Cowork | Not tested yet. Cowork and remote sessions read their own settings and do not load the plugin from your machine (not tested). |
+| Subagents, on any surface | Shaped summaries and saved copies; no resume block, nudge or handoff turn. |
 
 ### Team, Enterprise and managed machines
 
@@ -837,9 +1191,12 @@ The seated path has been run live under a Team organization (Claude Code 2.1.306
 
 ## Limits
 
+What this version does not do, or has not been run on yet. Each line links to the page with the details.
+
 - **Native Windows** is not supported yet. Without Git for Windows, the plugin's hooks are expected to fail with visible hook errors rather than stay quiet; see [Platforms](#platforms).
 - **claude.ai and Cowork** are not tested yet, so for now the plugin is for Claude Code sessions on your own machine.
 - **No usable perl** (Alpine without `apk add perl`, a minimal Fedora image without perl, a perl older than 5.28, or one found but unable to start, such as a version manager's shim with no perl picked or one that aborts on a missing library): the hooks print nothing and exit quietly (each leaves one content-free row in the watch folder, in the default one when `handoff_root` is relative and `log_dir` unset, but none when `log_dir` is relative, or the folder or a folder above it holds `.git` or `.planning`, also where a symlink leads: without perl the plugin cannot ask git whether such a folder is ignored), and helper commands answer `REFUSED: helper-runtime`. A hook whose perl ends on a signal (it crashed or was killed) exits the same quiet way and leaves the same row. With a perl that cannot start, helper commands print its error instead; repair or remove that perl. The mod still adds its instructions, but no summary or evidence copies are saved. `/afk-compact:handoff` then prints the handoff into the chat, marked as not saved and not secret-scanned.
+- **Context windows under about 329K tokens** (with the defaults): plugin compactions, the nudge, the handoff turns and plugin idle compaction are off. Claude Code compacts as usual, and each compaction is still shaped, saved, checked and resumed. See [How the thresholds are clamped](#how-the-thresholds-are-clamped).
 - **Subagents** get shaped summaries and copies, but no resume block. They also get no nudge and no handoff turn.
 - **Headless sessions** (`claude -p`, the Agent SDK, and apps or editors that run Claude Code through it, such as the desktop app): Claude Code rejects a plugin's compaction call there (seen under `claude -p` and the SDK). Instead, at a turn end at or above the target, the plugin runs `/compact` with no arguments and shapes that compaction through its own hook, so the same instructions, saved copy and resume block apply; the resume block goes with your next prompt. It gives no nudge, handoff turn, idle handoff turn or continue there. This path is not yet checked in a live session. When `/compact` cannot run (compaction turned off, or a one-prompt `claude -p` whose input has ended) or fails twice in a row, the plugin stops compacting on its own for the rest of that session. Plugin idle compaction does not run in headless sessions yet. A `/compact` that was skipped (for example by a PreCompact hook) or compacted without the plugin's instructions counts as a failure too: the next try waits for the cooldown and the end of a later turn, never the end of the turn that ran the `/compact`. The transcript shows the plugin's run as a plain `/compact`. Claude Code's own automatic compaction is not affected. `/afk-compact:status` says `automatic compaction: by /compact`, or `not available here` once that path is off.
 - **Verdicts only inform.** They add a fallback note, a toast, an escalation, or halt mode. They never block or rewrite a compaction.
@@ -853,9 +1210,198 @@ The seated path has been run live under a Team organization (Claude Code 2.1.306
 
 ## Troubleshooting
 
+Find the line you see, then follow its fix. Each entry names the page that has the full detail. Start with `/afk-compact:status`: it prints the verdict, open alerts, and the rule or note behind most of the entries below.
+
+### REFUSED: helper-runtime or no perl
+
+**You see:** the hooks print nothing, and helper commands answer `REFUSED: helper-runtime`. Or a helper command prints a perl error.
+
+- **Cause:** no usable perl: Alpine without `apk add perl`, a minimal Fedora image without perl, a perl older than 5.28, or one found but unable to start (a version manager's shim with no perl picked, or one that aborts on a missing library).
+- **Fix:** install perl 5.28 or newer (`apk add perl` on Alpine, `dnf install perl-interpreter` on a minimal Fedora image). With a perl that cannot start, helper commands print its error instead; repair or remove that perl.
+- **Meanwhile:** the mod still adds its instructions, but no summary or evidence copies are saved. `/afk-compact:handoff` prints the handoff into the chat, marked as not saved and not secret-scanned.
+
+See [Requirements](#requirements) and [Limits](#limits).
+
+### Write prompts for the plugin folders
+
+**You see:** a permission prompt for each helper call, or for a write under `~/.local/state/afk-compact/`.
+
+- **Helper calls, default permission mode:** each helper call prompts until you add the rule that `/afk-compact:status` prints, with the real folder, as `allow rule (default mode): Bash("<plugin folder>/scripts/afk-compact-store" wait *)`. The plugin folder name contains the version, so after an update the old rule stops matching. When your user or project settings still name an older folder, `/afk-compact:status` says so in a line `allow rule for an older plugin folder: <old folder>; current: <plugin folder>` and prints the new rule. It only reads your settings files; it never edits them.
+- **Writes to the state folders, default permission mode:** a write to the new folders asks until you allow it. This allow rule in your user settings (`~/.claude/settings.json`, under `permissions.allow`) stops the prompt (measured): `Edit(~/.local/state/afk-compact/**)`. A `Write(…)` rule for the same folder does not match these writes. If you set `XDG_STATE_HOME`, name that folder instead.
+
+See [Upgrading](#the-handoff-and-evidence-folders-moved-in-012).
+
+### In git, not ignored
+
+**You see:** `/afk-compact:status` lists a folder as `in git, not ignored`, and the plugin writes no handoffs, summary copies or logs.
+
+- **Cause:** your home folder is a git work tree (a dotfiles repository), and a `.gitignore` that ignores only `.claude/` keeps the old folders out of git but not `~/.local/state/afk-compact/`. The plugin writes nothing in a folder git would show.
+- **Fix:** add the line `/.local/state/afk-compact/` to `~/.gitignore`, or set `handoff_root` and `disposable_root` to folders outside any git work tree.
+
+See [Upgrading](#the-handoff-and-evidence-folders-moved-in-012) and [What it writes](#what-it-writes-on-your-machine).
+
+### Smoke check due
+
+**You see:** after a Claude Code update, `/afk-compact:status` says a check is due and offers a command to run.
+
+- **Fix:** type the command it prints, with the real folder: `! "<plugin folder>/scripts/afk-compact-store" smoke`.
+- **If smoke says no type declarations were found:** type `/plugin-authoring` once in any session (it costs one model turn), then run smoke again while that session is open (or pass `--types FILE`).
+
+See [The smoke check after a Claude Code update](#the-smoke-check-after-a-claude-code-update).
+
+### Saved-word warnings
+
+**You see:** `/afk-compact:status` or `settings show` warns about a saved value, and a behaviour you turned off runs again.
+
+- **Cause:** releases before 0.1.6 saved other words than `true` and `false` for the on/off settings. The plugin still reads them as before, but Claude Code reads a saved value that is not on the setting's list as unset, so the hooks run the default.
+- **Fix:** save `true` or `false` for the setting (`settings set` takes the old words too and saves `true` or `false`).
+
+See [Settings](#settings).
+
+### The version-mismatch line
+
+**You see:** a line like `this session runs 0.1.2; sessions started since 2026-11-01 14:02 +0200 run 0.1.3: /reload-plugins`, in `/afk-compact:status`, in the resume block or in a handoff's report.
+
+- **Cause:** you updated, or rolled back, and this session still runs the copy it loaded.
+- **Fix:** run `/reload-plugins`, or start a new session.
+
+See [When sessions run different versions](#when-sessions-run-different-versions).
+
+### root-invalid
+
+**You see:** `root: <key> refused (root-invalid)` in `/afk-compact:status`, and nothing written under that root.
+
+- **Cause:** a root that is not an absolute path: a relative path, or a Windows drive path such as `C:\x` outside Git Bash's perl, which reads it as `/c/x`. An unset `log_dir` follows `handoff_root` and is refused with it; the logs then go to the default folder.
+- **Fix:** set `handoff_root`, `log_dir` or `disposable_root` to an absolute path outside any git work tree.
+
+See [What it writes](#what-it-writes-on-your-machine).
+
+### queue: degraded
+
+**You see:** `queue: degraded (<reason>)` in `/afk-compact:status`, for example `queue: degraded (untagged)`, and no `Queued:` line in the handoff.
+
+- **Cause:** `queue_cmd` is set, but the path is not an executable file, or a `list` reply is not one JSON object with `"schema": "queue-stub/v1"`. The plugin uses nothing from the reply.
+- **Fix:** make your program keep the contract; the reason in the status line says which part fails. `queue_cmd` is read from your settings file only.
+
+See [Connect your own question queue](#connect-your-own-question-queue).
+
+### Hook errors on Windows
+
+**You see:** a visible hook error at each plugin hook's event, on native Windows without Git for Windows.
+
+- **Cause:** Claude Code runs hook commands in PowerShell, which cannot start the plugin's launcher. These errors do not block a tool call or a compaction, but compactions are not reliably shaped, no summary or evidence copies are saved, and the skills cannot call the helper.
+- **Fix:** native Windows is not supported yet. Running Claude Code inside WSL 2 is the expected route until native support lands.
+
+See [Platforms](#platforms).
+
+### Plugin compactions off: window below the minimum
+
+**You see:** `plugin compactions off: window <W> is below <N>, the smallest for these settings` in `/afk-compact:status`.
+
+- **Cause:** Claude Code treats windows below 100,000 as 100,000, and the plugin's own compactions need a larger window. `/afk-compact:status` ends its `thresholds:` line with `min_window <N>`, the smallest window that turns plugin compactions on with your settings (`min_window 329000` with the defaults), or `min_window never` when `compact_target_tokens` or `compact_soft_max_tokens` is set too low for any window.
+- **What still runs:** native auto-compaction, shaping, copies and verdicts.
+- **Fix:** none is needed when the window is meant to be small: only the plugin's own compactions are off on it. Otherwise compare `compact_target_tokens` and `compact_soft_max_tokens` with `min_window`; see [Settings](#settings).
+
+### A verdict other than ok
+
+**You see:** a toast, a fallback note in the resume block, or a verdict word other than `ok` in the log or in `/afk-compact:status`. Verdicts only inform: they add a fallback note, a toast, an escalation, or halt mode. They never block or rewrite a compaction.
+
+| Verdict | Meaning |
+|---|---|
+| `ok` | The summary is complete and in handoff form. |
+| `ok-trailer` | Complete and in handoff form, with text after the closing line. Counts as ok. |
+| `ok-unclosed` | A summary with every required section through its last one (Next steps) but no closing line. It counts as ok: no fallback note, and it never counts toward halt mode. |
+| `truncated` | A summary cut off inside its body. |
+| `unshaped` | The summary carries none of the plugin's marker: it is not in handoff form. |
+| `scope-leak` | The summary is of the other scope: a main conversation's in a subagent compaction, or the reverse. |
+| `stale` | The summary does not belong to the compaction the plugin recorded. |
+
+See [The path of one compaction](#the-path-of-one-compaction).
+
+### Filing a bug
+
+Open an issue at https://github.com/RuslanTar/afk-compact/issues with what you saw and the plugin version (`/afk-compact:status` shows it); attach a report zip only if you want to share the logs. To make the zip, see [Sending a report](#sending-a-report).
+
 ## FAQ
 
+Short answers, each with a link to the page that has the detail.
+
+### Is this just a lower auto-compact threshold?
+
+No. Claude Code's `/autocompact` can lower the point at which it compacts, but the compaction itself is still the plain one. The plugin changes what happens around a compaction:
+
+- Every compaction, native auto-compaction and your own `/compact` included, gets the same handoff instructions. A note you type with `/compact` comes first and wins.
+- Every summary is saved as a read-only copy and checked, and the next turn gets one resume block.
+- On a large enough window the plugin can also compact at a clean turn end, before native auto-compaction cuts in mid-task.
+
+See [How it works](#what-it-does) and [The path of one compaction](#the-path-of-one-compaction).
+
+### Does it use more of my usage?
+
+It can, in these ways, and each one has an off switch:
+
+- **Earlier, more frequent compactions** on very large windows, because the plugin compacts at a target size. See `compact_target_tokens` in [Settings](#settings).
+- **A handoff turn** before a planned compaction and in a last cycle: an extra turn on your model with the full context, which counts toward your usage. Turn it off with `precompact_turn` or `handoff_turn` set to `false`; see [Handoffs and resume](#the-handoff-turn-of-a-last-cycle).
+- **Keep-warm requests** while your background jobs run. Set `keep_warm_hours` to `0` to turn it off; see [keep-warm](#keeping-the-cache-warm-while-jobs-run).
+- **Plugin idle compaction** and the **idle handoff turn** when a session sits idle. By default the idle handoff turn also runs when a limit is at 90% or more. Set `idle_handoff_turn` to `false`, or `idle_handoff_near_limit` to `skip`, to keep it out; see [Idle compaction](#idle-compaction).
+
+### Does it send data anywhere?
+
+No. There are no network calls and no telemetry from the plugin. Logs are content-free and stay on your disk, and a report is a zip on your disk that you send yourself, or not. The model requests the plugin causes (a handoff turn, keep-warm, plugin idle compaction, the optional comparison trial) go through Claude Code to your usual model provider, like any other turn. See [Privacy](#privacy).
+
+### Does it change or block native compaction?
+
+It never edits a summary and never blocks a compaction. It adds its handoff instructions to the request, and afterwards it saves a copy and gives a verdict. A verdict only informs: it adds a fallback note, a toast, an escalation, or halt mode. Native auto-compaction stays the backstop. See [Design principles](#design-principles).
+
+### Can the model change my settings?
+
+Not the ones that matter. `/afk-compact:settings` changes the plugin's saved options only when you ask, shows the change and asks before it writes. The six consent keys (`repo_roots`, `relaunch_auto`, `relaunch_allow`, `unattended_prod_reads`, `restart_on_update` and `queue_cmd`) are read from your settings file only, and the plugin never sets or removes them, whoever runs its commands. See [Settings](#settings).
+
+### What happens after /clear?
+
+After `/clear` the plugin delivers no resume block, submits no prompt and runs no skill on its own; work resumes only when you ask for it. Background work keeps running. See [After /clear](#after-clear).
+
+### Do I need the status line?
+
+No. The status line shows the cache state, and `--note-usage` records the usage limits it shows; leave that out to keep the command read-only. The plugin works the same without a status line. See [The cache state in your status line](#the-cache-state-in-your-status-line).
+
 ## Design principles
+
+The rules afk-compact holds itself to. Each one points to the page that states it in full.
+
+### It never edits a summary or blocks a compaction
+
+Claude Code's own summarizer writes every summary. The plugin adds instructions, saves a read-only copy and gives a verdict. A verdict only informs: it adds a fallback note, a toast, an escalation or halt mode, and never blocks or rewrites a compaction. Claude Code's own auto-compaction is never turned off; it stays the backstop. See [How it works](#the-path-of-one-compaction) and [Limits](#limits).
+
+### Your instructions come first
+
+The plugin uses Claude Code's own hooks. A note you type with `/compact` comes first and wins over its instructions, and your settings decide when it acts. See [How it works](#what-it-does).
+
+### Local only
+
+No telemetry, and no network connection of its own. The model requests it asks for (handoff turns, keep-warm, its own compactions) go through Claude Code and count toward your usage like any turn. A report is a zip on your disk that you send yourself, if you want to. See [Privacy](#privacy).
+
+### It removes nothing on its own
+
+No handoff, saved copy, evidence file or log is deleted by the plugin on its own. `/afk-compact:prune` lists old evidence and deletes it only after your yes. See [Pruning old evidence](#pruning-old-evidence).
+
+### Your repository stays yours
+
+The private store is never written inside a git work tree unless that path is git-ignored. In repo mode, which both your settings and the repository must turn on, the only write is a scanned export, and the plugin never stages, commits or pushes it. See [What it writes on your machine](#what-it-writes-on-your-machine) and [Handoffs in git](#handoffs-in-git-repo-mode).
+
+### Outward steps need your words
+
+- A lost background job starts again by itself only when it is read-only or on your allowlist; production writes and anything with outside effects always ask. See [Lost background jobs](#lost-background-jobs).
+- An approval carries across a compaction only when your words are found in a message you typed and its targets still match. Deploys, production writes and pushes to a protected branch always ask again. See [Safety and approvals](#safety-and-approvals).
+- The six settings that let the plugin act without asking are read from your own settings file only, and the plugin never changes them. See [Consent keys](#consent-keys).
+
+### Every default is listed with its cost
+
+Each setting is listed with its default, what it does and what it costs, and the settings that send model requests each have an off-switch. See [What the settings cost](#what-the-settings-cost).
+
+### Numbers only with a method
+
+These pages give no recall, retention, speed or cost-saving number. The benchmark method is fixed in advance ([bench/METHOD.md](https://github.com/RuslanTar/afk-compact/blob/main/bench/METHOD.md)), and its results will be published there. The dollar figures for idle compaction are labelled estimates. What has not been run live yet is listed in [Limits](#limits).
 
 ## License
 

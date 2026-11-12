@@ -1,5 +1,7 @@
 # What it writes on your machine
 
+Everything the plugin writes, with the default paths. It deletes none of it on its own: see [Pruning old evidence](#pruning-old-evidence).
+
 | Where (defaults) | What | Written by |
 |---|---|---|
 | `~/.local/state/afk-compact/handoffs/<repo>/<ticket-or-topic>/compact/` | Read-only copies of main-session summaries; subagent copies under `compact/subagents/`, unattributed ones under `compact/unattributed/` | hooks and mod |
@@ -17,11 +19,19 @@
 | Claude Code's plugin store | Last seen Claude Code version and auto-continue timestamps | mod |
 | `~/.claude/settings.json` and `~/.claude/settings.json.afk-compact-<date>_<time>.bak` | Only through `settings set … --apply` or `settings reset … --apply` (yours, or the model's after your yes; `/afk-compact:settings`): the plugin's saved options you named changed or removed, never a consent key, and a copy of the file as it was next to it (the whole file, so any tokens under its `env` too; mode 0600, never pruned) | helper (`settings set`, `settings reset`) |
 
-**Subagent copies may be renamed.** When the agent of a subagent copy is not known at save time, the copy is saved as `sub-unknown`. Once a later turn-end check finds the agent in its transcript, the copy gets a new name with `-a<agent id>` (its first 8 characters) in the same folder: the text stays byte for byte the same, the frontmatter gains the agent id and the old name (`renamed_from`), and the old name is removed only after the new file has been checked. A path you noted before the rename still resolves, because both names end in the same id.
+## Subagent copies
 
-**Kept mismatches.** The raw summary text handed between hooks (under `pending/`) is removed once a copy holds it. If it differs from the saved copy, and the difference is more than Claude Code's own trailer after the end marker, it is kept as `pending/<id>.post.mismatch.md` or `pending/<id>.mod.mismatch.md`, redacted like a copy, with a `.mismatch.json` beside it that holds only hashes and counts. The plugin deletes none of these. `/afk-compact:status` counts them in every session folder, `kept mismatch stashes: <n> (redacted; the plugin never deletes them)`, and lists up to 10 paths. A raw summary that is still unsaved when its session ends is saved at that session's end (under `compact/unattributed/` when its scope cannot be proven), or later by another session's hooks, which take that session's lock first.
+Subagent copies may be renamed. When the agent of a subagent copy is not known at save time, the copy is saved as `sub-unknown`. Once a later turn-end check finds the agent in its transcript, the copy gets a new name with `-a<agent id>` (its first 8 characters) in the same folder: the text stays byte for byte the same, the frontmatter gains the agent id and the old name (`renamed_from`), and the old name is removed only after the new file has been checked. A path you noted before the rename still resolves, because both names end in the same id.
+
+## Kept mismatches
+
+The raw summary text handed between hooks (under `pending/`) is removed once a copy holds it. If it differs from the saved copy, and the difference is more than Claude Code's own trailer after the end marker, it is kept as `pending/<id>.post.mismatch.md` or `pending/<id>.mod.mismatch.md`, redacted like a copy, with a `.mismatch.json` beside it that holds only hashes and counts. The plugin deletes none of these. `/afk-compact:status` counts them in every session folder, `kept mismatch stashes: <n> (redacted; the plugin never deletes them)`, and lists up to 10 paths. A raw summary that is still unsaved when its session ends is saved at that session's end (under `compact/unattributed/` when its scope cannot be established), or later by another session's hooks, which take that session's lock first.
+
+## The hooks it registers
 
 It registers one mod module and eight classic command hooks: `PreCompact`, `PostCompact`, `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop`, `StopFailure` and `PermissionDenied`.
+
+## File modes and where it never writes
 
 Files are private (folders 0700, files 0600, copies 0400). The private store (`handoff_root`, `log_dir` and `disposable_root`) is never written inside a git work tree (unless that path is git-ignored, which the plugin then logs) or inside a `.planning/` folder, in either mode. A root that is not an absolute path (a relative path, or a Windows drive path such as `C:\x` outside Git Bash's perl, which reads it as `/c/x`) is refused as `root-invalid` and nothing is written under it; `/afk-compact:status` shows `root: <key> refused (root-invalid)`. An unset `log_dir` follows `handoff_root` and is refused with it; the logs then go to the default folder. The only thing the plugin writes inside a repository is the repo-mode export described in [Handoffs in git](repo-mode.md#handoffs-in-git-repo-mode), and the three files of `project init`.
 

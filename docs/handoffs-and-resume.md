@@ -1,8 +1,33 @@
 # Handoffs and resume
 
+A **handoff** is a file that a fresh session can resume from. The plugin asks for the same form in two places: the compaction summary it shapes, and the file `/afk-compact:handoff` writes. After a compaction it gives the next turn one short **resume block**. This page covers what a handoff holds, what the first reply after a compaction looks like, and the two extra turns in which the plugin asks for a handoff.
+
+## What a handoff contains
+
+Each handoff is a set of short sections, in this order. A section with nothing in it is left out.
+
+- **Resume here:** status, how stable the state is, the next step (**Step 1**: one exact command or edit), the **Gate** (what blocks it, or none), the likeliest mistake to avoid, and what is running now.
+- **User constraints:** your own words and asks, each with its state (open, partly done, done, superseded). Lines carry the id `U-` and a number.
+- **Approvals:** what you approved, for which targets, once or standing. Deploys, production writes and pushes to a protected branch are asked again.
+- **Decisions and do-not-re-raise:** the choices made and why (`D-`), and the options rejected, refuted or failed (`X-`).
+- **In flight:** background work still running (`B-`), with a command to check it and whether it may restart by itself, asks first or never restarts.
+- **Live state:** claims about the outside world, each with when it was last seen and a command to re-check it.
+- **Open questions:** questions only you can answer (`Q-`), with options and a recommendation.
+- **Location, if changed:** the worktree, branch and working folder.
+- **Work done and findings:** what was done, how far it went and the proof for it, plus findings and follow-ups.
+- **Evidence:** the temporary files the work cites.
+- **Next steps:** a numbered list that starts with Step 1.
+
+Every item has one id, ids are never written as a range or renumbered, and a secret is never written, even quoted: the handoff says where it lives. The full format, with every rule, is in [the handoff spec](../plugin/assets/handoff-spec.md); for how the ids carry from one handoff to the next, see [The ledger stays (from 0.1.5)](usage.md#the-ledger-stays-from-015).
+
 ## The first reply after a compaction
 
-The first reply after a compaction opens with one status line, before any tool call: `Resumed · step 1: <the summary's Step 1>`, or `Resumed after compaction` when no Step 1 can be read; after a handoff whose report was cut off, its `✓ Handoff saved: <path>` line takes that place (when the cut-off handoff can still be finished, after the one call that finishes it). When a script reads the reply (`claude -p`, the Agent SDK) the line is left out, so the output a script reads does not start with it; a terminal session, the desktop app, the IDE extensions and Claude Code's other apps where you read the reply (mobile, Slack, Cowork, an SSH remote) keep it. The plugin tells them apart by the `CLAUDE_CODE_ENTRYPOINT` value Claude Code sets and by whether the session draws on any surface; where its classic hooks deliver the block, by `CLAUDE_CODE_ENTRYPOINT` alone, or, when that is not set, by whether the mod has recorded this session as headless. A question whose dialog timed out is not asked again in a dialog until you write: it is listed at the end of the turn instead (after a compaction, the same holds for one whose dialog closed with no answer).
+- The first reply after a compaction opens with one status line, before any tool call: `Resumed · step 1: <the summary's Step 1>`, or `Resumed after compaction` when no Step 1 can be read; after a handoff whose report was cut off, its `✓ Handoff saved: <path>` line takes that place (when the cut-off handoff can still be finished, after the one call that finishes it).
+- When a script reads the reply (`claude -p`, the Agent SDK) the line is left out, so the output a script reads does not start with it; a terminal session, the desktop app, the IDE extensions and Claude Code's other apps where you read the reply (mobile, Slack, Cowork, an SSH remote) keep it.
+- The plugin tells them apart by the `CLAUDE_CODE_ENTRYPOINT` value Claude Code sets and by whether the session draws on any surface; where its classic hooks deliver the block, by `CLAUDE_CODE_ENTRYPOINT` alone, or, when that is not set, by whether the mod has recorded this session as headless.
+- A question whose dialog timed out is not asked again in a dialog until you write: it is listed at the end of the turn instead (after a compaction, the same holds for one whose dialog closed with no answer).
+
+
 
 ## Delivery after a restart
 
@@ -33,7 +58,7 @@ Set `handoff_turn` to `false` to turn this off. `handoff_turn_max_tokens` sets h
 
 ## The handoff turn before a planned compaction
 
-Before each planned compaction the model gets one extra turn to write a handoff (up to `handoff_turn_max_tokens`, 64K by default, and 34 tool calls). Set `precompact_turn` to `false` to save usage: code then records the checkpoint alone. The planned evaluation run measures this turn; if it shows no recall gain worth its cost, the default becomes `false` and this README says why.
+Before each planned compaction the model gets one extra turn to write a handoff (up to `handoff_turn_max_tokens`, 64K by default, and 34 tool calls). Set `precompact_turn` to `false` to save usage: code then records the checkpoint alone. The planned evaluation run measures this turn; if its cost is not worth it, the default becomes `false` and this page says why.
 
 A planned compaction is the one at a clean turn end once the context passes `compact_target_tokens`, in a turn that had no nudge (a nudged turn follows the rules of the last cycle above). With `precompact_turn` set to `true`, the plugin submits one turn of its own before it compacts. It uses the same machinery and limits as the last-cycle handoff turn, and asks for a handoff while the context is still there; the turn ends with the skill's report and does not continue the task.
 

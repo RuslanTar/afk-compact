@@ -1,5 +1,7 @@
 # Compatibility
 
+Where the plugin runs: operating systems, Claude Code surfaces, and managed setups.
+
 ## Platforms
 
 | Platform | This version |
@@ -16,6 +18,15 @@ The plugin has never run on native Windows. What follows is expected from the wa
 - **With Git for Windows**, the hooks may reach the helper through Git Bash and its perl, but nothing on that path has been tested: process start times, file locks and paths may be wrong, and the mod's own helper calls are expected to fail.
 
 On Windows, running Claude Code inside WSL 2 is the expected route until native support lands.
+
+## Surfaces
+
+| Where Claude Code runs | What the plugin does there |
+|---|---|
+| Terminal (`claude`) | Everything these pages describe. |
+| Headless: `claude -p`, the Agent SDK, and apps that run Claude Code through it, such as the desktop app | Shaping, saved copies, verdicts and the resume block. Its own compactions run as a plain `/compact` at a turn end; no nudge, handoff turn, idle handoff turn, continue or plugin idle compaction. Not yet checked in a live session. See [Limits](limitations.md#limits). |
+| claude.ai and Cowork | Not tested yet. Cowork and remote sessions read their own settings and do not load the plugin from your machine (not tested). |
+| Subagents, on any surface | Shaped summaries and saved copies; no resume block, nudge or handoff turn. |
 
 ## Team, Enterprise and managed machines
 
