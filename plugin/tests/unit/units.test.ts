@@ -806,8 +806,9 @@ test('isoLocal: the offset of each instant across a DST change; the stamp reads 
     const s = isoLocal(ms)
     expect(s).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}[+-]\d\d:\d\d$/)
     expect(Date.parse(s)).toBe(ms)
-    const off = -new Date(ms).getTimezoneOffset()
-    const m = /([+-])(\d\d):(\d\d)$/.exec(s)
+    // 0 - x, not -x: in a UTC zone (a CI runner) -0 is -0, and toBe tells -0 from the +00:00 read back.
+    const off = 0 - new Date(ms).getTimezoneOffset()
+    const m =/([+-])(\d\d):(\d\d)$/.exec(s)
     expect(m === null ? NaN : (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3]))).toBe(off)
     const short = isoLocal(ms, false)
     expect(short).toBe(s.slice(0, 19) + s.slice(23))
