@@ -1,0 +1,1 @@
+# Claude Code's compaction with and without {{plugin}} <!-- Source of docs/comparison.md, a GitHub-only page (not in plugin/README.md). Compare only with Claude Code's own behaviour, never name another plugin or tool. No recall, retention, speed or cost-saving number until the benchmark publishes one. No user-local paths. Cross-page links: page.md#anchor. -->

@@ -1,0 +1,30 @@
+# Read by tools/build. The pages under "shipped" are joined into plugin/README.md in this order
+# (each also renders to docs/<page>); the pages under "github" render to docs/<page> only.
+# Every src/docs/*.md except _*.md is in exactly one list.
+# shipped
+getting-started.md
+installation.md
+how-it-works.md
+usage.md
+handoffs-and-resume.md
+configuration.md
+idle-compaction.md
+keep-warm.md
+usage-limits.md
+status-line.md
+background-jobs.md
+safety-and-approvals.md
+repo-mode.md
+question-queue.md
+restart-on-update.md
+files-and-storage.md
+upgrading.md
+privacy-and-logs.md
+compatibility.md
+limitations.md
+troubleshooting.md
+faq.md
+design-principles.md
+# github
+README.md
+comparison.md
