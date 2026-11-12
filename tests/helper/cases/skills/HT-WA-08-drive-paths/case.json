@@ -2,9 +2,20 @@
  "id": "HT-WA-08",
  "layer": "H",
  "owner": "skills",
- "note": "wait reads a drive path: file:, exit: and marker: conditions and the file: guard take an optional drive prefix (a letter and a colon right before / or \\), as Claude Code hands on Windows. On macOS and Linux C: is a folder of the cwd, so the grammar is the same on every OS. marker:x:a:b is still path x with regex a:b, and file:C:x (no separator after the colon) matches no kind",
+ "note": "wait reads a drive path: file:, exit: and marker: conditions and the file: guard take an optional drive prefix (a letter and a colon right before / or \\), as Claude Code hands on Windows. On macOS and Linux C: is a folder of the cwd, so the grammar is the same on every OS. marker:x:a:b is still path x with regex a:b, and file:C:x (no separator after the colon) matches no kind. Under a Windows Perl C:/x is an absolute path and no folder can be named C:, so the steps that make or read the drive-path files need posix-paths and run on macOS and Linux only; the two no-drive steps run everywhere",
  "steps": [
   {
+   "name": "the plain file for the no-drive marker",
+   "setup": [
+    {
+     "write": "$TMP/x",
+     "content": "a:b\n"
+    }
+   ]
+  },
+  {
+   "name": "the drive-path files (C: is a folder of the cwd)",
+   "needs": ["posix-paths"],
    "setup": [
     {
      "write": "$TMP/C:/x",
@@ -23,10 +34,6 @@
      "content": "one\nre here\n"
     },
     {
-     "write": "$TMP/x",
-     "content": "a:b\n"
-    },
-    {
      "write": "$TMP/C:/g",
      "content": "g\n"
     }
@@ -34,6 +41,7 @@
   },
   {
    "name": "file: with a drive prefix before /",
+   "needs": ["posix-paths"],
    "argv": [
     "wait",
     "--for",
@@ -48,6 +56,7 @@
   },
   {
    "name": "file: with a drive prefix before a backslash",
+   "needs": ["posix-paths"],
    "argv": [
     "wait",
     "--for",
@@ -62,6 +71,7 @@
   },
   {
    "name": "exit: with a drive prefix",
+   "needs": ["posix-paths"],
    "argv": [
     "wait",
     "--for",
@@ -76,6 +86,7 @@
   },
   {
    "name": "marker: with a drive prefix keeps the whole path",
+   "needs": ["posix-paths"],
    "argv": [
     "wait",
     "--for",
@@ -121,6 +132,7 @@
   },
   {
    "name": "the file: guard takes a drive prefix",
+   "needs": ["posix-paths"],
    "argv": [
     "wait",
     "--for",
