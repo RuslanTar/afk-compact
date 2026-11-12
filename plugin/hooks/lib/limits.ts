@@ -133,7 +133,8 @@ export function windowRule(l: Limit, c: LimitCtx): string {
   // NaN reads as at the cap.
   if (!(l.percentUsed < cap)) return 'cap'
   if (!c.job) return 'no-job'
-  if (c.usageAt === undefined || c.now - c.usageAt > LIMIT_FRESH_MS) return 'stale'
+  // A time more than a minute ahead (a clock that stepped back) is not known (as in `latestOf`).
+  if (c.usageAt === undefined || c.now - c.usageAt > LIMIT_FRESH_MS || c.usageAt - c.now > RESET_SAME_MS) return 'stale'
   const ds = c.deltas[l.kind] ?? []
   if (ds.length === 0) return 'no-delta'
   return l.percentUsed + Math.max(LIMIT_DELTA_FLOOR, ...ds) + 1 < cap ? 'band' : 'delta'

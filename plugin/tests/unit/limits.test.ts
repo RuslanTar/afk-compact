@@ -388,3 +388,15 @@ test('D88-16 (review 3): a reading dated more than a minute ahead (a clock that 
   expect(judge([r('seven_day', 99, 'plugin', 1, R), r('seven_day', 40, 'peer', -4, R)], { ...C, job: false })).toMatchObject({ ok: false, rule: 'cap', windows: ['seven_day:99'] })
   expect(judge([r('seven_day', 99, 'plugin', 1, R), r('seven_day', 40, 'peer', -0.5, R)], { ...C, job: false })).toMatchObject({ ok: true, rule: '90', windows: ['seven_day:40'] })
 })
+
+test('AT-LM-17: a reading dated more than a minute ahead of the clock (a clock that stepped back) is not fresh for the band, as it has no known time: five_hour at 93 stamped 2 min (or 61 s) ahead stops (rule stale); one a minute ahead reads as now: the band', () => {
+  expect(windowRule(w('five_hour', 93), { ...C, usageAt: NOW + 2 * MIN })).toBe('stale')
+  expect(windowRule(w('five_hour', 93), { ...C, usageAt: NOW + MIN + 1000 })).toBe('stale')
+  expect(windowRule(w('five_hour', 93), { ...C, usageAt: NOW + MIN })).toBe('band')
+  expect(windowRule(w('five_hour', 93), { ...C, usageAt: NOW + 30000 })).toBe('band')
+  // Below 90 the time does not matter.
+  expect(windowRule(w('five_hour', 80), { ...C, usageAt: NOW + 2 * MIN })).toBe('ok')
+  // Through the trust rule: another session's 92 dated 4 min ahead, resetting in 3 days, alone.
+  expect(judge([r('seven_day', 92, 'peer', -4, NOW + 3 * DAY)], C)).toMatchObject({ ok: false, band: false, rule: 'stale' })
+  expect(judge([r('seven_day', 92, 'peer', -0.5, NOW + 3 * DAY)], C)).toMatchObject({ ok: true, band: true, rule: 'band' })
+})
