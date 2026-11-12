@@ -40,6 +40,6 @@ It stops when a turn starts (the job's result, your message), the session ends o
 - the idle gaps that reached their first request or the idle path's timer: how many warmed and how many were refused, by reason;
 - the requests sent, and how many read the cache (`warm`), missed it (`fork-miss`), came back late (`late`) or failed;
 - the reasons warming stopped, and how many gaps were handed back to plugin idle compaction or the idle handoff turn;
-- for each gap, the cache result of the session's next main request after it: `hit` or `miss`, the pause before it, its cache reads and writes, and Claude Code's cache miss reason when Claude Code reports one (see [Cache reads after a pause](privacy-and-logs.md#watcher)). A gap with no main request yet in the logs says `not seen yet`.
+- for each gap, the cache result of the session's next main request after it: `hit`, `miss` or `none` (no cache tokens), the pause before it, its cache reads and writes, and Claude Code's cache miss reason when Claude Code reports one (see [Cache reads after a pause](privacy-and-logs.md#watcher)). A gap with no main request yet in the logs says `not seen yet`.
 
 An idle gap that a turn ends before the first request leaves no keep-warm row, so it is not counted.

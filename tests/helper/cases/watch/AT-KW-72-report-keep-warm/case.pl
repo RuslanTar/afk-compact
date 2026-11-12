@@ -109,5 +109,42 @@ my $section = qr/^## Keep-warm\n\n(.*?)(?=^## )/ms;
         $E->ok((index(watch::json::encode($k), $T::SID) < 0) ? 1 : 0, 'no session id in keep-warm.json');
         $E->ok(($got{readme} =~ /keep-warm\.json/ ? 1 : 0), 'the README names keep-warm.json');
         $E->ok((grep { ($_->{name} // '') eq 'keep-warm.json' } @{ $got{manifest}{files} || [] }) ? 1 : 0, 'the manifest lists it');
+        # Two sessions: the gap list is in time order, whatever order the session ids sort in (in
+        # the zip they are salted hashes), so its cap and the table's newest 50 keep the newest gaps.
+        require watch::report;
+        my %two = (
+            'a-sorts-first' => [ $kw->('keep_warm_stop', 90000, why => 'no-jobs', pings => 0, gap_s => 3000, refused => \1),
+                                 $kw->('keep_warm_start', 95000, jobs => 1, gap_s => 3000),
+                                 $kw->('keep_warm_stop', 96000, why => 'turn', pings => 1, gap_s => 4000) ],
+            'z-sorts-last'  => [ $kw->('keep_warm_stop', 1000, why => 'ttl-5m', pings => 0, gap_s => 3000, refused => \1),
+                                 $kw->('keep_warm_stop', 92000, why => 'near-limit', pings => 0, gap_s => 3000, refused => \1) ],
+        );
+        my $whys = sub { join(',', map { $_->{why} // '-' } @{ $_[0]{gap_list} || [] }) };
+        my $k2 = watch::report::keep_warm(\%two);
+        $E->is($whys->($k2), 'ttl-5m,no-jobs,near-limit,turn', 'two sessions: the gap list is oldest first across sessions');
+        $E->ok((ref $k2->{gap_list_truncated} && !${ $k2->{gap_list_truncated} }) ? 1 : 0, 'two sessions: not truncated');
+        my @md = watch::report::_kw_lines($k2);
+        $E->ok((grep { /^\| 1 \| refused \| 0 \| 0 \| ttl-5m \|/ } @md) ? 1 : 0, 'two sessions: the table numbers the gaps in time order');
+        {
+            no warnings qw(once);
+            local $watch::report::KW_GAP_MAX = 2;
+            my $k3 = watch::report::keep_warm(\%two);
+            $E->is($whys->($k3), 'near-limit,turn', 'two sessions, cap 2: the newest two gaps are kept');
+            $E->ok((ref $k3->{gap_list_truncated} && ${ $k3->{gap_list_truncated} }) ? 1 : 0, 'two sessions, cap 2: truncated');
+            $E->is($k3->{gaps}{armed}, 4, 'two sessions, cap 2: the counts still cover every gap');
+        }
+        # A next-request result outside hit, miss and none (an export's `other`, or a bad word) counts
+        # as other, in the totals and the gap list alike.
+        my %odd = map {
+            my ($sid, $res, $t) = @$_;
+            ($sid => [ $kw->('keep_warm_stop', $t, why => 'no-jobs', pings => 0, gap_s => 3000, refused => \1),
+                       $after->($t + 10, gap_s => 3000, result => $res, miss_reason => 'other') ])
+        } (['s1', 'other', 1000], ['s2', 'not_seen', 2000], ['s3', 'hit', 3000]);
+        my $k4 = watch::report::keep_warm(\%odd);
+        $E->is(join(',', map { "$_=$k4->{next_request}{$_}" } qw(hit miss none not_seen other)), 'hit=1,miss=0,none=0,not_seen=0,other=2',
+               'a next-request result outside hit, miss and none counts as other');
+        $E->is(join(',', map { $_->{next}{result} } @{ $k4->{gap_list} }), 'other,other,hit', 'the gap list shows other too');
+        $E->ok((grep { /^- Next main request after a gap: 1 hit, 0 miss, 0 none, 0 not seen yet, 2 other$/ } watch::report::_kw_lines($k4)) ? 1 : 0,
+               'the section names the other results');
     },
 };

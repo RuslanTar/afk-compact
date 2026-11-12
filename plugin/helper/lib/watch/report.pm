@@ -221,16 +221,18 @@ sub stats {
 #   pings {sent, hit, missed, late, failed}: sent is the `keep_warm_send` rows (the result rows
 #     where a gap has fewer, an older version); hit `warm`, missed `fork-miss`, late `late`,
 #     failed the rest; ping_results {result => n}; handovers: stops that handed the gap back
-#   next_request {hit, miss, none, not_seen}, miss_reasons {reason => n}: for each gap, the first
-#     `cache_after_gap` row whose response came after the gap's last row and before the next gap
-#   gap_list: per gap, oldest first, at most $KW_GAP_MAX (the newest; gap_list_truncated)
+#   next_request {hit, miss, none, other, not_seen}, miss_reasons {reason => n}: for each gap, the
+#     first `cache_after_gap` row whose response came after the gap's last row and before the next
+#     gap (a result other than hit, miss or none, such as an export's `other`, counts as `other`)
+#   gap_list: per gap, oldest first across all sessions (by start, then end time), at most
+#     $KW_GAP_MAX (the newest; gap_list_truncated)
 our $KW_GAP_MAX = 1000;
 my %KW_PING = (warm => 'hit', 'fork-miss' => 'missed', late => 'late');
 sub keep_warm {
     my ($sessions) = @_;
     my %k = (v => 1, gaps => { armed => 0, warmed => 0, refused => 0, open => 0 }, refused_by => {}, stops_by => {},
              pings => { sent => 0, hit => 0, missed => 0, late => 0, failed => 0 }, ping_results => {}, handovers => 0,
-             next_request => { hit => 0, miss => 0, none => 0, not_seen => 0 }, miss_reasons => {}, gap_list => [],
+             next_request => { hit => 0, miss => 0, none => 0, other => 0, not_seen => 0 }, miss_reasons => {}, gap_list => [],
              gap_list_truncated => \0);
     my $t_of = sub { my $r = shift; return $r->{_t} // watch::io::parse_iso(ref $r->{ts} ? undef : $r->{ts}) // 0 };
     my $w = sub { my $v = shift; return (defined $v && !ref $v && $v =~ /\A[a-z][a-z0-9_:-]{0,39}\z/) ? $v : 'other' };
@@ -280,11 +282,14 @@ sub keep_warm {
             $j++ while $j < @after && $after[$j][0] <= $g->{end_t};
             next unless $j < @after && (!defined $next_start || $after[$j][0] < $next_start);
             my $a = $after[ $j++ ][1];
-            $g->{next} = { result => $w->($a->{result}), miss_reason => $w->($a->{miss_reason}),
+            my $res = $w->($a->{result});
+            $g->{next} = { result => ($res =~ /\A(?:hit|miss|none)\z/ ? $res : 'other'), miss_reason => $w->($a->{miss_reason}),
                            map { ($_ => $num->($a->{$_})) } grep { defined $num->($a->{$_}) } qw(gap_s cache_read cache_creation input missed_tokens) };
         }
         push @all, @gaps;
     }
+    # time order across sessions: the sessions come in id order (salted hashes in the zip)
+    @all = sort { ($a->{start_t} // 0) <=> ($b->{start_t} // 0) || ($a->{end_t} // 0) <=> ($b->{end_t} // 0) } @all;
     for my $g (@all) {
         my $n = 0;
         $n += $_ for values %{ $g->{res} };
@@ -300,7 +305,7 @@ sub keep_warm {
         $k{handovers}++ if $g->{handover};
         if ($g->{next}) {
             my $res = $g->{next}{result};
-            $k{next_request}{ exists $k{next_request}{$res} ? $res : 'none' }++;
+            $k{next_request}{$res}++;
             $k{miss_reasons}{ $g->{next}{miss_reason} }++;
         } else {
             $k{next_request}{not_seen}++;
@@ -330,7 +335,8 @@ sub _kw_lines {
         '- Ping results: ' . $cnt->($k->{ping_results}),
         '- Stops, by reason: ' . $cnt->($k->{stops_by}),
         "- Hand-overs to the idle path: $k->{handovers}",
-        "- Next main request after a gap: $n->{hit} hit, $n->{miss} miss, $n->{none} none, $n->{not_seen} not seen yet",
+        "- Next main request after a gap: $n->{hit} hit, $n->{miss} miss, $n->{none} none, $n->{not_seen} not seen yet"
+            . ($n->{other} ? ", $n->{other} other" : ''),
         '- Its cache miss reason: ' . $cnt->($k->{miss_reasons}),
         '', '| Gap | Outcome | Pings | Hit | Stop | Next request | Pause s | Read share | Miss reason |', '|---|---|---|---|---|---|---|---|---|',
     );
