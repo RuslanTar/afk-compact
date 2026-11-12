@@ -193,12 +193,15 @@ sub root_form {
 }
 
 # Cygwin::win_to_posix_path (MSYS and Cygwin perl), or undef. In test mode STORE_TEST_CYGDRIVE=<dir>
-# stands in for it: C:\a\b reads as <dir>/c/a/b (MSYS's /c/a/b under a test folder).
+# stands in for it: C:\a\b reads as <dir>/c/a/b (MSYS's /c/a/b under a test folder). In test mode
+# STORE_TEST_NO_CYGWIN=1 hides the real sub (a case that means MSYS perl without it, run on Git
+# Bash, whose perl has it); the STORE_TEST_CYGDRIVE stand-in still applies.
 sub _win_to_posix {
     if (test_mode() && defined $ENV{STORE_TEST_CYGDRIVE} && $ENV{STORE_TEST_CYGDRIVE} =~ m{\A/}) {
         my $top = $ENV{STORE_TEST_CYGDRIVE};
         return sub { (my $x = $_[0]) =~ tr{\\}{/}; $x =~ s{\A([A-Za-z]):}{$top . '/' . lc $1}e; return $x };
     }
+    return undef if test_mode() && ($ENV{STORE_TEST_NO_CYGWIN} // '') eq '1';
     no strict 'refs';
     return defined &{'Cygwin::win_to_posix_path'} ? \&{'Cygwin::win_to_posix_path'} : undef;
 }

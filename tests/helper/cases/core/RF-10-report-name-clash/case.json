@@ -1,0 +1,23 @@
+{
+ "id": "RF-10 (watch report picks its file name by exclusive create)",
+ "note": "`watch report` with no --out writes <watch>/reports/<date>_watch-report.md, else the next free -2, -3 ... name. It picked the name by a check, then wrote: two runs on the same date could pick one name, and the second read the clash as `REFUSED: output folder not writable` (exit 73). The name is now taken by an exclusive create and a clash moves on to the next number: 12 runs at once each write their own file, and a name taken by a dangling link (which a check reads as free) is skipped, never written through or replaced.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {"STORE_TEST_NO_GIT": "1"},
+ "steps": [
+  {"name": "a first report takes the plain name",
+   "argv": ["watch", "report"],
+   "expect": {"exit": 0, "stdout": "WATCH-REPORT $WATCH/reports/2026-10-21_watch-report.md\n",
+     "files": [{"path": "$WATCH/reports/2026-10-21_watch-report.md", "mode": "0600"}]}},
+  {"name": "a name taken by a dangling link is skipped",
+   "setup": [{"symlink": "$WATCH/reports/2026-10-21_watch-report-2.md", "to": "$TMP/nowhere/x.md"}],
+   "argv": ["watch", "report"],
+   "expect": {"exit": 0, "stdout": "WATCH-REPORT $WATCH/reports/2026-10-21_watch-report-3.md\n",
+     "absent": ["$TMP/nowhere"]}},
+  {"name": "12 reports at once: each writes its own file",
+   "parallel": 12,
+   "argv": ["watch", "report"],
+   "expect": {"exit": 0, "stdout_has": ["\\AWATCH-REPORT \\S+/reports/2026-10-21_watch-report-([4-9]|1[0-5])\\.md\\n\\z"],
+     "files": [{"path": "$WATCH/reports/2026-10-21_watch-report*.md", "count": 14}]}}
+ ]
+}

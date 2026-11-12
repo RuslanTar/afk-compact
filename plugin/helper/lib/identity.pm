@@ -6,8 +6,9 @@ package identity;
 # Linux, MSYS and Cygwin /proc/<pid>/stat field 22 + btime; else `ps -o lstart=`.
 # Every start-time read of one pid in the helper goes through _read_start; start_epochs reads
 # many at once (the same /proc fields on the same platforms, else one `ps -axo` listing).
-# Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk; STORE_TEST_PROC_ROOT=<dir>
-# stands in for /proc in the start-time read (with util::os's STORE_TEST_OS).
+# Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk; STORE_TEST_PPID=<pid>
+# stands in for getppid() where the walk starts; STORE_TEST_PROC_ROOT=<dir> stands in for /proc
+# in the start-time read (with util::os's STORE_TEST_OS).
 use strict;
 use warnings;
 use utf8;
@@ -277,9 +278,17 @@ sub _by_exe {
 # whose parent is the anchor, reads none, and with no anchor (a helper run from a terminal) none
 # is read either. A hop that CLAUDE_PID names is the anchor before its own parent and command are
 # read (0.1.4 T-14): a hook's helper whose parent is Claude Code itself makes no `ps` call here.
+# Under MSYS and Cygwin (util::os) a walk that starts at pid 1 or below has no parent chain to read
+# (Git Bash's perl sees getppid() = 1 in a hook): CLAUDE_PID is then the anchor, and without it the
+# walk finds nothing, as before. Elsewhere a helper whose parent is pid 1 is an orphan, whose
+# CLAUDE_PID may name a process that has exited: it finds nothing, as before.
 sub _walk {
     my ($pid) = @_;
     my $env = (defined $ENV{CLAUDE_PID} && $ENV{CLAUDE_PID} =~ /^[1-9][0-9]*$/) ? 0 + $ENV{CLAUDE_PID} : 0;
+    if ((!$pid || $pid <= 1) && $env) {
+        my $os = util::os();
+        return (0 + $env, 1) if $os eq 'msys' || $os eq 'cygwin';
+    }
     my @below;
     for (1 .. 12) {
         last if !$pid || $pid <= 1;
@@ -316,7 +325,8 @@ sub claude_pid {
         $START{$1} = $2;
         return $CACHED;
     }
-    my $first = getppid();
+    # STORE_TEST_PPID (test mode): stands in for getppid(), e.g. 1 as Git Bash's perl sees it.
+    my $first = util::test_mode() && ($ENV{STORE_TEST_PPID} // '') =~ /\A[0-9]+\z/ ? 0 + $ENV{STORE_TEST_PPID} : getppid();
     # A hook's perl runs as the launcher's child (0.1.4: a perl that cannot start falls
     # back), which hands main.pl "<launcher pid>:<its parent>". While the launcher is still this
     # process's parent the walk starts at that parent, as when perl took the launcher's place: the

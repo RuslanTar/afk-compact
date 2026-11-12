@@ -1,5 +1,6 @@
 {
  "id": "HT-HC-01",
+ "needs": ["unix-pid1"],
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",

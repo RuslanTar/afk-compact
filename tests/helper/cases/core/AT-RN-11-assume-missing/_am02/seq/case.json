@@ -1,0 +1,5 @@
+{
+ "id": "AT-RN-11-inner-seq",
+ "note": "run by AT-RN-11 only: a sequence case whose seed copy uses pid 1's start time placeholder and names no need; with unix-pid1 missing it skips instead of dying on the start time",
+ "sequence": "am-lstart1"
+}

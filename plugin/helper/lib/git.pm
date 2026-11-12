@@ -75,10 +75,12 @@ sub check_ignore_forms {
     return \@a;
 }
 
-# where(cwd) -> {in_git, toplevel, common_dir, repo, branch, head} with one or two calls
+# where(cwd) -> {in_git, toplevel, common_dir, repo, branch, head} with one or two calls. repo is
+# bytes on every branch, as git's output is: a character cwd's name joined to the byte root
+# (bucket.pm) encoded the root twice.
 sub where {
     my ($cwd, $timeout_ms) = @_;
-    my $res = { in_git => 0, repo => (defined $cwd ? util::basename($cwd) : undef) };
+    my $res = { in_git => 0, repo => (defined $cwd ? util::basename(util::fsb($cwd)) : undef) };
     return { %$res, unavailable => 1 } unless available();
     return $res unless defined $cwd && -d $cwd;
     my $r = cmd($cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir', '--show-toplevel', 'HEAD'], $timeout_ms // 2000);

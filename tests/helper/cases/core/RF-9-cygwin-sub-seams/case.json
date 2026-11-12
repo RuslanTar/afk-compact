@@ -1,0 +1,38 @@
+{
+ "id": "RF-9 (the drive-path cases hold under a perl that has Cygwin::win_to_posix_path)",
+ "note": "Git Bash's perl has Cygwin::win_to_posix_path, so a drive-path root reads as /c/... there. The cases that mean macOS or Linux set STORE_TEST_OS=linux, and the ones that mean MSYS perl without that sub set STORE_TEST_NO_CYGWIN=1, which hides the real sub (STORE_TEST_CYGDRIVE still stands in for it). Here a perl first on PATH defines the sub (C: reads as $TMP/cyg/c), as on the PC, so the seams are shown on any host. Every drive path in this case reads under $TMP or is refused: nothing is written outside the case's folder.",
+ "path_prepend": ["$TMP/cyg-bin"],
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "options": {"handoff_root": "C:\\h"},
+ "steps": [
+  {"setup": [
+    {"write": "$TMP/cyg-lib/FakeCygwin.pm", "content": "package FakeCygwin;\nuse strict;\nuse warnings;\n# Cygwin::win_to_posix_path as MSYS perl has it: C:\\x reads as <top>/c/x\nmy $top = '$TMP/cyg';\nsub Cygwin::win_to_posix_path { (my $x = $_[0]) =~ tr{\\\\}{/}; $x =~ s{\\A([A-Za-z]):}{$top . '/' . lc $1}e; return $x }\n1;\n"},
+    {"stub": "perl", "dir": "$TMP/cyg-bin", "script": "exec /usr/bin/perl -I'$TMP/cyg-lib' -MFakeCygwin \"$@\""},
+    {"mkdir": "$TMP/cyg/c"}
+  ]},
+  {"name": "the perl first on PATH has Cygwin::win_to_posix_path",
+   "exec": ["perl", "-e", "print defined &Cygwin::win_to_posix_path ? Cygwin::win_to_posix_path(qq(C:\\\\h)) . qq(\\n) : qq(none\\n)"],
+   "expect": {"exit": 0, "stdout": "$TMP/cyg/c/h\n"}},
+  {"name": "macOS or Linux (STORE_TEST_OS=linux): the drive-path root is root-invalid even where perl has the sub",
+   "env": {"STORE_TEST_OS": "linux"},
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "absent": ["$TMP/C:*", "$TMP/cyg/c/h"],
+     "stdout_has": ["^root: handoff_root refused \\(root-invalid\\); copies and evidence under it are not written$"]}},
+  {"name": "MSYS perl without the sub (STORE_TEST_NO_CYGWIN=1): root-invalid although perl has it",
+   "env": {"STORE_TEST_OS": "msys", "STORE_TEST_NO_CYGWIN": "1"},
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "absent": ["$TMP/C:*", "$TMP/cyg/c/h"],
+     "stdout_has": ["^root: handoff_root refused \\(root-invalid\\); copies and evidence under it are not written$"]}},
+  {"name": "MSYS perl with the sub: the drive-path root is read in its /c/ form",
+   "env": {"STORE_TEST_OS": "msys"},
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "absent": ["$TMP/C:*"],
+     "stdout_lacks": ["root-invalid"]}},
+  {"name": "STORE_TEST_NO_CYGWIN keeps the STORE_TEST_CYGDRIVE stand-in",
+   "env": {"STORE_TEST_OS": "msys", "STORE_TEST_NO_CYGWIN": "1", "STORE_TEST_CYGDRIVE": "$TMP/cyg"},
+   "argv": ["status", "--sid", "$SID"],
+   "expect": {"exit": 0, "absent": ["$TMP/C:*"],
+     "stdout_lacks": ["root-invalid"]}}
+ ]
+}

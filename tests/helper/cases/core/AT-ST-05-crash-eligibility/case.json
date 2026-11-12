@@ -1,5 +1,6 @@
 {
  "id": "AT-ST-05 a, e (crash eligibility, provisional)",
+ "needs": ["unix-pid1"],
  "note": "'Eligible' under a provisional reading: (a) a live- record of this host whose pid is gone, with no ended- record, counts as ended (a crash): finished; a live- record whose pid runs with another start time (restarted) counts as ended too; (e) a record without host and no ended- record is untouched (fail closed); and (b) a pid that runs with the same start time stays untouched",
  "tz": "Etc/GMT-3",
  "vars": {"A1": "5e55a002-0c0f-4f1e-9a00-00000000a002", "B1": "5e55a003-0c0f-4f1e-9a00-00000000a003", "R1": "5e55a004-0c0f-4f1e-9a00-00000000a004", "E1": "5e55a005-0c0f-4f1e-9a00-00000000a005"},

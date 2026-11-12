@@ -1,0 +1,68 @@
+{
+ "id": "AT-RN-11 (needs a Windows host lacks: skipped cases, steps not run, owner-bit modes)",
+ "note": "The runner as Git for Windows' Perl sees it, run on any host through --assume-missing: a case that needs unix-pid1 (pid 1 standing in for Claude Code; MSYS has no pid 1) skips, and so does a case that names no need but uses pid 1's start time placeholder, in its own text, in a setups/ file it runs or in a sequence's seed copy (a case-local fixtures folder through --fixtures); a step that needs ps-lstart is not run and named under its case while the next step runs, and with exact-modes an expected mode compares the owner write bit only (noacl mounts read 0644 for a 0600 file), with a count line. Without the flag the same pid-1 cases run and fail, so the probes count as met on macOS and Linux; those two steps need unix-pid1 themselves, so a host that lacks it does not run them",
+ "steps": [
+  {
+   "name": "with unix-pid1, ps-lstart and exact-modes assumed missing",
+   "lib": "runner_child",
+   "args": {
+    "tmp": "$TMP",
+    "dir": "_am01",
+    "args": ["--assume-missing", "unix-pid1,ps-lstart,exact-modes"],
+    "exit": 0,
+    "stdout_has": [
+     "^ok \\d+ - AT-RN-11-inner-pid1 # SKIP needs unix-pid1$",
+     "^ok \\d+ - AT-RN-11-inner-lstart1 # SKIP needs unix-pid1 \\(the case uses .LSTART1\\)$",
+     "^ok \\d+ - AT-RN-11-inner-lstart1-setup # SKIP needs unix-pid1 \\(the case uses .LSTART1\\)$",
+     "^ok \\d+ - AT-RN-11-inner-step\\n#   not run here: step 1 \\(reads a start time\\) \\(needs ps-lstart\\)$",
+     "^ok \\d+ - AT-RN-11-inner-modes$",
+     "^# steps not run here \\(their needs\\): 1$",
+     "^# modes compared by the owner write bit only \\(chmod does not set modes here\\): 1 checks$",
+     "^# passed 2, failed 0, skipped 3, not run 0$"
+    ]
+   }
+  },
+  {
+   "name": "on this host the needs count as met: the pid-1 case runs and fails",
+   "needs": ["unix-pid1"],
+   "lib": "runner_child",
+   "args": {
+    "tmp": "$TMP",
+    "dir": "_am01/pid1",
+    "exit": 1,
+    "stdout_has": [
+     "^not ok 1 - AT-RN-11-inner-pid1$",
+     "^# passed 0, failed 1, skipped 0, not run 0$"
+    ]
+   }
+  },
+  {
+   "name": "and the case that uses pid 1's start time without naming the need runs and fails",
+   "needs": ["unix-pid1"],
+   "lib": "runner_child",
+   "args": {
+    "tmp": "$TMP",
+    "dir": "_am01/lstart1",
+    "exit": 1,
+    "stdout_has": [
+     "^not ok 1 - AT-RN-11-inner-lstart1$",
+     "^# passed 0, failed 1, skipped 0, not run 0$"
+    ]
+   }
+  },
+  {
+   "name": "a sequence case whose seed copy uses pid 1's start time skips too",
+   "lib": "runner_child",
+   "args": {
+    "tmp": "$TMP",
+    "dir": "_am02",
+    "args": ["--assume-missing", "unix-pid1", "--fixtures", "$CASE/_am02/fixtures"],
+    "exit": 0,
+    "stdout_has": [
+     "^ok \\d+ - AT-RN-11-inner-seq # SKIP needs unix-pid1 \\(the case uses .LSTART1\\)$",
+     "^# passed 0, failed 0, skipped 1, not run 0$"
+    ]
+   }
+  }
+ ]
+}

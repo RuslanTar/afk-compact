@@ -1,0 +1,39 @@
+{
+ "id": "AT-P5-05 skills, non-ASCII cwd outside git",
+ "layer": "H",
+ "owner": "skills",
+ "note": "RF-4, the no-git branch of P5 text encoding: begin and publish in a non-ASCII folder (rëpo) that is no git work tree, under a non-ASCII handoff_root (räume). The repository name came from the character cwd on that branch (git.pm where), and bucket.pm joined it to the byte root, so the root was encoded twice: the bucket went under rÃ¤ume while handoff_root and the PostCompact copy stayed under räume, and locate called the file foreign. The name is now bytes on every branch, so every path is encoded once.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {"setup": [
+    {"mkdir": "$TMP/rëpo"},
+    {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@inline": {"options": {"handoff_root": "$TMP/räume/h"}}}}}
+  ]},
+  {"name": "begin in a non-ASCII folder outside git: the bucket is under the root once encoded",
+   "cwd": "$TMP/rëpo",
+   "argv": ["begin", "--sid", "$SID", "--topic", "retry"],
+   "capture": {"STAGE": "json:stage"},
+   "expect": {"exit": 0,
+     "stdout_has": ["\"stage\":\"$TMP/räume/h/rëpo/retry/\\.staging/11111111-[0-9a-f]{8}\""],
+     "stdout_lacks": ["Ã", "Â"]}},
+  {"write": "$STAGE/body.md",
+   "content": "# Retry fix drafted, suite pending\n## Resume here\nStatus: active · State: retry window fix drafted (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| draft in place | 2026-10-21 14:05 +0300 | `bin/test retry` | measured |\n## Open questions\nnone\n## Location\nfolder rëpo (no git) · this handoff: @self@\n## Work done and findings\n- retry fix: implemented\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"},
+  {"name": "publish writes under the root once encoded",
+   "cwd": "$TMP/rëpo",
+   "argv": ["publish", "--stage", "$STAGE", "--slug", "retry", "--status", "in-progress"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^Wrote handoff to: $TMP/räume/h/rëpo/retry/\\S+\\.md$"],
+     "stdout_lacks": ["Ã", "Â"],
+     "files": [{"path": "$TMP/räume/h/rëpo/retry/*.md", "count": 1}]}},
+  {"name": "locate finds it again as this session's own file, once encoded",
+   "cwd": "$TMP/rëpo",
+   "argv": ["locate", "--sid", "$SID", "--cwd", "$TMP/rëpo"],
+   "expect": {"exit": 0,
+     "stdout_has": ["^pick: $TMP/räume/h/rëpo/retry/\\S+\\.md$", "^integrity: ok$"],
+     "stdout_lacks": ["Ã", "Â", "foreign"]}},
+  {"name": "no step made a folder whose name holds the root encoded twice",
+   "exec": ["/bin/sh", "-c", "find \"$1\" -name '*Ã*' | head -n 1", "sh", "$TMP"],
+   "expect": {"exit": 0, "stdout": ""}}
+ ]
+}

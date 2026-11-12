@@ -1,0 +1,6 @@
+{
+ "id": "AT-RN-11-inner-lstart1",
+ "note": "run by AT-RN-11 only: a case that uses pid 1's start time placeholder and names no need; with unix-pid1 missing it skips, so its failing step never runs",
+ "exec": ["/bin/sh", "-c", "exit 1", "sh", "$LSTART1"],
+ "expect": {"exit": 0}
+}

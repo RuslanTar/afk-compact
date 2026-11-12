@@ -478,9 +478,19 @@ sub report_cli {
         my $dir = "$ctx->{watch}/reports";
         watch::io::mkdir_p($dir) or do { print "REFUSED: output folder not writable\n"; return 73 };
         my $base = watch::io::local_date($ctx->{now}) . '_watch-report' . ($o->{export} ? '-export' : '');
-        $path = "$dir/$base.md";
-        my $i = 1;
-        $path = "$dir/$base-" . ++$i . '.md' while -e $path;
+        # the first free name of <base>.md, <base>-2.md, ...: taken by an exclusive create, and a
+        # name another run took first (two reports on one date) moves on to the next number
+        for my $i (1 .. 10000) {
+            my $p = $i == 1 ? "$dir/$base.md" : "$dir/$base-$i.md";
+            next if -e $p || -l $p;
+            my $r = watch::export::_write_new($p, $md, clash => 1);
+            next if $r == -1;
+            return 73 unless $r;
+            print "WATCH-REPORT $p\n";
+            return 0;
+        }
+        print "REFUSED: output folder not writable\n";
+        return 73;
     }
     return 73 unless watch::export::_write_new($path, $md);
     print "WATCH-REPORT $path\n";

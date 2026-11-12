@@ -1,0 +1,8 @@
+{
+ "id": "AT-RN-11-inner-modes",
+ "note": "run by AT-RN-11 only: a 0644 file checked as 0600 passes when modes compare the owner write bit only (Git for Windows' noacl mounts)",
+ "steps": [
+  {"setup": [{"write": "$TMP/w", "content": "x\n", "mode": "0644"}]},
+  {"name": "owner write bit set on both sides", "exec": ["/bin/sh", "-c", "exit 0"], "expect": {"exit": 0, "files": [{"path": "$TMP/w", "mode": "0600"}]}}
+ ]
+}

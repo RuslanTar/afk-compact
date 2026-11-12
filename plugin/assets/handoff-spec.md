@@ -173,7 +173,7 @@ Fixed per rule; no user content. Shown as `afk-compact watcher: <text> (<alert_i
 
 `<store> wait --for <cond> [--for <cond>…] [--while <guard>…] [--max <s>] [--stall <s>] [--deadline <epoch>]`
 
-- **cond**: `pid-exit:<pid>[@<start-epoch>]` · `file:<path>` · `marker:<path>:<perl-regex>` · `exit:<path>`. **guard**: `pid:<pid>[@<start-epoch>]` · `file:<path>`. A path holds no `:`.
+- **cond**: `pid-exit:<pid>[@<start-epoch>]` · `file:<path>` · `marker:<path>:<perl-regex>` · `exit:<path>`. **guard**: `pid:<pid>[@<start-epoch>]` · `file:<path>`. A path holds no `:`, except a drive letter's right before `/` or `\` (`file:C:/x`, `marker:C:\x:<regex>`).
 - The wait is met when any `--for` holds. It ends early (exit 12) when a `--while` guard stops holding. `--max` is 0 to 7200 seconds, default 270; `--max 0` checks once and returns at once. `wait` prints its pending line only after `--max` has passed, and an unattended session ends a background command at 1800 s by default, so a main session waits with `--max 1740` (`main_max_s`).
 - `exit:<path>` reads the end marker of a job: a line `__exit <n>` (`^__exit (-?[0-9]+)$`) or the runtime trailer `[exited with code <n>]` prints `rc=<n>`. The trailer `[killed]` (a TaskStop, or the tasks stopped at exit) prints `killed`: the job was killed, never finished; a killed job is asked about, never relaunched by itself.
 - **End marker:** a job you will wait on is started with `; echo "__exit $?"` at the end of its command. A relaunch replays the recorded command byte for byte, so it carries the suffix when the original did; restart text never adds it.
@@ -465,13 +465,13 @@ Patterns use the subset that both Perl and JavaScript read the same way: no flag
   "wait": {
     "cond_res": {
       "pid-exit": "^pid-exit:([0-9]+)(@([0-9]+))?$",
-      "file": "^file:([^:]+)$",
-      "marker": "^marker:([^:]+):(.+)$",
-      "exit": "^exit:([^:]+)$"
+      "file": "^file:((?:[A-Za-z]:(?=[\\\\/]))?[^:]+)$",
+      "marker": "^marker:((?:[A-Za-z]:(?=[\\\\/]))?[^:]+):(.+)$",
+      "exit": "^exit:((?:[A-Za-z]:(?=[\\\\/]))?[^:]+)$"
     },
     "guard_res": {
       "pid": "^pid:([0-9]+)(@([0-9]+))?$",
-      "file": "^file:([^:]+)$"
+      "file": "^file:((?:[A-Za-z]:(?=[\\\\/]))?[^:]+)$"
     },
     "max_default_s": 270,
     "max_range_s": [0, 7200],
