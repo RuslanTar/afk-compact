@@ -274,6 +274,26 @@ fail() {
   printf '%s\n' "$*" >>"$C/fail"
 }
 
+needs_stub_os() {
+  # needs_stub_os NAME=VALUE...: a case whose launcher must see the stub-os uname -s or id -u
+  # report VALUE is skipped under a shell where it does not. A busybox built with its standalone
+  # shell (FEATURE_SH_STANDALONE, as in Ubuntu's busybox-static) runs its own uname and id
+  # applets ahead of PATH, so the stubs never run. Those applets read the real system and user,
+  # so the launcher's checks hold under that shell; only a value unlike the real one cannot be
+  # given. Probed with the stub-os folder first on PATH, as run_launcher --stub-os sets it.
+  for so_a in "$@"; do
+    so_n=${so_a%%=*}
+    so_v=${so_a#*=}
+    case $so_n in
+    uname) so_got=$(PATH=$here/stub-os:$PATH STUB_UNAME=$so_v $SH -c 'uname -s' 2>/dev/null) ;;
+    id) so_got=$(PATH=$here/stub-os:$PATH STUB_UID=$so_v $SH -c 'id -u' 2>/dev/null) ;;
+    *) echo "needs_stub_os: bad name $so_n" >&2; return 2 ;;
+    esac
+    [ "$so_got" != "$so_v" ] || continue
+    [ -n "$CSKIP" ] || CSKIP="this shell runs its own $so_n ahead of PATH (a busybox standalone shell), so the stub's $so_v never reaches the launcher"
+  done
+}
+
 # run_launcher [--notty-in] [--notty-out] [--env NAME=VALUE]... [--stub-os] [--no-pty]
 #              [--limit SECS] [--self WORD] -- ARGS...
 # --self: the word the shell gets for the launcher file (default: its absolute path).
@@ -368,6 +388,7 @@ want_val() {
 }
 
 want_err() {
+  [ -z "$CSKIP" ] || return 0
   grep -F -- "$1" "$C/err" >/dev/null 2>&1 || fail "stderr lacks: $1 [$(tr '\n' '|' <"$C/err" 2>/dev/null)]"
 }
 
@@ -376,6 +397,7 @@ want_no_err() {
 }
 
 want_err_lines() {
+  [ -z "$CSKIP" ] || return 0
   w=$(grep -c '' "$C/err" 2>/dev/null) || w=0
   [ "$w" = "$1" ] || fail "stderr lines: want $1, got $w [$(tr '\n' '|' <"$C/err" 2>/dev/null)]"
 }
@@ -1194,6 +1216,7 @@ case_38() {
 
 case_39() {
   new_case AT-RS-39a "Windows (MINGW, MSYS, CYGWIN): pass-through with the Windows line" needs-pty
+  needs_stub_os uname=MINGW64_NT-10.0-19045
   for w_u in MINGW64_NT-10.0-19045 MSYS_NT-10.0 CYGWIN_NT-10.0; do
     rm -f "$C/runs" "$C/err"
     run_launcher --stub-os --env "STUB_UNAME=$w_u" -- --verbose
@@ -1206,6 +1229,7 @@ case_39() {
   end_case
 
   new_case AT-RS-39b "another system: pass-through" needs-pty
+  needs_stub_os uname=SunOS
   run_launcher --stub-os --env STUB_UNAME=SunOS -- --verbose
   want_passthrough "not supported on this system"
   end_case
@@ -1227,6 +1251,7 @@ case_40() {
   end_case
 
   new_case AT-RS-40c "runtime folder owned by someone else (stub id): pass-through" needs-pty
+  needs_stub_os id=4242 "uname=$host"
   run_launcher --stub-os --env STUB_UID=4242 --env "STUB_UNAME=$host" -- --verbose
   want_passthrough "the runtime folder is not private (a symlink, another owner or not 0700)"
   end_case
@@ -1271,6 +1296,7 @@ case_40() {
   end_case
 
   new_case AT-RS-40h "Linux with getfacl: an ACL entry beyond user::, group::, other:: on the runtime folder: pass-through" needs-pty
+  needs_stub_os uname=Linux "id=$uid"
   run_launcher --stub-os --env STUB_UNAME=Linux --env "STUB_UID=$uid" --env "STUB_FACL=user:4242:rwx
 mask::rwx" -- --verbose
   want_passthrough "the runtime folder is not private (a symlink, another owner or not 0700)"

@@ -235,6 +235,11 @@ or a system other than macOS and Linux. On Windows (MINGW, MSYS, CYGWIN) the lin
 - `tests/launcher/run.sh [--shell "SHELL"]... [--quick] [CASE...]`: every case under every
   POSIX shell found (`/bin/sh`, `/bin/bash`, `bash`, `/bin/dash`, `dash`, `/bin/zsh`, `zsh`,
   `busybox sh`; links to one already listed are skipped). Needs `script(1)` and `perl`.
+  A busybox built with its standalone shell (Ubuntu's `busybox-static`, for one) runs its own
+  `uname` and `id` ahead of PATH, so under it the cases that need a stub to report another
+  system or user (AT-RS-39a, AT-RS-39b, AT-RS-40c; AT-RS-40h on a host other than Linux) are
+  skipped and say why. The launcher is
+  not weakened there: those applets report the real system and user.
 - `tests/launcher/docker.sh [IMAGE...]`: the same on Linux in Docker, no network, no
   credentials, the repo read-only, as uid 1000, plus the real foreign-owner case. Default
   images: `debian:bookworm-slim` (dash as `/bin/sh`, bash) and `launcher-test-alpine:1`
