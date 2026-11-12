@@ -350,10 +350,11 @@ export const register: Register = (on, options) => {
 
   // The resume block (the same idle block again for a person back after a background result's turn
   // took it goes beside their prompt, in prompt.submit: this is asked once per conversation).
+  // Nothing here may wait for the context breakdown: that read waits for this hook (alive.ts prepare).
   on('prompt.context', async ($, e, next) => {
     const r = await next(e)
     const d = realDeps($, options, state)
-    const sid = await prepare(d)
+    const sid = await prepare(d, { inContext: true })
     const block = await contextBlock(d, sid)
     if (block === undefined) return r
     const name = blockName($.plugin.name)

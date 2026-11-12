@@ -1,10 +1,10 @@
 {
  "id": "PRIV-02-symlinks",
- "note": "PRIV-02 (handoff-spec §10 deny names): the name gate runs on a path and on its real target. A tasks/<id>.output link to a subagent transcript, a harmless-named link to a .netrc, and a link to a *.jsonl under CLAUDE_CONFIG_DIR/projects are withheld and none of their text reaches a copy; a link whose target passes the gate is still followed and copied",
+ "note": "PRIV-02 (handoff-spec §10 deny names): the name gate runs on a path and on its real target. A tasks/<id>.output link to a subagent transcript, a harmless-named link to a .netrc, and a link to a *.jsonl under CLAUDE_CONFIG_DIR/projects are withheld and none of their text reaches a copy; a link whose target passes the gate is still followed and copied. The link targets sit inside the helper's own TMPDIR, so they stay in the sweep's temp-root scope (RRP-07) wherever the host's temp folder is (a CI runner's is not under /tmp or /var/folders)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
-  "CLAUDE_CONFIG_DIR": "$TMP/cfg"
+  "CLAUDE_CONFIG_DIR": "$TMP/tmpdir/cfg"
  },
  "steps": [
   {
@@ -21,28 +21,28 @@
      "to": "$HOME/.claude/projects/-work/$SID/subagents/agent-a1b2c3.jsonl"
     },
     {
-     "write": "$TMP/vault/.netrc",
+     "write": "$TMP/tmpdir/vault/.netrc",
      "text": "machine example.invalid login fixture password PRIV02-CANARY-netrc\n"
     },
     {
      "symlink": "$TMP/tmpdir/notes.txt",
-     "to": "$TMP/vault/.netrc"
+     "to": "$TMP/tmpdir/vault/.netrc"
     },
     {
-     "write": "$TMP/cfg/projects/-p/0000.jsonl",
+     "write": "$TMP/tmpdir/cfg/projects/-p/0000.jsonl",
      "text": "{\"note\":\"PRIV02-CANARY-cfg\"}\n"
     },
     {
      "symlink": "$TMP/tmpdir/run.log",
-     "to": "$TMP/cfg/projects/-p/0000.jsonl"
+     "to": "$TMP/tmpdir/cfg/projects/-p/0000.jsonl"
     },
     {
-     "write": "$TMP/vault/real.txt",
+     "write": "$TMP/tmpdir/vault/real.txt",
      "text": "PRIV02 control text\n"
     },
     {
      "symlink": "$TMP/tmpdir/control.txt",
-     "to": "$TMP/vault/real.txt"
+     "to": "$TMP/tmpdir/vault/real.txt"
     },
     {
      "paths": [

@@ -27,23 +27,47 @@ export async function writeAlive(d: Deps, sid: string, turnId: string | null): P
 
 /**
  * Once per load, before any handler acts: the Claude Code version, the effective thresholds
- * (`config_effective` and its rows) and a halt mode persisted by an earlier load.
+ * (`config_effective` and its rows), a halt mode persisted by an earlier load and the idle record.
+ * One run for the load: every caller waits for the same run, so none acts on a load whose halt
+ * mode or idle record is not read yet (the caller that started it sees its failure; the others go
+ * on). The thresholds are a part of their own, read beside the loads.
+ * `inContext`: called from prompt.context, which waits for the loads only, never for the
+ * thresholds. Their compaction window comes from the context breakdown, and that read waits for
+ * the context build, which waits for this hook: on `claude --resume` Claude Code builds the first
+ * message's context at start-up, and a prompt.context that waited for that read never returned
+ * (the resumed session made no request).
  */
-export async function prepare(d: Deps): Promise<string> {
+export async function prepare(d: Deps, opts: { inContext?: boolean } = {}): Promise<string> {
   const sid = await d.sessionId()
   const s = d.state
-  if (!s.initDone) {
-    s.initDone = true
-    try {
-      s.ccVersion = (await d.version()).version
-    } catch {
-      s.ccVersion = null
-    }
-    await effective(d, sid)
-    await loadHalt(d, sid)
-    await loadIdle(d, sid)
+  let own: LoadInit | undefined
+  if (s.init === undefined) {
+    own = startInit(d, sid)
+    s.init = { loads: own.loads.catch(() => undefined), thresholds: own.thresholds.catch(() => undefined) }
   }
+  const init = own ?? s.init
+  await init.loads
+  if (opts.inContext !== true) await init.thresholds
   return sid
+}
+
+type LoadInit = { loads: Promise<unknown>; thresholds: Promise<unknown> }
+
+/** The load's one init run: the version first, then the thresholds beside halt mode and the idle record. */
+function startInit(d: Deps, sid: string): LoadInit {
+  const s = d.state
+  const version = d.version().then(
+    v => {
+      s.ccVersion = v.version
+    },
+    () => {
+      s.ccVersion = null
+    },
+  )
+  return {
+    thresholds: version.then(() => effective(d, sid)),
+    loads: version.then(() => loadHalt(d, sid)).then(() => loadIdle(d, sid)),
+  }
 }
 
 /**

@@ -56,32 +56,40 @@ jobs:
     defaults:
       run:
         # tools/gates fails on the name of the folder above the checkout, so the checkout sits in a
-        # folder with a name that appears nowhere in the text.
-        working-directory: ci-parent-8f3a/afk-compact
+        # folder with a name that appears nowhere in the text. The name is made from the run id
+        # when the job runs: a fixed name would appear in this file, which the gates also read.
+        working-directory: ci-parent-${{ github.run_id }}/afk-compact
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          path: ci-parent-8f3a/afk-compact
+          path: ci-parent-${{ github.run_id }}/afk-compact
       - name: tools/gates
         env:
-          # tools/gates fails on the runner's account name; getpass reads LOGNAME first.
-          LOGNAME: ci-account-8f3a
-          USER: ci-account-8f3a
+          # tools/gates fails on the runner's account name; getpass reads LOGNAME first. Made from
+          # the run id, as the folder above.
+          LOGNAME: ci-account-${{ github.run_id }}
+          USER: ci-account-${{ github.run_id }}
           # The competitor-name list is kept out of the repository. Pushes to main use it from this
-          # secret; a pull request from a fork gets no secret and runs with a one-line placeholder,
-          # so the maintainer runs the real list before merging an outside pull request.
+          # secret. Without it (a pull request from a fork, or the secret not set) the names gate is
+          # not run and every other gate is: tools/gates needs a list, so it gets a one-line
+          # placeholder that matches nothing, and the names-only pass over the files below is
+          # skipped (this file holds the placeholder). The maintainer runs the real list before
+          # merging an outside pull request.
           GATE_NAMES: ${{ secrets.GATE_NAMES }}
         run: |
           names="$RUNNER_TEMP/names.txt"
+          text_gates="user-path attribution stale-name"
           if [ -n "$GATE_NAMES" ]; then
             printf '%s\n' "$GATE_NAMES" > "$names"
+            text_gates="names $text_gates"
           else
-            echo "::notice::GATE_NAMES is not set; the names gate runs with a placeholder list"
+            echo "::warning::GATE_NAMES is not set; the names gate is not run, the other gates are"
             printf 'ci-placeholder-name\n' > "$names"
           fi
           tools/gates plugin README.md docs --names "$names" --no-git-log
-          # The community files, .github and bench get the four gates that apply to hand-written text.
-          for gate in names user-path attribution stale-name; do
+          # The community files, .github and bench get the gates that apply to hand-written text
+          # (names, user-path, attribution, stale-name).
+          for gate in $text_gates; do
             tools/gates CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md CHANGELOG.md .github bench \
               --names "$names" --no-git-log --only "$gate"
           done
@@ -117,10 +125,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-    env:
-      TMPDIR: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The cases write under TMPDIR. A job-level env cannot read the runner context, so set it here.
+      - name: Point TMPDIR at the runner's temp folder
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Helper cases (a case that needs a tool or a Docker image the runner lacks prints "not run")
         run: perl tests/helper/run.pl tests/helper/cases
       - name: Watcher cases

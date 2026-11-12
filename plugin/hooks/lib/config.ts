@@ -513,10 +513,19 @@ export function optionEnv(o: PluginOptions): Record<string, string> {
 /**
  * Computes the effective thresholds once per load (a `/config` change reloads the module) and
  * logs `config_effective`, one `config_clamped` per clamped value, one `config_invalid` per
- * replaced value, and `triggers_off` or `trigger_disabled_small_window`.
+ * replaced value, and `triggers_off` or `trigger_disabled_small_window`. A caller while that read
+ * runs (one prompt.context started without waiting: alive.ts prepare) waits for the same read.
  */
 export async function effective(d: Deps, sid: string): Promise<Effective> {
-  if (d.state.eff) return d.state.eff
+  const s = d.state
+  if (s.eff) return s.eff
+  s.effReading ??= readEffective(d, sid).finally(() => {
+    s.effReading = undefined
+  })
+  return s.effReading
+}
+
+async function readEffective(d: Deps, sid: string): Promise<Effective> {
   let window = 0
   try {
     window = (await d.usage()).window
