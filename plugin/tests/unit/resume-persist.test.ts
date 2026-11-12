@@ -6,6 +6,7 @@
 // re-measured past 600 s. A newer compaction, the load's first turn end and /clear settle a record
 // that was not taken, so it never reaches a later turn or process.
 import { expect, test } from 'claude-code/testing'
+import { hasTag } from '../../hooks/lib/assemble'
 import type { PendingResume } from '../../hooks/lib/deps'
 import { ARMED_FILE, PENDING_FILE, pendingRecord } from '../../hooks/lib/resume'
 import { SID_A, SID_B, T0, WATCH, World, raiseCompact } from './harness.test'
@@ -294,6 +295,91 @@ test('AT-RP-07: a compaction while the first prompt.context reads the armed reco
   expect(blockOf(w, ctx)).toContain(SID_A)
   expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([[n2, 'delivered:prompt.context']])
   expect(json(w, PENDING)).toMatchObject({ state: 'settled', nonce: n2 })
+})
+
+// Claude Code 2.1.322 on `claude --resume`: the engine builds the first message's context at
+// start-up, so prompt.context is raised beside session.start, and a context breakdown
+// (`$.session.usage({ breakdown })`) waits for that build (its memory-file rows read the
+// instruction files the build resolves), which waits for every prompt.context hook.
+
+/** The compaction window of the breakdown, apart from the World's usage window (1,000,000). */
+const BREAKDOWN = { rawMaxTokens: 800000, autocompactSource: 'model-default' }
+
+test('BG-RESUME-01: a resumed load\'s first prompt.context, raised before session.start read the thresholds, settles: the hook never awaits the breakdown that waits for its own context', async ($, on) => {
+  const w = new World()
+  w.files.set(ARMED, seeded(60))
+  w.install(on)
+  w.breakdown = BREAKDOWN
+  let ctx: { blocks: readonly { name: string; text: string }[] } | undefined
+  const pc = $.prompt.context({ blocks: [] })
+  w.atBreakdown = () => pc
+  void pc.then(c => {
+    ctx = c
+  })
+  await w.settle()
+  expect(ctx).toBeDefined()
+  // The armed block still goes out with that context, once.
+  expect(blockOf(w, ctx ?? { blocks: [] })).toContain('1a1a1a1')
+  await w.start($)
+  await w.settle()
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([['ab0c0001', 'delivered:prompt.context']])
+  // The thresholds still come from the breakdown, read once that context was built: one row.
+  expect(w.rowsOf('config_effective').map(r => [r.window, r.window_from])).toEqual([[800000, 'breakdown']])
+})
+
+test('BG-RESUME-01: session.start first, its threshold read waiting on the context build: the first prompt.context and then session.start settle', async ($, on) => {
+  const w = new World().install(on)
+  w.breakdown = BREAKDOWN
+  let built: () => void = () => undefined
+  const building = new Promise<void>(r => {
+    built = r
+  })
+  w.atBreakdown = () => building
+  let started = false
+  void w.start($).then(() => {
+    started = true
+  })
+  await w.settle()
+  let settled = false
+  void $.prompt.context({ blocks: [] }).then(() => {
+    settled = true
+    built()
+  })
+  await w.settle()
+  expect(settled).toBe(true)
+  expect(started).toBe(true)
+  expect(w.rowsOf('config_effective').map(r => [r.window, r.window_from])).toEqual([[800000, 'breakdown']])
+})
+
+test('BG-RESUME-02: session.start first on a resume, its threshold read waiting on the context build: the first prompt.context builds the restored idle block only after halt.json was read ([idle-halt])', async ($, on) => {
+  const w = new World()
+  w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' }))
+  w.files.set(ARMED, seededWith(60, { idle: true }))
+  w.install(on)
+  w.breakdown = BREAKDOWN
+  let built: () => void = () => undefined
+  const building = new Promise<void>(r => {
+    built = r
+  })
+  w.atBreakdown = () => building
+  let started = false
+  void w.start($).then(() => {
+    started = true
+  })
+  await w.settle()
+  let ctx: { blocks: readonly { name: string; text: string }[] } | undefined
+  void $.prompt.context({ blocks: [] }).then(c => {
+    ctx = c
+    built()
+  })
+  await w.settle()
+  expect(ctx).toBeDefined()
+  expect(started).toBe(true)
+  const block = blockOf(w, ctx ?? { blocks: [] }) ?? ''
+  expect(block).toContain(SID_A)
+  // Halt mode the earlier process left: the restored idle block stops after the background result.
+  if (hasTag('resume-context', 'idle-halt')) expect(block).toContain('handle it, then stop and wait for the user')
+  expect(w.rowsOf('mod_outcome').map(r => [r.nonce, r.resume])).toEqual([['ab0c0001', 'delivered:prompt.context']])
 })
 
 for (const ageS of [60, 700]) {
