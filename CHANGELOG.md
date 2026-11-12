@@ -6,6 +6,24 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-11-12
+
+afk-compact 0.1.10 fixes a hang on resume. On Claude Code 2.1.322 and later, the first prompt after `claude --resume` could hang with no reply, because the plugin waited for a context reading that Claude Code only finishes after that prompt's own hooks. The fault dates from 0.1.4.
+
+### Fixed
+
+- **Resumed sessions no longer hang on the first prompt.** After `claude --resume`, the first prompt could wait forever with no request sent on Claude Code 2.1.322 and later. The plugin no longer waits for the compaction window reading before that prompt; it still reads the window once and uses it as soon as it arrives.
+- **Halt mode on resume.** A resumed session now reads halt mode and its idle state from the earlier process before the first prompt is handled, so a note restored on that prompt shows halt mode when it is on.
+
+### Upgrade notes
+
+- No action is required.
+
+### Compatibility
+
+- Requires Claude Code 2.1.287 or newer. The one-line install needs 2.1.292 or newer.
+- Tested against Claude Code 2.1.322.
+
 ## [0.1.9] - 2026-11-11
 
 afk-compact 0.1.9 keeps near-limit stops in force through long idle gaps. Before this release, a usage reading counted for only 10 minutes, so after 10 idle minutes a limit at 99% no longer stopped keep-warm or plugin idle compaction. A reading now counts until its limit resets. This release also supports installs that Claude Code reads in place from a local folder marketplace.
@@ -371,7 +389,8 @@ This is an early (0.x) version. Some parts that need a live session or a managed
 - `git` for the git measurements.
 - Supported: macOS 13 or newer, and Linux with glibc. Expected to work but not yet tested in a session: Alpine/musl and WSL 2. Native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.10
 [0.1.9]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.9
 [0.1.8]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.8
 [0.1.7]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.7
