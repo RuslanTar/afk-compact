@@ -1,5 +1,5 @@
-// U tests through the kit: the Dev-1 job recorder in the main `tool.call` handler (MOD-SPEC §7
-// "Job records"; AT-J-01, AT-J-02; DP-2 both output-path candidates go to the helper).
+// U tests through the kit: the job recorder in the main `tool.call` handler
+// (AT-J-01, AT-J-02; both output-path candidates go to the helper).
 import { expect, test } from 'claude-code/testing'
 import { AGENT, SID_A, World } from './harness.test'
 
@@ -68,7 +68,7 @@ test('AT-J-01: subagent, denied, foreground and errored calls record nothing; a 
   expect(w.jobLines).toEqual([{ kind: 'stop', task_id: 'b6' }])
 })
 
-test('E-S-1 (CR-F22 not taken): a TaskStop with an error result still records the stop line, so the job is never relaunched', async ($, on) => {
+test('TaskStop error: a TaskStop with an error result still records the stop line, so the job is never relaunched', async ($, on) => {
   const w = new World().install(on)
   w.toolAnswer = () => ({ isError: true, result: 'No task found with ID: b8', text: 'No task found with ID: b8' })
   await w.start($)

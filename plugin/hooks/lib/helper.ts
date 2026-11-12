@@ -1,11 +1,11 @@
-// `$.process.run` wrappers for every helper subcommand the mod calls (BUILD-PLAN §3.1). A call
+// `$.process.run` wrappers for every helper subcommand the mod calls. A call
 // that rejects (cannot start, timed out) or exits non-zero is a failed call; callers fall back.
 import type { Deps, RunResult } from './deps'
 import type { RestartReport, RestartSetting } from './restart'
 
-/** MOD-SPEC §2.3: 2 s for helper calls. */
+/** 2 s for helper calls. */
 export const HELPER_MS = 2000
-/** MOD-SPEC §10: checkpoint budget 10 s, plus start-up slack. */
+/** Checkpoint budget 10 s, plus start-up slack. */
 export const CHECKPOINT_MS = 12000
 /** Sweep after a main-proven compaction (the PostCompact budget is 8 s; same here). */
 export const SWEEP_MS = 10000
@@ -15,7 +15,7 @@ export async function call(d: Deps, args: readonly string[], timeoutMs = HELPER_
 }
 
 /**
- * `log --sid S --stream paths --stdin` (F2-6): several rows in one spawn, one JSON object per
+ * `log --sid S --stream paths --stdin`: several rows in one spawn, one JSON object per
  * line on stdin, each appended as a row. Nothing is sent for an empty list.
  */
 export async function logPaths(d: Deps, sid: string, lines: readonly string[]): Promise<RunResult | undefined> {
@@ -24,7 +24,7 @@ export async function logPaths(d: Deps, sid: string, lines: readonly string[]): 
 }
 
 /**
- * `usage --sid S [--stdin]` (D-83, limits.ts): the shared usage record's entries, after adding this
+ * `usage --sid S [--stdin]` (limits.ts): the shared usage record's entries, after adding this
  * session's own reading (`own`: `{at, windows}` in epoch seconds) when given; undefined when the
  * call failed or its reply did not parse.
  */
@@ -45,16 +45,16 @@ export function failClass(r: RunResult): string {
 }
 
 /**
- * `watch`: the helper's effective log folder after its unsafe-root checks (MOD-SPEC §1.2), null
+ * `watch`: the helper's effective log folder after its unsafe-root checks, null
  * when every candidate was refused, undefined when the reply has no such key.
  */
 export type Ident = {
   pid: number | null
   pid_lstart: string | null
   watch?: string | null
-  /** SESSION-RESTART D1: `restart_on_update` as the helper resolved it (settings file only). */
+  /** `restart_on_update` as the helper resolved it (settings file only). */
   restart?: RestartSetting
-  /** §2.3: background restarts that failed after the kill, reported once by this load. */
+  /** Background restarts that failed after the kill, reported once by this load. */
   restartReports?: RestartReport[]
 }
 
@@ -96,18 +96,18 @@ export type DispatchArgs = {
   instrBytes: number
   ccVersion: string | null
   loadId: string
-  /** The handoff turn this dispatch follows or interrupts (MOD-SPEC §2.3 `handoff_ht`). */
+  /** The handoff turn this dispatch follows or interrupts (`handoff_ht`). */
   handoffHt?: string
-  /** IC-1 D1: an idle dispatch, with the seconds since the last main turn end. */
+  /** An idle dispatch, with the seconds since the last main turn end. */
   idle?: { gapS: number }
-  /** MG-4: the session's model (`$.session.model()`), recorded only. */
+  /** The session's model (`$.session.model()`), recorded only. */
   model?: string
 }
 
 /**
  * `dispatch … [--handoff-ht H] [--idle=true --idle-gap-s=N] [--model M]` → `ok`; exit 3 `REFUSED: nonce-exists`.
  * `--idle` is given only for an idle dispatch (absent = false), in the `=` form, which the
- * helper's parser reads alike for a value flag and a boolean one (CORE-14).
+ * helper's parser reads alike for a value flag and a boolean one.
  */
 export async function dispatch(d: Deps, a: DispatchArgs): Promise<RunResult> {
   return call(d, [
@@ -122,7 +122,7 @@ export async function dispatch(d: Deps, a: DispatchArgs): Promise<RunResult> {
 }
 
 /**
- * `handoff-turn open --sid --ht --reason --max-calls --max-tokens` (D-18 B8): `ok` (the ht record
+ * `handoff-turn open --sid --ht --reason --max-calls --max-tokens`: `ok` (the ht record
  * was created), `EXISTS` (draw another ht), or `failed` (refused, or the call failed).
  */
 export async function handoffTurnOpen(d: Deps, sid: string, ht: string, reason: string, maxCalls: number, maxTokens: number): Promise<'ok' | 'EXISTS' | 'failed'> {
@@ -139,7 +139,7 @@ export async function handoffTurnSupersede(d: Deps, sid: string, ht: string, non
 }
 
 /**
- * `handoff-turn close --sid --ht --why cancelled` (BL-2, asked of core in mod-to-core item 5):
+ * `handoff-turn close --sid --ht --why cancelled`:
  * marks an ht whose handoff turn will not run, so `begin` does not bind it to a manual
  * `/handoff`. True for `ok`/`EXISTS`. A helper without `close` fails the call: the ht then stays
  * open as before (60 minutes), nothing else changes.
@@ -180,7 +180,7 @@ export function parseHandoffState(stdout: string): HandoffState {
 }
 
 /**
- * `log --sid S --stream jobs --stdin` (Dev-1 D1): one raw job or stop object per line; the helper
+ * `log --sid S --stream jobs --stdin`: one raw job or stop object per line; the helper
  * completes and appends the row, or refuses (`REFUSED: jobs-caller`, exit 3) and logs why.
  */
 export async function logJobs(d: Deps, sid: string, lines: readonly string[]): Promise<RunResult | undefined> {
@@ -196,8 +196,8 @@ export async function prevCopy(d: Deps, sid: string): Promise<string | undefined
 }
 
 /**
- * `consent`: the consent values the helper resolved for this checkpoint (CORE-15), read from the
- * settings file only (DP-3); `{}` when the reply has none.
+ * `consent`: the consent values the helper resolved for this checkpoint, read from the
+ * settings file only; `{}` when the reply has none.
  */
 export type Checkpoint = { measured_block: string | null; lane: string | null; ms: Record<string, number>; consent: Record<string, string> }
 
@@ -307,7 +307,7 @@ export function channelToken(v: string | undefined): string | null {
 /**
  * The re-measure block (`measure --sid --compact --nonce N`), or undefined. The nonce makes the
  * evidence map this compaction's (its checkpoint, else its own sweep), never a newer one's.
- * `copy` (AP-5): the saved copy of this compaction's summary, whose `## Approvals` lines the
+ * `copy`: the saved copy of this compaction's summary, whose `## Approvals` lines the
  * helper checks against this session's transcript (`Approvals (checked)` lines); without it the
  * block has no approvals line, so no approval in the summary counts as checked.
  * `budgetMs`: the helper's own budget for the whole call (`--budget-ms`), for a caller that kills

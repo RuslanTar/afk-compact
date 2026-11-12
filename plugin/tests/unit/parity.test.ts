@@ -1,4 +1,4 @@
-// Phase 2 cross-checks (BUILD-PLAN §4.4) on the TS side, over generated modules (the kit has no fs):
+// Cross-checks on the TS side, over generated modules (the kit has no fs):
 //   BT-04  the TS assembler gives the goldens tools/assemble wrote, byte for byte
 //   AT-C-03  the TS detector gives every tuple of tests/fixtures/summaries/expected.tsv
 //   BT-05  the mod reads the real helper's recorded replies, and the fake helper the U tests use
@@ -24,7 +24,7 @@ import { World } from './harness.test'
 const NAME = 'x'.repeat(14)
 
 describe('BT-04 TS assembler vs the goldens', () => {
-  // D-10 (small-rulings §1.7): the mod applies `queue` whenever `queue_cmd` is set, so every
+  // The mod applies `queue` whenever `queue_cmd` is set, so every
   // golden counts, the queue ones included.
   const cases = GOLDENS
   // Runtime values that carry the build name (queue_add, handoff_finish) are rendered with NAME.
@@ -47,7 +47,7 @@ describe('BT-04 TS assembler vs the goldens', () => {
   })
 })
 
-// P5-FOLD A1 (fix-to-mod item 1): the 6 P5 summaries and the after-close cases, with the
+// The 6 P5 summaries and the after-close cases, with the
 // fixture's listed trailer, once tools/fixtures-gen renders `CORPUS_P5` (until then: nothing to run).
 describe('AT-P5-01, AT-P5-02 TS detector vs the P5 corpus', () => {
   test('every P5 entry gives its verdict, placement and sha', () => {
@@ -64,7 +64,7 @@ describe('AT-P5-01, AT-P5-02 TS detector vs the P5 corpus', () => {
   })
 })
 
-// Idle lab runs of 2026-10-23 on Claude Code 2.1.309 (EXPERIMENT-RESULTS §5.2): the installed
+// Idle lab runs on Claude Code 2.1.309: the installed
 // message carries three engine trailers after the sentinel (the third is new in 2.1.309) and the
 // PostCompact compact_summary an <analysis> block before <summary>. Every form reads ok, sentinel
 // 1 from the end, marker on body line 1, and both forms of one run share the normalized body.
@@ -85,7 +85,7 @@ describe('idle 2.1.309 summaries: TS detector vs summaries/idle', () => {
   })
 })
 
-// Live probe 2026-10-27 on Claude Code 2.1.311: the installed message wraps the tools-used block in
+// A live probe on Claude Code 2.1.311: the installed message wraps the tools-used block in
 // a closed <system-reminder> block before `Summary:`. Every entry gives its expected.tsv tuple; the
 // installed forms (also with a blank line before `Summary:` and a tools list over several lines)
 // read ok with the marker on body line 1 and share the PostCompact form's body; an unclosed
@@ -173,7 +173,7 @@ function form(s: string): string {
 describe('BT-05 recorded helper replies', () => {
   test('the mod reads every real reply as intended', async () => {
     expect(await ident(depsFor(reply('ident')), REPLY_SID)).toEqual({ pid: 424242, pid_lstart: 'Tue Oct 21 09:00:00 2026', restart: 'off' })
-    // SESSION-RESTART: restart on update off by default: the gate refuses `off`; no note, no record.
+    // Restart on update off by default: the gate refuses `off`; no note, no record.
     expect(JSON.parse(join(reply('restart-gate-off').stdout))).toMatchObject({ ok: false, why: 'off', setting: 'off' })
     expect(JSON.parse(join(reply('restart-claim-none').stdout))).toMatchObject({ claimed: false, why: 'none', refused: [] })
     expect(JSON.parse(join(reply('restart-set-absent').stdout))).toEqual({ ok: true, l: 'absent', c: 'absent', why: null })
@@ -193,7 +193,7 @@ describe('BT-05 recorded helper replies', () => {
     const block = await measure(depsFor(reply('measure')), REPLY_SID)
     expect(typeof block === 'string' && block.length > 0 && block.length <= 3000).toBe(true)
     expect([reply('log').exitCode, join(reply('log').stdout), reply('log-paths').exitCode]).toEqual([0, '', 0])
-    // D-18 B8 / Dev-1 D1: the handoff-turn calls, handoff-state in its six forms, the jobs log.
+    // The handoff-turn calls, handoff-state in its six forms, the jobs log.
     const sidOf = (n: string): string => argvOf(reply(n))[2] ?? ''
     const htOf = (n: string): string => argvOf(reply(n))[argvOf(reply(n)).indexOf('--ht') + 1] ?? ''
     expect(await handoffTurnOpen(depsFor(reply('handoff-turn-open')), sidOf('handoff-turn-open'), htOf('handoff-turn-open'), 'cap', 34, 64000)).toBe('ok')
@@ -209,7 +209,7 @@ describe('BT-05 recorded helper replies', () => {
       finish: join(reply('handoff-state-staged').stdout).replace(/^.* finish=/, '').trimEnd(),
     })
     const staged = await hs('handoff-state-staged')
-    // core C-2 (core-to-mod §24): the finish command starts with the token `<store>`, which the
+    // The finish command starts with the token `<store>`, which the
     // resume block's first line defines as `@store@`; it holds no launcher word or plugin root of
     // its own. The storeWord()/`ctx::store_cmd()` parity is checked on `@store@` (AT-PK-03 below).
     const finish = staged.state === 'staged' ? staged.finish ?? '' : ''
@@ -219,7 +219,7 @@ describe('BT-05 recorded helper replies', () => {
     })
     expect(await hs('handoff-state-published')).toEqual({ state: 'published', path: '~/.local/state/' + NAME + '/handoffs/repo/LAB-42/2026-10-21_14-05-12_5e55a001_retry.md' })
     expect(await hs('handoff-state-superseded')).toEqual({ state: 'superseded', nonce: REPLY_NONCE })
-    // DP-28: a claimed handoff file the publish could not write answers `publish-failed <path>`;
+    // A claimed handoff file the publish could not write answers `publish-failed <path>`;
     // the mod reads it as failed, so the cycle falls back to the full summary text.
     expect(join(reply('handoff-state-publish-failed').stdout)).toMatch(/^publish-failed ~\/\S+_retry-2\.md\n$/)
     expect(await hs('handoff-state-publish-failed')).toEqual({ state: 'failed' })
@@ -266,7 +266,7 @@ describe('BT-05 recorded helper replies', () => {
   })
 })
 
-// AT-PK-03 (mod part): the launcher word for the root classes PKG-RUNTIME A.1 names. The helper's
+// AT-PK-03 (mod part): the launcher word for each root class. The helper's
 // `ctx::store_cmd()` gives the same words (core case AT-PK-03-store-word holds the same roots).
 describe('AT-PK-03 storeWord', () => {
   test('double quotes; single quotes for ", $, backquote, backslash; refused when \' is there too', () => {

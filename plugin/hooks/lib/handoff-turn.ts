@@ -1,11 +1,11 @@
-// The handoff turn (MOD-SPEC §9.1, D-18, D-20): in a cycle that will not auto-continue (a last
+// The handoff turn: in a cycle that will not auto-continue (a last
 // cycle) the mod submits one turn after the nudged turn ends and before it compacts, so the
 // handoff is written with the full context, on the session's model, from a warm cache. This
 // module holds its state, its limits text and its end; boundary.ts schedules it and the
 // compaction after it, compact.ts handles a native compaction that races it.
 //
-// The limits are context text only (DP-5, Q-R-2): no tool call is ever denied here, and the
-// texts say what the model should do, never that the plugin stops anything (DP-14 (7)).
+// The limits are context text only: no tool call is ever denied here, and the
+// texts say what the model should do, never that the plugin stops anything.
 import type { Deps, RequestUsage } from './deps'
 import { readShare, submitPending, submitSettled } from './deps'
 import type { Effective } from './config'
@@ -27,7 +27,7 @@ export type HaltReason = '2-nonok' | 'thrash' | 'cap' | 'continue-off'
 
 /**
  * Every `handoff-turn open --reason` value: a last cycle's halt reason, the pre-compaction turn
- * (§9.3) or the pre-idle turn (§9.4).
+ * or the pre-idle turn.
  */
 export type TurnReason = HaltReason | 'precompact' | 'idle'
 
@@ -40,7 +40,7 @@ export function kindOf(r: TurnReason): TurnKind {
   return r === 'precompact' ? 'precompact' : r === 'idle' ? 'idle' : 'halt'
 }
 
-/** `@halt_reason@` (D-18 B6): the plain words for each reason. */
+/** `@halt_reason@`: the plain words for each reason. */
 export const HALT_REASON_TEXT: Record<HaltReason, string> = {
   '2-nonok': 'compaction failed twice in a row',
   thrash: 'compactions keep repeating without progress',
@@ -49,9 +49,9 @@ export const HALT_REASON_TEXT: Record<HaltReason, string> = {
 }
 
 /**
- * What starts a handoff turn: a last cycle (`halt`, §9.1), the pre-compaction turn
- * (`precompact`, §9.3) or the pre-idle turn (`idle`, §9.4). Each has its own submit lines in
- * `handoff-turn.txt` around the shared `[submit]` line (S-SETTINGS D, IC-1 D5).
+ * What starts a handoff turn: a last cycle (`halt`), the pre-compaction turn
+ * (`precompact`) or the pre-idle turn (`idle`). Each has its own submit lines in
+ * `handoff-turn.txt` around the shared `[submit]` line.
  */
 export type TurnKind = 'halt' | 'precompact' | 'idle'
 const KIND_TAG: Record<TurnKind, Tag> = { halt: 'submit-halt', precompact: 'submit-pre', idle: 'submit-idle' }
@@ -66,7 +66,7 @@ export function submitText(name: string, kind: TurnKind, runtime: Runtime, drop:
   return assembleIf(name, 'handoff-turn', ['submit', KIND_TAG[kind]], runtime, drop)
 }
 
-/** DP-4: only these reasons get the plugin compaction after the handoff turn. */
+/** Only these reasons get the plugin compaction after the handoff turn. */
 export function compactsAfter(reason: HaltReason): boolean {
   return reason === 'cap' || reason === 'continue-off'
 }
@@ -74,7 +74,7 @@ export function compactsAfter(reason: HaltReason): boolean {
 /**
  * The last cycle's reason as it stands now: a `thrash` or `2-nonok` halt that started after the
  * nudge (thrash is found at the nudged turn's end) wins over the `cap` or `continue-off` the
- * nudge saw, so DP-4 gives that cycle no plugin compaction. A halt for `cap` changes nothing.
+ * nudge saw, so that cycle gets no plugin compaction. A halt for `cap` changes nothing.
  */
 export function haltWins(d: Deps, reason: HaltReason): HaltReason {
   const h = d.state.halt
@@ -84,15 +84,15 @@ export function haltWins(d: Deps, reason: HaltReason): HaltReason {
 
 /** The pre-flight skip: below this allowance no handoff turn starts. */
 export const MIN_ALLOWANCE = 20000
-/** Bands below the native trigger `N` (MOD-SPEC §9.1). */
+/** Bands below the native trigger `N`. */
 export const SPENT_MARGIN = 15000
 export const NEAR_MARGIN = 25000
 export const IMMINENT_MARGIN = 5000
 /** Runaway guard: at most this many handoff turns per rolling hour per session. */
 export const PER_HOUR = 2
 /**
- * The optional turns (pre-compaction §9.3, pre-idle §9.4) take only the first hourly slot, so a
- * last-cycle handoff turn always keeps the second (S-SETTINGS D, IC-1 D5).
+ * The optional turns (pre-compaction, pre-idle) take only the first hourly slot, so a
+ * last-cycle handoff turn always keeps the second.
  */
 export const OPTIONAL_PER_HOUR = 1
 
@@ -119,23 +119,23 @@ export type HandoffTurn = {
   interjected: boolean
   /** A native compaction ran during the turn (the race); the plugin compaction is dropped. */
   race: { nonce: string; trigger: string } | null
-  /** The hourly-cap stamp is written: a deferred-then-rerun turn counts once (DP-30 (2)). */
+  /** The hourly-cap stamp is written: a deferred-then-rerun turn counts once. */
   stamped?: boolean
-  /** MG-3: the first request's cache-read share (`turn.step` index 0); null when it had no usage. */
+  /** The first request's cache-read share (`turn.step` index 0); null when it had no usage. */
   firstReadShare?: number | null
-  /** `@idle_min@` of a pre-idle turn: 49, or 55 when the 55.5-min outcome check runs it (owner xxxxxxxx-17). */
+  /** `@idle_min@` of a pre-idle turn: 49, or 55 when the 55.5-min outcome check runs it. */
   idleMin?: string
-  /** D-83: an idle turn's limit note (a reading at the limit that did not stop it), for its start row. */
+  /** An idle turn's limit note (a reading at the limit that did not stop it), for its start row. */
   limit?: LimitNote
   /**
-   * The shadow trial's forks fired for this planned turn (TRIAL-DUAL-HANDOFF §4.1): kept on the
+   * The shadow trial's forks fired for this planned turn: kept on the
    * turn, not its ht, so a re-run after a dropped submit (a new ht) fires nothing more.
    */
   shadowFired?: boolean
 }
 
 /**
- * MG-3 (ratify R4 guard, owner xxxxxxxx-18): a main `turn.step` result. The running handoff
+ * A main `turn.step` result. The running handoff
  * turn's first request (index 0) gives its cache-read share for `handoff_turn_end`. Synchronous,
  * no await: it only reads the result the step already has.
  */
@@ -147,12 +147,12 @@ export function onStep(d: Deps, turnId: string, index: number, usage: RequestUsa
 
 /**
  * A handoff published by a handoff turn, until the next main turn or compaction; `reported` when
- * that turn's answer carried the skill's receipt or the path (owner 2026-10-30 07:49: else the
+ * that turn's answer carried the skill's receipt or the path (else the
  * next window's `[handoff-ack]` stands in for the report).
  */
 export type Published = { ht: string; path: string; reported: boolean }
 
-/** `c` = 1 + `call_cap` + `recipe_cap` from the shared spec (RV-25), or undefined without them. */
+/** `c` = 1 + `call_cap` + `recipe_cap` from the shared spec, or undefined without them. */
 export function maxCalls(): number | undefined {
   const a = specValue('call_cap')
   const b = specValue('recipe_cap')
@@ -178,18 +178,18 @@ export async function handoffPossible(d: Deps, sid: string): Promise<boolean> {
 /**
  * One `handoff_skipped` row; an optional turn's row also names its reason (`precompact`, `idle`).
  * An idle timer's row also names its kind (`turn`, `check`, `compact`) and, when it fired late,
- * by how many seconds (`late_s`); a `near-limit` row the windows read (`windows`, D-76: idle.ts
- * `limitWindows`) and each one's source and age (`usage_src`, `usage_age_s`, D-83).
+ * by how many seconds (`late_s`); a `near-limit` row the windows read (`windows`: idle.ts
+ * `limitWindows`) and each one's source and age (`usage_src`, `usage_age_s`).
  */
 export async function skipped(d: Deps, sid: string, why: string, ht: string | null = null, reason?: TurnReason, extra: { kind?: string; late_s?: number; windows?: string[]; rule?: string; plan?: string; tier?: string } & Partial<UsageFields> = {}): Promise<void> {
   await log(d, sid, 'handoff_skipped', {
     why, ht, ...(reason !== undefined && !isHalt(reason) ? { reason } : {}),
     ...(extra.kind !== undefined ? { kind: extra.kind } : {}), ...(extra.late_s !== undefined ? { late_s: extra.late_s } : {}),
     ...(extra.windows !== undefined ? { windows: extra.windows } : {}),
-    // D-80: a near-limit skip's rule (limits.ts) and the plan words Claude Code's environment had.
+    // A near-limit skip's rule (limits.ts) and the plan words Claude Code's environment had.
     ...(extra.rule !== undefined ? { rule: extra.rule } : {}), ...(extra.plan !== undefined ? { plan: extra.plan } : {}),
     ...(extra.tier !== undefined ? { tier: extra.tier } : {}),
-    // D-83: each window's source and age (limits.ts `usageFields`).
+    // Each window's source and age (limits.ts `usageFields`).
     ...(extra.usage_src !== undefined ? { usage_src: extra.usage_src } : {}), ...(extra.usage_age_s !== undefined ? { usage_age_s: extra.usage_age_s } : {}),
     ...(extra.usage_n !== undefined ? { usage_n: extra.usage_n } : {}), ...(extra.usage_anomaly !== undefined ? { usage_anomaly: extra.usage_anomaly } : {}),
   })
@@ -203,7 +203,7 @@ export function newTurn(reason: TurnReason, tokens: number, allowance: number, n
 }
 
 /**
- * MOD-SPEC §9.3: at an eligible turn-end compaction (the caller checked the §9 turn-end guards and
+ * At an eligible turn-end compaction (the caller checked the turn-end guards and
  * that the turn was not nudged), with `precompact_turn: model`, the planned pre-compaction turn,
  * or undefined with one `handoff_skipped {why, reason: precompact}` row (then the normal
  * compaction runs exactly as with `code`). `code` plans nothing and logs nothing.
@@ -223,7 +223,7 @@ export async function planPrecompact(d: Deps, sid: string, eff: Effective, token
 }
 
 /**
- * At a last cycle's nudged turn end (`answer`): the Start checks of §9.1. Returns the planned
+ * At a last cycle's nudged turn end (`answer`): the start checks. Returns the planned
  * turn (to submit after `boundary_delay_ms`), or undefined with a `handoff_skipped` row when one
  * applies. `handoff_turn` off plans nothing and logs nothing.
  */
@@ -244,17 +244,17 @@ export async function planHandoff(d: Deps, sid: string, reason: HaltReason, eff:
  * The delay is over: draws the ht (checked against dispatch records and handoff-turn records),
  * opens its record, then submits the `[submit]` text, framed. False, with a `handoff_skipped`
  * row, when the record cannot be opened or the submit fails. True, with nothing submitted, when
- * a user turn started while it awaited the helper (§9.1 step 3: that turn cancels the handoff
+ * a user turn started while it awaited the helper (that turn cancels the handoff
  * turn and logs `why=user-turn`; the normal rules apply at its end); an ht opened by then is
  * closed (`handoff-turn close`), as after a failed submit. A user prompt that entered and whose
- * turn has not started yet counts the same (CR-F17), and so does our own submit dropped by our
+ * turn has not started yet counts the same, and so does our own submit dropped by our
  * `prompt.submit` hook because one came first; the phase is then `delay` again, so a prompt
  * that never starts its turn lets the delay run again (boundary.ts).
  */
 export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispatchTaken: (n: string) => Promise<boolean>): Promise<boolean> {
   const s = d.state
   // A user prompt came first: its turn started (onTurnStart marks it before its own awaits), or
-  // it entered (`prompt.submit` counted it) and its turn is about to start (CR-F17, CR-F25).
+  // it entered (`prompt.submit` counted it) and its turn is about to start.
   const userFirst = () => s.handoffTurn !== h || s.mainTurnRunning || s.foreignPrompts > 0
   // Checked again after every await.
   const cancelled = () => h.phase !== 'delay' || userFirst()
@@ -299,7 +299,7 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
     const now = await d.now()
     await d.storeSet(htKey(sid), [...(await recentTurns(d, sid, now)), now])
   }
-  // IC-1 D7 (ii): the session this turn was planned for is still the one running (a `/clear`
+  // The session this turn was planned for is still the one running (a `/clear`
   // in the delay leaves it to the old conversation): else nothing is submitted, and nothing
   // compacts in its place.
   const otherSession = async (ht: string): Promise<boolean> => {
@@ -312,8 +312,8 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
   }
   if (await otherSession(opened)) return true
   // The shadow trial (off without its local config): the capped facts measure, before the last
-  // check below, so a user prompt that comes during it still wins there (TRIAL-DUAL-HANDOFF §4.1).
-  // While the trial config is there the measure can take up to 3 s, so D7 (ii) runs once more.
+  // check below, so a user prompt that comes during it still wins there.
+  // While the trial config is there the measure can take up to 3 s, so the session check runs once more.
   const trial = shadowPresent(d)
   const shadow = await shadowPrepM2(d, sid, h, opened)
   if (trial && (await otherSession(opened))) return true
@@ -334,7 +334,7 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
     submitSettled(s)
     if (userFirst()) {
       // Our prompt.submit hook dropped it: a user prompt came first, and its turn cancels the
-      // handoff turn (`why=user-turn`, at its turn.start). Our prompt never runs (CR-F17).
+      // handoff turn (`why=user-turn`, at its turn.start). Our prompt never runs.
       s.orphanSubmit = false
       if (s.handoffTurn === h) {
         h.phase = 'delay'
@@ -355,17 +355,17 @@ export async function openAndSubmit(d: Deps, sid: string, h: HandoffTurn, dispat
 /**
  * A main `turn.start`: our submit's turn becomes the handoff turn (no checkpoint nudge in it);
  * a user's turn during the delay cancels the handoff turn (`why=user-turn`); the leftover turn of
- * our cancelled prompt is aborted at its start (OT-1), unless it may carry another prompt too
+ * our cancelled prompt is aborted at its start, unless it may carry another prompt too
  * (`alone` false: another prompt entered beside ours and the turn's text is more than ours).
  */
 export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, turnId: string, alone = true): Promise<void> {
   const s = d.state
   const h = s.handoffTurn
   if (ours && s.orphanSubmit) {
-    // OT-1 (owner xxxxxxxx-06 "Abort the leftover turn", 2026-10-22): the handoff prompt a user
+    // Abort the leftover turn: the handoff prompt a user
     // turn cancelled (below) starts now; it is aborted before anything else, so no tool runs in
     // it. If the abort fails, the turn runs as before, with no checkpoint nudge in it. A turn that
-    // may carry the user's words too is never aborted (REVIEW-NIGHT-3 R3-07): it runs as before.
+    // may carry the user's words too is never aborted: it runs as before.
     const ht = s.orphanHt
     s.orphanSubmit = false
     s.orphanHt = null
@@ -393,12 +393,12 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
     h.turnId = turnId
     h.startedAt = await d.now()
     s.nudgedThisTurn = true
-    // §9.3 `again`: one pre-compaction turn per main compaction, whatever its end.
+    // `again`: one pre-compaction turn per main compaction, whatever its end.
     if (h.reason === 'precompact') s.precompactRan = true
     await log(d, sid, 'handoff_turn_start', {
       ht: h.ht, reason: h.reason, turn_id: turnId, t0: h.t0, max_calls: h.maxCalls, max_tokens: h.allowance,
       ...(h.reason === 'idle' ? { gap_s: await gapSeconds(d), ...(await limitFields(d, h.limit)) } : {}),
-      // MG-4: the session's model this turn runs on (recorded only; the submit names none).
+      // The session's model this turn runs on (recorded only; the submit names none).
       model: (await d.model()) ?? null,
     })
     return
@@ -407,9 +407,9 @@ export async function onHandoffTurnStart(d: Deps, sid: string, ours: boolean, tu
     s.handoffTurn = undefined
     shadowPluginSide(d, h, 'cancelled')
     await skipped(d, sid, 'user-turn', h.ht, h.reason)
-    // CR-F17: a user prompt that entered beside our submit started first. Our prompt is still
+    // A user prompt that entered beside our submit started first. Our prompt is still
     // queued and starts after it (it is still ours: claimTurn kept it pending), where it is
-    // aborted (OT-1); its ht is closed so neither turn's `begin` binds it as a handoff turn's.
+    // aborted; its ht is closed so neither turn's `begin` binds it as a handoff turn's.
     if (h.phase === 'submitted') {
       s.orphanSubmit = s.ourSubmitPending
       s.orphanHt = s.orphanSubmit ? h.ht : null
@@ -478,7 +478,7 @@ export async function onInterjection(d: Deps, sid: string, turnId: string): Prom
 export type HandoffEnd =
   /** Not a handoff-turn end, or one the user took over: the normal turn-end rules apply. */
   | { kind: 'normal' }
-  /** Nothing more: aborted, raced, or a halt reason that gets no plugin compaction (DP-4). */
+  /** Nothing more: aborted, raced, or a halt reason that gets no plugin compaction. */
   | { kind: 'done' }
   /**
    * One plugin compaction, exempt from cooldown (and from halt after a last cycle), `[handoff]`
@@ -487,7 +487,7 @@ export type HandoffEnd =
   | { kind: 'compact'; ht: string; path: string | undefined; reported: boolean; stats: Record<string, string | number | null>; exemptHalt: boolean }
 
 /**
- * The handoff turn's `turn.complete`: one `handoff_turn_end` row (MOD-SPEC §2.5 fields) and
+ * The handoff turn's `turn.complete`: one `handoff_turn_end` row and
  * what follows. Published + `cap`/`continue-off` → compaction with `[handoff]`; not published →
  * the same compaction with the full text; `2-nonok`/`thrash` → no compaction, halt stays, the
  * toast says why; aborted or raced → nothing.
@@ -522,7 +522,7 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string, answe
   }
   const path = state.state === 'published' ? state.path : undefined
   const shown = path === undefined ? undefined : await tilde(d, path)
-  // Owner 2026-10-30 07:49 (review of the first build): the report counts as sent when the turn
+  // Review of the first build: the report counts as sent when the turn
   // ended with an answer that carries the receipt or the path; only an unsent one gets the ack.
   // Review of the second build: after a race the race compaction's block already carried the ack,
   // so a later native idle compaction does not ask for it a second time. Review of the third build:
@@ -536,24 +536,24 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string, answe
     await markIdlePublished(d, sid)
   }
   const halt = isHalt(h.reason) ? h.reason : undefined
-  // DP-4: a thrash or 2-nonok halt that started since the plan still rules out the compaction.
-  // §9.3: a pre-compaction turn ending `answer` is always followed by its compaction (`[handoff]`
-  // when published, else the full text); §9.4: a pre-idle turn never is.
+  // A thrash or 2-nonok halt that started since the plan still rules out the compaction.
+  // A pre-compaction turn ending `answer` is always followed by its compaction (`[handoff]`
+  // when published, else the full text); a pre-idle turn never is.
   const follows = halt !== undefined ? compactsAfter(haltWins(d, halt)) : h.reason === 'precompact'
   const compact = reason === 'answer' && h.race === null && !h.interjected && follows
-  // §9.4 and MG-3 `cache_read_share`, every reason: the first request's share as its
+  // `cache_read_share`, every reason: the first request's share as its
   // `turn.step` result reported it (onStep); null when no step result carried usage.
   await log(d, sid, 'handoff_turn_end', {
     ...stats, reason: h.reason, turn_id: h.turnId, interjected: h.interjected, compaction: compact,
     cache_read_share: h.firstReadShare ?? null,
   })
-  // The user took the turn over: halt clears at its end as for any user turn (§9.1).
+  // The user took the turn over: halt clears at its end as for any user turn.
   if (h.interjected) {
     await clearHalt(d, sid)
     return { kind: 'normal' }
   }
   if (reason !== 'answer' || h.race !== null) return { kind: 'done' }
-  // The optional turns toast nothing (§9.3: one `handoff_turn_end` row; `/status` counts them).
+  // The optional turns toast nothing (one `handoff_turn_end` row; `/status` counts them).
   if (halt === undefined) return compact ? { kind: 'compact', ht: h.ht, path: shown, reported, stats, exemptHalt: false } : { kind: 'done' }
   const why = HALT_REASON_TEXT[haltWins(d, halt)]
   if (compact) {
@@ -566,7 +566,7 @@ export async function endHandoffTurn(d: Deps, sid: string, reason: string, answe
   return { kind: 'done' }
 }
 
-/** A path with the home folder as `~` (MOD-SPEC §9.1 `@handoff_path@`). */
+/** A path with the home folder as `~` (`@handoff_path@`). */
 export async function tilde(d: Deps, path: string): Promise<string> {
   const home = (await d.home())?.replace(/\/+$/, '')
   if (home && home !== '' && (path === home || path.startsWith(home + '/'))) return '~' + path.slice(home.length)
@@ -581,7 +581,7 @@ export function racedTurn(d: Deps, trigger: string): HandoffTurn | undefined {
 
 /**
  * `[handoff-partial]` runtime for a resume block after a race, or `[handoff]` when published;
- * `ack` adds `[handoff-ack]`: its report was not sent (owner 2026-10-30 07:49).
+ * `ack` adds `[handoff-ack]`: its report was not sent.
  */
 export type RaceBlock = { published: string; ack?: boolean } | { draft: boolean; finish: string | null }
 

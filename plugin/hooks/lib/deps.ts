@@ -25,12 +25,12 @@ export type RunResult = {
 
 /**
  * `rateLimits` keeps each window's `kind` (`five_hour`, `seven_day`, a gateway's `spend_limit`;
- * `''` when the engine gave none): only a plan window is evidence of the one-hour cache (D15).
- * `resetsAt` (D-80): when the window resets (epoch ms), absent when not reported or unreadable.
+ * `''` when the engine gave none): only a plan window is evidence of the one-hour cache.
+ * `resetsAt`: when the window resets (epoch ms), absent when not reported or unreadable.
  */
 export type Usage = { tokens: number | undefined; window: number; rateLimits: { kind: string; percentUsed: number; resetsAt?: number }[] }
 /**
- * 0.1.4 T-11: the compaction window as Claude Code settled it, from the `summary` context breakdown
+ * 0.1.4: the compaction window as Claude Code settled it, from the `summary` context breakdown
  * (`$.session.usage({ breakdown: 'summary' })`, estimated locally: no token-count request):
  * `window` its `rawMaxTokens`, `threshold` its `autoCompactThreshold` (absent while auto-compaction
  * is off), `source` its `autocompactSource` (env, settings, clientdata, experiment, model-default,
@@ -38,11 +38,11 @@ export type Usage = { tokens: number | undefined; window: number; rateLimits: { 
  */
 export type CompactWindow = { window: number; threshold?: number; source?: string }
 
-/** Claude Code's own native idle compaction as the merged settings and its environment say (§1.1). */
+/** Claude Code's own native idle compaction as the merged settings and its environment say. */
 export type NativeIdle = 'on' | 'vetoed' | 'compaction-off' | 'unknown'
 
 /**
- * The environment the idle timers read once per load (§5): Claude Code's own
+ * The environment the idle timers read once per load: Claude Code's own
  * `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` (`compactMin`, as native parses it), the test seam
  * `STORE_TEST_IDLE_CACHE_S` (`cacheS`, 120–3600, else undefined), the `DISABLE_PROMPT_CACHING*`
  * names native's cache check reads (`cacheOff`) and Claude Code's prompt-cache TTL switches for
@@ -95,7 +95,7 @@ export function cacheTtlOf(t: TtlEnv, setting: unknown): CacheTtl | undefined {
 /** Native `IXt`: no idle compaction below this context size by default, and never below the floor. */
 export const IDLE_COMPACT_MIN_DEFAULT = 200000
 export const IDLE_COMPACT_MIN_FLOOR = 100000
-/** D10: the test seam's bounds, in seconds of a simulated prompt-cache hour. */
+/** The test seam's bounds, in seconds of a simulated prompt-cache hour. */
 export const IDLE_CACHE_S_MIN = 120
 export const IDLE_CACHE_S_MAX = 3600
 
@@ -112,7 +112,7 @@ export function compactMinOf(v: string | undefined): number {
   return Number.isSafeInteger(n) && n > 0 ? Math.max(IDLE_COMPACT_MIN_FLOOR, n) : IDLE_COMPACT_MIN_DEFAULT
 }
 
-/** `STORE_TEST_IDLE_CACHE_S` (D10): an integer from 120 to 3600, else undefined (ignored). */
+/** `STORE_TEST_IDLE_CACHE_S`: an integer from 120 to 3600, else undefined (ignored). */
 export function cacheSOf(v: string | undefined): number | undefined {
   const t = (v ?? '').trim()
   if (!/^[0-9]+$/.test(t)) return undefined
@@ -127,7 +127,7 @@ export type RequestUsage = { input_tokens: number; cache_read_input_tokens: numb
 const tokensOf = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
 
 /**
- * MG-3: the share of a request's input the prompt cache served, `cache_read_input_tokens` over
+ * The share of a request's input the prompt cache served, `cache_read_input_tokens` over
  * all input tokens (uncached + read + written), to 3 places; null with no usage or no input. A
  * request on another model than the session's cannot read the session's cache, so a low share
  * at a large context is the observable sign of one. A main request's cache marker sits on its
@@ -141,7 +141,7 @@ export function readShare(u: RequestUsage | null | undefined): number | null {
 }
 
 /**
- * The cold test of a compaction (root ruling 2026-10-27 23:16, after the L3 probe; replaces the
+ * The cold test of a compaction (after the L3 probe; replaces the
  * read share there): the share of the cached prefix the summarizer request read rather than wrote,
  * `cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens)`, to 3 places;
  * null with no usage or no cache tokens. Claude Code's compaction request puts its one message
@@ -162,7 +162,7 @@ export function uncoveredInput(u: RequestUsage | null | undefined): number | nul
 }
 export type Version = { version: string; base?: string; builtAt?: string }
 
-/** The launcher's folder under the plugin root (PKG-RUNTIME A.1): this spelling lives here only. */
+/** The launcher's folder under the plugin root: this spelling lives here only. */
 export const LAUNCHER_DIR = 'scripts'
 
 /** The launcher's absolute path, `<root>/scripts/` + the name + `-store` (an argv element, no quoting). */
@@ -171,7 +171,7 @@ export function launcherPath(root: string, name: string): string {
 }
 
 /**
- * The launcher as one shell word for text the model or the user types (PKG-RUNTIME A.1, A.2):
+ * The launcher as one shell word for text the model or the user types:
  * the absolute path in double quotes; in single quotes when it holds `"`, `$`, a backquote or
  * `\`; `undefined` (refused: the caller raises `store_path_unquotable`) when it also holds `'`.
  * `ctx::store_cmd()` builds the same word on the helper side (parity test).
@@ -200,7 +200,7 @@ export interface Deps {
   usage(): Promise<Usage>
   version(): Promise<Version>
   /**
-   * MG-4 (ratify R4 kept with a tested guard, owner xxxxxxxx-18): `$.session.model()`, the main
+   * `$.session.model()` (kept with a tested guard), the main
    * loop's model as `/model` shows it, for the `dispatch` and `handoff_turn_start` rows;
    * undefined when it cannot be read. Read only to record it: no call of the mod names a model.
    */
@@ -223,7 +223,7 @@ export interface Deps {
    */
   invalidateContext(): void
   /**
-   * OT-2 (owner xxxxxxxx-06, 2026-10-22): `$.turn.abort({ turnId })`, ending the running main
+   * `$.turn.abort({ turnId })`, ending the running main
    * turn (its tools stopped, no interruption marker); rejects when `turnId` is not the running one.
    */
   abortTurn(turnId: string): Promise<void>
@@ -247,18 +247,18 @@ export interface Deps {
   zone?(): Promise<string | undefined>
   after(ms: number, fn: () => void): { cancel: () => void }
   toast(text: string): void
-  /** `$.ui.toast` for the one-time notice: shown whatever `warn_ui` says (W-BETA A). */
+  /** `$.ui.toast` for the one-time notice: shown whatever `warn_ui` says. */
   notice(text: string, timeoutMs: number): void
   policy(): Promise<{ mods_managed_only: boolean; hooks_managed_only: boolean }>
   /**
-   * IA-2 (idle D3), split by the plugin's idle compaction (§1.1): Claude Code's own idle
+   * Split by the plugin's idle compaction: Claude Code's own idle
    * compaction as the merged settings and its environment say, first match wins.
    * `compaction-off`: `DISABLE_COMPACT` or `DISABLE_AUTO_COMPACT` set, or `autoCompactEnabled`
    * `false` (native's gate order puts `compaction_off` first; the plugin never compacts against
    * it). `vetoed`: `idleCompaction` `false` (only native idle is off; the plugin compacts idle
    * sessions itself). `unknown` when a read throws; else `on`. The server can still keep native
-   * idle off while the setting allows it (IC-1 F2), so `on` and `unknown` arm the 55.5-min outcome
-   * check (owner xxxxxxxx-17, O-9: "unreadable means check what happened").
+   * idle off while the setting allows it, so `on` and `unknown` arm the 55.5-min outcome
+   * check (unreadable means check what happened).
    */
   nativeIdle(): Promise<NativeIdle>
   /** The idle timers' environment (IdleEnv), read once per load (`idleEnvMemo`). */
@@ -275,27 +275,27 @@ export interface Deps {
    */
   compactWindowSetting?(): Promise<number | undefined>
   /**
-   * 0.1.4 T-11: the compaction window from the `summary` context breakdown (CompactWindow), read
+   * 0.1.4: the compaction window from the `summary` context breakdown (CompactWindow), read
    * with the thresholds once per load (config.ts effective) while `native_window_tokens` is unset;
    * undefined when the reply has no breakdown (an older Claude Code, no session bound), its window
    * is not a positive number, or the call throws. Then compactWindowSetting is read, as in 0.1.3.
    */
   compactWindow?(): Promise<CompactWindow | undefined>
   /**
-   * Owner xxxxxxxx-17 (2b): the idle mode Claude Code last cached from its server
+   * The idle mode Claude Code last cached from its server
    * (`cachedGrowthBookFeatures.tengu_sunny_locket.mode` in `<config dir>/.claude.json`), as a
    * logged hint only: the plugin never decides on it (an internal cache shared by all processes
    * that flips between fetches). Undefined when it cannot be read.
    */
   servedHint(): Promise<string | undefined>
   /**
-   * Owner xxxxxxxx-38 ("Measure more first"): subagents and teammates of this session that have
+   * Subagents and teammates of this session that have
    * not ended (`$.agent.list()`, any status but completed, failed or killed), by id; undefined
    * when the list cannot be read. A workflow's agents are not listed: `agentTurns` counts them.
    */
   agentsAlive(): Promise<string[] | undefined>
   /**
-   * D-82 (owner 2026-11-09, session xxxxxxxx: 22 idle teammates read as 22 open jobs): the listed
+   * An idle teammate is no open job (one session's 22 idle teammates read as 22 open jobs): the listed
    * agents of this session at work now, by id: `agentsAlive` less one that waits for a message
    * (`idle`, Claude Code 2.1.319 sets it at each TeammateIdle). Its next turn comes only when
    * someone writes to it, so no result is on its way. `waiting` stays at work: it is held on
@@ -306,18 +306,18 @@ export interface Deps {
   /** `<root>` and `<watch>`, or undefined when `~` could not be expanded. */
   paths(): Promise<Paths | undefined>
   /**
-   * `$.model.fork({ prompt })`, the shadow trial's one model call (TRIAL-DUAL-HANDOFF §4.1): the
+   * `$.model.fork({ prompt })`, the shadow trial's one model call: the
    * engine's answer as given; rejects on a hook's `{ deny }`. Called only while the user's local
-   * trial config is on (shadow.ts), and for keep-warm's ping (keepwarm.ts, D-14).
+   * trial config is on (shadow.ts), and for keep-warm's ping (keepwarm.ts).
    */
   fork(prompt: string): Promise<unknown>
   /**
-   * SESSION-RESTART §4.2: `$.ui.log`, one dim transcript line the model does not read (the
+   * `$.ui.log`, one dim transcript line the model does not read (the
    * restart notice before and after); a failure is ignored.
    */
   uiLog(text: string): void
   /**
-   * SESSION-RESTART §3.4 step 4: `$.command.run({ command })`, the command queued as if typed and
+   * `$.command.run({ command })`, the command queued as if typed and
    * run once the session is idle (`exit` never resolves when it ends the session). Rejects an
    * unknown name, inside a hook the turn waits on, or past a Stop (F1, F2).
    */
@@ -327,18 +327,18 @@ export interface Deps {
   /** G9, G3b: `$.session.surfaces()`, undefined when the call throws. */
   surfaces(): Promise<readonly string[] | undefined>
   /**
-   * SESSION-RESTART §2.1, §3.2: the literal env reads of restart on update: the session kind,
+   * The literal env reads of restart on update: the session kind,
    * the background backend and job folder, and the restart launcher's launch folder (launch.gen.ts).
    */
   restartEnv(): Promise<RestartEnv>
   /**
-   * 0.1.4 R-3: CLAUDE_CODE_ENTRYPOINT (`$.env.get`), which Claude Code sets per host: `cli`, `sdk-cli`
-   * for `-p` (probe 2026-11-03 on 2.1.317: `cli` in a terminal load, `sdk-cli` in 7 `-p` loads),
+   * 0.1.4: CLAUDE_CODE_ENTRYPOINT (`$.env.get`), which Claude Code sets per host: `cli`, `sdk-cli`
+   * for `-p` (a probe on 2.1.317: `cli` in a terminal load, `sdk-cli` in 7 `-p` loads),
    * `claude-desktop`, `claude-vscode`, `sdk-ts`, `sdk-py`; undefined when unset, empty or unreadable.
    */
   entrypoint(): Promise<string | undefined>
   /**
-   * D-80: the plan words Claude Code may put in its environment (`CLAUDE_CODE_SUBSCRIPTION_TYPE`,
+   * The plan words Claude Code may put in its environment (`CLAUDE_CODE_SUBSCRIPTION_TYPE`,
    * `CLAUDE_CODE_RATE_LIMIT_TIER`; undocumented, often unset), for the limit rows only, never to
    * decide: each a short lowercase word, else left out.
    */
@@ -361,7 +361,7 @@ export type LoadState = {
   /** An AskUserQuestion call of this main turn closed unanswered (an answered one never sets it). */
   askedThisTurn: boolean
   nudgedThisTurn: boolean
-  /** A nudge-driven compaction should auto-continue (MOD-SPEC §9). */
+  /** A nudge-driven compaction should auto-continue. */
   resumeAfter: boolean
   /** The last main turn ended on a user-owned question. */
   lastTurnAsksUser: boolean
@@ -373,7 +373,7 @@ export type LoadState = {
   /** This main turn's AskUserQuestion dialog that closed on the AFK timeout: its questions (question.ts). */
   askTimedOut: string | undefined
   /**
-   * 0.1.4 R-7: a person's prompt entered this running turn after `askTimedOut` was set (question.ts
+   * 0.1.4: a person's prompt entered this running turn after `askTimedOut` was set (question.ts
    * `personTyped`): the question stays carried, its timeout mark does not.
    */
   askPersonSince: boolean
@@ -384,11 +384,11 @@ export type LoadState = {
   openTimedOut: boolean
   /** The next main turn.start comes from our own `$.prompt.submit`. */
   ourSubmitPending: boolean
-  /** The text of that submit: it tells our turn from a prompt that entered beside it (CR-F17). */
+  /** The text of that submit: it tells our turn from a prompt that entered beside it. */
   ourSubmitText: string | undefined
   /** Prompts of others (the user, another plugin) entering an idle session whose turn has not started yet. */
   foreignPrompts: number
-  /** Our handoff-turn prompt still queued after a user turn cancelled that turn: its turn is aborted (OT-1). */
+  /** Our handoff-turn prompt still queued after a user turn cancelled that turn: its turn is aborted. */
   orphanSubmit: boolean
   /** The ht that cancelled handoff turn had (closed), for the `handoff_orphan_aborted` row; null when none. */
   orphanHt: string | null
@@ -396,7 +396,7 @@ export type LoadState = {
   handoffSubmitting: boolean
   /** Our auto-continue's `$.prompt.submit` call is in flight: dropped there the same way (cont.ts). */
   contSubmitting: boolean
-  /** The handoff turn deferred for a prompt that entered but has not started its turn: run again if it never does (CR-F17). */
+  /** The handoff turn deferred for a prompt that entered but has not started its turn: run again if it never does. */
   afterForeign: (() => void) | undefined
   /** Boundary scheduler. */
   timer: { cancel: () => void } | undefined
@@ -407,15 +407,15 @@ export type LoadState = {
   consecutiveNonOk: number
   halt: { active: boolean; reason: string | null }
   haltToasted: boolean
-  /** prompt.context ran in this load (MOD-SPEC §3.4 ctxSeen). */
+  /** prompt.context ran in this load (`ctxSeen`). */
   ctxSeen: boolean
   /**
-   * 0.1.5 D-1: a `prompt.context` call of another loop passed the pending block over (resume.ts
+   * 0.1.5: a `prompt.context` call of another loop passed the pending block over (resume.ts
    * `otherLoopContext`); the next main prompt not of ours carries it (`passedBlockFor`). `restored`:
    * that call restored the block's record (a person's prompt then gets no timeout mark).
    */
   ctxPassed: { restored: boolean } | undefined
-  /** Nonces of this load's mod-self dispatches (the self-call check, §3.1 step 0). */
+  /** Nonces of this load's mod-self dispatches (the self-call check). */
   selfNonces: Set<string>
   /** The pending main resume block for prompt.context or the continue text. */
   pending: PendingResume | undefined
@@ -427,7 +427,7 @@ export type LoadState = {
   fourthToasted: boolean
   selfCallLoggedFor: Set<string>
   keysetLoggedFor: Set<string>
-  /** Temp paths already recorded for this session (MOD §10). */
+  /** Temp paths already recorded for this session. */
   recordedPaths: Set<string>
   /** Background work a test awaits (boundary runs from a timer). */
   inflight: Promise<unknown> | undefined
@@ -439,11 +439,11 @@ export type LoadState = {
   mainCompactionsSid: string | null
   /** Escalation kinds already toasted in this load. */
   toasted: Set<string>
-  /** The nudged main turn's last-cycle reason (MOD-SPEC §9.1), set at the nudge, read at its end. */
+  /** The nudged main turn's last-cycle reason, set at the nudge, read at its end. */
   lastCycle: HaltReason | null
   /** The nonce the nudge named (`@queue_add@`); the compaction of that cycle uses it. */
   nudgeNonce: string | undefined
-  /** The handoff turn from its scheduling to its end (MOD-SPEC §9.1). */
+  /** The handoff turn from its scheduling to its end. */
   handoffTurn: HandoffTurn | undefined
   /** Main turn (`turnSeq`) in which a main compaction other than ours ran after the nudge, or -1. */
   compactedInTurn: number
@@ -453,11 +453,11 @@ export type LoadState = {
   nativeCompactSeq: number
   /** Main compactions other than ours running now (not `precompute`). */
   nativeCompacting: number
-  /** The post-handoff compaction waiting for a running native one to end (CR-F19). */
+  /** The post-handoff compaction waiting for a running native one to end. */
   afterNative: (() => void) | undefined
-  /** A pre-compaction turn ran since this load's last main compaction (§9.3 `again`). */
+  /** A pre-compaction turn ran since this load's last main compaction (`again`). */
   precompactRan: boolean
-  /** Origin kinds of the prompts counted in `foreignPrompts`, oldest first (IC-1 D6). */
+  /** Origin kinds of the prompts counted in `foreignPrompts`, oldest first. */
   enteringKinds: string[]
   /**
    * Prompts of others queued while a main turn ran (`turnId` set), oldest first: the origin kind,
@@ -468,34 +468,34 @@ export type LoadState = {
   queuedKinds: { kind: string; text: string; over: string; passed: number }[]
   /** The origin kind of the prompt that opened the current main turn: `plugin` for ours, undefined when none was seen. */
   turnOrigin: string | undefined
-  /** When the last main turn ended, and whether it ended `answer` (§9.4, the idle predicate). */
+  /** When the last main turn ended, and whether it ended `answer` (the idle predicate). */
   lastTurnEndAt: number | undefined
   lastTurnAnswer: boolean
-  /** When the last main-thread model request (`turn.step`) started: the idle compaction's anchor (D3). */
+  /** When the last main-thread model request (`turn.step`) started: the idle compaction's anchor. */
   lastMainReqAt: number | undefined
   /** How many main-thread model requests (`turn.step`) this load has seen: keep-warm's fork-miss reads a new one. */
   mainReqs: number
   /**
-   * D11: the last sign of a person at the prompt (a `prompt.edit`, a `prompt.change` of theirs, an
+   * The last sign of a person at the prompt (a `prompt.edit`, a `prompt.change` of theirs, an
    * interactive `session.start`); the idle compaction skips `present` for a minute after it.
    */
   lastInputAt: number | undefined
-  /** D7: the plugin's idle compactions that failed in a row in this load (a success resets it). */
+  /** The plugin's idle compactions that failed in a row in this load (a success resets it). */
   idleCompactFails: number
-  /** D7 (`failed`, two in a row) and D8 (`queued`, lane B1): the idle compaction is off for the load. */
+  /** `failed` (two in a row) or `queued`: the idle compaction is off for the load. */
   idleCompactOff: 'failed' | 'queued' | undefined
-  /** The persisted idle due this load runs was adopted from another load or process (§3.4, D6). */
+  /** The persisted idle due this load runs was adopted from another load or process. */
   idleAdopted: boolean
   /** `idleEnv()` once per load. */
   idleEnvMemo: Promise<IdleEnv> | undefined
-  /** The pre-idle timer (§9.4). */
+  /** The pre-idle timer. */
   idleTimer: { cancel: () => void } | undefined
   /**
-   * D12 (lane B): bumped by every cancel of the idle timer, synchronously, so a tick that was
+   * Bumped by every cancel of the idle timer, synchronously, so a tick that was
    * reading the clock when a turn started, a prompt entered or the session ended re-arms nothing.
    */
   idleGen: number
-  /** The `atLoad` of the timer `schedule` armed last (§3.4): a prompt a hook drops re-arms it alike (`resumeIdle`). */
+  /** The `atLoad` of the timer `schedule` armed last: a prompt a hook drops re-arms it alike (`resumeIdle`). */
   idleAtLoad: boolean
   /** Fires of this load's idle timer under way (a count): `resumeIdle` arms no second timer beside one. */
   idleFiring: number
@@ -505,29 +505,29 @@ export type LoadState = {
    */
   idleDueSid: string | undefined
   /**
-   * Per session id, the one pending delete of the tombstone this load wrote last (§3.1): a newer
+   * Per session id, the one pending delete of the tombstone this load wrote last: a newer
    * tombstone or record of that sid cancels it, so turn starts do not pile up hour-long waits.
    */
   idleTombDeletes: Map<string, { cancel: () => void }>
-  /** The idle episode: from a human-origin turn's end to the next human-origin turn.start (§9.4). */
+  /** The idle episode: from a human-origin turn's end to the next human-origin turn.start. */
   idleEpisode: { since: number; done: boolean } | undefined
-  /** A handoff turn published since the last human-origin turn (§9.4 `published`). */
+  /** A handoff turn published since the last human-origin turn (`published`). */
   publishedSinceHuman: boolean
   /**
    * The session id and policy tuple (native, plugin_turn, plugin_compact, compact_min,
-   * served_hint, cache_s) of the last `idle_mode` row this load wrote (IA-3, owner xxxxxxxx-17;
-   * §1.2: one per session id, so a `/clear` gets its own), undefined before the first.
+   * served_hint, cache_s) of the last `idle_mode` row this load wrote (one per session id, so a
+   * `/clear` gets its own), undefined before the first.
    */
   idleMode: { sid: string; tuple: string } | undefined
   /**
-   * Owner xxxxxxxx-37 ("Full block again on return"): a turn not of a person's (a background
+   * The full block again on return: a turn not of a person's (a background
    * result) took an idle compaction's resume block at `usedAt`; the first human-origin turn gets
    * the full block again, re-measured, with `[idle-again]`. `remeasure` is the measure that turn's
    * block was built with, taken at `measuredAt` (used, with that stamp, when the new measure fails).
    */
   idleAgain: { sid: string; pend: PendingResume; usedAt: number; remeasure: string | undefined; measuredAt: number } | undefined
   /**
-   * Away digest phase 1 (owner 2026-10-27 12:5x): the open idle episode of the last main idle
+   * Away digest phase 1: the open idle episode of the last main idle
    * compaction (or of its block restored after `claude --resume`), from its after-step to the
    * first human-origin prompt once a turn got the block: the lane facts its summary gave, the
    * lane state the last turn was told (`shown`, undefined until a turn got the block), the measure
@@ -540,13 +540,13 @@ export type LoadState = {
    */
   idleLane: IdleLane | undefined
   /**
-   * Owner xxxxxxxx-17: the end of this load's last main compaction (any trigger but precompute),
+   * The end of this load's last main compaction (any trigger but precompute),
    * and whether it was an idle dispatch; the 55.5-min check stands down when it is after the turn
    * end it was armed for. Also kept in `$.store` (`idle_seen:<sid>`), so a reload keeps it.
    */
   compactedAt: { sid: string; at: number; idle: boolean } | undefined
   /**
-   * Owner xxxxxxxx-38: agent loops (subagents, teammates, a workflow's agents) whose turn started
+   * Agent loops (subagents, teammates, a workflow's agents) whose turn started
    * and has not completed in this load, by agent id.
    */
   agentTurns: Set<string>
@@ -579,7 +579,7 @@ export type LoadState = {
    * a compaction our hook shaped counts, a skipped or unclaimed one too.
    */
   commandFails: number
-  /** SESSION-RESTART: the restart this load armed, from its arm to its end (one at a time). */
+  /** Restart on update: the restart this load armed, from its arm to its end (one at a time). */
   restart: RestartRun | undefined
   /** `<why>|<to>` of the `refresh_skipped` and `refresh_would` rows this load wrote (once each). */
   restartLogged: Set<string>
@@ -593,15 +593,15 @@ export type LoadState = {
   drift: { at: number; installed: string | null } | undefined
   /** The `version_drift` rows this load wrote, by target. */
   driftLogged: Set<string>
-  /** §2.1: this load's session ran another Claude Code version before (versionCanary), for `refresh_done {route: supervisor}`. */
+  /** This load's session ran another Claude Code version before (versionCanary), for `refresh_done {route: supervisor}`. */
   versionMoved: { from: string; to: string } | undefined
-  /** D10: the newest permission_mode a main hook input carried in this load (Stop, UserPromptSubmit, PermissionRequest), and when. */
+  /** The newest permission_mode a main hook input carried in this load (Stop, UserPromptSubmit, PermissionRequest), and when. */
   modeSeen: { mode: string; at: number } | undefined
-  /** D10: when the last main turn of this load started. */
+  /** When the last main turn of this load started. */
   lastMainTurnAt: number | undefined
-  /** D10: when this load's `session.start` ran (once per load; never for a `/clear`). */
+  /** When this load's `session.start` ran (once per load; never for a `/clear`). */
   sessionStartAt: number | undefined
-  /** Keep-warm (D-14, keepwarm.ts): the current idle gap's warming, undefined between a turn start and the next turn end. */
+  /** Keep-warm (keepwarm.ts): the current idle gap's warming, undefined between a turn start and the next turn end. */
   keepWarm: KeepWarm | undefined
   /** The ping timer, and its generation (bumped by every cancel, as `idleGen`). */
   keepWarmTimer: { cancel: () => void } | undefined
@@ -618,12 +618,12 @@ export type LoadState = {
   /** Task ids a background-task notification reported ended (keepwarm.ts `noteEndedTasks`); cleared at session end. */
   endedTasks: Set<string>
   /**
-   * D-80 (limits.ts): when the usage reading was last refreshed, as far as this load can tell: the
+   * limits.ts: when the usage reading was last refreshed, as far as this load can tell: the
    * end of a main request (its response's headers carry it) or a `session.measure` event.
    */
   usageAt: number | undefined
   /**
-   * D-83 (limits.ts `noteUsage`): the reading this load last wrote to the shared usage record, as
+   * limits.ts `noteUsage`: the reading this load last wrote to the shared usage record, as
    * a key of its windows, and when (a reading written again only once it changed or grew old).
    */
   usageNote: { key: string; at: number } | undefined
@@ -659,10 +659,10 @@ export type PendingResume = {
   sid: string
   nonce: string
   block: string
-  /** When the block was built, and what it was built from: a block delivered more than 600 s later is built again with a fresh measure (IC-1 D3). */
+  /** When the block was built, and what it was built from: a block delivered more than 600 s later is built again with a fresh measure. */
   builtAt: number
   args: BlockArgs
-  /** The measure the block was built with (owner xxxxxxxx-25: a halt change rebuilds it without a new helper call). */
+  /** The measure the block was built with (a halt change rebuilds it without a new helper call). */
   remeasure?: string
   /** When that measure was taken (`@measured_at@` of a rebuild that takes no new one; `builtAt` when absent). */
   measuredAt?: number
@@ -709,7 +709,7 @@ export type IdleLane = {
   result: boolean
   /**
    * The turn now running read the lane working only because that result unblocks a step held on
-   * its job (owner 2026-10-28 digest rules (a)): its end reads the lane again (rule (b), digest.ts
+   * its job (digest rule (a)): its end reads the lane again (rule (b), digest.ts
    * `laneTurnEnd`); cleared there.
    */
   unblocked: boolean
@@ -722,7 +722,7 @@ export type IdleLane = {
 }
 
 /**
- * The mod's part of the rollup (MOD-SPEC §2.5, F2-3): `nudged` = a nudge was given in the main
+ * The mod's part of the rollup: `nudged` = a nudge was given in the main
  * turn this compaction ended or interrupted; `continued` = an auto-continue was submitted after
  * it; `halt` = halt mode was on once the mod had handled it.
  */
@@ -730,7 +730,7 @@ export type Outcome = {
   nudged: boolean
   continued: boolean
   halt: boolean
-  /** The handoff turn this compaction followed or interrupted (MOD-SPEC §2.5 rollup fields). */
+  /** The handoff turn this compaction followed or interrupted (rollup fields). */
   handoff?: Record<string, string | number | null>
 }
 
@@ -1178,7 +1178,7 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
 }
 
 /**
- * The mod writes where the helper does (MOD-SPEC §1.2 unsafe roots): the helper's effective watch
+ * The mod writes where the helper does (unsafe roots left out): the helper's effective watch
  * from `ident` when it gave one, nothing at all when it refused every log folder (null), and the
  * folders from the options only while no helper answer is known (the helper-missing fallback).
  */
@@ -1189,7 +1189,7 @@ export function withHelperWatch(p: Paths | undefined, id: LoadState['ident']): P
   return { root: p.root, watch: w.replace(/\/+$/, '') }
 }
 
-/** Owner xxxxxxxx-17 (2b): Claude Code's own cache file, in `CLAUDE_CONFIG_DIR` or else `HOME`. */
+/** Claude Code's own cache file, in `CLAUDE_CONFIG_DIR` or else `HOME`. */
 export const SERVED_FILE = '.claude.json'
 /** A cache file larger than this is not read for the hint. */
 export const SERVED_MAX_CHARS = 8000000
@@ -1209,10 +1209,10 @@ export function servedMode(text: string): string | undefined {
   }
 }
 
-/** `AgentStatus` values of an agent that ended (owner xxxxxxxx-38: every other status counts as running). */
+/** `AgentStatus` values of an agent that ended (every other status counts as running). */
 export const AGENT_ENDED: readonly string[] = ['completed', 'failed', 'killed']
 /**
- * D-82: `AgentStatus` values of a live agent at rest: one that waits for a message (`idle`, a
+ * `AgentStatus` values of a live agent at rest: one that waits for a message (`idle`, a
  * teammate between its turns). It stays alive (a restart would end it) but is no open job. Not
  * `waiting`: Claude Code 2.1.319 sets it also on an agent held by background work it owns, whose
  * result is still to come (the `AgentStatus` doc).
@@ -1275,7 +1275,7 @@ export function claimOwnCompact(s: LoadState, e: { trigger: string; agentId?: st
   return own
 }
 
-/** Before our `$.prompt.submit`: the next main turn.start is ours (MOD-SPEC §9, §9.1 step 3). */
+/** Before our `$.prompt.submit`: the next main turn.start is ours. */
 export function submitPending(s: LoadState, text: string): void {
   s.ourSubmitPending = true
   s.ourSubmitText = text
@@ -1300,11 +1300,11 @@ export function isOurText(turnText: string, sent: string | undefined): boolean {
  * At a main turn.start, before any await: whether it is the turn of our pending submit. With no
  * other prompt entering, the first turn to start is ours, as before. When a prompt of the user
  * (or of another plugin) entered beside ours, only a turn that carries our text is ours, and
- * the other turn leaves our submit pending for the turn still to come (CR-F17).
+ * the other turn leaves our submit pending for the turn still to come.
  */
 export function claimTurn(s: LoadState, turnText: string): boolean {
   // A prompt queued over an earlier turn whose own turn this is: its turn carries exactly its
-  // text (xxxxxxxx, xxxxxxxx: 5 of 5), so a turn that only contains it (a task notification
+  // text (5 of 5 in two real sessions), so a turn that only contains it (a task notification
   // quoting a short "y") is not taken for it.
   const t = turnText.trim()
   const q = t === '' ? -1 : s.queuedKinds.findIndex(k => k.text.trim() === t)
@@ -1314,7 +1314,7 @@ export function claimTurn(s: LoadState, turnText: string): boolean {
     submitSettled(s)
     s.turnOrigin = 'plugin'
   } else if (q >= 0) {
-    // A prompt typed while a turn ran starts its own turn after it (xxxxxxxx 2026-10-30): its
+    // A prompt typed while a turn ran starts its own turn after it (seen in a real session): its
     // origin kind was kept when it was queued, never counted as entering.
     s.turnOrigin = s.queuedKinds.splice(q, 1)[0]?.kind
   } else {
@@ -1330,7 +1330,7 @@ export function claimTurn(s: LoadState, turnText: string): boolean {
   return ours
 }
 
-/** IC-1 D6: the origin kinds of a person's prompt (typed, remote bridge, SDK). */
+/** The origin kinds of a person's prompt (typed, remote bridge, SDK). */
 export const HUMAN_ORIGINS: readonly string[] = ['composer', 'bridge', 'sdk']
 
 export function isHuman(kind: string | undefined): boolean {
@@ -1365,7 +1365,7 @@ export function promptQueued(s: LoadState, kind: string, text: string, over: str
 
 /**
  * That prompt did not enter (`{ drop }` or a failed chain): no turn of its own will start. A
- * handoff turn it deferred (CR-F17) runs its delay again once no other prompt is entering.
+ * handoff turn it deferred runs its delay again once no other prompt is entering.
  */
 export function promptNotEntered(s: LoadState, kind = 'unknown'): void {
   if (s.foreignPrompts > 0) s.foreignPrompts--
@@ -1381,7 +1381,7 @@ export function promptNotEntered(s: LoadState, kind = 'unknown'): void {
 /**
  * A `prompt.submit` of ours: its origin is this plugin's own (`{ kind: 'plugin', name }`, which
  * no hook can change), so it is told from a user's prompt by origin, never by its text, which a
- * peer hook may rewrite (CR-F17). The engine skips only the calling hook, so this hook sees it.
+ * peer hook may rewrite. The engine skips only the calling hook, so this hook sees it.
  */
 export function isOwnOrigin(origin: { kind: string; name?: string }, name: string): boolean {
   return origin.kind === 'plugin' && origin.name === name
@@ -1391,7 +1391,7 @@ export function isOwnOrigin(origin: { kind: string; name?: string }, name: strin
  * Our own handoff-turn submit reaching our `prompt.submit` hook after another prompt came first
  * (a main turn started, or a prompt entered whose turn has not started), or our auto-continue
  * after a person's (`userFirst`): it is dropped there, so it never runs after that turn as a
- * plain one (CR-F17, CR-F25), nor takes the resume block that turn should get. A continue behind
+ * plain one, nor takes the resume block that turn should get. A continue behind
  * a task notification's entering prompt still runs after that turn, as before.
  */
 export function refuseOwnSubmit(s: LoadState): boolean {
@@ -1399,7 +1399,7 @@ export function refuseOwnSubmit(s: LoadState): boolean {
 }
 
 /**
- * A main turn runs, or a person's prompt (IC-1 D6 origin) entered and its turn has not started.
+ * A main turn runs, or a person's prompt (by origin) entered and its turn has not started.
  * A task notification's or another plugin's entering prompt stops neither a continue nor a
  * compaction, as before: a last cycle's compaction dropped for it would not come again while halt
  * stays on, and the continue still runs after its turn.

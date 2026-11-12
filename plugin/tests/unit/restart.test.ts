@@ -1,4 +1,4 @@
-// U tests through the kit: restart on update (SESSION-RESTART §7.1, AT-RS-01..19, the mod's part).
+// U tests through the kit: restart on update (AT-RS-01..19, the mod's part).
 // The helper's `restart` command is faked by the World (gate, arm, set, claim, respawn); its real
 // behaviour is the helper cases RS-*. A plugin compaction at a turn end (nudged, so a continue
 // would follow) or an idle compaction opens the restart moment; the session runs 2.1.311 and
@@ -97,7 +97,7 @@ test('AT-RS-03 (on, fg): gate passes: armed, the transcript line, refresh_start,
   expect(w.flag(gate, '--route')).toBe('fg')
   expect(w.flag(gate, '--launch')).toBe(LAUNCH)
   expect(w.flag(gate, '--model')).toBe('claude-test-model')
-  // D10: the start of the last main turn goes with it; PostCompact has no mode (no --since).
+  // The start of the last main turn goes with it; PostCompact has no mode (no --since).
   expect(Number(w.flag(gate, '--turn-at'))).toBeLessThanOrEqual(Number(w.flag(gate, '--now-ms')))
   expect(gate?.args).not.toContain('--since')
   const arm = w.restartCalls('arm')[0]
@@ -184,7 +184,7 @@ async function idleMoment($: Engine, w: World, answer = 'Done with that step.', 
 const G6: { why: string; name: string; before?: (w: World) => void; answer?: string; reason?: 'aborted'; kind?: string }[] = [
   { why: 'aborted', name: 'the last turn aborted', reason: 'aborted' },
   { why: 'asks-user', name: 'the last turn asks the user', answer: 'Should I run the migration now?' },
-  // A task's turn (a person's prompt would clear halt, IC-1 D6).
+  // A task's turn (a person's prompt would clear halt).
   { why: 'halted', name: 'halt mode on', kind: 'task-notification', before: w => { w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: 'thrash' })) } },
   { why: 'headless', name: 'a headless load (G2)', before: w => { w.interactive = false } },
 ]
@@ -849,7 +849,7 @@ async function classic($: Engine, ev: 'Stop' | 'UserPromptSubmit' | 'PermissionR
   await ($ as unknown as { classic: Record<string, (e: unknown) => Promise<unknown>> }).classic[ev]?.(e)
 }
 
-test('AT-RS-19 (D10, mod part): the newest main permission_mode of Stop, UserPromptSubmit or PermissionRequest goes to the gate with its time and the last turn\'s start; a subagent\'s or an unknown mode is not read', async ($, on) => {
+test('AT-RS-19 (mod part): the newest main permission_mode of Stop, UserPromptSubmit or PermissionRequest goes to the gate with its time and the last turn\'s start; a subagent\'s or an unknown mode is not read', async ($, on) => {
   const w = await session($, on)
   await w.userTurn($)
   await classic($, 'UserPromptSubmit', { prompt: 'x', permission_mode: 'default' })
@@ -870,14 +870,14 @@ test('AT-RS-19 (D10, mod part): the newest main permission_mode of Stop, UserPro
   expect(Number(w.flag(gate, '--seen-at'))).toBeGreaterThan(turnAt)
 })
 
-test('AT-RS-19 (D10, mod part): no mode read in this load: no --seen-mode (the helper falls back to its Stop record)', async ($, on) => {
+test('AT-RS-19 (mod part): no mode read in this load: no --seen-mode (the helper falls back to its Stop record)', async ($, on) => {
   const w = await session($, on)
   await nudgedTurn($, w)
   const gate = w.restartCalls('gate')[0]
   expect([gate?.args.includes('--seen-mode'), gate?.args.includes('--turn-at')]).toEqual([false, true])
 })
 
-test('AT-RS-19 (D10, mod part): no main turn in this load (the plugin\'s idle compaction of a record an earlier process armed): --turn-at is the load\'s start, so that process\'s Stop counts as older than the last turn and the launch mode narrows it', { options: { idle_handoff_turn: 'true', precompact_turn: 'false' } }, async ($, on) => {
+test('AT-RS-19 (mod part): no main turn in this load (the plugin\'s idle compaction of a record an earlier process armed): --turn-at is the load\'s start, so that process\'s Stop counts as older than the last turn and the launch mode narrows it', { options: { idle_handoff_turn: 'true', precompact_turn: 'false' } }, async ($, on) => {
   const MIN = 60000
   const w = new World({ version: { version: '2.1.311' } }).install(on, {
     [`idle_due:${SID_A}`]: {

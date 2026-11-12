@@ -1,5 +1,5 @@
-// U tests through the kit: idle compaction and the pre-idle handoff turn (IC-1; MOD-SPEC §2.5
-// idle rule, §3.4 delivery rule, §9 halt and /clear guards, §9.4). Cases that run the pre-idle
+// U tests through the kit: idle compaction and the pre-idle handoff turn (the
+// idle rule, delivery rule, halt and /clear guards). Cases that run the pre-idle
 // turn need the `[submit-idle]` lines of handoff-turn.txt; a build without them answers
 // `no-asset`, and those cases check that instead.
 import { expect, test as kitTest } from 'claude-code/testing'
@@ -12,27 +12,27 @@ import { isoLocal } from '../../hooks/lib/log'
 import { HOME, SID_A, SID_B, T0, WATCH, World, markerNonce, raiseCompact } from './harness.test'
 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
-// IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` arms the pre-idle turn only while Claude
+// `auto` arms the pre-idle turn only while Claude
 // Code's own idle compaction is off, read from the settings (`idleCompaction`, `autoCompactEnabled`).
 const ON = { idle_handoff_turn: 'true', precompact_turn: 'false' }
 
 /**
  * A kit test with `idle_digest: submit` unless its options name a value: the `[idle]` cases here
- * pin the line as built for `submit` and `return`; owner rule (c) (2026-10-28) makes `off` the
+ * pin the line as built for `submit` and `return`; `off` is the
  * default of 0.1.1, whose `[idle-off]` line lane.test.ts covers.
  */
 function test(name: string, ...rest: readonly [TestBody] | readonly [TestOptions, TestBody]): void {
   const [o, body]: [TestOptions, TestBody] = rest.length === 1 ? [{}, rest[0]] : [rest[0], rest[1]]
   kitTest(name, { ...o, options: { idle_digest: 'submit', ...o.options } }, body)
 }
-// IDLE-COMPACT D2: with `"idleCompaction": false` at 200K and more the plugin's own idle
+// With `"idleCompaction": false` at 200K and more the plugin's own idle
 // compaction replaces the 49-min turn; the turn's own cases switch it off (`idle_compact: off`).
 const TURN = { ...ON, idle_compact: 'false' }
-// Lane B (owner Q2): with native idle on and silent, the 55.5-min check compacts at 200K and more
+// With native idle on and silent, the 55.5-min check compacts at 200K and more
 // instead of running the turn; the check's turn cases switch the plugin's compaction off the same way.
 const NATIVE_OFF: Record<string, unknown> = { idleCompaction: false }
 const MIN = 60000
-// D15: only a five-hour or seven-day window shows the one-hour cache.
+// Only a five-hour or seven-day window shows the one-hour cache.
 const LIMITS = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 30 }]
 const PUBLISHED = HOME + '/.claude/handoffs/r/LAB-42/2026-10-21_15-00-00_5e55a001_handoff.md'
 const SHOWN = '~/.claude/handoffs/r/LAB-42/2026-10-21_15-00-00_5e55a001_handoff.md'
@@ -50,7 +50,7 @@ async function humanTurn($: Engine, w: World, tokens = 260000, answer = 'Done wi
   await w.turnEnd($, answer)
 }
 
-// ---- IC-1 D1: the idle predicate on the dispatch
+// ---- : the idle predicate on the dispatch
 
 test('AT-IC-01: auto, no turn, no prompt entering, gap 1,600 s → idle (no [midturn]); 1,400 s → not idle', async ($, on) => {
   const w = new World().install(on)
@@ -90,7 +90,7 @@ test('AT-IC-01: a prompt entering, a running turn (midturn), and manual / plugin
   expect(dispatchFlag(w, 4, '--midturn')).toBe('true')
 })
 
-// ID-1 (owner D2, 2026-10-23; SPEC-DELTAS AT-ID-01): Claude Code's future `idle` trigger.
+// AT-ID-01: Claude Code's future `idle` trigger.
 test('AT-ID-01: a dispatch with trigger idle is handled like auto: no trigger_unknown, dispatch --trigger auto, the idle predicate, checkpoint and after-step; mid-turn like auto', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
@@ -115,7 +115,7 @@ test('AT-ID-01: a dispatch with trigger idle is handled like auto: no trigger_un
   expect(w.callsOf('checkpoint').length).toBe(3)
 })
 
-test('AT-IC-01 (core-to-mod §17): helper down, the fs fallback record of an idle dispatch has idle true and idle_gap_s', async ($, on) => {
+test('AT-IC-01: helper down, the fs fallback record of an idle dispatch has idle true and idle_gap_s', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await humanTurn($, w, 150000)
@@ -127,7 +127,7 @@ test('AT-IC-01 (core-to-mod §17): helper down, the fs fallback record of an idl
   expect([rec.nonce, rec.idle, rec.idle_gap_s, rec.midturn]).toEqual([nonce, true, 1600, false])
 })
 
-// ---- IC-1 D3: [idle] and the delivery-time re-measure
+// ---- : [idle] and the delivery-time re-measure
 
 test('AT-IC-03: an idle dispatch gets [idle] in its resume block (when this build has the line), never with [midturn]', async ($, on) => {
   const w = new World().install(on)
@@ -144,19 +144,19 @@ test('AT-IC-03: an idle dispatch gets [idle] in its resume block (when this buil
   const mid = assemble(w.name, 'resume-context', ['prod-forbid', 'midturn'], { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x' })
   const midLine = mid.split('\n').find(l => !plain.split('\n').includes(l))
   if (midLine !== undefined) expect(block).not.toContain(midLine)
-  // Owner xxxxxxxx-18 ("Add the check line"): the kept messages are checked before Step 1.
+  // The check line: the kept messages are checked before Step 1.
   if (line !== undefined) expect(line).toContain('check the messages kept after the summary first; skip what is already done')
   const halt = lineOf(w, ['idle-halt'])
   if (halt !== undefined) expect(block).not.toContain(halt)
 })
 
-// Owner xxxxxxxx-25 ("Stop in halt"; SPEC-DELTAS AT-IB-03): while halt mode is on, the idle line
+// Stop in halt (AT-IB-03): while halt mode is on, the idle line
 // says to handle the background result, then stop and wait for the user.
 const RT = { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x', idle_used_at: 'x' }
 /**
  * The lines `tags` add to the plain block (`base` kept in both), joined; undefined when none. They
- * end before the step-5 digest's Basis, which code renders from the block's own facts (owner
- * 2026-10-27 22:32; lane.test.ts checks it).
+ * end before the step-5 digest's Basis, which code renders from the block's own facts
+ * (lane.test.ts checks it).
  */
 function lineOf(w: World, tags: Tag[], base: Tag[] = [], rt: Record<string, string> = RT): string | undefined {
   const r = { lane_basis: BASIS_CUT, ...rt }
@@ -168,7 +168,7 @@ const BASIS_CUT = '\u0002'
 const blockOf = (w: World, ctx: { blocks: readonly { name: string; text: string }[] }) => ctx.blocks.find(b => b.name === `${w.name}-resume`)?.text
 /** What the model read beside the prompt of the newest turn (the plugin's prompt.submit context). */
 const ctxOf = (w: World): string => (w.submitContexts[w.submitContexts.length - 1] ?? []).join('\n')
-/** The `Measured facts (<stamp>;` head a block's measure was taken at (IC-1 D3: the stamp shows the facts' age). */
+/** The `Measured facts (<stamp>;` head a block's measure was taken at (: the stamp shows the facts' age). */
 const measuredHead = (at: number) => `Measured facts (${isoLocal(at, false)};`
 
 test('AT-IB-03: halt on at an idle compaction: a task-notification turn gets [idle-halt] (handle it, then stop and wait for the user), not [idle]; the person\'s return clears halt and gets [idle]', async ($, on) => {
@@ -203,7 +203,7 @@ test('AT-IB-03: halt on at an idle compaction: a task-notification turn gets [id
   if (halt !== undefined) expect(back).not.toContain(halt)
 })
 
-// Owner 2026-10-26 [driver] (GSD re-entry per session; review of the first build): a halted idle
+// [driver] (GSD re-entry per session; review of the first build): a halted idle
 // block never carries the re-enter line, though its re-measure names an Active driver (EXCLUSIVE
 // in tools/assemble); the person's return, which clears halt, gets it.
 test('AT-GR-06: halt on at an idle compaction: the [idle-halt] block keeps the Active driver fact but not the [driver] re-enter line; the person\'s return gets it', async ($, on) => {
@@ -292,7 +292,7 @@ test('AT-GR-07: a fresh re-measure whose GSD step timed out keeps the stored GSD
   if (driver !== undefined) expect(block).toContain(driver)
 })
 
-// Owner xxxxxxxx-37 ("Full block again on return", replaces ID-3's [idle-return] line; SPEC-DELTAS
+// The full block again on return (replaces the old [idle-return] line;
 // AT-ID-03): the first human prompt after a background result's turn took an idle compaction's
 // block gets the full block again, re-measured, with [idle-again] naming when it went out first.
 // It goes beside that prompt (its prompt.submit context): prompt.context is asked once per
@@ -508,7 +508,7 @@ test('AT-IC-04: the re-measure fails (3 s budget) → the stored block goes out,
   expect(w.callsOf('measure')[0]?.args.includes('--budget-ms')).toBe(false)
 })
 
-// ---- IC-1 D5: the pre-idle handoff turn (§9.4)
+// ---- : the pre-idle handoff turn
 
 test('AT-IC-05: on, a turn ends answer at 260K with rate limits → due at 49 min; at fire: handoff-turn open --reason idle and one [submit-idle] submit; at its end no compaction, no continue', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
@@ -563,7 +563,7 @@ const SKIPS: { why: string; tag?: string; options?: Record<string, unknown>; wor
   { why: 'session-changed', setup: w => { w.sid = SID_B } },
   { why: 'small', tokens: 150000 },
   { why: 'ttl-5m', setup: w => { w.rateLimits = [] } },
-  // D15: a Claude gateway reports only its spend limit, and its cache is the five-minute one.
+  // A Claude gateway reports only its spend limit, and its cache is the five-minute one.
   { why: 'ttl-5m', limits: [{ kind: 'spend_limit', percentUsed: 10 }] },
   // Only with idle_handoff_near_limit `skip`; the default `run` runs the turn (below).
   { why: 'near-limit', options: { idle_handoff_near_limit: 'skip' }, setup: w => { w.rateLimits = [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }] } },
@@ -589,7 +589,7 @@ for (const c of SKIPS) {
   })
 }
 
-// Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): idle_handoff_near_limit `run`, the
+// The handoff is wanted anyway: idle_handoff_near_limit `run`, the
 // default, runs the turn at any usage share; a spend limit at 95% or with no reading (NaN) does not stop it.
 for (const c of [
   { name: 'a seven-day window at 95%', limits: [{ kind: 'five_hour', percentUsed: 12 }, { kind: 'seven_day', percentUsed: 95 }] },
@@ -616,7 +616,7 @@ for (const c of [
   })
 }
 
-// 0.1.2 (owner xxxxxxxx, configurable, `run` the default): all three idle_handoff_near_limit values
+// 0.1.2 (configurable, `run` the default): all three idle_handoff_near_limit values
 // on plan windows and on a spend limit. The usage names a gateway's money cap `spend_limit`; the
 // five-hour and seven-day windows are the plan's. `skip-spend` skips only at a spend limit of 90%
 // or more (no reading, NaN, counts as there, as under `skip`).
@@ -743,7 +743,7 @@ test('AT-IC-08: composer and bridge prompts clear halt too', async ($, on) => {
   expect(w.rowsOf('halt').map(r => r.active)).toEqual([false])
 })
 
-// ---- IC-1 D7: nothing the ended session scheduled reaches the conversation after /clear
+// ---- : nothing the ended session scheduled reaches the conversation after /clear
 
 const CLEAR = { reason: 'clear', sessionId: SID_A, resume: { id: SID_A } }
 
@@ -861,9 +861,9 @@ test('AT-IC-14: a past due and another sid\'s due arm nothing', { options: ON },
   expect(idleSkips(w).length + w.submits.length).toBe(0)
 })
 
-// §9.4: a main turn.start, a prompt entering and session.end cancel the timer and clear the
+// A main turn.start, a prompt entering and session.end cancel the timer and clear the
 // persisted due, so a reload of the same sid re-arms nothing the session already cancelled. Every
-// clear is a tombstone (IDLE-COMPACT §3.1), never null: a missing record means a lost write.
+// clear is a tombstone, never null: a missing record means a lost write.
 /** The last value the mod stored for this sid's due (undefined: never written). */
 function watchDue(on: Parameters<World['install']>[0]): () => unknown {
   let last: unknown
@@ -874,7 +874,7 @@ function watchDue(on: Parameters<World['install']>[0]): () => unknown {
   })
   return () => last
 }
-/** A tombstone: the record was cleared (§3.1). */
+/** A tombstone: the record was cleared. */
 const cleared = (v: unknown): boolean => typeof v === 'object' && v !== null && (v as Record<string, unknown>).cancelled === true
 
 test('AT-IC-14: a main turn.start clears the persisted idle_due (a tombstone)', { options: ON }, async ($, on) => {
@@ -912,7 +912,7 @@ test('AT-IC-14: session.end clears the persisted idle_due (a tombstone)', { opti
 
 // ---- A fresh load re-arms the due with no turn end of its own: a background session moved to a
 // new version by the supervisor (no SessionEnd), or a `claude respawn` or signal end (SessionEnd
-// `other`, which keeps the due), then resumed under its id; probe P4 2026-10-27 skipped the 49-min
+// `other`, which keeps the due), then resumed under its id; a probe skipped the 49-min
 // turn as `aborted` there. The `aborted` and `published` checks and `gap_s` read the armed turn
 // from the persisted due.
 const moved = (kind: 'turn' | 'check', answer?: boolean, published?: boolean) => ({
@@ -1041,7 +1041,7 @@ test('BG-IDLE-07: the turn that publishes a handoff marks the due it armed publi
 
 test('BG-IDLE-08: a due another process on the same sid fired or cancelled (a resumed copy) does nothing here: no row, no submit', { options: ON }, async ($, on) => {
   let gone = false
-  // That process's fire or cancel left its tombstone (IDLE-COMPACT §3.1, G1 held-elsewhere).
+  // That process's fire or cancel left its tombstone (G1 held-elsewhere).
   const tomb = { cancelled: true, sid: SID_A, load: 'other-load', due: T0 + 10 * MIN, at: T0 + 5 * MIN }
   on('store.get', { key: 'idle_due:' + SID_A }, (_$, e, next) => (gone ? { value: tomb } : next(e)))
   const w = new World().install(on, moved('turn', true))
@@ -1070,8 +1070,8 @@ test('BG-IDLE-08 (lost write): a due the store lost (no record, no tombstone) is
   expect(w.submits.length).toBe(0)
 })
 
-// ---- IA-1..3 (idle D3, owner 2026-10-23 02:4x): `auto` = the plugin's pre-idle turn only while
-// Claude Code's own idle compaction is off; a failed settings read counts as on (O-9 provisional).
+// ---- `auto` = the plugin's pre-idle turn only while
+// Claude Code's own idle compaction is off; a failed settings read counts as on (for now).
 const idleModes = (w: World) => w.rowsOf('idle_mode').map(r => `${String(r.native)}/${String(r.plugin_turn)}`)
 
 test('AT-IA-02: auto with idleCompaction false arms the timer; idle_mode vetoed/on', { options: TURN }, async ($, on) => {
@@ -1096,8 +1096,8 @@ test('AT-IA-02: auto with autoCompactEnabled false: compaction-off (idle never f
   expect(idleModes(w)).toEqual(['compaction-off/on'])
 })
 
-// Owner xxxxxxxx-17 ("Check outcome at 55.5m"; D3 reworded "off when native actually compacts",
-// O-9 "unreadable means check what happened"): native on or unreadable arms the outcome check.
+// Check the outcome at 55.5 min (off when native actually compacts; unreadable means check
+// what happened): native on or unreadable arms the outcome check.
 for (const c of [{ name: 'idleCompaction true', policy: { idleCompaction: true } }, { name: 'the key absent', policy: {} }]) {
   test(`AT-IA-02: auto with ${c.name}: native on, no turn at 49 min, the 55.5-min check armed; idle_mode on/check`, { options: TURN }, async ($, on) => {
     const w = new World().install(on)
@@ -1113,7 +1113,7 @@ for (const c of [{ name: 'idleCompaction true', policy: { idleCompaction: true }
   })
 }
 
-test('AT-IA-02: the settings read throws: native unknown, the 55.5-min check armed (O-9: check what happened)', { options: TURN }, async ($, on) => {
+test('AT-IA-02: the settings read throws: native unknown, the 55.5-min check armed (check what happened)', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.settingsThrow = true
   w.rateLimits = LIMITS
@@ -1164,7 +1164,7 @@ test('AT-IA-04: idle_mode is written once per change, not per turn; off reads na
   expect(w.submits.length + idleSkips(w).length).toBe(1)
 })
 
-test('AT-IC-06 / IA-1: off arms nothing even with native idle off', { options: { ...TURN, idle_handoff_turn: 'false' } }, async ($, on) => {
+test('AT-IC-06: off arms nothing even with native idle off', { options: { ...TURN, idle_handoff_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   w.policy = NATIVE_OFF
   w.rateLimits = LIMITS
@@ -1175,10 +1175,10 @@ test('AT-IC-06 / IA-1: off arms nothing even with native idle off', { options: {
   expect(idleModes(w)).toEqual(['vetoed/off'])
 })
 
-// ---- Owner xxxxxxxx-17 ("Check outcome at 55.5m"): with native idle on or unreadable, the plugin
+// ---- Check the outcome at 55.5 min: with native idle on or unreadable, the plugin
 // checks its own records about 55.5 min after the turn end and runs the handoff turn while the
-// cache is warm when native did not compact; owner xxxxxxxx-38 ("Measure more first"): not while
-// agents run. SPEC-DELTAS AT-IS-01..AT-IS-07.
+// cache is warm when native did not compact; not while
+// agents run. AT-IS-01..AT-IS-07.
 const silentRows = (w: World) => w.rowsOf('idle_silent').map(r => [r.gap_s, r.tokens, r.agents, r.served_hint ?? null])
 const opens = (w: World) => w.callsOf('handoff-turn').filter(c => c.args[0] === 'open').map(c => w.flag(c, '--reason'))
 const served = (mode: string) => JSON.stringify({ numStartups: 3, cachedGrowthBookFeatures: { tengu_other: true, tengu_sunny_locket: { mode } } })
@@ -1237,10 +1237,10 @@ test('AT-IS-02: another main compaction since the turn end (manual): compacted; 
   expect(w.submits.length + idleSkips(w).length).toBe(2)
 })
 
-// Owner 2026-10-27 03:4x ("Compact (Recommended)", replaces xxxxxxxx-38 "Measure more first"):
+// Compact while agents run (this replaced measuring more first):
 // while agents run (native never compacts then) the check compacts the session itself: the
 // same self-call as the plugin's other compactions, an idle dispatch record and resume block,
-// no continue. SPEC-DELTAS AT-IS-03, AT-IS-08..AT-IS-10.
+// no continue. AT-IS-03, AT-IS-08..AT-IS-10.
 const idleCompacts = (w: World) => w.rowsOf('idle_compact').map(r => [r.gap_s, r.tokens, r.agents])
 const RUNNING = [{ id: 'sub-1', status: 'running' }, { id: 'sub-0', status: 'completed' }]
 
@@ -1270,8 +1270,8 @@ test('AT-IS-03: agents running at the check (a listed subagent, or a workflow ag
   expect(idleCompacts(w).map(r => r[2])).toEqual([1, 1])
   expect(w.rowsOf('idle_silent').map(r => r.agents)).toEqual([1, 1])
   expect(w.compacts.length).toBe(2)
-  // Its turn ends: with no agent left the next check compacts all the same at 200K and more (lane
-  // B, owner Q2: instead of the handoff turn), with agents 0.
+  // Its turn ends: with no agent left the next check compacts all the same at 200K and more
+  // (instead of the handoff turn), with agents 0.
   await $.turn.complete({ answer: 'done', durationMs: 1, isAborted: false, turnId: 'wf-t1', reason: 'answer', agentId: 'wf-agent-1' } as never)
   w.agents = [{ id: 'sub-1', status: 'completed' }]
   await w.advance(10 * MIN)
@@ -1356,7 +1356,7 @@ for (const c of AGENT_SKIPS) {
   })
 }
 
-test('AT-IS-04: the served hint (2b) is logged in idle_mode and idle_silent, never decides: mode off or compact, the check runs the same', { options: TURN }, async ($, on) => {
+test('AT-IS-04: the served hint is logged in idle_mode and idle_silent, never decides: mode off or compact, the check runs the same', { options: TURN }, async ($, on) => {
   const w = new World().install(on)
   w.rateLimits = LIMITS
   w.files.set(HOME + '/.claude.json', served('off'))

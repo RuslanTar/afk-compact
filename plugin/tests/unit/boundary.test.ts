@@ -1,5 +1,5 @@
 // U tests through the kit: turn-end scheduler, self-call, nudge, auto-continue, cap, halt,
-// thrash (MOD-SPEC §4, §9) and the trigger switches (§1.2).
+// thrash and the trigger switches.
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import { assemble, assembleIf, hasAsset } from '../../hooks/lib/assemble'
@@ -124,7 +124,7 @@ test('AT-B-04: one nudge per main turn; none for a subagent call or a denied cal
   expect(w.rowsOf('nudge').length).toBe(1)
 })
 
-test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge with its reason; one handoff-turn submit, no continue, no compaction (DP-4)', async ($, on) => {
+test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge with its reason; one handoff-turn submit, no continue, no compaction', async ($, on) => {
   const w = new World().install(on)
   w.summaryMode = 'unshaped'
   await w.start($)
@@ -140,7 +140,7 @@ test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge with its rea
   const r = await w.tool($)
   expect(r.context?.[0]).toBe(halted(w, '2-nonok'))
   expect(r.context?.[0]).not.toContain('Then it resumes the work by itself')
-  // CR-F30/F35: a [halt] nudge promises no compaction (DP-4, DP-13). Not guarded on the asset:
+  // A [halt] nudge promises no compaction. Not guarded on the asset:
   // a build whose nudge still makes the promise (before wp/text febc3c1, or a revert) fails here.
   expect(r.context?.[0]).not.toContain('the plugin compacts the session into a handoff summary')
   expect(r.context?.[0]).toContain('It compacts afterwards only if auto-continue is off or at its hourly limit.')
@@ -157,7 +157,7 @@ test('AT-B-05: two consecutive unshaped main verdicts: [halt] nudge with its rea
   expect(w.rowsOf('halt').length).toBe(1)
 })
 
-test('CR-F20: a continue answered { drop }: continue skipped:submit-failed', async ($, on) => {
+test('a continue answered { drop }: continue skipped:submit-failed', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   w.submitDrop = 'a Stop stands'
@@ -412,7 +412,7 @@ test('AT-B-06: 4 nudge-driven cycles within 50 min: 3 continues; the 4th capped 
   expect(w.rowsOf('halt')[0]?.reason).toBe('cap')
 })
 
-// S-SETTINGS A (owner 04:10): the default cap is 6 per rolling hour.
+// The default cap is 6 per rolling hour.
 test('AT-CAP-01: default config, 7 nudge-driven cycles within 55 min: 6 continues; the 7th capped at its nudged turn end (halt cap, handoff turn, one compaction, no continue)', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
@@ -502,7 +502,7 @@ test('AT-B-09: a nudged turn that ends aborted: no continue', { options: { preco
   expect(w.submits.length).toBe(0)
 })
 
-test('AT-B-10: continue with the claim still free: fixed line + block, ≤9,800 chars (RP-4: BLOCK_MAX 9,500 + the fixed line), claim prompt.submit', async ($, on) => {
+test('AT-B-10: continue with the claim still free: fixed line + block, ≤9,800 chars (BLOCK_MAX 9,500 + the fixed line), claim prompt.submit', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   await nudgedTurn($, w)
@@ -640,7 +640,7 @@ test('halt mode survives a reload (halt.json) until a user-typed turn clears it'
 
 /**
  * Halt on, a task notification's turn running: a prompt of `origin` is queued over it (typed
- * mid-turn, `turnId` set) and starts its own turn after it ends (xxxxxxxx 2026-10-30 04:36).
+ * mid-turn, `turnId` set) and starts its own turn after it ends (seen in a real session).
  */
 async function queuedTurn($: Engine, w: World, origin: { kind: string; name?: string }): Promise<void> {
   w.files.set(`${WATCH}/${SID_A}/halt.json`, JSON.stringify({ active: true, reason: '2-nonok' }))
@@ -784,7 +784,7 @@ test('AT-P-04: window 200000: trigger_disabled_small_window; no nudge or plugin 
   await w.turnEnd($)
   await w.advance(5000)
   const eff = w.rowsOf('config_effective')[0]
-  // P5-FOLD A3: disabled, so the thresholds are null and the computed values are the raw fields.
+  // Disabled, so the thresholds are null and the computed values are the raw fields.
   expect([eff?.soft_max, eff?.target, eff?.soft_max_raw, eff?.target_raw]).toEqual([null, null, 51000, 34000])
   expect([eff?.disabled, eff?.small_window, eff?.min_window]).toEqual(['trigger-disabled-small-window', true, 329000])
   expect(w.rowsOf('trigger_disabled_small_window').length).toBe(1)
@@ -816,7 +816,7 @@ test('AT-Q-08 (mod part): queue_cmd set: the nudge keeps [queue] with @queue_add
   const queueAdd = storeWord(w.root, w.name) + ` queue-add --sid ${SID_A} --nonce ${nonce}`
   expect(r.context?.[0]).toBe(assemble(w.name, 'checkpoint-nudge', ['continue', 'queue'], { tokens: '610,000', queue_add: queueAdd }))
   if (assetText('checkpoint-nudge', w.name).includes('@queue_add@')) expect(r.context?.[0]).toContain(queueAdd)
-  // The mod itself never runs the queue tool or queue-add (OD-21 as amended by D-10).
+  // The mod itself never runs the queue tool or queue-add.
   expect(w.callsOf('queue-add').length).toBe(0)
 })
 
@@ -854,7 +854,7 @@ test('AT-P5-07 (row): native_window_tokens 50000 counts as 100000, with one conf
 })
 
 // 0.1.3 small fixes: an unset native_window_tokens follows Claude Code's own autoCompactWindow
-// setting (the owner had to repeat 800000 in the option by hand); an option set still wins.
+// setting (before, a user had to repeat 800000 in the option by hand); an option set still wins.
 const NW_ROWS: { name: string; options?: Record<string, number>; set?: unknown; window: number }[] = [
   { name: 'autoCompactWindow 800000, option unset: window 800000', set: 800000, window: 800000 },
   { name: 'option 900000 over autoCompactWindow 800000: window 900000', options: { native_window_tokens: 900000 }, set: 800000, window: 900000 },
@@ -889,7 +889,7 @@ test('NW-SET (0.1.3): settings unreadable: the model window', async ($, on) => {
   expect(w.rowsOf('config_effective')[0]?.window).toBe(1000000)
 })
 
-// 0.1.4 T-11: an unset native_window_tokens follows the compaction window Claude Code settled, read
+// 0.1.4: an unset native_window_tokens follows the compaction window Claude Code settled, read
 // once per load from the summary context breakdown (no token-count request): its rawMaxTokens is
 // the window and its autoCompactThreshold, when present, the native trigger; config_effective logs
 // where the window came from and the breakdown's autocompactSource. No breakdown, or a failed
@@ -913,7 +913,7 @@ const BD_ROWS: BdRow[] = [
     bd: { rawMaxTokens: 500000, autocompactSource: 'env', autoCompactThreshold: 480000 }, want: [900000, 867000, 'option', null] },
 ]
 for (const r of BD_ROWS) {
-  test(`NW-BD (0.1.4 T-11): ${r.name}`, { options: r.options ?? {} }, async ($, on) => {
+  test(`NW-BD (0.1.4): ${r.name}`, { options: r.options ?? {} }, async ($, on) => {
     const w = new World().install(on)
     w.breakdown = r.bd
     w.breakdownThrow = r.throws === true
@@ -926,7 +926,7 @@ for (const r of BD_ROWS) {
   })
 }
 
-test('NW-BD (0.1.4 T-11): the breakdown is read once per load, not again at later turns', async ($, on) => {
+test('NW-BD (0.1.4): the breakdown is read once per load, not again at later turns', async ($, on) => {
   const w = new World().install(on)
   w.breakdown = { rawMaxTokens: 500000, autocompactSource: 'env', autoCompactThreshold: 480000 }
   await w.start($)
@@ -938,9 +938,9 @@ test('NW-BD (0.1.4 T-11): the breakdown is read once per load, not again at late
   expect(w.rowsOf('config_effective').length).toBe(1)
 })
 
-// DP-30 (4): `compacted.ms` has one definition on every path: from the dispatch record written
+// `compacted.ms` has one definition on every path: from the dispatch record written
 // (or reused) to the compaction's answer, as on the mod-hook path.
-test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'false' } }, async ($, on) => {
+test('DP-30: a dispatch write that takes 250 ms is not in compacted.ms, on the mod-self path as on the mod-hook path', { options: { precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
   w.atHelper = async (sub) => {
     if (sub === 'dispatch') await w.clock.set(w.clock.now() + 250)
@@ -956,7 +956,7 @@ test('DP-30 (4): a dispatch write that takes 250 ms is not in compacted.ms, on t
   expect(rows.map(r => r.ms)).toEqual([0, 0])
 })
 
-// ID-4 (owner D2, 2026-10-23; SPEC-DELTAS AT-ID-04; REVIEW-NIGHT-2 test gap): after a compaction the
+// AT-ID-04: after a compaction the
 // plugin did not start (native auto, manual, or a future idle trigger) it submits nothing on its own;
 // only a nudge-driven cycle sets resumeAfter. A background result can still open a turn of its own.
 test('AT-ID-04: after a native auto, manual or idle compaction the plugin submits nothing and logs no continue', async ($, on) => {

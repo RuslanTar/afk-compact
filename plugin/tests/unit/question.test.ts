@@ -1,8 +1,8 @@
-// U tests through the kit: question carry (0.1.2, investigation wf_c3788b4f-00e fix 1). A main
+// U tests through the kit: question carry (0.1.2). A main
 // turn that ends on a question to the user (its answer's last line asks one, or one of its
 // AskUserQuestion dialogs closed on Claude Code's AFK timeout) leaves that question open until a
 // person's turn starts; a main compaction in between carries its text in the resume block
-// (`[question]`), so it is in front of the user when they return (session xxxxxxxx: a dialog
+// (`[question]`), so it is in front of the user when they return (in one real session a dialog
 // timed out and a compaction 50 s later buried the unanswered question).
 import { describe, expect, test } from 'claude-code/testing'
 import { QUESTION_MAX, answerQuestion, askOf, clipQuestion, dialogQuestions, personAnswered, timedOut } from '../../hooks/lib/question'
@@ -36,7 +36,7 @@ function ask(...qs: (string | [string, string])[]): never {
 }
 
 /**
- * The shape of session xxxxxxxx's dialog that closed on the AFK timeout at 08:44, in neutral
+ * The shape of a real dialog that closed on the AFK timeout, in neutral
  * words: four questions, context first and the ask last; the second's text opens with its header
  * word, the third asks first and gives context after, the fourth ends on a short ask.
  */
@@ -109,7 +109,7 @@ describe('question carry: the text', () => {
     expect(askOf('Context. Keep A (i.e. 3 hosts) vs. B (cf. Table 2)?')).toBe('Keep A (i.e. 3 hosts) vs. B (cf. Table 2)?')
     expect(askOf('Logs, caches, etc. Which ones go?')).toBe('Which ones go?')
   })
-  test('xxxxxxxx 08:44: each question\'s ask after its header, every question kept; over the cap without headers, then clipped', () => {
+  test('a real timed-out dialog: each question\'s ask after its header, every question kept; over the cap without headers, then clipped', () => {
     expect(dialogQuestions({ questions: AF_0844.map(([header, question]) => ({ header, question })) })).toBe(AF_0844_ASKS)
     // A header the ask starts with is not repeated; a blank one is left out.
     expect(dialogQuestions({ questions: [{ header: 'Merge', question: 'Ready. Merge now?' }, { header: ' ', question: 'Push?' }] })).toBe('Merge now? / Push?')
@@ -136,7 +136,7 @@ describe('question carry: the flow', () => {
     expect((b ?? '').indexOf('6. No recap') < (b ?? '').indexOf('Open question: ')).toBe(true)
   })
 
-  test('xxxxxxxx 08:44: a dialog that closed on the AFK timeout, an answer ending on a Coming up line: every question\'s ask is carried', async ($, on) => {
+  test('a real timed-out dialog: a dialog that closed on the AFK timeout, an answer ending on a Coming up line: every question\'s ask is carried', async ($, on) => {
     const w = new World().install(on)
     dialogs(w, 'timeout')
     await w.start($)

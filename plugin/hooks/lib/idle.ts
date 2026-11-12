@@ -1,46 +1,45 @@
-// What the plugin does with an idle main session (MOD-SPEC §9.4, IC-1 D5; settings
+// What the plugin does with an idle main session (settings
 // `idle_handoff_turn` and `idle_compact`, both default auto). At every main turn end the mod
 // (re)arms one timer, of one kind, from how Claude Code's own idle compaction reads in the merged
-// settings and its environment (deps.nativeIdle, IDLE-COMPACT-SPEC §1.1, §1.2):
-// - `compact` (native `vetoed`: `"idleCompaction": false`, automatic compaction on; IDLE-COMPACT
-//   D1, D2): the plugin compacts the session itself about 54 minutes after the last main-thread
+// settings and its environment (deps.nativeIdle):
+// - `compact` (native `vetoed`: `"idleCompaction": false`, automatic compaction on): the plugin
+//   compacts the session itself about 54 minutes after the last main-thread
 //   request (0.9 of the one-hour prompt cache, native's own fraction), with a floor of the turn
-//   end plus a minute (D3), at Claude Code's idle minimum or more (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`,
+//   end plus a minute, at Claude Code's idle minimum or more (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`,
 //   200,000 by default). One shaped compaction through the same self-call as the plugin's other
 //   compactions (boundary.ts), an idle dispatch record and resume block, no continue after it
-//   (`idle_compact` row). It replaces the 49-min turn (D2): no turn runs before it or after a
-//   failed attempt. Its guards (§2.1, `fireCompact`) mirror native's where the mod can see them.
-//   Two failed attempts in a row turn it off for the load (D7).
+//   (`idle_compact` row). It replaces the 49-min turn: no turn runs before it or after a
+//   failed attempt. Its guards (`fireCompact`) mirror native's where the mod can see them.
+//   Two failed attempts in a row turn it off for the load.
 // - `turn` (native `compaction-off`, or `vetoed` below the minimum, with `idle_compact: off`, or
-//   after D7): the handoff turn 49 minutes after the turn end (the measured native idle time of
+//   after two failed attempts): the handoff turn 49 minutes after the turn end (the measured native idle time of
 //   54 minutes less a 5-minute lead). With `compaction-off` the plugin never compacts against an
 //   explicit switch.
-// - `check` (native `on`, or `unknown`: O-9 "unreadable means check what happened"; owner
-//   xxxxxxxx-17 "Check outcome at 55.5m"): an outcome check 55.5 minutes after the turn end.
+// - `check` (native `on`, or `unknown`: unreadable means check what happened): an outcome
+//   check 55.5 minutes after the turn end.
 //   Native fires 54:00 after the last request and the cache lasts to minute 60. When the plugin's
 //   own records show a main compaction since that turn end it stands down (`native-fired`);
 //   otherwise native stayed silent for whatever reason (served `off`, a keypress, a dialog, a
 //   failure, agents running), one `idle_silent` row counts the break, and, with `idle_compact`
 //   auto, the plugin compacts the main session itself while the cache is still warm: always while
-//   agents run (native never compacts then; owner 2026-10-27 03:4x "Compact (Recommended)", which
-//   replaces xxxxxxxx-38 "Measure more first"), and at Claude Code's idle minimum or more when
-//   none run (owner 18:54 Q2: compact instead of the handoff turn). The same guards as `compact`
-//   (`compactGuards`, IDLE-COMPACT D4), the same failure count (D7). Below that minimum, or with
+//   agents run (native never compacts then), and at Claude Code's idle minimum or more when
+//   none run (compact instead of the handoff turn). The same guards as `compact`
+//   (`compactGuards`), the same failure count. Below that minimum, or with
 //   `idle_compact: off`, the handoff turn runs (`agents-running` while agents run). Armed while
-//   `idle_handoff_turn` or `idle_compact` is auto (lane B).
-// - `off`: nothing (a headless load: no plugin turn and, until lane B1, no plugin compaction).
-// Every timer re-reads the wall clock at least once a minute (D12 ticks), so a computer that
+//   `idle_handoff_turn` or `idle_compact` is auto.
+// - `off`: nothing (a headless load: no plugin turn and, for now, no plugin compaction).
+// Every timer re-reads the wall clock at least once a minute (ticks), so a computer that
 // wakes before the due fires on time; one that wakes after it meets the lapsed bound.
 // One `idle_mode {native, plugin_turn, plugin_compact, compact_min?, served_hint?, cache_s?}` row
-// whenever that policy changes for a session id; `served_hint` (2b) is Claude Code's cached server
-// mode, logged only, never used to decide. The due is persisted (`idle_due:<sid>`, §3.1) with the
-// load that holds it: a fire checks once that it still holds it (G1, D14), and every clear writes
+// whenever that policy changes for a session id; `served_hint` is Claude Code's cached server
+// mode, logged only, never used to decide. The due is persisted (`idle_due:<sid>`) with the
+// load that holds it: a fire checks once that it still holds it (G1), and every clear writes
 // a short-lived tombstone, so a missing record reads as a lost write (`due-missing`), never as a
 // takeover. A new load (hot reload, `--resume`, a supervisor move) adopts a record it finds and
-// fires it late only within a bound (§3.4). When the turn's checks pass, one plugin-submitted
-// handoff turn runs on the D-18 machinery (handoff-turn.ts); no plugin compaction and no continue
-// follow it (DP-4; PR-2 P-56 is not reviewed); at most one per idle episode.
-// Keep-warm (D-14, keepwarm.ts): while the gap warms (a background job of this session open, the
+// fires it late only within a bound. When the turn's checks pass, one plugin-submitted
+// handoff turn runs on the handoff-turn machinery (handoff-turn.ts); no plugin compaction and no continue
+// follow it; at most one per idle episode.
+// Keep-warm (keepwarm.ts): while the gap warms (a background job of this session open, the
 // one-hour cache), every kind's fire waits (`keep-warm`) and its record goes back here when warming
 // stops with the cache warm (`handOverIdle`), anchored at the last warm ping (`warm`). A gap with no
 // record armed or held (both paths off, or no kind at this size) or with `triggers` off never warms
@@ -59,7 +58,7 @@ import { judge, limitCtx, noteOf, readingsNow, tierFields } from './limits'
 import { MIN_ALLOWANCE, OPTIONAL_PER_HOUR, SPENT_MARGIN, dropDeferred, maxCalls, newTurn, openAndSubmit, recentTurns, skipped } from './handoff-turn'
 import { log } from './log'
 
-/** The one-hour prompt cache every idle time below is a share of (scaled by the D10 test seam). */
+/** The one-hour prompt cache every idle time below is a share of (scaled by the test seam). */
 export const IDLE_CACHE_MS = 3600000
 /** Native `NVo`: the compaction fires at this share of the cache life after the last request. */
 export const IDLE_COMPACT_FRACTION = 0.9
@@ -69,43 +68,43 @@ export const IDLE_LAPSE_FRACTION = 58 / 60
 export const IDLE_LATE_MS = 60000
 /** Native `M5e`: a person seen at the prompt this recently is present (G7). */
 export const IDLE_PRESENT_MS = 60000
-/** D3: the compaction never fires sooner than this after the turn end. */
+/** The compaction never fires sooner than this after the turn end. */
 export const IDLE_AFTER_END_MS = 60000
-/** D12 (lane B): the longest wait of an idle timer; each tick re-reads the wall clock (not scaled). */
+/** The longest wait of an idle timer; each tick re-reads the wall clock (not scaled). */
 export const IDLE_TICK_MS = 60000
-/** D7: failed idle compactions in a row that turn the plugin's idle compaction off for the load. */
+/** Failed idle compactions in a row that turn the plugin's idle compaction off for the load. */
 export const IDLE_COMPACT_FAILS_MAX = 2
 /**
- * D6 (b), the ship gate of live probe L1-c4: an adopted load (a new process on the same session,
- * same Claude Code version and model) compacts. `false` if L1-c4's summary read share is below 0.8:
+ * The ship gate of a live probe: an adopted load (a new process on the same session,
+ * same Claude Code version and model) compacts. `false` if that probe's summary read share is below 0.8:
  * every adopted load then skips `adopted-cold`.
  */
 export const ADOPTED_IDLE_COMPACT = true
-/** 54 − 5 minutes after the turn end (IC-1 F3, F6; no key: tuned from P-IC-1 / E-1 `idle_gap_s`). */
+/** 54 − 5 minutes after the turn end (no key: tuned from measured `idle_gap_s`). */
 export const IDLE_FIRE_MS = 49 * 60000
 /** `@idle_min@`: the minutes the `[submit-idle]` text names. */
 export const IDLE_MIN_TEXT = '49'
 /**
- * Owner xxxxxxxx-17: the outcome check, about 55.5 minutes after the turn end (native fired 54:00
+ * The outcome check, about 55.5 minutes after the turn end (native fired 54:00
  * after the last request in 5 of 5 cases, within 15 s; its boundary lands 6–16 s later; the
  * 1-hour cache lasts to minute 60).
  */
 export const IDLE_CHECK_MS = 55.5 * 60000
 /** `@idle_min@` of a handoff turn the outcome check runs. */
 export const IDLE_CHECK_MIN_TEXT = '55'
-/** Claude Code's default idle floor (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, IC-1 F3): `idle_silent` rows from here up only. */
+/** Claude Code's default idle floor (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`): `idle_silent` rows from here up only. */
 export const NATIVE_IDLE_FLOOR = 200000
 /**
  * The idle handoff turn's limit share (`near-limit`): only with `idle_handoff_near_limit: skip`
- * (owner xxxxxxxx, 2026-10-30: "I want the handoff anyway", so the default `run` does not check
- * it), and with `skip-spend` only the spend-limit windows (owner xxxxxxxx, 0.1.2: configurable,
- * `run` the default). Plugin idle compaction and keep-warm go by limits.ts (D-80: 90%, or the band
+ * (the handoff is wanted anyway, so the default `run` does not check
+ * it), and with `skip-spend` only the spend-limit windows (0.1.2: configurable,
+ * `run` the default). Plugin idle compaction and keep-warm go by limits.ts (90%, or the band
  * above it while a job is open); a record with no window reported reads its share at arm here.
  */
 export const NEAR_LIMIT_PCT = 90
 
 /**
- * D-76: the `windows` of a near-limit row (`handoff_skipped`, `keep_warm_stop`, a trial skip
+ * The `windows` of a near-limit row (`handoff_skipped`, `keep_warm_stop`, a trial skip
  * record): every window the usage reports, in its order, as `kind:percent` (whole percent, rounded
  * down); none reported, the record's reading at arm that decided, as `arm:percent`. Claude Code
  * reports a window's kind and share only (`five_hour`, `seven_day`, a gateway's `spend_limit`), no
@@ -116,13 +115,13 @@ export function limitWindows(limits: Usage['rateLimits'], armPct: number | null 
   if (limits.length > 0) return limits.map(l => `${l.kind || 'unknown'}:${pct(l.percentUsed)}`)
   return armPct === null ? [] : [`arm:${pct(armPct)}`]
 }
-/** A tombstone outlives every timer that could still hold its record (§3.1): its due plus this. */
+/** A tombstone outlives every timer that could still hold its record: its due plus this. */
 const TOMBSTONE_LIFE_MS = IDLE_LATE_MS + 60000
-/** D15: the windows that show a subscription, so the one-hour main-thread cache. */
+/** The windows that show a subscription, so the one-hour main-thread cache. */
 const PLAN_WINDOWS: readonly string[] = ['five_hour', 'seven_day']
 /** The window a Claude gateway reports for its money spend cap (not a plan's usage allowance). */
 const SPEND_WINDOW = 'spend_limit'
-/** D7: the failure classes of `BoundaryResult` that count (a person's turn or a headless host do not). */
+/** The failure classes of `BoundaryResult` that count (a person's turn or a headless host do not). */
 const COUNTED_FAILS: readonly string[] = ['skipped', 'other', 'failed', 'unclaimed', 'error']
 
 function dueKey(sid: string): string {
@@ -136,12 +135,12 @@ function dueKey(sid: string): string {
 export type IdleKind = 'turn' | 'check' | 'compact'
 
 /**
- * The persisted timer (§3.1): when it fires, its kind, the turn end it was armed at, the idle
+ * The persisted timer: when it fires, its kind, the turn end it was armed at, the idle
  * episode it belongs to, whether that turn ended `answer`, and whether a handoff was published
  * since the last human-origin turn (@bg). `load` is the load that armed or adopted it (G1).
  * `anchor` is the start of the last main request at arm (null: use `end`); `tokens`, `ttl` and
  * `pct` are the context size, the cache (Claude Code's TTL switch when one is set, `5m` with
- * caching off, else `1h` when a plan window was reported, D15) and the highest window share at
+ * caching off, else `1h` when a plan window was reported) and the highest window share at
  * arm, which a new process reads before its first request reports any (G10-G12); `spct` the
  * highest spend-limit share at arm (null: none reported), for `idle_handoff_near_limit: skip-spend`;
  * `cc` and `model` are the Claude Code version and main model at arm (G3a). `warm` is the start of
@@ -151,7 +150,7 @@ export type IdleKind = 'turn' | 'check' | 'compact'
  * anchored at the last warm one, with the gap's start and its warm pings so far); no timer of the
  * holding load runs for it, and a load that adopts it (a reload while warming) ends that warming
  * (`keep_warm_stop {why: reload}`) and fires it at that due, while the cache is still warm.
- * `job` marks a record keep-warm handed back with a job still open (D-79: an agent's, a workflow's
+ * `job` marks a record keep-warm handed back with a job still open (an agent's, a workflow's
  * or a working teammate's result turn would read the conversation cold; a background shell alone may
  * never end, so it sets no `job`, `resultJobOpen`): plugin idle compaction takes it from
  * `idle_handoff_min_tokens` up (`compactFloor`).
@@ -173,7 +172,7 @@ export type Due = {
   job?: true
 }
 
-/** Every clear of a record (§3.1): which load cleared which due, and when. */
+/** Every clear of a record: which load cleared which due, and when. */
 type Tombstone = { cancelled: true; sid: string; load: string; due: number; at: number }
 
 const numOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
@@ -227,14 +226,14 @@ function readStored(v: unknown): 'missing' | 'tombstone' | Due {
 
 const secs = (ms: number): number => Math.round(ms / 1000)
 
-/** D10: the test seam's scale for every cache-derived time (1 without it). */
+/** The test seam's scale for every cache-derived time (1 without it). */
 export function scaleOf(env: IdleEnv): number {
   return env.cacheS === undefined ? 1 : env.cacheS / 3600
 }
 
 /**
  * One idle skip row, with the timer's kind, when late by how much, and a near-limit skip's windows
- * and rule (D-80, with the plan words Claude Code's environment has).
+ * and rule (with the plan words Claude Code's environment has).
  */
 async function idleSkip(d: Deps, sid: string, why: string, kind: IdleKind, lateS?: number, windows?: string[], rule?: string, usage?: UsageFields): Promise<void> {
   await skipped(d, sid, why, null, 'idle', {
@@ -244,7 +243,7 @@ async function idleSkip(d: Deps, sid: string, why: string, kind: IdleKind, lateS
 }
 
 /**
- * The fields an action's row gets from its limit note (D-80, D-83: the rule, the plan words, the
+ * The fields an action's row gets from its limit note (the rule, the plan words, the
  * windows with their sources and ages), none without one.
  */
 export async function limitFields(d: Deps, n: LimitNote | undefined): Promise<Record<string, string | number | readonly string[] | Record<string, number>>> {
@@ -253,14 +252,14 @@ export async function limitFields(d: Deps, n: LimitNote | undefined): Promise<Re
 }
 
 /**
- * A skip reason with the windows its row names (`near-limit`, D-76), the rule that decided (D-80)
- * and each window's source and age (D-83).
+ * A skip reason with the windows its row names (`near-limit`), the rule that decided
+ * and each window's source and age.
  */
 type Skip = { why: string; windows: string[]; rule?: string; usage?: UsageFields }
 
 /**
  * Cancels the timer (synchronous: safe before any await in a hook). The generation goes up, so a
- * tick that is reading the clock right now re-arms nothing (D12).
+ * tick that is reading the clock right now re-arms nothing.
  */
 export function cancelIdleTimer(d: Deps): void {
   d.state.idleTimer?.cancel()
@@ -275,7 +274,7 @@ function dropTombDelete(d: Deps, sid: string): void {
 }
 
 /**
- * Writes a tombstone over the record of `due` (§3.1) and deletes it once every timer that could
+ * Writes a tombstone over the record of `due` and deletes it once every timer that could
  * still hold that record has fired, if it is still this one then (the next arm overwrites it
  * anyway; `loadIdle` deletes an expired one of its own session id). One pending delete per
  * session id: the next tombstone or record of the sid cancels this one's.
@@ -294,7 +293,7 @@ async function writeTombstone(d: Deps, sid: string, due: number, at?: number): P
   d.state.idleTombDeletes.set(sid, h)
 }
 
-/** A record's tombstone (§3.1); nothing when the key is already empty or a tombstone. */
+/** A record's tombstone; nothing when the key is already empty or a tombstone. */
 async function clearDue(d: Deps, sid: string): Promise<void> {
   const v = readStored(await d.storeGet(dueKey(sid)))
   if (v === 'missing' || v === 'tombstone') return
@@ -304,7 +303,7 @@ async function clearDue(d: Deps, sid: string): Promise<void> {
 /**
  * Cancels the timer and clears the persisted due with a tombstone (a turn started, a prompt
  * entered, the session ended), so a reload of the same sid re-arms nothing already cancelled
- * (AT-IC-14), and a timer of another process on the same sid finds it held elsewhere (§3.5).
+ * (AT-IC-14), and a timer of another process on the same sid finds it held elsewhere.
  * Callers may have cancelled the timer already (cancelIdleTimer before any await); the due is
  * cleared all the same.
  */
@@ -317,12 +316,12 @@ export async function cancelIdle(d: Deps, sid: string): Promise<void> {
 }
 
 /**
- * D12 (lane B, §3.3): ticks of at most a minute to the due, each re-reading the wall clock, so a
+ * Ticks of at most a minute to the due, each re-reading the wall clock, so a
  * wait that the computer's sleep stretched (a monotonic clock, INFERRED) fires on time when it
  * wakes before the due; the last tick is exact, and one that comes late meets G3 `lapsed`. A
  * cancel (turn start, entering prompt, session end) while a tick reads the clock stops it from
  * re-arming (`idleGen`). `atLoad`: the due had already passed when this load adopted the record
- * (§3.4 late-fire), so G7 applies to the fire of every kind, not only `compact`. Exported for
+ * (late fire), so G7 applies to the fire of every kind, not only `compact`. Exported for
  * its unit test (AT-IC-C35: the kit cannot hold `$.clock.now` while a tick reads it).
  */
 export function schedule(d: Deps, rec: Due, now: number, atLoad = false): void {
@@ -376,11 +375,11 @@ async function persist(d: Deps, rec: Due): Promise<void> {
 }
 
 /**
- * Keep-warm (D-14) hands the record it held back to the idle path with the cache still warm: due
+ * Keep-warm hands the record it held back to the idle path with the cache still warm: due
  * now, anchored at the start of the last warm ping (`anchor` for the compaction's lapse guard,
  * `warm` for the turn's), with the episode, the turn's end and the published flag as they are now.
- * `job` (D-79, owner 2026-11-08 23:22: "after the last keep-warm ... you would actually compact to
- * avoid re-reading the cold cache"): a stop with a job whose result turn is certain still open (an
+ * `job` (after the last keep-warm ping it compacts, so the job's result does not re-read a cold
+ * cache): a stop with a job whose result turn is certain still open (an
  * agent, a workflow or a working teammate, not a background shell alone: the cutoff, the deadline, the
  * limit band) compacts from `idle_handoff_min_tokens` up, since the job's result turn would read
  * a cold cache after an idle handoff turn, which does not compact; a 49-min turn record becomes
@@ -399,14 +398,14 @@ export async function handOverIdle(d: Deps, rec: Due, warm: number, now: number,
 
 /**
  * The smallest context plugin idle compaction takes for this record: Claude Code's idle minimum,
- * or for a record keep-warm handed back with a job open (D-79) `idle_handoff_min_tokens` when lower.
+ * or for a record keep-warm handed back with a job open `idle_handoff_min_tokens` when lower.
  */
 function compactFloor(d: Deps, rec: Due, env: IdleEnv): number {
   return rec.job === true ? Math.min(env.compactMin, d.cfg.idle_handoff_min_tokens) : env.compactMin
 }
 
 /**
- * Keep-warm (D-14): the latest moment a record it holds still fires on the idle path once handed
+ * Keep-warm: the latest moment a record it holds still fires on the idle path once handed
  * back anchored at `warm`: the turn's 55.5-min bound (`fire`), else the compaction's lapse guard
  * (G3, 58 min; the check compacts by the same guards).
  */
@@ -415,7 +414,7 @@ export function heldDeadline(rec: Due, warm: number, scale: number): number {
 }
 
 /**
- * Keep-warm (D-14) holds the record while its gap warms: it stays in the store (not a tombstone),
+ * Keep-warm holds the record while its gap warms: it stays in the store (not a tombstone),
  * due at the next ping and anchored at the last warm request, so a load that adopts it after a
  * reload (a hot reload, `claude respawn`, a supervisor move, SessionEnd `other`) still fires it
  * while the cache is warm. No timer of this load runs for it: keep-warm hands it back
@@ -436,7 +435,7 @@ export async function heldHere(d: Deps, sid: string): Promise<Due | undefined> {
 }
 
 /**
- * Keep-warm (D-14): an idle record of `sid` is in the store, armed or held (not a tombstone), so an
+ * Keep-warm: an idle record of `sid` is in the store, armed or held (not a tombstone), so an
  * idle path (the handoff turn, the plugin's compaction or the 55.5-min check) can take the gap over.
  */
 export async function idleArmed(d: Deps, sid: string): Promise<boolean> {
@@ -458,25 +457,25 @@ export async function releaseHeld(d: Deps, sid: string, keep: boolean): Promise<
   await d.storeSet(dueKey(sid), plain)
 }
 
-/** The policy at this moment (§1.2): Claude Code's own idle compaction and the plugin's paths. */
+/** The policy at this moment: Claude Code's own idle compaction and the plugin's paths. */
 type Policy = { native: NativeIdle; turnOn: boolean; compactOn: boolean; env: IdleEnv }
 
 /**
- * IA-3, owner xxxxxxxx-17 and IDLE-COMPACT §1.2: the policy, with one `idle_mode` row when its
+ * The policy, with one `idle_mode` row when its
  * tuple differs from the last one this load wrote for this session id (so a `/clear` in the same
- * load gets its own). The served hint (2b) is read only where it could matter (the check), and
+ * load gets its own). The served hint is read only where it could matter (the check), and
  * only logged.
  */
 async function policy(d: Deps, sid: string): Promise<Policy> {
   const s = d.state
   const native = await d.nativeIdle()
   const env = await d.idleEnv()
-  // A headless session submits no model turn, and (until lane B1) gets no idle compaction.
+  // A headless session submits no model turn, and (for now) gets no idle compaction.
   const { turnOn, compactOn } = idleSwitches(d)
   const live = native === 'on' || native === 'unknown'
   const pluginTurn = live ? (turnOn ? 'check' : 'off') : turnOn ? 'on' : 'off'
-  // `check` (lane B): the 55.5-min check compacts itself when Claude Code stayed silent (with
-  // agents running, or at the minimum or more with none: owner Q2). Lane A wrote `agents` there.
+  // `check`: the 55.5-min check compacts itself when Claude Code stayed silent (with
+  // agents running, or at the minimum or more with none). An earlier build wrote `agents` there.
   const pluginCompact = native === 'compaction-off' ? 'off' : compactOn ? (live ? 'check' : 'on') : (s.idleCompactOff ?? 'off')
   const served = live && (turnOn || compactOn) ? await d.servedHint() : undefined
   const fields = {
@@ -495,8 +494,8 @@ async function policy(d: Deps, sid: string): Promise<Policy> {
 
 /**
  * The plugin's two idle paths as the options and this load allow them: the handoff turn
- * (`idle_handoff_turn`) and its own idle compaction (`idle_compact`, off for the load after D7).
- * A headless load has neither (no model turn; lane B1 has the headless compaction).
+ * (`idle_handoff_turn`) and its own idle compaction (`idle_compact`, off for the load after two failures).
+ * A headless load has neither (no model turn; a headless compaction is not built yet).
  */
 function idleSwitches(d: Deps): { turnOn: boolean; compactOn: boolean } {
   const s = d.state
@@ -506,9 +505,9 @@ function idleSwitches(d: Deps): { turnOn: boolean; compactOn: boolean } {
   }
 }
 
-/** §1.2: the kind a turn end at this context size arms. Tokens cannot grow without a main turn. */
+/** The kind a turn end at this context size arms. Tokens cannot grow without a main turn. */
 function pickKind(p: Policy, tokens: number | undefined): IdleKind | 'off' {
-  // Lane B: the check is armed for the turn, or for the plugin's compaction at it, which needs
+  // The check is armed for the turn, or for the plugin's compaction at it, which needs
   // Claude Code's idle minimum (with agents running too: G10).
   if (p.native === 'on' || p.native === 'unknown') {
     if (p.turnOn) return 'check'
@@ -523,13 +522,13 @@ function policyOff(p: Policy): boolean {
   return pickKind(p, undefined) === 'off' && pickKind(p, 0) === 'off'
 }
 
-/** D15: the five-hour and seven-day windows the usage reports (a gateway's `spend_limit` is not one). */
+/** The five-hour and seven-day windows the usage reports (a gateway's `spend_limit` is not one). */
 function planOf(u: Use): Usage['rateLimits'] {
   return (u?.rateLimits ?? []).filter(l => PLAN_WINDOWS.includes(l.kind))
 }
 
 /**
- * Main `turn.complete` (any origin): (re)arms the timer for the kind the policy gives (§1.2):
+ * Main `turn.complete` (any origin): (re)arms the timer for the kind the policy gives:
  * `compact` at `max(anchor + 54 min, end + 60 s)`, `turn` at `end + 49 min`, `check` at
  * `end + 55.5 min`; `off` arms nothing and drops a timer armed before.
  */
@@ -543,7 +542,7 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
     return
   }
   const scale = scaleOf(p.env)
-  // D3: the cache is refreshed when a request reads it, so the compaction counts from the start
+  // The cache is refreshed when a request reads it, so the compaction counts from the start
   // of the last main request; a turn that ended long after it (an aborted tool run) gets a minute.
   const anchor = s.lastMainReqAt !== undefined && s.lastMainReqAt <= endAt ? s.lastMainReqAt : endAt
   const due = kind === 'compact'
@@ -551,7 +550,7 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
     : endAt + (kind === 'turn' ? IDLE_FIRE_MS : IDLE_CHECK_MS) * scale
   let cc: string | null = null
   let model: string | null = null
-  // G3a: the check may compact too (lane B), so it keeps the prefix it was armed with as well.
+  // G3a: the check may compact too, so it keeps the prefix it was armed with as well.
   if (kind === 'compact' || kind === 'check') {
     try {
       cc = (await d.version()).version
@@ -562,7 +561,7 @@ export async function armIdle(d: Deps, sid: string, endAt: number): Promise<void
   }
   const limits = u?.rateLimits ?? []
   const spend = limits.filter(l => l.kind === SPEND_WINDOW)
-  // The cache this load writes (D15, G11): caching off or a TTL switch first, else the plan windows.
+  // The cache this load writes (G11): caching off or a TTL switch first, else the plan windows.
   const set = p.env.cacheOff ? '5m' : await explicitTtl(d, p.env)
   s.idleAdopted = false
   await persist(d, {
@@ -592,7 +591,7 @@ export async function markIdlePublished(d: Deps, sid: string): Promise<void> {
   await d.storeSet(dueKey(sid), { ...rec, published: true })
 }
 
-/** §3.4: a due that passed while no process held it still fires at load within these bounds. */
+/** A due that passed while no process held it still fires at load within these bounds. */
 function lateFireOk(rec: Due, now: number, scale: number): boolean {
   if (rec.kind === 'compact') {
     return now - rec.due <= IDLE_LATE_MS && now - (rec.anchor ?? rec.end ?? rec.due) <= IDLE_LAPSE_FRACTION * IDLE_CACHE_MS * scale
@@ -604,7 +603,7 @@ function lateFireOk(rec: Due, now: number, scale: number): boolean {
 }
 
 /**
- * Once per load (AT-IC-14, §3.4): the persisted due of this sid is adopted (written back with this
+ * Once per load (AT-IC-14): the persisted due of this sid is adopted (written back with this
  * load's id, so a timer of the process it came from finds it held elsewhere) and armed again; one
  * whose due passed fires at once within its late-fire bound, where G7 (`present`) applies to
  * every kind (an interactive `session.start` stamps presence before this runs), else it writes
@@ -643,7 +642,7 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
     if (rec.published) s.publishedSinceHuman = true
   }
   s.idleAdopted = rec.load !== s.loadId
-  // Keep-warm (D-14): a record its gap held while warming in another load ends that warming here
+  // Keep-warm: a record its gap held while warming in another load ends that warming here
   // (the load that pinged is gone), and goes on as a plain record at the due it holds.
   const { held, ...plain } = rec
   if (held !== undefined && rec.load !== s.loadId) {
@@ -655,13 +654,13 @@ export async function loadIdle(d: Deps, sid: string): Promise<void> {
   schedule(d, own, now, rec.due <= now)
 }
 
-/** The idle handoff turn may run; `limit`: why a reading at the limit did not stop it (D-83), for its start row. */
+/** The idle handoff turn may run; `limit`: why a reading at the limit did not stop it, for its start row. */
 type Go = { tokens: number; allowance: number; native: number; calls: number; limit?: LimitNote }
 
 type Use = { tokens: number | undefined; rateLimits: Usage['rateLimits'] } | undefined
 
 /**
- * D15 / G11: no one-hour cache. Prompt caching is off (`DISABLE_PROMPT_CACHING*`); else Claude
+ * G11: no one-hour cache. Prompt caching is off (`DISABLE_PROMPT_CACHING*`); else Claude
  * Code's own TTL switch decides when one is set (`5m`: skip; `1h`: a one-hour cache, plan window or
  * not); else the usage reports no plan window. A load that adopted the record has made no request
  * of its own yet (the usage reports none before the first response), so it goes by the record's
@@ -676,8 +675,8 @@ async function ttl5m(d: Deps, env: IdleEnv, u: Use, rec: Due): Promise<boolean> 
 }
 
 /**
- * Keep-warm (D-14): the main conversation's cache is the one-hour one: caching on, and Claude
- * Code's own TTL switch says `1h`, or none is set and the usage reports a plan window (D15).
+ * Keep-warm: the main conversation's cache is the one-hour one: caching on, and Claude
+ * Code's own TTL switch says `1h`, or none is set and the usage reports a plan window.
  */
 export async function oneHourCache(d: Deps, env: IdleEnv, u: Use): Promise<boolean> {
   if (env.cacheOff) return false
@@ -698,8 +697,8 @@ function armReading(rec: Due, spend = false): Reading[] {
 /**
  * G12, the idle handoff turn's own near-limit rule (`idle_handoff_near_limit`; never under `run`):
  * a window at the limit share or more (any kind, a gateway's too; `skip-spend`: a gateway's spend
- * limit only, plan windows ignored), by the trust rule of D-83 (limits.ts `judge`): every counted
- * window of that kind at the share or more (D-88: a reading counts until its reset); none reported,
+ * limit only, plan windows ignored), by the trust rule (limits.ts `judge`): every counted
+ * window of that kind at the share or more (a reading counts until its reset); none reported,
  * the session's own entries in the usage record (`readingsNow`), else the record's reading at arm.
  */
 async function turnNearLimit(d: Deps, sid: string, u: Use, rec: Due, now: number): Promise<Verdict | undefined> {
@@ -714,11 +713,11 @@ async function turnNearLimit(d: Deps, sid: string, u: Use, rec: Due, now: number
 }
 
 /**
- * G12 of plugin idle compaction (D-80, D-83, limits.ts): every reading of the windows, the
+ * G12 of plugin idle compaction (limits.ts): every reading of the windows, the
  * session's own and the shared record's, by the adaptive rule and the trust rule (a window that
- * reset counts for nothing, D-88: every other counts until its reset, a window by its latest
+ * reset counts for nothing, every other counts until its reset, a window by its latest
  * reading, and any window under the limit lets it run);
- * none reported, the session's own entries in the usage record (`readingsNow`, D-88), else the
+ * none reported, the session's own entries in the usage record (`readingsNow`), else the
  * record's highest share at arm (90%, rule `arm-90`, only while that reading is fresh). A skip, or
  * the rule for the `idle_compact` row (`band`, `split`, `no-fresh`), or nothing.
  */
@@ -732,14 +731,14 @@ async function compactLimit(d: Deps, sid: string, u: Use, rec: Due, now: number)
   return limit !== undefined ? { limit } : {}
 }
 
-/** The checks of §9.4 "Fire" from `aborted` on, in order; the first that fails is the skip reason. */
+/** The fire checks from `aborted` on, in order; the first that fails is the skip reason. */
 async function laterChecks(d: Deps, sid: string, eff: Effective, u: Use, rec: Due): Promise<string | Skip | Go> {
   const s = d.state
   if (!s.lastTurnAnswer) return 'aborted'
   // A keep-warm ping since the last main request found the cache cold (keepwarm.ts): no turn on it.
   if (forkMissed(s, sid)) return 'fork-miss'
   const tokens = u?.tokens ?? rec.tokens ?? undefined
-  // 0.1.5 D-3 (owner 2026-11-07, "3. yes"; session xxxxxxxx, ~166k tokens, finished and logged
+  // 0.1.5 (a session of ~166k tokens finished its work and logged
   // `small` at every check): a lane that reads finished gets the turn below the floor too; every
   // other limit stands. Unknown tokens still skip: the turn's allowance below needs the size.
   if (tokens === undefined || (tokens < d.cfg.idle_handoff_min_tokens && (await laneAtCheck(d, sid)) !== 'finished')) return 'small'
@@ -768,7 +767,7 @@ function newerTurn(s: Deps['state'], rec: Due): boolean {
   return (s.lastTurnEndAt ?? 0) > end || (s.lastMainReqAt ?? 0) > (rec.anchor ?? end)
 }
 
-/** G7 (D11): a person was seen at the prompt in the last minute. */
+/** G7: a person was seen at the prompt in the last minute. */
 function present(s: Deps['state'], now: number): boolean {
   return s.lastInputAt !== undefined && now - s.lastInputAt < IDLE_PRESENT_MS
 }
@@ -782,8 +781,8 @@ async function usageOrNone(d: Deps): Promise<Use> {
 }
 
 /**
- * The agents of this session at work (owner xxxxxxxx-38; the 2026-10-27 idle compaction): the
- * listed subagents and teammates at work (D-82: an idle teammate, which waits for a message, is
+ * The agents of this session at work: the
+ * listed subagents and teammates at work (an idle teammate, which waits for a message, is
  * no running agent), with the agent loops whose turn is running in this load (a workflow's agents
  * are not listed); with no agent list to read, the Stop list's teammates. Keep-warm's open jobs
  * and the lane's Basis count read agents the same way (lane.ts `agentIds`).
@@ -793,8 +792,8 @@ export async function agentsRunning(d: Deps, sid?: string): Promise<number> {
 }
 
 /**
- * The 49-min turn: the checks of §9.4 "Fire", in order (the session id is G2's, in `fire`). A
- * turn this load fires late at its start (`atLoad`, §3.4) also skips `present` (G7): a person who
+ * The 49-min turn: the fire checks, in order (the session id is G2's, in `fire`). A
+ * turn this load fires late at its start (`atLoad`) also skips `present` (G7): a person who
  * just launched or resumed the session gets no plugin turn submitted in front of them.
  */
 async function turnBlocked(d: Deps, sid: string, rec: Due, now: number, atLoad: boolean): Promise<string | Skip | Go> {
@@ -806,29 +805,29 @@ async function turnBlocked(d: Deps, sid: string, rec: Due, now: number, atLoad: 
   return laterChecks(d, sid, eff, await usageOrNone(d), rec)
 }
 
-/** The plugin's own idle compaction at the check (owner 2026-10-27, owner Q2): its `idle_compact` row (`rule`: the limit band's, D-80). */
+/** The plugin's own idle compaction at the check: its `idle_compact` row (`rule`: the limit band's). */
 type Compact = { compact: true; gapS: number; tokens: number; agents: number; limit?: LimitNote }
 
 /**
- * Owner xxxxxxxx-17: the 55.5-min outcome check. A check that fires more than a minute late is
- * `lapsed` (§3.4). A main compaction since the turn end stands down (`native-fired` for an idle
+ * The 55.5-min outcome check. A check that fires more than a minute late is
+ * `lapsed`. A main compaction since the turn end stands down (`native-fired` for an idle
  * one, else `compacted`); a busy session is no idle break. A check this load fires late at its
- * start (`atLoad`, §3.4) skips `present` (G7): a person who just launched or resumed the session
+ * start (`atLoad`) skips `present` (G7): a person who just launched or resumed the session
  * gets neither a turn nor a compaction in front of them. Otherwise native stayed silent: one
  * `idle_silent` row at 200K and more, then, with `idle_compact` auto, the plugin's own idle
- * compaction behind the guards it shares with the `compact` timer (`compactGuards`, D4: lane A
- * had a shorter list here, without the cache and the limits): while agents run (owner 2026-10-27
- * 03:4x; native never compacts then), and with none running at Claude Code's idle minimum or
- * more, or with the turn off (owner Q2, 18:54: compact instead of the turn; a refusal is the
- * check's one row, no turn after it, as D2 rules for `compact`). Before the guards it reads
+ * compaction behind the guards it shares with the `compact` timer (`compactGuards`; an earlier
+ * build had a shorter list here, without the cache and the limits): while agents run
+ * (native never compacts then), and with none running at Claude Code's idle minimum or
+ * more, or with the turn off (compact instead of the turn; a refusal is the
+ * check's one row, no turn after it, as for `compact`). Before the guards it reads
  * Claude Code's automatic compaction once more (G0b, as the `compact` timer does at its fire):
- * switched off since the arm, it never compacts (D1). Two refusals still give the turn, as before
- * lane B, when no agents run and the turn is on (root call on Q2, 2026-10-27): `halted` (a thrash
+ * switched off since the arm, it never compacts. Two refusals still give the turn, as before
+ * the check could compact, when no agents run and the turn is on: `halted` (a thrash
  * or bad-summary halt stops plugin compactions, not the turn; with `idle_handoff_near_limit: run`
- * also when `near-limit` came before it, root call NL-2, and with `skip-spend` when no spend limit
- * is at the share) and `compaction-off` (D1 keeps the
- * turn there). Else the turn's checks, or `agents-running` while agents run (the skip of before
- * 2026-10-27, with `idle_compact: off`).
+ * also when `near-limit` came before it, and with `skip-spend` when no spend limit
+ * is at the share) and `compaction-off` (an explicit switch keeps the
+ * turn there). Else the turn's checks, or `agents-running` while agents run (the earlier skip,
+ * with `idle_compact: off`).
  */
 async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: number, atLoad: boolean): Promise<string | Skip | Go | Compact> {
   const on = idleSwitches(d)
@@ -856,7 +855,7 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
     const g = (await d.nativeIdle()) === 'compaction-off' ? { why: 'compaction-off' } : await compactGuards(d, sid, rec, now, env)
     // The gap is the timer's own (about 3,330 s) when the turn end is unknown.
     if (!('why' in g)) return { compact: true, gapS: gap ?? Math.round((IDLE_CHECK_MS * scale) / 1000), tokens: g.tokens, agents, ...(g.limit !== undefined ? { limit: g.limit } : {}) }
-    // Root call NL-2 (0.1.2): `near-limit` comes before `halted` in the guards, so under
+    // 0.1.2: `near-limit` comes before `halted` in the guards, so under
     // `idle_handoff_near_limit: run` a halt that stops the compaction anyway (not the cap) falls
     // back to the turn the same way; `skip` keeps the near-limit skip, and `skip-spend` keeps it
     // only when a spend limit is at the share (plan windows alone fall back as under `run`).
@@ -867,7 +866,7 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
   if (!d.cfg.triggers) return 'triggers-off'
   const eff = await effective(d, sid)
   if (eff.disabled) return 'small-window'
-  // Keep-warm (D-14): a record handed back anchored at its last warm request submits no turn past
+  // Keep-warm: a record handed back anchored at its last warm request submits no turn past
   // the 58-minute lapse bound from it (the cache may have lapsed), as its compaction (G3) does not.
   if (typeof rec.warm === 'number' && now > rec.warm + IDLE_LAPSE_FRACTION * IDLE_CACHE_MS * scale) return 'lapsed'
   return laterChecks(d, sid, eff, u, rec)
@@ -875,7 +874,7 @@ async function checkBlocked(d: Deps, sid: string, rec: Due, now: number, scale: 
 
 /**
  * `boundary()` for an idle compaction. A throw is a failed attempt (`error`) with one skip row of
- * its own after the `idle_compact` row, so the fire still writes its one outcome (§2.3).
+ * its own after the `idle_compact` row, so the fire still writes its one outcome.
  */
 async function idleBoundary(d: Deps, sid: string, kind: IdleKind, opts: Parameters<typeof boundary>[1]): Promise<BoundaryResult> {
   try {
@@ -887,11 +886,11 @@ async function idleBoundary(d: Deps, sid: string, kind: IdleKind, opts: Paramete
 }
 
 /**
- * D7: a success resets the count of failed idle compactions; a failure of a counted class adds
+ * A success resets the count of failed idle compactions; a failure of a counted class adds
  * one, and the second in a row turns the plugin's idle compaction off for the load (one
  * `idle_compact_off` row; the 49-min turn path takes over at the next turn end, and the check's
  * turn, or `agents-running`, at the next check). The timer's and the check's compactions count
- * together (lane B, D4).
+ * together.
  */
 export async function countIdleCompact(d: Deps, sid: string, r: BoundaryResult): Promise<void> {
   const s = d.state
@@ -909,21 +908,21 @@ export async function countIdleCompact(d: Deps, sid: string, r: BoundaryResult):
 }
 
 /**
- * A fire's outcome (§2.3): `done` once its one row is written, a path that writes its own took
+ * A fire's outcome: `done` once its one row is written, a path that writes its own took
  * over (the `idle_compact` row and the compaction, the handoff turn), or G1 found the record held
  * elsewhere (no row by rule). A throw before that is the fire's one `error` row.
  */
 type FireOut = { done: boolean }
 
 /**
- * The timer fired (D14, §2.1 fire order). G1 once, first: a record another load holds (a later
+ * The timer fired (in fire order). G1 once, first: a record another load holds (a later
  * armer or adopter, or a tombstone) leaves nothing to do here and no row, since the load that
  * holds it writes that episode's row; a record lost to a store write is `due-missing` (one row,
  * `lapsed` when the fire is also late). Then the record is cleared with a tombstone, G2 (the
  * session changed), and the path of the kind. Two processes that read it in the same moment can
  * both go on (the store has no compare-and-set). Every other fire of every kind writes exactly
  * one outcome: a throw anywhere before it, G1's own read included, is one `[error, kind]` row.
- * `atLoad`: the due had passed when this load adopted the record (§3.4).
+ * `atLoad`: the due had passed when this load adopted the record.
  */
 export async function fire(d: Deps, rec: Due, now: number, atLoad = false): Promise<void> {
   const out: FireOut = { done: false }
@@ -955,7 +954,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   }
   await writeTombstone(d, sid, rec.due, now)
   if ((await d.sessionId()) !== sid) return skip('session-changed')
-  // Keep-warm (D-14): while the gap warms, the record waits there (no turn, no compaction yet).
+  // Keep-warm: while the gap warms, the record waits there (no turn, no compaction yet).
   if (await keepWarmHolds(d, rec, now)) return skip('keep-warm')
   if (rec.kind === 'compact') return fireCompact(d, rec, now, out)
   // The check writes no `idle_mode` row at its fire: it keeps its policy as armed and reads again
@@ -964,7 +963,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   const scale = scaleOf(await d.idleEnv())
   if (rec.kind === 'turn') {
     // A 49-min turn that finds native idle on or unreadable now logs `native-on` / `native-unknown`
-    // and checks the outcome at 55.5 min instead (owner xxxxxxxx-17).
+    // and checks the outcome at 55.5 min instead.
     const p = await policy(d, sid)
     if (!p.turnOn) return skip('disabled')
     if (p.native === 'on' || p.native === 'unknown') {
@@ -972,7 +971,7 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
       await rearmCheck(d, rec, now, scale)
       return
     }
-    // §3.4: a turn starting after minute 55.5 (a late timer, a sleep) is lapsed.
+    // A turn starting after minute 55.5 (a late timer, a sleep) is lapsed.
     const base = baseOf(rec)
     if (base !== null && now > base + IDLE_CHECK_MS * scale) return skip('lapsed', secs(now - rec.due))
   }
@@ -980,12 +979,12 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
   if (typeof b === 'string') return skip(b, b === 'lapsed' ? secs(now - rec.due) : undefined)
   if ('why' in b) return skip(b.why, undefined, b.windows, b.rule, b.usage)
   if ('compact' in b) {
-    // Owner 2026-10-27 and owner Q2: one shaped compaction instead of the turn, run as the
-    // `compact` timer runs its own (D4): asked once more after the checkpoint (`idleRecheck`),
-    // exempt from halt for the auto-continue cap (D5), its failures counted (D7). A rejection (a
+    // One shaped compaction instead of the turn, run as the
+    // `compact` timer runs its own: asked once more after the checkpoint (`idleRecheck`),
+    // exempt from halt for the auto-continue cap, its failures counted. A rejection (a
     // turn started, or a headless host that cannot compact between turns) is one
     // `compact_rejected` row from boundary(), never retried: the next check comes only after
-    // another main turn end. A refusal before the compaction is one skip row (D13).
+    // another main turn end. A refusal before the compaction is one skip row.
     out.done = true
     await log(d, sid, 'idle_compact', {
       gap_s: b.gapS, tokens: b.tokens, agents: b.agents, at: 'check', late_s: Math.max(0, secs(now - rec.due)), adopted: s.idleAdopted,
@@ -1023,14 +1022,14 @@ async function fireOnce(d: Deps, rec: Due, now: number, atLoad: boolean, out: Fi
     await dropDeferred(d, sid, h)
     return
   }
-  // One per idle episode, whatever the turn's end (§9.4 `episode`).
+  // One per idle episode, whatever the turn's end (`episode`).
   if (s.idleEpisode) s.idleEpisode.done = true
 }
 
 /**
  * The AT-IA-03 pattern (G0a): native idle came back on since the timer was armed, so the outcome
  * check is armed for the same turn end, when that is still ahead and the check is on at all (its
- * turn or, lane B, the plugin's compaction at it).
+ * turn or the plugin's compaction at it).
  */
 async function rearmCheck(d: Deps, rec: Due, now: number, scale: number): Promise<void> {
   const end = baseOf(rec)
@@ -1039,12 +1038,12 @@ async function rearmCheck(d: Deps, rec: Due, now: number, scale: number): Promis
 }
 
 /**
- * The plugin's own idle compaction (kind `compact`, §2.1): after G1 and G2, G0a-G0c here, then
+ * The plugin's own idle compaction (kind `compact`): after G1 and G2, G0a-G0c here, then
  * `compactGuards`; the first that fails is the one skip row (`handoff_skipped {why, reason: idle,
  * kind: compact, late_s?}`); then one `idle_compact` row and the compaction (boundary.ts, exempt
- * from halt for the auto-continue cap, D5), whose refusal is one more skip row (D13) and whose
- * failure counts for D7. A guard that throws is one `error` skip row: the record is already
- * cleared, so the episode ends here either way (§2.3); `out` tells `fire` when the outcome is
+ * from halt for the auto-continue cap), whose refusal is one more skip row and whose
+ * failure counts toward turning it off. A guard that throws is one `error` skip row: the record is already
+ * cleared, so the episode ends here either way; `out` tells `fire` when the outcome is
  * written, so a throw elsewhere is its one `error` row too.
  */
 async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promise<void> {
@@ -1068,7 +1067,7 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
     return
   }
   // G0b, G0c: automatic compaction switched off; the plugin's idle compaction off (the option,
-  // D7, or a headless load: lane A has no headless path).
+  // two failures, or a headless load: there is no headless path).
   if (p.native === 'compaction-off') return skip('compaction-off')
   if (!p.compactOn) return skip('disabled')
   let g: { why: string } | Skip | { tokens: number; limit?: LimitNote }
@@ -1093,13 +1092,13 @@ async function fireCompact(d: Deps, rec: Due, now: number, out: FireOut): Promis
   await countIdleCompact(d, sid, r)
 }
 
-/** D5: halt for the auto-continue cap does not stop an idle compaction (no continue follows it). */
+/** Halt for the auto-continue cap does not stop an idle compaction (no continue follows it). */
 function capHalt(s: Deps['state']): boolean {
   return s.halt.active && s.halt.reason === 'cap'
 }
 
 /**
- * §2.4 `idleRecheck` for the plugin's idle compaction, at the timer and at the check (lane B, D4):
+ * `idleRecheck` for the plugin's idle compaction, at the timer and at the check:
  * G4 (a turn, or a compaction other than ours: the boundary's own native check looks only after
  * a handoff turn), G5, G6 and G7 once more after the checkpoint, which can take seconds: a person
  * who came back meanwhile, or a `/compact` typed or sent meanwhile, is not compacted over (one
@@ -1118,9 +1117,9 @@ function recheckOf(d: Deps, sid: string, rec: Due): () => Promise<string | undef
 }
 
 /**
- * G3-G14 of the plugin's idle compaction (§2.1), in order: the first that fails is the reason,
+ * G3-G14 of the plugin's idle compaction, in order: the first that fails is the reason,
  * else the context size the compaction goes by. The `compact` timer and the 55.5-min check's
- * compaction (lane B, D4: one compaction, one rule set) both call it. No G1 and no read of the
+ * compaction (one compaction, one rule set) both call it. No G1 and no read of the
  * due record (G1 ran once at the top of `fire`, before the record was cleared). `adoptedOk` is
  * ADOPTED_IDLE_COMPACT (a parameter for its unit test).
  */
@@ -1129,7 +1128,7 @@ export async function compactGuards(d: Deps, sid: string, rec: Due, now: number,
   const no = (why: string) => ({ why })
   // G3: the cache has probably lapsed, or the timer came late (a sleep).
   if (now - rec.due > IDLE_LATE_MS || now - (rec.anchor ?? rec.end ?? rec.due) > IDLE_LAPSE_FRACTION * IDLE_CACHE_MS * scaleOf(env)) return no('lapsed')
-  // G3a (D6 a): the prompt prefix changed since the arm, so the cache is cold: another Claude Code
+  // G3a: the prompt prefix changed since the arm, so the cache is cold: another Claude Code
   // version (an adopted load) or another main model (an adopted load, or `/model` in this one,
   // which sends no request and so re-arms nothing). A read that throws counts as changed.
   let cc: string | undefined
@@ -1142,7 +1141,7 @@ export async function compactGuards(d: Deps, sid: string, rec: Due, now: number,
   if ((rec.cc !== null && rec.cc !== cc) || (rec.model !== null && rec.model !== model)) return no('prefix-changed')
   // A keep-warm ping since the last main request missed the main prefix: the cache is cold (keepwarm.ts).
   if (forkMissed(s, sid)) return no('fork-miss')
-  // G3b (D6 b): an adopted load compacts only while the L1-c4 gate allows adopted loads at all.
+  // G3b: an adopted load compacts only while the live-probe gate allows adopted loads at all.
   if (s.idleAdopted && !adoptedOk) return no('adopted-cold')
   // G4-G7: busy, a newer turn or request, a compaction since the turn end, a person at the prompt.
   if (isBusy(s) || s.nativeCompacting > 0 || s.ownCompact !== undefined) return no('busy')
@@ -1169,7 +1168,7 @@ export async function gapSeconds(d: Deps): Promise<number | null> {
   return t === undefined ? null : Math.round(((await d.now()) - t) / 1000)
 }
 
-/** One `submit_dropped {why}` row: a submit site found the session changed (IC-1 D7 (ii)). */
+/** One `submit_dropped {why}` row: a submit site found the session changed. */
 export async function submitDropped(d: Deps, sid: string, site: string): Promise<void> {
   await log(d, sid, 'submit_dropped', { why: 'session-changed', site })
 }

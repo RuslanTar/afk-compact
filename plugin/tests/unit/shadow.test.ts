@@ -1,5 +1,5 @@
-// U tests through the kit: the local shadow trial (TRIAL-DUAL-HANDOFF, P-DH-TEST, owner 2026-10-26
-// 21:2x "dual handoffs"): nothing without the local trial config; the fire points M1 (typed and
+// U tests through the kit: the local shadow trial (dual handoffs): nothing without the local
+// trial config; the fire points M1 (typed and
 // model-called), M2 (the plugin's handoff turn) and M3 (a compaction with no handoff turn before
 // it); the guards (90% windows, no limits, the 58-minute cold rule, the config's own skips); the
 // fork outcomes; and the content-free shape of what reaches `trial-save`. Synthetic texts only.
@@ -185,7 +185,7 @@ test('AT-DH-07: M3 for the plugin\'s own compaction with no handoff turn: two fo
 
 // The plugin's own idle compaction is the idle moment (m3-idle), as Claude Code's is: under
 // "idleCompaction": false it takes native's place at the same moment; trigger plugin says who.
-// keep_warm_hours 0: this test's fork hook answers every fork, keep-warm's ping too (D-14), and
+// keep_warm_hours 0: this test's fork hook answers every fork, keep-warm's ping too, and
 // keep-warm would hold the check while the agent runs (keepwarm.test.ts covers that path).
 test('AT-DH-07 (idle): the plugin\'s own idle compaction at 54 min (native vetoed) is an m3-idle moment with trigger plugin, not m3-plugin; so is the 55.5-min check\'s', { options: { precompact_turn: 'false', keep_warm_hours: 0 } }, async ($, on) => {
   const w = new World().install(on)
@@ -213,7 +213,7 @@ test('AT-DH-07 (idle): the plugin\'s own idle compaction at 54 min (native vetoe
 
 // ---- guards
 
-test('AT-DH-08b (D-80): the trial stays at 90: a plan window at 93 skips near-limit though plugin idle compaction\'s band would let it run (an agent at work, a fresh reading, a measured change of 1)', async ($, on) => {
+test('AT-DH-08b: the trial stays at 90: a plan window at 93 skips near-limit though plugin idle compaction\'s band would let it run (an agent at work, a fresh reading, a measured change of 1)', async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   await started($, w)
@@ -243,7 +243,7 @@ test('AT-DH-08: guards cover both forks with one record each: no limits, a windo
   await w.settle()
   expect(forks.length).toBe(0)
   expect(saves(w).map(s => s.moment.status)).toEqual(['skipped:no-limits', 'skipped:near-limit', 'skipped:cold'])
-  // D-76: the near-limit skip record names the windows read; the other two have none.
+  // The near-limit skip record names the windows read; the other two have none.
   expect(saves(w).map(s => s.moment.windows ?? 'none')).toEqual(['none', ['five_hour:10', 'seven_day:90'], 'none'])
   // No cap: every eligible moment fires.
   for (let i = 0; i < 6; i++) {
@@ -333,7 +333,7 @@ test('AT-DH-12: M2 pre-compaction handoff turn: exactly one old and one native f
   expect(s.map(x => [x.moment.kind, x.moment.ht, x.moment.plugin_side, x.moment_id])).toEqual([['m2-precompact', ht, 'submitted', SID_A.slice(0, 8) + '-' + ht]])
 })
 
-/** Our handoff-turn submit meets a user prompt entering as it goes in (CR-F17), which is then dropped or not. */
+/** Our handoff-turn submit meets a user prompt entering as it goes in, which is then dropped or not. */
 function userEntersAtSubmit($: Engine, w: World, userDropped: boolean): { held: () => Promise<unknown> | undefined; open: () => void } {
   const USER = 'the user typed this'
   let held: Promise<unknown> | undefined
@@ -546,7 +546,7 @@ test('AT-DH-18: parseMeasure, armOf and armOfError map every answer; the old pro
   expect(oldPrompt(n, { ...m, old: { status: 'no-old-skill' } }, undefined)).toBe(undefined)
 })
 
-// ---- review fixes (2026-10-27)
+// ---- review fixes
 
 test('AT-DH-26: the cold rule holds mid-turn on the last main step\'s start: a compaction 30 min after it fires (with the turn id), one 59 min after it is skipped:cold', async ($, on) => {
   const w = new World().install(on)
@@ -618,7 +618,7 @@ test('AT-DH-29: a turn end that measured the trial off: the handoff turn after i
   expect(w.callsOf('trial-measure').length).toBe(2)
 })
 
-test('AT-DH-30: IC-1 D7 (ii) runs again after the M2 measure: a session that changed while it ran gets no submit and no fork', { options: { precompact_turn: 'true' } }, async ($, on) => {
+test('AT-DH-30: the session check runs again after the M2 measure: a session that changed while it ran gets no submit and no fork', { options: { precompact_turn: 'true' } }, async ($, on) => {
   const w = new World().install(on)
   const forks = trialOn(on, w)
   await started($, w)

@@ -1,4 +1,4 @@
-// PROBE-4 (BUILD-PLAN §2.6, MOD-SPEC §12): what the offline kit can do for the mod's U tests.
+// PROBE-4: what the offline kit can do for the mod's U tests.
 // Kept as a regression test: if a kit release changes one of these answers, the U-test
 // style that depends on it has to change too. Uses inline plugins only, so it does not
 // depend on what register.ts wires.

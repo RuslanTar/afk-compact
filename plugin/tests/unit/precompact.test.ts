@@ -1,5 +1,5 @@
-// U tests through the kit: the pre-compaction handoff turn (MOD-SPEC §9.3, S-SETTINGS D, OD-4;
-// setting `precompact_turn`). The cases that run the turn need the `[submit-pre]` lines of
+// U tests through the kit: the pre-compaction handoff turn (setting
+// `precompact_turn`). The cases that run the turn need the `[submit-pre]` lines of
 // handoff-turn.txt; a build without them skips the turn (`no-asset`) and those cases check that.
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
@@ -161,7 +161,7 @@ test('AT-PC-04 (false): as built: no submit, the normal compaction at boundary_d
   expect(w.rowsOf('config_invalid').length).toBe(0)
 })
 
-// D-72: Claude Code checks a value against the option's list, so one outside it (a word from before
+// Claude Code checks a value against the option's list, so one outside it (a word from before
 // 0.1.6 such as ' Model ' or 'code', or any other text) reaches the mod as unset: the default true,
 // the turn, and no config_invalid (parseOptions' own reading of such words: units.test.ts).
 for (const v of [' Model ', 'code', 'sometimes']) test(`AT-PC-04 (${JSON.stringify(v)}): outside the options, Claude Code gives the default true: the turn`, { options: { precompact_turn: v } }, async ($, on) => {

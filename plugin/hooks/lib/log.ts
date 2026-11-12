@@ -1,4 +1,4 @@
-// Mod rows (MOD-SPEC §2.5, WATCHER-SPEC §6.2 envelope): one `log` helper call per row, in order;
+// Mod rows (the shared row envelope): one `log` helper call per row, in order;
 // when the helper call fails, one file per row under `<watch>/<sid>/events/`. Rows are
 // content-free: ids, counts, enums, byte counts, durations, our own paths. One exception:
 // `compact_rejected.error` and `compact_command.error` keep Claude Code's own rejection or
@@ -148,7 +148,7 @@ async function fallback(d: Deps, sid: string, row: Row): Promise<void> {
 }
 
 /**
- * A `skip` reason as a row value (WATCHER-SPEC §6.3 `compacted.skip`: null or a class). Any
+ * A `skip` reason as a row value (`compacted.skip`: null or a class). Any
  * hook can set the reason, so its free text is never logged: a short token is kept, else `other`
  * (the free-text fields are `compact_rejected.error` and `compact_command.error`, see the header).
  */
@@ -207,7 +207,7 @@ export async function ensureIdent(d: Deps, sid: string): Promise<void> {
 }
 
 /**
- * The watch folder the helper vetted (MOD-SPEC §1.2 unsafe roots, PRIV-04), or undefined: when
+ * The watch folder the helper vetted (unsafe roots left out), or undefined: when
  * `ident` refused every log folder (null) or gave no answer. Raw text (the summary stash) is
  * written only here, never under the folder the options name.
  */
@@ -218,9 +218,9 @@ export async function vettedWatch(d: Deps, sid: string): Promise<string | undefi
 }
 
 /**
- * The toast for an escalation row (MOD-SPEC §5.5: log + toast where the mod runs, never an
+ * The toast for an escalation row (log + toast where the mod runs, never an
  * action), once per kind per load. Wording is provisional: the design names the toast, not its
- * text, except the two after-step toasts of MOD-SPEC §5.2 (see `toastOnce`).
+ * text, except the two after-step toasts (see `toastOnce`).
  */
 export function escalate(d: Deps, row: string): void {
   toastOnce(d, row, `${d.name}: ${row}; see /${d.name}:status`)

@@ -1,5 +1,5 @@
 // U tests of the pure libs: nonce (AT-C-01), detector (AT-C-02), assembler budgets (AT-P-07,
-// D-17/DP-8 table), clamp (AT-P-03/04/15/16 arithmetic), the run-time brand in the marker
+// the budget table), clamp (AT-P-03/04/15/16 arithmetic), the run-time brand in the marker
 // (BT-01 U part), sha256.
 import { describe, expect, test } from 'claude-code/testing'
 import { ASSET_NAMES, assetText } from '../../hooks/lib/assets.gen'
@@ -108,7 +108,7 @@ describe('AT-C-02 detector', () => {
 })
 
 const PREV = '~/.claude/handoffs/example-repo/LAB-123/' + 'p'.repeat(141 - '~/.claude/handoffs/example-repo/LAB-123/'.length)
-/** PKG-RUNTIME A.2: budgets render `@store@` with a 160-character root stand-in. */
+/** Budgets render `@store@` with a 160-character root stand-in. */
 const STORE = '"' + '/' + 'r'.repeat(159) + '/scripts/' + NAME + '-store"'
 const WORST = {
   store: STORE, idle_min: '49',
@@ -125,7 +125,7 @@ const WORST = {
   question: 'q'.repeat(QUESTION_MAX - 1) + '?',
   // 0.1.3 resume-text A [resumed]: the first line at its longest (resume.ts resumeLine, STEP1_MAX).
   resume_line: 'Resumed · step 1: ' + 's'.repeat(STEP1_MAX - 1) + '…',
-  // The shadow trial's fork texts (TRIAL-DUAL-HANDOFF §4.2): read at run time from local files.
+  // The shadow trial's fork texts: read at run time from local files.
   old_skill: '# Old skill\nStep 1.', old_template: '# Template', trial_facts: 'Repository: r', trial_tail: 'Last reply:\ndone',
 }
 const BLANK = Object.fromEntries(Object.keys(WORST).map(k => [k, '']))
@@ -140,10 +140,10 @@ const TAGS: Record<string, Tag[]> = {
 }
 
 /**
- * The tag combinations the mod builds: every subset, less the exclusive groups (BLD-04, XR-19):
+ * The tag combinations the mod builds: every subset, less the exclusive groups:
  * exactly one of `prod-forbid`/`prod-allow` on the resume block, at most one of `idle`, `idle-halt`
- * (owner xxxxxxxx-25), `idle-done` (away digest phase 1), their `idle_digest: off` variants
- * `idle-off` and `idle-done-off` (owner rule (c)) and `midturn`, `idle-again` (owner xxxxxxxx-37)
+ * (halt mode), `idle-done` (away digest phase 1), their `idle_digest: off` variants
+ * `idle-off` and `idle-done-off` and `midturn`, `idle-again` (the block again on return)
  * only with one of those idle lines, `handoff` never with `handoff-partial`, `driver` never with
  * `idle-halt`, `idle-done` or `idle-done-off`, and one handoff-turn kind at a time.
  */
@@ -155,9 +155,9 @@ function combos(tags: Tag[]): Tag[][] {
   const IDLE: Tag[] = ['idle', 'idle-halt', 'idle-done', 'idle-off', 'idle-done-off']
   out = out.filter(c => [...IDLE, 'midturn' as Tag].filter(t => has(c, t)).length <= 1 && !(has(c, 'handoff') && has(c, 'handoff-partial')))
   out = out.filter(c => !has(c, 'idle-again') || IDLE.some(t => has(c, t)))
-  // Owner 2026-10-30 07:49: [handoff-ack] only beside [handoff], the path it names.
+  // [handoff-ack] only beside [handoff], the path it names.
   out = out.filter(c => !has(c, 'handoff-ack') || has(c, 'handoff'))
-  // Owner 2026-10-26 [driver]: never with [idle-halt] (auto-continue is paused); a measured driver
+  // [driver]: never with [idle-halt] (auto-continue is paused); a measured driver
   // keeps the work lane working, so never with [idle-done] either (lane.ts).
   out = out.filter(c => !(has(c, 'driver') && (has(c, 'idle-halt') || has(c, 'idle-done') || has(c, 'idle-done-off'))))
   // 0.1.3 resume-text: [resumed] never beside [handoff-ack] or [idle-again]; [question-timeout] only beside [question].
@@ -191,11 +191,11 @@ describe('AT-P-07 assembler (14-character name)', () => {
       expect([tags.join('+'), lines[lines.length - 1]]).toEqual([tags.join('+'), 'Last line before </summary>: ' + sentinelText(NAME, WORST.nonce)])
     }
   })
-  // D-17: the static core has a soft 4,500-char target only (tools/assemble prints ADVISORY);
-  // the hard guard is the channel total below, with the D-18 `[handoff]` line included; 8,720 B since
-  // the owner's 2026-10-26 plugin-text ruling ("Raise the cap"; tools/assemble BUDGETS), 8,800 B since the
-  // away digest's lane Status and step marks (owner 2026-10-27 12:5x), 8,850 B since a saved handoff's
-  // report in full is its one ack line with the path (owner 2026-10-30 07:49). Classic keeps 8,192.
+  // The static core has a soft 4,500-char target only (tools/assemble prints ADVISORY);
+  // the hard guard is the channel total below, with the `[handoff]` line included; 8,720 B since
+  // the plugin-text review raised the cap (tools/assemble BUDGETS), 8,800 B since the
+  // away digest's lane Status and step marks, 8,850 B since a saved handoff's
+  // report in full is its one ack line with the path. Classic keeps 8,192.
   test('mod main [midturn]+[chain]+[handoff]+[measured] with a full 3,000 B block ≤8,850 B (the hard channel total)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'handoff', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
     expect(byteLength(s) <= 8850).toBe(true)
@@ -208,33 +208,33 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const s = assembleText(text('handoff-instructions'), ['midturn', 'chain', 'measured'], { ...WORST, measured_facts: 'x'.repeat(3000) })
     expect(byteLength(s) <= 8850).toBe(true)
   })
-  // RP-1 (owner 2026-10-23, ratify xxxxxxxx#R3 overturned): 3,000 is a soft target now; the protocol
+  // 3,000 is a soft target, not a hard limit; the protocol
   // may exceed it only up to the size its logged reason names (tools/budget-reasons.json, 4,130
-  // since owner xxxxxxxx-18 and xxxxxxxx-37 added the idle check line and the [idle-again] note,
-  // the owner's 2026-10-26 GSD re-entry ruling the [driver] line, and the 2026-10-26 plugin-text
-  // ruling TC-02's idle report and TC-26's unblocked Next steps with the ask repeated last; 4,590
+  // since the idle check line and the [idle-again] note,
+  // GSD re-entry per session the [driver] line, and the plugin-text
+  // review's idle report and unblocked Next steps with the ask repeated last; 4,590
   // since the away digest's [idle-done] line with its code-rendered Basis, and the step-5 digest
-  // clause of [idle], owner 2026-10-27 12:5x and AWAY-DIGEST phase 1 items 3 and 5; 4,620 since that
-  // step-5 digest carries the code-rendered Basis line too, owner 2026-10-27 22:32; 4,657 since
+  // clause of [idle], away digest phase 1 items 3 and 5; 4,620 since that
+  // step-5 digest carries the code-rendered Basis line too; 4,657 since
   // release-0.1.0's [driver] line names the workflow file a GSD loop command loads; 4,907 since
-  // [handoff-ack] and [handoff-partial] carry the one-line handoff ack, owner 2026-10-30 07:49; 5,373
+  // [handoff-ack] and [handoff-partial] carry the one-line handoff ack; 5,373
   // since the 0.1.2 question carry's [question] line quotes an open question of up to 240 chars;
-  // 5,580 since D-22's [auto-mode] line, root 2026-10-31; 5,846 since the 0.1.3 resume-text lane's
+  // 5,580 since the [auto-mode] line; 5,846 since the 0.1.3 resume-text lane's
   // [resumed] first line, step 6's no-dialog clause and the [question-timeout] note; 5,874 since its
   // review round 1's edits to [handoff-ack], [handoff-partial] and [question-timeout]; 5,894 since
-  // 0.1.4 R-1 names in [auto-mode] the classes still blocked; 6,114 since G-1, root 2026-11-04:
+  // 0.1.4 names in [auto-mode] the classes still blocked; 6,114 since the gate rule:
   // step 4 says the gate asks even when an approval carries and names protected branches, 240
-  // chars on a worst path measured at 5,871 before it; 6,127 since 0.1.5 D-2 gives the digest's
+  // chars on a worst path measured at 5,871 before it; 6,127 since 0.1.5 gives the digest's
   // Basis as its first line, exactly, in [idle] and [idle-done] (13 chars on the worst path); 6,131
   // since its review gives [idle] the article of [idle-done] (`then the lane state`), so a further
   // growth fails here).
-  test('resume protocol ≤6,131 chars (soft 3,000 with a logged reason; RP-1) for every tag combination the mod builds, @store@ at its 160-char root', SLOW, () => {
+  test('resume protocol ≤6,131 chars (soft 3,000 with a logged reason) for every tag combination the mod builds, @store@ at its 160-char root', SLOW, () => {
     for (const tags of combos(TAGS['resume-context'] ?? [])) {
       const s = assembleText(text('resume-context'), tags, WORST, ['measured_at', 'remeasure'])
       expect(s.length <= 6131).toBe(true)
     }
   })
-  // REVIEW-NIGHT NR-11 / TG-04 (RP-2, RP-4): the shipped worst-case protocol, not a synthetic one.
+  // The shipped worst-case protocol, not a synthetic one.
   // 0.1.3 resume-text (review of its first build: the two new tags took this test from about 0.7 s
   // to 1.7 s alone, 6.4 s once under load against the kit's 5 s): [resumed] and [question-timeout]
   // each only add one line of fixed text (WORST's longest `@resume_line@`), so a combination
@@ -259,7 +259,7 @@ describe('AT-P-07 assembler (14-character name)', () => {
     const big = fitBlock(render, measured + '\n' + 'z'.repeat(4000))
     expect(big.length <= BLOCK_MAX && big.includes('(+')).toBe(true)
   })
-  test('the queue tag is applied when given (D-10: the mod gives it only with queue_cmd set)', () => {
+  test('the queue tag is applied when given (the mod gives it only with queue_cmd set)', () => {
     const t = text('checkpoint-nudge')
     const s = assembleText(t, ['continue', 'queue'], WORST)
     const without = assembleText(t, ['continue'], WORST)
@@ -290,7 +290,7 @@ describe('AT-P-07 assembler (14-character name)', () => {
     expect(s.indexOf(line) < s.indexOf('Measured facts (')).toBe(true)
     expect(assembleText(text('resume-context'), ['idle', 'prod-forbid'], r)).not.toContain('Open question')
   })
-  // Owner 2026-10-30 07:49 ("short message after compaction"): a handoff published before the
+  // A short message after compaction: a handoff published before the
   // compaction whose report was not sent gets one ack line, not the report; the summary does not
   // copy that report as a pending answer in full.
   test('[handoff-ack] carries the one-line ack for the path [handoff] names, limited to the report; [handoff-partial] the same form for a written receipt', () => {
@@ -339,7 +339,7 @@ test('BT-01 (U part): the marker in assets.gen.ts takes the run-time plugin name
   expect(assetText('subagent-instructions', 'q')).toContain(OPEN + 'q v1 n=@nonce@ s=sub' + CLOSE)
 })
 
-test('STATE-ROOT (0.1.2): the default handoff root is outside ~/.claude, and .watch moves with it', () => {
+test('state root (0.1.2): the default handoff root is outside ~/.claude, and .watch moves with it', () => {
   // the plugin's name stands as a token in the fallback default; parseOptions fills it in
   expect(DEFAULTS.handoff_root).toBe('~/.local/state/' + NAME_TOKEN + '/handoffs')
   const unset = parseOptions({ handoff_root: '${user_config.handoff_root}', log_dir: '' }, 'nm')
@@ -353,7 +353,7 @@ test('STATE-ROOT (0.1.2): the default handoff root is outside ~/.claude, and .wa
   expect(paths(DEFAULTS, undefined)).toBeUndefined()
 })
 
-test('STATE-ROOT (0.1.2): the default disposable root is outside ~/.claude too; a value set stays', () => {
+test('state root (0.1.2): the default disposable root is outside ~/.claude too; a value set stays', () => {
   expect(DEFAULTS.disposable_root).toBe('~/.local/state/' + NAME_TOKEN + '/disposable')
   expect(parseOptions({ disposable_root: '${user_config.disposable_root}' }, 'nm').disposable_root).toBe('~/.local/state/nm/disposable')
   expect(parseOptions({}).disposable_root).toBe('~/.local/state/plugin/disposable')
@@ -361,7 +361,7 @@ test('STATE-ROOT (0.1.2): the default disposable root is outside ~/.claude too; 
   expect(parseOptions({ disposable_root: '~/.claude/trash-staging' }, 'nm').disposable_root).toBe('~/.claude/trash-staging')
 })
 
-test('STATE-ROOT (0.1.2): the default handoff root reads under an absolute $XDG_STATE_HOME, as the helper', () => {
+test('state root (0.1.2): the default handoff root reads under an absolute $XDG_STATE_HOME, as the helper', () => {
   const xdg = { home: '/xs', name: 'nm' }
   // unset or equal to the default (as written or expanded): under XDG_STATE_HOME, .watch with it
   expect(paths(parseOptions({}, 'nm'), '/hh/u', xdg)).toEqual({ root: '/xs/nm/handoffs', watch: '/xs/nm/handoffs/.watch' })
@@ -400,8 +400,8 @@ test('AT-P-15: clamp at windows 329000 and 328999, defaults: enabled (target 120
   expect(off.disabled).toBe('trigger-disabled-small-window')
 })
 
-// AT-P-16's "off → 567000" is N − 100,000; the same §1.2 formula's floor(0.8 × window) = 560,000
-// binds first, so the off value is 560000 (needs/mod-escalations.md E-M-2).
+// AT-P-16's "off → 567000" is N − 100,000; the same formula's floor(0.8 × window) = 560,000
+// binds first, so the off value is 560000.
 test('AT-P-16: window 700000: soft max 551000 + clamped; handoff_turn off: 560000 (reserve 52,000 + allowance, else 100,000)', () => {
   const on = clamp(DEFAULTS, 700000)
   expect(on.soft_max).toBe(551000)
@@ -416,7 +416,7 @@ test('AT-P-16: window 700000: soft max 551000 + clamped; handoff_turn off: 56000
 test('handoff_turn / handoff_turn_max_tokens / queue_cmd options: validation, clamp, notes', () => {
   const a = parseOptions({ handoff_turn: ' OFF ', handoff_turn_max_tokens: 5000, queue_cmd: '/q/bin/queue' })
   expect([a.handoff_turn, a.handoff_turn_max_tokens, a.queue_cmd]).toEqual(['off', 20000, '/q/bin/queue'])
-  // D-72: ' OFF ' is a word from before 0.1.6 (false), read with its note
+  // ' OFF ' is a word from before 0.1.6 (false), read with its note
   expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'handoff_turn_max_tokens', configured: 5000, effective: 20000 }], noted: [{ key: 'handoff_turn', note: 'legacy-word' }] })
   const b = parseOptions({ handoff_turn: 'fork', handoff_turn_max_tokens: '900000' })
   expect([b.handoff_turn, b.handoff_turn_max_tokens]).toEqual(['halt', 150000])
@@ -465,7 +465,7 @@ test('T-10 temp paths: a piece of a command never reaches paths.jsonl; a cut ass
   expect(tempPaths({ command: 'tail -f exit:/private/tmp/a/tasks/b1.output F=$S/tasks/x.output' })).toEqual(['/private/tmp/a/tasks/b1.output'])
 })
 
-test('detector: an s=sub marker with the main Resume here heading in a subagent-proven compaction is scope-leak (MOD-SPEC 5.1, corpus 41)', () => {
+test('detector: an s=sub marker with the main Resume here heading in a subagent-proven compaction is scope-leak (corpus 41)', () => {
   const name = 'x'.repeat(14)
   const text = '<summary>\n' + markerText(name, '5e6f7081', 'sub') + '\n## Task as assigned\nfind callers\n## Resume here\nStatus: active\n' +
     sentinelText(name, '5e6f7081') + '\n</summary>'
@@ -475,7 +475,7 @@ test('detector: an s=sub marker with the main Resume here heading in a subagent-
   expect(detectSummary(noHeading, name, { dispatchNonce: '5e6f7081', scope: 'sub' }).verdict).toBe('ok')
 })
 
-// P5-FOLD A3 (MOD-SPEC §1.2 effective thresholds): small-window diagnostics.
+// Effective thresholds: small-window diagnostics.
 test('AT-P5-07: clamp diagnostics: raw negative values, min_window, triggers off computes the clamp, the 100,000 window floor', () => {
   const tiny = clamp(DEFAULTS, 100000)
   expect([tiny.disabled, tiny.soft_max, tiny.target, tiny.small_window, tiny.min_window]).toEqual(['trigger-disabled-small-window', -49000, -32667, true, 329000])
@@ -495,7 +495,7 @@ test('AT-P5-07: clamp diagnostics: raw negative values, min_window, triggers off
   expect([clamp(ho, 313000).disabled, clamp(ho, 312999).disabled]).toEqual([null, 'trigger-disabled-small-window'])
 })
 
-// text-to-mod M-2 (spec §16 `clamp`, MOD-02 parity): the ten keys, each read from the shipped object.
+// The spec's `clamp` object (parity): the ten keys, each read from the shipped object.
 test('clamp constants: one shared source (the spec-literals clamp object, key by key), else the built-in values', () => {
   expect(CLAMP_DEFAULTS).toEqual({
     native_offset: 33000, min_target: 120000, reserve_base: 52000, reserve_no_handoff: 100000, window_floor: 100000,
@@ -530,18 +530,18 @@ test('clamp: target = floor(soft x target_num / target_den) in integers, never a
   expect(parseOptions({ handoff_turn_max_tokens: 900000 }).handoff_turn_max_tokens).toBe(CLAMP_DEFAULTS.handoff_tokens_max)
 })
 
-// S-SETTINGS A, D; IC-1 config keys; MOD-SPEC §1.2.
-test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idle_handoff_turn (trim, fold, invalid), idle_handoff_min_tokens (clamped)', () => {
+// The config keys.
+test('options: cap default 6; precompact_turn, unattended_prod_reads, idle_handoff_turn (trim, fold, invalid), idle_handoff_min_tokens (clamped)', () => {
   expect(DEFAULTS.max_auto_continues_per_hour).toBe(6)
-  // Owner xxxxxxxx-18: the same default as src/plugin.json (`model`).
+  // The same default as src/plugin.json (`model`).
   expect(DEFAULTS.precompact_turn).toBe('model')
   expect(parseOptions({}).max_auto_continues_per_hour).toBe(6)
-  // AT-IA-01 (idle D3): default `auto`; the old `on` reads as `auto` with a config_note; `off` is off;
-  // any other value is `off` plus config_invalid (owner xxxxxxxx-13; there is no forced on).
+  // AT-IA-01: default `auto`; the old `on` reads as `auto` with a config_note; `off` is off;
+  // any other value is `off` plus config_invalid (there is no forced on).
   expect(DEFAULTS.idle_handoff_turn).toBe('auto')
   const a = parseOptions({ precompact_turn: ' Model ', unattended_prod_reads: 'ALLOW', idle_handoff_turn: ' on', idle_handoff_min_tokens: 50000 })
   expect([a.precompact_turn, a.unattended_prod_reads, a.idle_handoff_turn, a.idle_handoff_min_tokens]).toEqual(['model', 'allow', 'auto', 100000])
-  // D-72: the words before 0.1.6 (and another case or spaces) read the same, each with a note
+  // The words before 0.1.6 (and another case or spaces) read the same, each with a note
   expect(a.notes).toEqual({ invalid: [], clamped: [{ key: 'idle_handoff_min_tokens', configured: 50000, effective: 100000 }],
     noted: [{ key: 'precompact_turn', note: 'legacy-word' }, { key: 'unattended_prod_reads', note: 'legacy-word' }, { key: 'idle_handoff_turn', note: 'legacy-on' }] })
   // AT-PC-04: any other value is `code` (the no-extra-cost path), whatever the default.
@@ -555,7 +555,7 @@ test('MOD-02 options: cap default 6; precompact_turn, unattended_prod_reads, idl
   expect(parseOptions({ idle_handoff_turn: ' OFF ' }).idle_handoff_turn).toBe('off')
 })
 
-// AT-IA-01, owner xxxxxxxx-13 (2026-10-26, "Off + common words"): false, no, none, disabled, 0 read as
+// AT-IA-01 (off plus the common words): false, no, none, disabled, 0 read as
 // off; true, yes, 1, on as auto (a JSON boolean or number too); anything else is off plus
 // config_invalid, which /status shows. One value with settings.pm $IDLE_INVALID.
 test('AT-IA-01 idle_handoff_turn: common words, and any other value reads as off', () => {
@@ -579,8 +579,8 @@ test('AT-IA-01 idle_handoff_turn: common words, and any other value reads as off
   }
 })
 
-// IDLE-COMPACT §5 (D9): `idle_compact` reads like `idle_handoff_turn` (the same word lists and
-// invalid value as settings.pm); default `auto` pending the owner (Q3). `on` is a plain auto word
+// `idle_compact` reads like `idle_handoff_turn` (the same word lists and
+// invalid value as settings.pm); default `auto`. `on` is a plain auto word
 // here (no legacy note: the key is new).
 test('AT-IC-C00 idle_compact: default auto; common words; any other value reads as off with config_invalid', () => {
   expect(DEFAULTS.idle_compact).toBe('auto')
@@ -591,7 +591,7 @@ test('AT-IC-C00 idle_compact: default auto; common words; any other value reads 
   }
   for (const w of ['auto', 'true', 'Yes', ' 1 ', 'on', true, 1]) {
     const r = parseOptions({ idle_compact: w } as never)
-    // D-72: only the stored form `true` reads with no note (every other word is from before 0.1.6)
+    // Only the stored form `true` reads with no note (every other word is from before 0.1.6)
     expect([w, r.idle_compact, r.notes.invalid, r.notes.noted]).toEqual([w, 'auto', [], w === 'true' ? undefined : [{ key: 'idle_compact', note: 'legacy-word' }]])
   }
   for (const w of ['  ', '\t', '${user_config.idle_compact}']) expect(parseOptions({ idle_compact: w } as never).idle_compact).toBe('auto')
@@ -601,12 +601,12 @@ test('AT-IC-C00 idle_compact: default auto; common words; any other value reads 
   }
 })
 
-// D-72 (0.1.6; owner 2026-11-08): the seven on/off options take `true` or `false`; a word saved by a
+// 0.1.6: the seven on/off options take `true` or `false`; a word saved by a
 // release before 0.1.6 keeps its meaning (either word, another case, spaces, a JSON boolean) with a
 // `legacy-word` note, never the opposite; an unknown word reads by the key's own rule, never as the
 // other word but where that rule's value is it. One table with settings.pm %SWITCH (the
 // config-defaults gate compares them).
-test('D-72 options: true and false, and the words before 0.1.6, read as the helper reads them', () => {
+test('0.1.6 options: true and false, and the words before 0.1.6, read as the helper reads them', () => {
   expect(SWITCH).toEqual({ handoff_turn: ['halt', 'off'], precompact_turn: ['model', 'code'], watcher: ['shadow', 'off'],
     unattended_prod_reads: ['allow', 'forbid'], idle_handoff_turn: ['auto', 'off'], idle_compact: ['auto', 'off'], resume_proceed: ['auto', 'confirm'] })
   const read = (k: string, v: unknown) => {
@@ -634,11 +634,11 @@ test('D-72 options: true and false, and the words before 0.1.6, read as the help
     .toEqual(['halt', 'model', 'forbid', 'auto', 'auto', false])
 })
 
-// Owner xxxxxxxx (2026-10-30, "I want the handoff anyway"): `idle_handoff_near_limit` `run` (the
+// The handoff is wanted anyway: `idle_handoff_near_limit` `run` (the
 // default) runs the idle handoff turn near a usage limit, `skip` skips it there, `skip-spend` (0.1.2)
 // only near a spend limit; trimmed and
 // case-folded; any other value is the default `run` plus config_invalid; no legacy words.
-test('MOD-02 options: idle_handoff_near_limit: default run; trim and fold; any other value reads as run with config_invalid', () => {
+test('options: idle_handoff_near_limit: default run; trim and fold; any other value reads as run with config_invalid', () => {
   expect(DEFAULTS.idle_handoff_near_limit).toBe('run')
   expect(parseOptions({}).idle_handoff_near_limit).toBe('run')
   for (const [w, want] of [[' SKIP ', 'skip'], ['skip', 'skip'], ['Run', 'run'], [' run\t', 'run'], ['skip-spend', 'skip-spend'], [' Skip-Spend ', 'skip-spend']] as const) {
@@ -655,8 +655,8 @@ test('MOD-02 options: idle_handoff_near_limit: default run; trim and fold; any o
   }
 })
 
-// IDLE-COMPACT §1.2, §5: the environment the idle timers read. CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS
-// as native `IXt` reads it; the D10 test seam bounded to 120-3600 s; a flag as Claude Code reads one.
+//, : the environment the idle timers read. CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS
+// as native `IXt` reads it; the test seam bounded to 120-3600 s; a flag as Claude Code reads one.
 test('AT-IC-C00 idle env: compactMinOf, cacheSOf, envTruthy', () => {
   expect([compactMinOf(undefined), compactMinOf(''), compactMinOf('abc'), compactMinOf('-5'), compactMinOf('0'), compactMinOf('1.5')]).toEqual([200000, 200000, 200000, 200000, 200000, 200000])
   expect([compactMinOf('50000'), compactMinOf(' 300000 '), compactMinOf('100000')]).toEqual([100000, 300000, 100000])
@@ -666,7 +666,7 @@ test('AT-IC-C00 idle env: compactMinOf, cacheSOf, envTruthy', () => {
   expect([undefined, '', '0', 'false', 'off', 'no', 'x'].map(v => envTruthy(v))).toEqual([false, false, false, false, false, false, false])
 })
 
-// P5-FOLD A1 (MOD-SPEC §5.1): a sentinel placed right after `</summary>` belongs to the body.
+// A sentinel placed right after `</summary>` belongs to the body.
 describe('AT-P5-01, AT-P5-02 sentinel after </summary>', () => {
   const N = '1a2b3c4d'
   const body = (n = N) => markerText(NAME, n, 'main') + '\n# LAB-42 retry\n## Resume here\nStatus: active\n'
@@ -738,9 +738,8 @@ function specStrings(key: string): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
 }
 
-// MOD-04 (MOD-SPEC §3.4, BUILD-PLAN §3.4; S-SETTINGS B, PKG-RUNTIME A.1/A.2).
-describe('MOD-04 resume-block tags and the store token', () => {
-  // The step-4 pair as T-TEXT/S-SETTINGS word it (two lines, one tag each), and a store line.
+describe('resume-block tags and the store token', () => {
+  // The step-4 pair as the settings word it (two lines, one tag each), and a store line.
   const TEXT = 'Head.\n[prod-forbid] 4. ask before production.\n[prod-allow] 4. a read-only production check may run.\n[chain] Run @store@ wait once.\nTail.\n'
 
   test('AT-PR-05 (mod part): [prod-allow] only when the option and the checkpoint consent both say allow (four combinations); exactly one step-4 line', () => {
@@ -818,26 +817,26 @@ test('isoLocal: the offset of each instant across a DST change; the stamp reads 
 
 // 0.1.2 log-tz at the source: a stamp is made in the system zone as it stands at that stamp
 // (Deps.zone, read again each time), not the zone the engine read at load; the engine's own
-// zone only when none is known. Seen 2026-10-30: /etc/localtime moved from Europe/UTC+2 zone to
-// Etc/GMT-1 under running sessions, and the mod went on stamping +02:00.
+// zone only when none is known. Seen in practice: /etc/localtime moved from a UTC+2 zone to a
+// UTC+1 zone under running sessions, and the mod went on stamping +02:00.
 test('isoLocal in a named zone: the offset of each instant across a DST change, whatever the engine zone', () => {
   const at = (z: string, ms: number) => isoLocal(ms, true, z)
-  expect(at('Etc/GMT-1', Date.UTC(2026, 9, 25, 0, 30, 0, 250))).toBe('2026-10-25T02:30:00.250+02:00')
-  expect(at('Etc/GMT-1', Date.UTC(2026, 9, 25, 1, 30, 0, 0))).toBe('2026-10-25T02:30:00.000+01:00')
-  expect(at('Europe/UTC+2 zone', Date.UTC(2026, 9, 30, 10, 49, 12, 7))).toBe('2026-10-30T12:49:12.007+02:00')
-  expect(at('Etc/GMT-1', Date.UTC(2026, 9, 30, 10, 49, 12, 7))).toBe('2026-10-30T11:49:12.007+01:00')
+  expect(at('CET', Date.UTC(2026, 9, 25, 0, 30, 0, 250))).toBe('2026-10-25T02:30:00.250+02:00')
+  expect(at('CET', Date.UTC(2026, 9, 25, 1, 30, 0, 0))).toBe('2026-10-25T02:30:00.000+01:00')
+  expect(at('EET', Date.UTC(2026, 9, 30, 10, 49, 12, 7))).toBe('2026-10-30T12:49:12.007+02:00')
+  expect(at('CET', Date.UTC(2026, 9, 30, 10, 49, 12, 7))).toBe('2026-10-30T11:49:12.007+01:00')
   expect(at('America/New_York', Date.UTC(2026, 2, 8, 6, 59, 59, 0))).toBe('2026-03-08T01:59:59.000-05:00')
   expect(at('America/New_York', Date.UTC(2026, 2, 8, 7, 0, 0, 0))).toBe('2026-03-08T03:00:00.000-04:00')
   expect(at('Asia/Kolkata', Date.UTC(2026, 0, 1, 0, 0, 0, 999))).toBe('2026-01-01T05:30:00.999+05:30')
   expect(at('UTC', Date.UTC(2026, 11, 31, 23, 59, 59, 1))).toBe('2026-12-31T23:59:59.001+00:00')
-  expect(isoLocal(Date.UTC(2026, 9, 25, 0, 30, 0, 250), false, 'Etc/GMT-1')).toBe('2026-10-25T02:30:00+02:00')
+  expect(isoLocal(Date.UTC(2026, 9, 25, 0, 30, 0, 250), false, 'CET')).toBe('2026-10-25T02:30:00+02:00')
   // A zone the engine does not know falls back to the engine's own.
   const ms = Date.UTC(2026, 9, 30, 10, 0, 0, 0)
   expect(isoLocal(ms, true, 'Nowhere/Atlantis')).toBe(isoLocal(ms))
 })
 
 test('zoneOfPath: the IANA name where /etc/localtime leads, only a zone the engine knows', () => {
-  expect(zoneOfPath('/private/var/db/timezone/tz/2026a.1.0/zoneinfo/Etc/GMT-1')).toBe('Etc/GMT-1')
+  expect(zoneOfPath('/private/var/db/timezone/tz/2026a.1.0/zoneinfo/CET')).toBe('CET')
   expect(zoneOfPath('/usr/share/zoneinfo/America/Argentina/Buenos_Aires')).toBe('America/Argentina/Buenos_Aires')
   expect(zoneOfPath('/usr/share/zoneinfo/posix/Asia/Kolkata')).toBe('Asia/Kolkata')
   expect(zoneOfPath('/usr/share/zoneinfo/UTC')).toBe('UTC')
@@ -851,7 +850,7 @@ test('zoneOfPath: the IANA name where /etc/localtime leads, only a zone the engi
 })
 
 test('stamp: each stamp reads the system zone again; a zone switch under a running load shows at the next stamp', async () => {
-  const zones: (string | undefined)[] = ['Europe/UTC+2 zone', 'Etc/GMT-1', undefined]
+  const zones: (string | undefined)[] = ['EET', 'CET', undefined]
   const d = { zone: async () => zones.shift() } as unknown as Deps
   const ms = Date.UTC(2026, 9, 30, 11, 21, 6, 0)
   expect(await stamp(d, ms, false)).toBe('2026-10-30T13:21:06+02:00')

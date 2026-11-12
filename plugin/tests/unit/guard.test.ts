@@ -1,8 +1,8 @@
-// U tests through the kit: the "never a different model" guard (ratify R4 kept with a tested
-// guarantee, owner xxxxxxxx-18, 2026-10-23; SPEC-DELTAS MG-2…MG-4). The mod names no model,
+// U tests through the kit: the "never a different model" guard (kept with a tested
+// guarantee). The mod names no model,
 // effort, fallback model or agent in any compact or submit call (MG-2, a spy on every call that
 // reaches the bottom); it records the session's model (MG-4), the prefix read of the summarizer
-// request with its uncovered input (root ruling 2026-10-27 23:16) and the cache-read share of the
+// request with its uncovered input and the cache-read share of the
 // handoff turn's first request (MG-3), the runtime sign that a request went to another model (it
 // cannot read the session's cache).
 import { expect, test } from 'claude-code/testing'
@@ -84,7 +84,7 @@ test('AT-MG-02: idle path: the pre-idle turn submit names no model; a native aut
   keysClean(w)
 })
 
-// IDLE-COMPACT D2: with "idleCompaction": false the plugin's own idle compaction at 54 min takes
+// With "idleCompaction": false the plugin's own idle compaction at 54 min takes
 // the 49-min turn's place; it is a plugin compaction like the others, naming no model.
 test('AT-MG-02: idle path (the plugin\'s own idle compaction): one mod-self idle compaction at 54 min with instructions only; nothing submitted', { options: { idle_handoff_turn: 'true', precompact_turn: 'false' } }, async ($, on) => {
   const w = new World().install(on)
@@ -110,7 +110,7 @@ test('MG-3: readShare is cache reads over all input tokens, 3 places; null witho
   expect(readShare(undefined)).toBe(null)
 })
 
-// Root ruling 2026-10-27 23:16 (the L3 cold-cache forensics): a compaction's request leaves the
+// The L3 cold-cache forensics: a compaction's request leaves the
 // context after its one cache marker uncached, warm or cold, so the cold test reads the prefix only.
 test('prefixRead is cache reads over the cached prefix (reads + writes), 3 places; uncoveredInput the input outside it; null without usage or cache tokens', () => {
   // L3 (warm, 54 min): 0.045 of all input read, but 0.925 of the prefix.
@@ -149,7 +149,7 @@ test('AT-MG-03: a compaction with usage {read 380K, input 2K, creation 10K} → 
   expect(w.rowsOf('compaction_cache').length).toBe(3)
 })
 
-test('AT-MG-03 (root ruling 2026-10-27 23:16): the L3 idle compaction, warm, with 338K of tool results after the last cache marker: not cold; the uncovered input is logged apart', async ($, on) => {
+test('AT-MG-03: the L3 idle compaction, warm, with 338K of tool results after the last cache marker: not cold; the uncovered input is logged apart', async ($, on) => {
   const w = new World().install(on)
   await w.start($)
   w.tokens = 355000

@@ -1,7 +1,7 @@
-// The resume block (MOD-SPEC §3.4): built after a main compaction, delivered once by the first
+// The resume block: built after a main compaction, delivered once by the first
 // channel whose claim wins. The mod's channels are `prompt.context` (order 2) and the continue
-// text (order 3, cont.ts); classic SessionStart (order 1) is the helper's. One exception (owner
-// xxxxxxxx-37, "Full block again on return"): when a background result's turn took an idle
+// text (order 3, cont.ts); classic SessionStart (order 1) is the helper's. One exception (the
+// full block again on return): when a background result's turn took an idle
 // compaction's block, the first human-origin prompt gets the full block again, re-measured, with
 // `[idle-again]` noting the earlier use, beside that prompt (`prompt.submit` context: `againFor`).
 import type { Deps, IdleLane, LoadState, Outcome, PendingResume } from './deps'
@@ -16,9 +16,9 @@ import type { Lane, LaneFacts, LaneResult } from './lane'
 import { LANES, LEGACY_STATUS, asLaneFacts, endedRows, laneBasis, laneNote, laneOf, notifiedTasks, runningUnits, showsDigest } from './lane'
 
 /**
- * MOD-SPEC §3.4: soft total 6,500 chars (compaction-rem-6, T-TEXT E3: a 3,000-char protocol beside
- * a 3,000-byte measured block); soft since the owner overturned ratify xxxxxxxx#R3 (2026-10-23,
- * SPEC-DELTAS RP-2/RP-4): a block over it logs `resume_block_over_soft`. The hard cap is 9,500,
+ * Soft total 6,500 chars (a 3,000-char protocol beside
+ * a 3,000-byte measured block); only a soft target, not a hard limit: a block over it
+ * logs `resume_block_over_soft`. The hard cap is 9,500,
  * under the 10,000-char SessionStart cutoff: over it whole re-measure lines are cut first.
  */
 export const BLOCK_MAX = 9500
@@ -42,14 +42,14 @@ export type BlockArgs = {
   handoff?: RaceBlock
   /** `[prod-allow]` instead of `[prod-forbid]` (see `prodAllowed`). */
   prodAllow?: boolean
-  /** An idle compaction: `[idle]` (IC-1 D3), never with `[midturn]`. */
+  /** An idle compaction: `[idle]`, never with `[midturn]`. */
   idle?: boolean
-  /** Owner xxxxxxxx-25 ("Stop in halt"): halt mode is on, so an idle block gets `[idle-halt]` instead of `[idle]`. */
+  /** Stop in halt: halt mode is on, so an idle block gets `[idle-halt]` instead of `[idle]`. */
   halt?: boolean
-  /** Owner xxxxxxxx-37: a background result's turn took this idle block at this time; `[idle-again]` says so. */
+  /** A background result's turn took this idle block at this time; `[idle-again]` says so. */
   again?: number
   /**
-   * Away digest phase 1 (owner 2026-10-27 12:5x): an idle block's lane facts from its summary. At
+   * Away digest phase 1: an idle block's lane facts from its summary. At
    * every build the lane is read again with the agents running then (lane.ts): a finished or
    * blocked lane gets `[idle-done]` instead of `[idle]`.
    */
@@ -70,13 +70,13 @@ export type BlockArgs = {
    */
   step1?: string
   /**
-   * D-22 (root 2026-10-31): the newest main permission_mode the mod saw when the compaction built
+   * The newest main permission_mode the mod saw when the compaction built
    * this block was `auto`. A build with no mode seen in its load (a block restored after
    * `claude --resume`, before the first turn) reads this; else the load's own (`autoModeOf`).
    */
   autoMode?: boolean
   /**
-   * 0.1.4 R-3/R-4: the reply's reader is a script (`scriptReader` when the block was built), so the
+   * 0.1.4: the reply's reader is a script (`scriptReader` when the block was built), so the
    * block has no `[resumed]` line. Recorded at build: a delivery whose reader differs builds the block
    * again (`freshBlock`). Absent (an older record): `scriptReader` decides at the build.
    */
@@ -90,7 +90,7 @@ export const RESUMED_FALLBACK = 'Resumed after compaction'
 /**
  * Step 1's tail after the step (and what follows it): `— for "<the user's latest request>"`, as
  * lane.ts cuts it, or its free form `— for the …` (review round 2: 5 of 89 real copies), or the
- * template's other form, `— proposed…` / `| proposed` (real copy xxxxxxxx c1).
+ * template's other form, `— proposed…` / `| proposed` (seen in a real copy).
  */
 const STEP1_TAIL = /\s+(?:—\s+(?:for\s+(?:"|the\s)|proposed\b).*|\|\s*proposed\s*)$/
 const STEP1_LINE = /^\s*Step 1:[ \t]*(.*)$/
@@ -115,8 +115,8 @@ export function clipStep1(text: string): string {
 }
 
 /**
- * 0.1.3 resume-text A (owner 2026-10-30 07:52: "it's not clear if the compaction went well, as
- * there are literally no messages after compaction"; usage review: median 5 tool calls before the
+ * 0.1.3 (with no message after a compaction it was not clear whether the compaction went
+ * well; usage review: median 5 tool calls before the
  * first visible line): the summary's Step 1, the first `Step 1:` line of its `## Resume here`
  * section, without its tail (STEP1_TAIL), on one line within STEP1_MAX (`clipStep1`). Undefined
  * when there is no Step 1 text, or no such section: a summary not in handoff form may quote a
@@ -161,9 +161,9 @@ export function personWrote(a: BlockArgs): BlockArgs {
 }
 
 /**
- * 0.1.4 R-3: Claude Code's hosts where a person reads the reply though no person is at a prompt
+ * 0.1.4: Claude Code's hosts where a person reads the reply though no person is at a prompt
  * (session.start `isInteractive` false): its desktop app and its VS Code extension
- * (CLAUDE_CODE_ENTRYPOINT, `Deps.entrypoint`). Review F-4: also the other entrypoints 2.1.317 counts
+ * (CLAUDE_CODE_ENTRYPOINT, `Deps.entrypoint`). Also the other entrypoints 2.1.317 counts
  * as a person's surface (its own set beside `isInteractive`): the desktop app's third-party form,
  * Cowork's local agent, the remote desktop and mobile apps, an SSH remote and the Slack app; with
  * `local_agent` and `claude_in_slack`, the underscore forms it maps to the same Cowork and Slack
@@ -173,10 +173,10 @@ const PERSON_HOSTS: readonly string[] = ['claude-desktop', 'claude-vscode', 'cla
   'local_agent', 'remote_desktop', 'remote_mobile', 'ssh-remote', 'claude-in-slack', 'claude_in_slack']
 
 /**
- * 0.1.4 R-3 (the line's audience decides; the 0.1.3 follow-up's escalation: Claude Code reports
+ * 0.1.4 (the line's audience decides; the 0.1.3 follow-up's escalation: Claude Code reports
  * `isInteractive` false for the desktop app and the IDE extensions too, so their users lost the
  * line): the reply goes to a script, so the block has no `[resumed]` line, only in a headless load
- * (`state.headless`) with no surface (`$.session.surfaces()` empty: probe 2026-11-03 on 2.1.317, 7
+ * (`state.headless`) with no surface (`$.session.surfaces()` empty: a probe on 2.1.317, 7
  * `-p` loads gave `[]`, a terminal load `["terminal"]`) whose entrypoint, when readable, is not one
  * of PERSON_HOSTS. A surface (desktop, mobile, an IDE) or such an entrypoint keeps the line.
  * Nudges and plugin turns still follow `state.headless` alone.
@@ -207,7 +207,7 @@ export function keepGsdLines(fresh: string, stored: string | undefined): string 
   return kept && kept.length > 0 ? fresh.replace(GSD_TIMEOUT, () => kept.join('\n')) : fresh
 }
 
-/** IC-1 D3: a block delivered later than this after it was built is built again. */
+/** A block delivered later than this after it was built is built again. */
 export const REMEASURE_AFTER_MS = 600000
 /** The re-measure's budget at delivery (one helper call). */
 export const REMEASURE_MS = 3000
@@ -215,17 +215,17 @@ export const REMEASURE_MS = 3000
 export const REMEASURE_HELPER_MS = REMEASURE_MS - 300
 
 /**
- * MOD-SPEC §3.4 step 4 (S-SETTINGS B): `[prod-allow]` only when the mod's own option and the
+ * Step 4: `[prod-allow]` only when the mod's own option and the
  * checkpoint of this nonce (`consent.unattended_prod_reads`, the helper's settings-file value)
  * both say `allow`; the stricter view wins, so a missing checkpoint keeps `[prod-forbid]`.
  */
 /**
- * D-22 (root 2026-10-31, 0.1.2 classifier probe): in auto permission mode the classifier blocks a
+ * 0.1.2 classifier probe: in auto permission mode the classifier blocks a
  * gated outward action that a carried approval covers, as with none, and passes the user's fresh
- * yes; so the block keeps `[auto-mode]`, which asks first. 0.1.4 R-1 (probe 2026-11-03 on 2.1.317):
+ * yes; so the block keeps `[auto-mode]`, which asks first. 0.1.4 (a probe on 2.1.317):
  * only destructive git and external writes are still blocked, a plain push passes, so the line
  * names those two. The mode is the newest a main hook input carried in this load (Stop,
- * UserPromptSubmit, PermissionRequest: restart.ts `noteMode`, D10); with none seen yet, the one
+ * UserPromptSubmit, PermissionRequest: restart.ts `noteMode`); with none seen yet, the one
  * the building compaction recorded. No new probe.
  */
 export function autoModeOf(d: Pick<Deps, 'state'>, a: Pick<BlockArgs, 'autoMode'>): boolean {
@@ -238,7 +238,7 @@ export function prodAllowed(option: string, consent: string | undefined): boolea
 }
 
 /**
- * `@store@` for a text the mod assembles (PKG-RUNTIME A.1, A.2): the launcher word, or, for a
+ * `@store@` for a text the mod assembles: the launcher word, or, for a
  * root no quoting can carry, the `store_path_unquotable` escalation and a `drop` of the lines
  * that hold it (no line names a command it cannot spell).
  */
@@ -258,14 +258,14 @@ export async function buildBlock(d: Deps, sid: string, a: BlockArgs, fresh?: str
  * `buildBlock`, with the measure it was built from (undefined when the measure failed) and when
  * that measure was taken. `fresh` null: no measure is taken (a rebuild whose stored measure is
  * missing renders without one). `at`: when a stored measure was taken, so a rebuild that takes no
- * new one keeps its `@measured_at@` (IC-1 D3: the stamp shows the facts' age); else now.
+ * new one keeps its `@measured_at@` (the stamp shows the facts' age); else now.
  * `notified`: the tasks the delivering prompt reported ended (`PendingResume.notified`), whose
  * in-flight rows a block with no idle episode shows ended (an idle block takes its episode's).
  */
 export async function buildBlockWith(
   d: Deps, sid: string, a: BlockArgs, fresh?: string | null, at?: number, notified?: ReadonlySet<string>,
 ): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; lane?: LaneResult; running?: number }> {
-  // AP-5: the saved copy goes with the re-measure, so the summary's approvals are checked.
+  // The saved copy goes with the re-measure, so the summary's approvals are checked.
   const remeasure = fresh === null ? undefined : fresh ?? (await measure(d, sid, a.nonce, undefined, a.savedCopy ?? undefined))
   const driver = remeasure !== undefined && DRIVER_LINE.test(remeasure)
   const idle = a.idle === true && !a.midturn
@@ -273,7 +273,7 @@ export async function buildBlockWith(
   // the units running now: agents, the measure's running rows (none for a block restored after
   // `claude --resume`: they ran in the process that ended), less what this episode's
   // notifications reported ended, with the work the model started since its block went out, and
-  // with whether a job's result came with this turn's prompt (owner 2026-10-28 digest rules (a)).
+  // with whether a job's result came with this turn's prompt (digest rule (a)).
   const ep = episodeOf(d.state, sid, a.nonce)
   const running = idle && a.halt !== true ? await runningUnits(d, ep?.restored === true ? undefined : remeasure, ep?.ended ?? new Set()) : undefined
   const lane = running !== undefined
@@ -282,9 +282,9 @@ export async function buildBlockWith(
   const tags: Tag[] = []
   if (a.midturn) tags.push('midturn')
   if (a.nonok) tags.push('nonok')
-  // Owner xxxxxxxx-25: in halt mode the idle line stops after the background result; a finished
-  // or blocked lane shows the digest instead of continuing (owner 2026-10-27 12:5x). Under
-  // `idle_digest: off` (owner rule (c), 2026-10-28) the same lines ask for one line on the lane
+  // In halt mode the idle line stops after the background result; a finished
+  // or blocked lane shows the digest instead of continuing. Under
+  // `idle_digest: off` the same lines ask for one line on the lane
   // state in place of the digest: `[idle-off]` and `[idle-done-off]`.
   const off = d.cfg.idle_digest === 'off'
   if (idle) {
@@ -293,12 +293,12 @@ export async function buildBlockWith(
       : off ? 'idle-off' : 'idle')
   }
   if (idle && a.again !== undefined) tags.push('idle-again')
-  // Exactly one of the two step-4 lines (BLD-04 exclusive group).
+  // Exactly one of the two step-4 lines (an exclusive group).
   tags.push(a.prodAllow === true ? 'prod-allow' : 'prod-forbid')
-  // D-22: in auto mode a carried approval does not pass the classifier for destructive git or an
-  // external write (0.1.4 R-1); ask first.
+  // In auto mode a carried approval does not pass the classifier for destructive git or an
+  // external write (0.1.4); ask first.
   if (autoModeOf(d, a)) tags.push('auto-mode')
-  // Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver,
+  // GSD re-entry per session: the re-enter line only beside a measured driver,
   // never in a halted idle block ([idle-halt] stops and waits for the user; EXCLUSIVE in tools/assemble).
   // A measured driver keeps the lane working (lane.ts), so it never meets [idle-done] (or its off
   // variant) either.
@@ -311,8 +311,8 @@ export async function buildBlockWith(
   if (lane !== undefined) {
     runtime.lane = lane.lane
     runtime.lane_why = lane.why
-    // The digest's Basis line, rendered by code now (review of fix round 1, M7): [idle-done]'s, and
-    // the step-5 digest's of [idle] (owner 2026-10-27 22:32).
+    // The digest's Basis line, rendered by code now (review of fix round 1): [idle-done]'s, and
+    // the step-5 digest's of [idle].
     runtime.lane_basis = laneBasis(a.lane, running ?? 0, remeasure)
   }
   const h = a.handoff
@@ -336,7 +336,7 @@ export async function buildBlockWith(
   // 0.1.3 resume-text A: one code-rendered first line, unless the block already fixes the first
   // line (the handoff ack; a raced handoff's receipt when its draft can be finished) or an earlier
   // turn printed it ([idle-again]: a background result's turn took this block first). Not when a
-  // script reads the reply (0.1.4 R-3, `scriptReader`: a headless load with no surface, `claude -p`
+  // script reads the reply (0.1.4, `scriptReader`: a headless load with no surface, `claude -p`
   // or the Agent SDK; the desktop app and IDE extensions keep it).
   const partialFirst = h !== undefined && !('published' in h) && runtime.draft_state === 'present'
   const script = a.script ?? (await scriptReader(d))
@@ -373,7 +373,7 @@ export function blockName(name: string): string {
 }
 
 /**
- * 0.1.5 D-1 (AD1 on 2.1.319): a `prompt.context` call that is not the main session's. Claude Code
+ * 0.1.5 (seen on 2.1.319): a `prompt.context` call that is not the main session's. Claude Code
  * asks it for other requests too, with nothing in the call to say whose (its `[AgentSummary]`
  * fork of a running background agent, about 140 s before that agent's result turn), and the
  * answer is the main conversation's cached context. The main session's call comes with its own
@@ -396,7 +396,7 @@ function servedOrigin(s: LoadState): string | undefined {
 }
 
 /**
- * 0.1.5 D-1, the fallback: a main turn whose prompt did not carry a block another loop's call
+ * 0.1.5, the fallback: a main turn whose prompt did not carry a block another loop's call
  * passed over (our own submit; from `prompt.submit` and main `turn.start`) has the cached
  * context, which lacks the block, dropped, so a `prompt.context` call asked again delivers it.
  */
@@ -411,7 +411,7 @@ export function contextPassedOn(d: Deps): void {
 export type PassedSent = { text: string; pend: PendingResume; restored: boolean; sent: () => Promise<void> }
 
 /**
- * 0.1.5 D-1 (review: `prompt.context` is asked once per conversation, and a cached answer an
+ * 0.1.5 (review: `prompt.context` is asked once per conversation, and a cached answer an
  * invalidate drops may drop only the turn after): the block another loop's call passed over goes
  * beside the next main prompt not of ours (`prompt.submit` context, as `againFor`), after
  * `laneRecheck` counted that prompt's results, delivered as `prompt.context` would deliver it to
@@ -462,7 +462,7 @@ export async function contextBlock(d: Deps, sid: string): Promise<string | undef
   // `prompt.submit`): `prompt.context` is asked once per conversation, so a note here would not
   // reach them.
   if (!pend || pend.sid !== sid || pend.resumePref === 'none') return undefined
-  // D-1: not a delivery; its answer, which Claude Code caches for the main conversation too, goes
+  // Not a delivery; its answer, which Claude Code caches for the main conversation too, goes
   // without the block, and the next main prompt carries it (`passedBlockFor`).
   if (otherLoopContext(s)) {
     s.ctxPassed = { restored: restored || s.ctxPassed?.restored === true }
@@ -505,7 +505,7 @@ async function takeBlock(
     sent: async () => {
       if (pend.args.idle === true) await laneShown(d, pend, out, human)
       await logOutcome(d, pend.sid, pend.nonce, pend.outcome, 'delivered:' + channel)
-      // Owner xxxxxxxx-37: a background result (not a person) took an idle compaction's block; the
+      // A background result (not a person) took an idle compaction's block; the
       // first human-origin prompt gets it again, beside that prompt (`againFor`).
       if (pend.args.idle === true && !human) {
         s.idleAgain = { sid, pend: { ...pend, args }, usedAt: await d.now(), remeasure: out.remeasure, measuredAt: out.measuredAt }
@@ -564,7 +564,7 @@ async function laneShown(
   }
   l.shown = out.lane?.lane ?? 'working'
   if (showsDigest(l.shown)) l.digested = true
-  // Owner 2026-10-28 digest rules (b): working only because this turn's result unblocks a step
+  // Digest rule (b): working only because this turn's result unblocks a step
   // held on its job: this turn's end reads the lane again.
   if (out.lane?.byResult === true) l.unblocked = true
   // The measure this turn's block went out with (re-measured past 600 s): its rows and its driver.
@@ -574,7 +574,7 @@ async function laneShown(
 }
 
 /**
- * Away digest phase 1, the re-check channel (AWAY-DIGEST §2.1, owner 2026-10-27 12:5x), from
+ * Away digest phase 1, the re-check channel, from
  * `prompt.submit` before the prompt enters, for every prompt not of this plugin's: the lane note
  * goes beside the prompt (its `context`), the channel Claude Code names for text that changes from
  * turn to turn. A person's prompt closes the episode once a turn got its block (one still pending
@@ -587,7 +587,7 @@ async function laneShown(
  * (`laneBasis`). A prompt that then does not enter (dropped, or its hook chain threw) hands the
  * note back with `laneNoteLost`, so the next turn of the episode gets it.
  * A notification that reports a task ended is a job's result: in its turn a step held on that job
- * can run, so the lane reads working (owner 2026-10-28 digest rules (a)), and that turn's end
+ * can run, so the lane reads working (digest rule (a)), and that turn's end
  * reads it again (rule (b), digest.ts `laneTurnEnd`). Once any turn of the episode was told a
  * finished or blocked lane, a note asks for one line on the new state, never a second digest.
  */
@@ -640,7 +640,7 @@ export function laneNoteLost(s: LoadState, n: LaneNoteSent): void {
 
 /**
  * A main tool call that started work (lane.ts `startsWork`) after a turn got the episode's block:
- * the summary's Status no longer describes the lane (owner xxxxxxxx-06, "cleared/superseded"), so
+ * the summary's Status no longer describes the lane (cleared or superseded), so
  * the rest of the episode reads it as working and asks for no stop.
  */
 export function laneWorkStarted(s: LoadState): void {
@@ -665,7 +665,7 @@ export function pendingNotified(s: LoadState, kind: string, text: string): void 
   for (const id of notifiedTasks(text)) (p.notified ??= new Set()).add(id)
 }
 
-/** Owner xxxxxxxx-25 ("Stop in halt"): an idle block's halt variant follows halt mode at delivery. */
+/** Stop in halt: an idle block's halt variant follows halt mode at delivery. */
 function haltNow(d: Deps, a: BlockArgs): BlockArgs {
   return a.idle === true ? { ...a, halt: d.state.halt.active } : a
 }
@@ -678,7 +678,7 @@ export type AgainSent = {
 }
 
 /**
- * Owner xxxxxxxx-37 ("Full block again on return", replaces the ID-3 `[idle-return]` line): after
+ * The full block again on return (replaces the old `[idle-return]` line): after
  * a turn not of a person's took an idle compaction's resume block, the first prompt of a person's
  * gets the full block again, always re-measured (3 s budget; when that fails, with the measure the
  * earlier delivery had and its stamp), with `[idle-again]` naming when it went out first. It goes
@@ -696,8 +696,8 @@ export async function againFor(d: Deps, kind: string, startsTurn: boolean): Prom
   s.idleAgain = undefined
   try {
     if ((await d.sessionId()) !== r.sid) return undefined
-    // Owner xxxxxxxx-25: the halt variant follows halt mode when the block is read. A person's
-    // prompt that starts its own turn clears halt at that turn's start (IC-1 D6), after this hook;
+    // The halt variant follows halt mode when the block is read. A person's
+    // prompt that starts its own turn clears halt at that turn's start, after this hook;
     // one typed into a running turn does not.
     const args = startsTurn ? { ...r.pend.args, ...(r.pend.args.idle === true ? { halt: false } : {}) } : haltNow(d, r.pend.args)
     // A person's prompt: no timeout mark (review round 2).
@@ -722,12 +722,12 @@ export function againLost(s: LoadState, a: AgainSent): void {
 }
 
 /**
- * IC-1 D3 delivery rule: a block built more than 600 s ago (an idle block is read hours later)
+ * The delivery rule: a block built more than 600 s ago (an idle block is read hours later)
  * is built again with a fresh `measure --compact` (3 s budget): `resume_remeasured`; on a
  * timeout or failure the stored block goes out: `resume_remeasure_failed`. Its
- * `@measured_at@` stamp shows the age either way. `force` re-measures at any age (owner
- * xxxxxxxx-37). When `args` differ from what the block was built with (owner xxxxxxxx-25: halt
- * came or went; xxxxxxxx-37: the `[idle-again]` note), it is built again in any case, with the
+ * `@measured_at@` stamp shows the age either way. `force` re-measures at any age (the full
+ * block again on return). When `args` differ from what the block was built with (halt
+ * came or went; the `[idle-again]` note), it is built again in any case, with the
  * stored measure and its own stamp when no fresh one is taken or the fresh one fails.
  */
 async function freshBlock(
@@ -735,7 +735,7 @@ async function freshBlock(
 ): Promise<{ block: string; remeasure: string | undefined; measuredAt: number; remeasured: boolean; lane?: LaneResult; running?: number }> {
   const t0 = await d.now()
   const ageS = Math.round((t0 - pend.builtAt) / 1000)
-  // 0.1.4 R-4: the reader as it is now (a load found headless after the build, a surface that
+  // 0.1.4: the reader as it is now (a load found headless after the build, a surface that
   // attached or left); a block built for the other reader is built again.
   const args: BlockArgs = { ...given, script: await scriptReader(d) }
   // Away digest phase 1: an idle block is built again at delivery (from its stored measure, no
@@ -803,7 +803,7 @@ export async function claimedWhere(d: Deps, sid: string, nonce: string): Promise
 }
 
 /**
- * F2-3: the mod's part of the rollup, one append-only row per compaction, written once its
+ * The mod's part of the rollup, one append-only row per compaction, written once its
  * resume block has settled (subagent compactions at once, `none-subagent`). Readers join it to
  * the rollup row by nonce; nothing is rewritten.
  */
@@ -814,7 +814,7 @@ export async function logOutcome(d: Deps, sid: string, nonce: string, o: Outcome
 }
 
 /**
- * Owner 2026-10-27 ("Fix in 0.1.1", VERSION-REFRESH tier 1): the pending main block also lives on
+ * Since 0.1.1 the pending main block also lives on
  * disk, so a session that exits or restarts between a compaction and its next turn gets it after
  * `claude --resume` of the same session id. The after-step writes `<watch>/<sid>/resume-pending.json`
  * (the helper's vetted watch only, as the summary stash; kept with the session's folder): the
@@ -930,8 +930,8 @@ function isOutcome(o: unknown): o is Outcome {
  * another session's, or not of the shape `pendingRecord` writes. Its age counts from `built_at`.
  * The block is built again here from the stored facts (no new measure; the stored `@measured_at@`),
  * so a restart that picked up a plugin update never gets the old version's text or `<store>`
- * path, and `[prod-allow]` stays only when this load's option still allows it (MOD-SPEC §3.4
- * step 4: the stricter view wins).
+ * path, and `[prod-allow]` stays only when this load's option still allows it (step 4: the
+ * stricter view wins).
  */
 export async function restorePending(d: Deps, sid: string): Promise<PendingResume | undefined> {
   const path = await recordPath(d, sid, ARMED_FILE)
@@ -954,7 +954,7 @@ export async function restorePending(d: Deps, sid: string): Promise<PendingResum
   const s1 = typeof a.step1 === 'string' ? clipStep1(a.step1) : ''
   if (s1 !== '') a.step1 = s1
   else delete a.step1
-  // 0.1.4 R-3: this load's reader, not the one of the process that wrote the record.
+  // 0.1.4: this load's reader, not the one of the process that wrote the record.
   a.script = await scriptReader(d)
   const at = typeof measuredAt === 'number' ? measuredAt : builtAt
   const built = await buildBlockWith(d, sid, a, typeof remeasure === 'string' ? remeasure : null, at)

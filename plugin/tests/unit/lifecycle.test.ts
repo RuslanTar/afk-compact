@@ -1,5 +1,5 @@
 // U tests through the kit: session lifecycle, liveness, canaries, resume delivery, the seat
-// simulation and the fs trace (MOD-SPEC §3.3, §3.4, §5.6, §7, §10).
+// simulation and the fs trace.
 import { shippedNotice } from '../../hooks/lib/notice'
 import type { On, Register } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
@@ -54,7 +54,7 @@ test('BG-VER-01: this session ran 2.1.310 before (moved, resumed or respawned) a
   expect(w.files.get(`${WATCH}/version.json`)).toBeUndefined()
 })
 
-test('BG-VER-02: another session already ran 2.1.311 and this machine ran 2.1.310 too: a new session on 2.1.310 logs no version_change, no toast, smokeDue stays 2.1.311 (probe P5)', async ($, on) => {
+test('BG-VER-02: another session already ran 2.1.311 and this machine ran 2.1.310 too: a new session on 2.1.310 logs no version_change, no toast, smokeDue stays 2.1.311 (as a probe showed)', async ($, on) => {
   const w = new World({ version: { version: '2.1.310' } })
   w.install(on, { lastVersion: '2.1.311', smokeDue: '2.1.311', [SEEN_KEY]: ['2.1.310', '2.1.311'], [BY_SID_KEY]: { [SID_B]: '2.1.311' } })
   await w.start($)
@@ -95,7 +95,7 @@ test('AT-M3-08 (reload): a load that finds lastVersion equal adds nothing', asyn
   w.install(on, { lastVersion: '2.1.305', smokeDue: '2.1.305' })
   await w.start($)
   expect(w.rowsOf('version_change').length).toBe(0)
-  // The first-run notice (W-BETA A) is not a version toast.
+  // The first-run notice is not a version toast.
   expect(w.toasts.filter(t => t !== shippedNotice(w.name).text).length).toBe(0)
 })
 
@@ -160,7 +160,7 @@ test('prompt.context: TAKEN (SessionStart won) adds no block', async ($, on) => 
   expect(ctx.blocks.length).toBe(0)
 })
 
-// Owner 2026-10-26 (GSD re-entry per session): the resume block keeps its [driver] line only
+// GSD re-entry per session: the resume block keeps its [driver] line only
 // beside the helper's measured `Active driver:` line (lib/gsd.pm, this session's own transcript).
 const DRIVER_RT = { session_id: SID_A, saved_copy: 'x', measured_at: 'x', remeasure: 'x', store: 'x' }
 const driverText = (name: string): string | undefined => {
@@ -205,7 +205,7 @@ test('AT-GR-05 (mod): a re-measure whose loop paused itself (a Paused driver lin
   expect(block).not.toContain(line)
 })
 
-// Root rulings R2/R4 (2026-10-27): an ambiguous driver gets the weaker `Was driving:` hint, which
+// An ambiguous driver gets the weaker `Was driving:` hint, which
 // is never run: no [driver] line beside it.
 test('AT-GR-05 (mod): a re-measure with a Was driving hint (no Active driver line) has no [driver] line', async ($, on) => {
   const w = new World().install(on)
@@ -380,7 +380,7 @@ test('unsafe roots: the mod writes under the watch folder ident gives, not the c
 /** An ident answer that names no watch folder: the mod writes under the one its own settings give. */
 const identNoWatch = () => ({ exitCode: 0, stdout: JSON.stringify({ pid: 43210, pid_lstart: 'Tue Oct 21 14:00:00 2026', execpath_version: null }) + '\n' })
 
-test('STATE-ROOT (SR-5): ident names no watch: the mod writes .watch under an absolute $XDG_STATE_HOME, as the helper', async ($, on) => {
+test('SR-5: ident names no watch: the mod writes .watch under an absolute $XDG_STATE_HOME, as the helper', async ($, on) => {
   const w = new World().install(on)
   w.env['XDG_STATE_HOME'] = '/xs/u/'
   w.replies['ident'] = identNoWatch
@@ -390,14 +390,14 @@ test('STATE-ROOT (SR-5): ident names no watch: the mod writes .watch under an ab
   await w.turnStart($)
   await raiseCompact($, { trigger: 'auto' })
   await w.settle()
-  // the raw summary is stashed only under a watch folder ident gives (PRIV-04); here, the files the mod writes itself
+  // the raw summary is stashed only under a watch folder ident gives; here, the files the mod writes itself
   expect(w.writes.length).toBeGreaterThan(0)
   expect(w.writes.filter(p => !p.startsWith(xwatch + '/'))).toEqual([])
   expect(w.files.has(`${xwatch}/${SID_A}/mod-alive.json`)).toBe(true)
   expect(w.files.has(`${xwatch}/version.json`)).toBe(true)
 })
 
-test('STATE-ROOT (SR-5): ident names no watch, $XDG_STATE_HOME relative: ignored, the mod writes under ~/.local/state', async ($, on) => {
+test('SR-5: ident names no watch, $XDG_STATE_HOME relative: ignored, the mod writes under ~/.local/state', async ($, on) => {
   const w = new World().install(on)
   w.env['XDG_STATE_HOME'] = 'rel/state'
   w.replies['ident'] = identNoWatch

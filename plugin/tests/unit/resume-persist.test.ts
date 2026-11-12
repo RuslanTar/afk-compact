@@ -1,5 +1,5 @@
-// U tests through the kit: the pending resume block across a restart (owner 2026-10-27 "Fix in
-// 0.1.1", VERSION-REFRESH tier 1 gap). The after-step persists the block as
+// U tests through the kit: the pending resume block across a restart (since 0.1.1). The
+// after-step persists the block as
 // `<watch>/<sid>/resume-pending.json`; a session end other than `/clear` keeps it; the classic
 // SessionStart(resume) renames it to `resume-armed.json` (helper case AT-RP-04); the first
 // prompt.context of the same session id in a load delivers it once, built again by that load and
@@ -309,18 +309,18 @@ for (const ageS of [60, 700]) {
   })
 }
 
-/** Raise a classic hook event the way the engine does (the mod's observe-only D10 hooks). */
+/** Raise a classic hook event the way the engine does (the mod's observe-only hooks). */
 async function classic($: unknown, ev: 'Stop' | 'UserPromptSubmit', e: Record<string, unknown>): Promise<void> {
   await ($ as { classic: Record<string, (e: unknown) => Promise<unknown>> }).classic[ev]?.(e)
 }
 
 const AUTO_LINE = "Auto mode: its classifier blocks a force-push, history rewrite, branch or tag delete or external write that step 4's approval covers"
 
-// D-22 (root 2026-10-31, the 0.1.2 classifier probe): in auto permission mode a carried approval
+// The 0.1.2 classifier probe: in auto permission mode a carried approval
 // does not pass the classifier, so the block keeps [auto-mode] (ask first); the mode is the newest
 // main hook input's (restart.ts noteMode), and the record keeps it for a block restored later.
 for (const mode of ['auto', 'default'] as const) {
-  test(`D-22: a compaction after a main prompt in ${mode} mode ${mode === 'auto' ? 'keeps' : 'has no'} [auto-mode] (block and record)`, async ($, on) => {
+  test(`auto mode: a compaction after a main prompt in ${mode} mode ${mode === 'auto' ? 'keeps' : 'has no'} [auto-mode] (block and record)`, async ($, on) => {
     const w = new World().install(on)
     await w.start($)
     await classic($, 'UserPromptSubmit', { prompt: 'x', permission_mode: mode })
@@ -337,7 +337,7 @@ for (const mode of ['auto', 'default'] as const) {
 }
 
 for (const seen of [undefined, 'acceptEdits'] as const) {
-  test(`D-22: a restored block recorded in auto mode ${seen === undefined ? 'keeps [auto-mode] while this load has seen no main mode' : 'drops [auto-mode] once this load saw ' + seen}`, async ($, on) => {
+  test(`auto mode: a restored block recorded in auto mode ${seen === undefined ? 'keeps [auto-mode] while this load has seen no main mode' : 'drops [auto-mode] once this load saw ' + seen}`, async ($, on) => {
     const w = new World()
     w.files.set(ARMED, seededWith(60, { autoMode: true }))
     w.install(on)

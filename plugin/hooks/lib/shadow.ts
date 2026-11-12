@@ -1,4 +1,4 @@
-// The local shadow trial (TRIAL-DUAL-HANDOFF, owner 2026-10-26 21:2x "dual handoffs", P-DH-MOD):
+// The local shadow trial (dual handoffs):
 // at each real moment (M1 handoff, M2 plugin handoff turn, M3 compaction with no handoff turn
 // before it) two tool-less forks of the session start together from the same point: the `old`
 // arm answers an older handoff skill through the plugin's adapter, the `native` arm answers
@@ -34,7 +34,7 @@ export const TURN_MEASURE_MS = 8000
 export const SAVE_MS = 20000
 /** The last reply and a typed prompt are kept to this many characters (their end). */
 export const TAIL_MAX = 16000
-/** Claude Code's separator before a `/compact` text (TRIAL-DUAL-HANDOFF §4.2b `pJ`): the only engine string here. */
+/** Claude Code's separator before a `/compact` text (`pJ`): the only engine string here. */
 export const COMPACT_TEXT_SEP = '\n\nAdditional Instructions:\n'
 
 export type MomentKind =
@@ -80,7 +80,7 @@ export type FireSpec = {
   turnId?: string
   /** A `/compact` text of the user's: added to the native prompt as the engine adds it. */
   compactText?: string
-  /** A prompt typed now (M1 owner): part of the supplied tail. */
+  /** A prompt typed now (M1, typed by the person): part of the supplied tail. */
   typed?: string
 }
 
@@ -126,7 +126,7 @@ type ShadowLoad = {
   present: boolean
   kept: Kept | undefined
   lastAnswer: string | undefined
-  /** M1: the main turn (`turnSeq`) whose forks fired; the owner-typed one marks the turn about to start. */
+  /** M1: the main turn (`turnSeq`) whose forks fired; the person-typed one marks the turn about to start. */
   firedTurnSeq: number
   firedNonces: Set<string>
   /** When the last main step (one model request) started, on the session's clock: the cold rule's input. */
@@ -162,7 +162,7 @@ export async function shadowSettled(state: Deps['state']): Promise<void> {
   while (sh && sh.inflight.size > 0) await Promise.all([...sh.inflight])
 }
 
-/** The trial config's fixed path for this plugin name (§4.3), or undefined without a home. */
+/** The trial config's fixed path for this plugin name, or undefined without a home. */
 export function trialPath(home: string | undefined, name: string): string | undefined {
   const h = home?.replace(/\/+$/, '')
   return h ? `${h}/.cache/${name}-trial/trial.json` : undefined
@@ -224,7 +224,7 @@ async function measure(d: Deps, sid: string, timeoutMs: number): Promise<Measure
 
 /**
  * After a main turn end (started, not awaited): whether the trial config exists, and while it
- * does, one off-hook measure kept for the M1 and M3 fire points (§4.1 "facts first").
+ * does, one off-hook measure kept for the M1 and M3 fire points.
  */
 export function shadowTurnEnd(d: Deps, sid: string, answer: string): void {
   const sh = load(d)
@@ -298,7 +298,7 @@ async function prepare(d: Deps, sid: string, spec: FireSpec, m: Measure | undefi
   const limits = u?.rateLimits ?? []
   if (limits.length === 0) return { ...base, skip: 'no-limits' }
   if (limits.some(l => !(l.percentUsed < NEAR_LIMIT_PCT))) return { ...base, skip: 'near-limit', windows: limitWindows(limits) }
-  // The cold rule (§4.5) on the last main request, mid-turn too: a step's start, else the turn end.
+  // The cold rule on the last main request, mid-turn too: a step's start, else the turn end.
   const last = Math.max(d.state.lastTurnEndAt ?? -Infinity, sh.lastStepAt ?? -Infinity)
   if (!Number.isFinite(last) || now - last > COLD_MS) return { ...base, skip: 'cold' }
   const tail = tailText(sh, spec)
@@ -325,7 +325,7 @@ async function position(d: Deps, sid: string): Promise<number> {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0
 }
 
-/** Maps one `$.model.fork` answer (or its rejection) to an arm status (§4.6, §4.7). */
+/** Maps one `$.model.fork` answer (or its rejection) to an arm status. */
 export function armOf(r: unknown, startedAt: number, endedAt: number): ArmResult {
   const x = r as { isAnswered?: unknown; text?: unknown; reason?: unknown; usage?: unknown; status?: unknown; error?: unknown } | null
   if (!x || typeof x !== 'object' || typeof x.isAnswered !== 'boolean') return { status: 'rejected', startedAt, endedAt }
@@ -380,7 +380,7 @@ function fork(d: Deps, prompt: string, startedAt: number): Promise<ArmResult> {
 }
 
 /**
- * Starts the moment: both forks one after the other with no await between them (§4.1), or
+ * Starts the moment: both forks one after the other with no await between them, or
  * nothing but the skip record. Synchronous: the caller calls it right before the plugin's own
  * submit or compaction. Never throws.
  */
@@ -408,7 +408,7 @@ export function startShadow(d: Deps, p: Prepared | undefined): Moment | undefine
       if (!q) return
       track(sh, q.then(async r => {
         if (mo.saved) {
-          // A late result after the record was written with this arm `lost` (§4.7).
+          // A late result after the record was written with this arm `lost`.
           if (mo[k]?.status === 'lost') await saveLate(d, mo, k, r)
           return
         }
@@ -439,7 +439,7 @@ async function finish(d: Deps, mo: Moment): Promise<void> {
   const input = saveInput(d, mo, await zoneOf(d))
   const r = await call(d, ['trial-save', '--sid', mo.p.sid], SAVE_MS, JSON.stringify(input) + '\n')
   if (r.ok) return
-  // §4.7 "trial-save fails: one row": a second, minimal call (no reply, so no scan and no shadow).
+  // A second, minimal call (no reply, so no scan and no shadow).
   const strip = (a: Record<string, unknown>) => {
     const { reply: _reply, ...rest } = a
     return rest
@@ -468,7 +468,7 @@ function armRecord(r: ArmResult | undefined, fallback: string, tokens: number | 
   }
 }
 
-/** The content-free moment fields (§4.6); the replies ride only in the arms' `reply`. */
+/** The content-free moment fields; the replies ride only in the arms' `reply`. */
 export function momentFields(mo: { p: Prepared; pluginSide: string; htRerun?: string }, zone: string | undefined): Record<string, unknown> {
   const p = mo.p
   const f = p.m?.facts
@@ -544,7 +544,7 @@ async function saveLate(d: Deps, mo: Moment, arm: 'old' | 'native', r: ArmResult
 
 // ---------------------------------------------------------------- fire points
 
-/** M1, owner-typed: `prompt.submit` of this plugin's typed handoff command, before `next(e)`. Never throws. */
+/** M1, person-typed: `prompt.submit` of this plugin's typed handoff command, before `next(e)`. Never throws. */
 export async function shadowOwnerHandoff(d: Deps, args: string, text: string): Promise<void> {
   try {
     if (!on(d)) return
@@ -586,14 +586,14 @@ export async function shadowSelfHandoff(d: Deps, sid: string, tool: string, inpu
 /**
  * M2, inside `openAndSubmit` before its last cancel check: the capped facts measure and the
  * prepared moment, or undefined (trial off, or this handoff turn already fired: a re-run after a
- * dropped submit fires nothing, §4.1). Never throws.
+ * dropped submit fires nothing). Never throws.
  */
 export async function shadowPrepM2(d: Deps, sid: string, h: HandoffTurn, ht: string): Promise<Prepared | undefined> {
   try {
     const sh = load(d)
     if (!sh.present || h.shadowFired) return undefined
     // The turn end before this handoff turn measured off, ended or not valid: no measure here (the
-    // config is re-read at the next turn end, §4.1).
+    // config is re-read at the next turn end).
     const k = sh.kept
     if (k !== undefined && k.sid === sid && k.m.state !== 'on') return undefined
     const fresh = await measure(d, sid, M2_MEASURE_MS)

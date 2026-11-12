@@ -1,5 +1,4 @@
-// The work lane's state after an idle compaction (away digest phase 1; owner 2026-10-27 12:5x,
-// xxxxxxxx-05/-06/-08/-09, AWAY-DIGEST §11). The model sets the to-do and done items and the
+// The work lane's state after an idle compaction (away digest phase 1). The model sets the to-do and done items and the
 // lane's Status when it writes the summary; after an idle compaction the plugin reads that Status
 // and re-checks it with code only where the text is unsure or contradicts what code measures:
 // - `working`: a step can start, or a job runs whose result the work acts on: today's `[idle]`;
@@ -7,11 +6,11 @@
 // - `hard-blocked`: all that is left waits on the user and nothing runs (nothing can start);
 // - `soft-blocked`: all that is left waits on the user and something still runs.
 // Both blocked states act like `finished` (the digest), but the lane is not done. Under
-// `idle_digest: off` (owner rule (c), 2026-10-28) they start nothing too, but every text asks for
+// `idle_digest: off` they start nothing too, but every text asks for
 // one line on the lane state with its Basis in place of the digest. A result that
 // unblocks a step makes the lane `working` again (the `[idle-done]` text says so), and work the
 // model starts after the block went out supersedes the summary's Status for the rest of the idle
-// episode (owner xxxxxxxx-06). Anything code cannot read falls back to `working`, today's
+// episode. Anything code cannot read falls back to `working`, today's
 // behaviour; code never turns a summary toward a stop its own words do not ask for.
 import type { Deps } from './deps'
 
@@ -34,8 +33,8 @@ export type LaneFacts = {
   free: number
   /**
    * Of the steps marked todo, those held on a job: a running job's result leads them as their
-   * trigger (`On the timer notification, reply …`, `when CI finishes, report …`; owner 2026-10-28
-   * digest rules (a)), with no user-wins word, or a `waits: job` mark says so. Such a step runs
+   * trigger (`On the timer notification, reply …`, `when CI finishes, report …`; digest
+   * rule (a)), with no user-wins word, or a `waits: job` mark says so. Such a step runs
    * once that result is in (-06).
    */
   onJob: number
@@ -45,7 +44,7 @@ export type LaneFacts = {
   elsewhere: boolean
   /**
    * The summary has a Next steps section (`## Next steps: none` included). A summary cut near its
-   * size cap can lose it (AWAY-DIGEST §4.3), so a finished Status without one is not believed.
+   * size cap can lose it, so a finished Status without one is not believed.
    */
   listed: boolean
   /** `Step 1:` is `none`, `proposed`, a step to run, or there is no Step 1 line. */
@@ -62,7 +61,7 @@ export type LaneFacts = {
 /**
  * The state code settled on, how (the summary's Status, or the code re-check), and a plain reason.
  * `byResult`: working only because the job's result that came with this turn unblocks a step held
- * on that job (owner 2026-10-28 digest rules (a)); that turn's end reads the lane again (rule (b)).
+ * on that job (digest rule (a)); that turn's end reads the lane again (rule (b)).
  */
 export type LaneResult = { lane: Lane; source: 'status' | 'recheck'; why: string; byResult?: true }
 
@@ -80,7 +79,7 @@ export type LaneMeasured = {
   superseded?: boolean
   /**
    * A job's result came with this turn's prompt (a notification that reported a task ended): a
-   * step held on a job can run in this turn (owner 2026-10-28 digest rules (a), xxxxxxxx-06).
+   * step held on a job can run in this turn (digest rule (a)).
    */
   result?: boolean
 }
@@ -93,8 +92,8 @@ const GATE_RE = /^\s*Gate:[ \t]*([^·\n]*)/m
 const ITEM_RE = /^\s*\d+\.\s/
 /**
  * A step mark: `· todo` or `· done` that ends the item's own words (the line end, a `;`, `,`, `.`
- * or `)`, or the next item of a one-line section), so `· done when green` is not one. 0.1.5 D-2
- * (AD2 on 0.1.4: a summary wrote `— done`, so its Basis read 0 of 3 done): the other common
+ * or `)`, or the next item of a one-line section), so `· done when green` is not one. Since 0.1.5
+ * (on 0.1.4 a summary wrote `— done`, so its Basis read 0 of 3 done): the other common
  * marks read too, after `—`, `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case, and a mark
  * may take a note in brackets (`— done (commit 1a2b3c)`). `stepMark` says which one counts.
  * A wait mark (`WAITS_SRC`) reads after the same separators (`MARK_SEP`).
@@ -102,7 +101,7 @@ const ITEM_RE = /^\s*\d+\.\s/
 const MARK_SEP = '·|•|—|–|:|\\(|\\s--?'
 const MARK_SRC = `(${MARK_SEP})\\s*(todo|done)(?=\\s*$|\\s*[;,.()]|\\s+\\d+\\.\\s)`
 /**
- * A wait mark (0.1.5, E-4): `· waits: job` (the step needs a running job's result first) or
+ * A wait mark (0.1.5): `· waits: job` (the step needs a running job's result first) or
  * `· waits: you` (it needs the user), which the summary's model writes on a todo step that waits,
  * before its `· todo` (read after it too). Code reads the hold from the mark, not the wording. A
  * dash may stand for the `·` (`— waits: you · todo`: 8 of 20 probe summaries wrote one so), and
@@ -118,7 +117,7 @@ const GATED_RE = /\b(?:gated|ask user)\b/i
  * A step that cannot run now, as release-0.1.1b reads it (its own `HELD_RE`, unchanged): it is
  * gated, asks the user, holds a pending answer, waits on something (`waits for`, `waiting on`,
  * `awaiting`, `blocked on`/`by`) or needs an approval or the user. A wait on CI or a reviewer counts
- * too: under a blocked Status the model's word leads (owner xxxxxxxx-05), and code moves a stop
+ * too: under a blocked Status the model's word leads, and code moves a stop
  * toward work only on a step that names no wait at all. Such a step is held on the user, whatever
  * else it says (`holdOf`): a wait on a job (`Wait for the timer notification, then reply`) too.
  */
@@ -148,8 +147,8 @@ const FINISH =
 /** The start of the step (after its number; `then` may lead): only a trigger there holds the step. */
 const LEAD = '^(?:\\d+\\.\\s+)?(?:then,?\\s+)?'
 /**
- * A step whose trigger is a running job's result, leading the step (owner 2026-10-28 digest
- * rules (a)):
+ * A step whose trigger is a running job's result, leading the step (digest
+ * rule (a)):
  * - `On the timer notification, reply …`, `after the agent result, merge …`, `upon the agent's
  *   return`: on, upon or after, then a job's result (`JOB_RESULT`);
  * - `After the run, commit …`, `upon CI, …`: upon or after, then a job alone (an article or a
@@ -208,8 +207,8 @@ const USER_WINS_RE = new RegExp(`\\b(?:${PRONOUN}|${PERSON}|${APPROVAL})(?![\\w-
  */
 const OWN_REPLY_RE = /(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answers?)(?=\s*(?:$|[,.;·—]|(?:with|and|in)\b))/gi
 /**
- * What holds a step (Step 1's text, or a Next steps item): the user, a running job's result (owner
- * 2026-10-28 digest rules (a): it runs once the result is in), or nothing (it can run). No step
+ * What holds a step (Step 1's text, or a Next steps item): the user, a running job's result (digest
+ * rule (a): it runs once the result is in), or nothing (it can run). No step
  * with no wait mark reads more held on a job, or freer, than on release-0.1.1b:
  * - a step release-0.1.1b reads held (`HELD_RE`, on the step as it is) is held on the user, as
  *   there; so is a wait on a job (`Wait for the timer notification, then reply`: a known limit of
@@ -219,7 +218,7 @@ const OWN_REPLY_RE = /(^|[,—]|\bthen\b)(\s*(?:\d+\.\s+)?)(?:repl(?:y|ies)|answ
  * A wait mark (`waitsOf`) leads the wording: `waits: you` is held on the user, `waits: job` on
  * the job (`Wait for CI, then merge · waits: job` too, the known limit of the wording, and a step
  * whose words wait on a person, `Merge, needs owner approval · waits: job`: the model's mark
- * leads, owner D-61), unless the step is gated; so a mark never makes a step free. The wording is
+ * leads), unless the step is gated; so a mark never makes a step free. The wording is
  * the fallback for a step with no mark (an older summary, a
  * step the model left unmarked). The job reading takes every space (a no-break space too) as a
  * plain one, as copies.pm `_hold_of` does.
@@ -263,7 +262,7 @@ function section(text: string, heading: string): string[] | undefined {
 
 /**
  * The item's step mark, or undefined; a mark inside brackets is a note's and never counts (0.1.5
- * D-2 review: `— todo (review: done)` and `2. merge — todo (review · done)` stay todo). Of the
+ * review: `— todo (review: done)` and `2. merge — todo (review · done)` stay todo). Of the
  * marks outside brackets: the last `·` mark, as on 0.1.4; else the others, `todo` if any is
  * (`— todo, build: done` stays todo). A wait mark after it (`· todo · waits: job`) does not hide
  * it. copies.pm `_step_mark`.
@@ -294,7 +293,7 @@ function depthAt(text: string, at: number): number {
 /**
  * The item's step mark (`stepMark`); an item with a wait mark and no step mark code can read
  * (`1. Read the log · waits: job`) is to do: only a step to do is given one. (`· waits: you ·
- * todo (gated by U-2)`, 3 of 24 probe summaries, reads todo by its own mark since D-2.)
+ * todo (gated by the review)`, 3 of 24 probe summaries, reads todo by its own mark since 0.1.5.)
  */
 function lastMark(item: string): 'todo' | 'done' | undefined {
   return stepMark(item) ?? (new RegExp(WAITS_SRC, 'i').test(item) ? 'todo' : undefined)
@@ -420,11 +419,11 @@ function count(n: number, one: string, many: string): string {
 }
 
 /**
- * The digest's Basis line, rendered by code when its block or note goes out (AWAY-DIGEST §3.1,
- * §8 "invented or stale facts"; review of fix round 1, M7): how many of the listed steps the
+ * The digest's Basis line, rendered by code when its block or note goes out (so the digest
+ * holds no invented or stale facts): how many of the listed steps the
  * summary marks done, the units running now, and the commits not pushed and files changed the
- * measure shows. The model prints it as it is; the rest of the digest is the model's (owner
- * xxxxxxxx-05: the model sets the done and to-do items).
+ * measure shows. The model prints it as it is; the rest of the digest is the model's (the model
+ * sets the done and to-do items).
  * A branch with no upstream (a new local or worktree branch, a detached HEAD) or a gone one has
  * its commits not pushed unknown, never 0 (review of fix round 2). `asOf` (a note's, `HH:MM`) is
  * when the measure was taken: a later turn's note reuses the one its block went out with.
@@ -447,22 +446,22 @@ function recheck(lane: Lane, why: string): LaneResult {
 }
 
 /**
- * The lane state. The summary's Status leads (owner xxxxxxxx-05); code overrides it where the
+ * The lane state. The summary's Status leads; code overrides it where the
  * text is unsure or contradicts it, toward more work or a truer blocked label, and toward a stop
  * only when the summary's own marks ask for one:
  * - working, whatever the Status: a mid-turn compaction, a summary not in the handoff form, a
  *   half-done step, a measured loop driver, or work started after the block went out;
  * - `finished` is working while a unit runs, a step is marked todo or has no mark, Step 1 is set
  *   or missing, the steps are in a handoff file (`see handoff`), or there is no Next steps
- *   section (a summary cut near its size cap can lose it: AWAY-DIGEST §4.3);
+ *   section (a summary cut near its size cap can lose it);
  * - a blocked Status is working while a step can run (marked todo, naming no gate or wait; or
- *   Step 1 set with `Gate: none`: owner xxxxxxxx-08, non-blocking work keeps the lane going);
+ *   Step 1 set with `Gate: none`: non-blocking work keeps the lane going);
  *   a step held on a job is not such a step: the model's blocked word stands while the job runs,
- *   and only the turn its result comes with reads working (`byResult`; owner 2026-10-28 digest
- *   rules (a), xxxxxxxx-06: the result unblocks that step); that turn's end reads the lane again
+ *   and only the turn its result comes with reads working (`byResult`; digest
+ *   rule (a): the result unblocks that step); that turn's end reads the lane again
  *   without the result (rule (b), digest.ts `laneTurnEnd`), so the step it did no longer counts;
  *   `hard-blocked` with a unit running is `soft-blocked`, and `soft-blocked` with none is
- *   `hard-blocked` (owner xxxxxxxx-06: soft means something still runs);
+ *   `hard-blocked` (soft means something still runs);
  * - `working`, an older word or none: `finished` once nothing runs, every listed step is marked
  *   done and Step 1 is none (a Status written while agents ran, as at the plugin's idle
  *   compaction); else working.
@@ -512,8 +511,8 @@ export function showsDigest(l: Lane): boolean {
 /** The in-flight rows of a measure (`In flight (sidecar …):`, measure.pm `inflight_lines`): id, type, status. */
 const INFLIGHT_ROW = /^\s+(\S+) · ([^·]+?) · (\S+)/
 /**
- * Types that are not a unit of work here: agents and teammates are counted live (D-82: the measure
- * lists an idle teammate as running), a Monitor or a cron only watches (AWAY-DIGEST §2.1).
+ * Types that are not a unit of work here: agents and teammates are counted live (the measure
+ * lists an idle teammate as running), a Monitor or a cron only watches.
  */
 const NOT_UNIT = /^(?:subagent|local_agent|teammate|cron)$|monitor/i
 
@@ -574,9 +573,9 @@ export function endedRows(remeasure: string, ended: ReadonlySet<string>): string
  * The agents of this session at work, one set for keep-warm's open jobs (keepwarm.ts `openJobs`),
  * plugin idle compaction's running agents (idle.ts `agentsRunning`) and the digest's units
  * (`runningUnits`): the agent loops whose turn runs in this load and the listed subagents and
- * teammates at work (D-82: an idle teammate, which waits for a message, is none). When the agent
+ * teammates at work (an idle teammate, which waits for a message, is none). When the agent
  * list cannot be read (`$.agent.list()` throws), the teammates the last main Stop of this session
- * listed count, as before D-82 (an idle one cannot be told from one at work then); `sid` the
+ * listed count, as before (an idle one cannot be told from one at work then); `sid` the
  * session's id, read when not given.
  */
 export async function agentIds(d: Deps, sid?: string): Promise<Set<string>> {
@@ -601,8 +600,8 @@ export async function agentIds(d: Deps, sid?: string): Promise<Set<string>> {
 /**
  * The units of this session running now: its agents (`agentIds`, as idle.ts `agentsRunning` and
  * keep-warm read them) and the background tasks `remeasure` lists as running, less every task a
- * notification of this idle episode reported ended (AWAY-DIGEST §2.1 interim rule until probe
- * P-AD-1: a background result's own turn counts its task as ended, whatever the agent list or the
+ * notification of this idle episode reported ended (an interim rule until a probe settles it:
+ * a background result's own turn counts its task as ended, whatever the agent list or the
  * sidecar still says).
  */
 export async function runningUnits(d: Deps, remeasure: string | undefined, ended: ReadonlySet<string>): Promise<number> {
@@ -613,7 +612,7 @@ export async function runningUnits(d: Deps, remeasure: string | undefined, ended
 }
 
 /**
- * 0.1.5 D-3 (owner 2026-11-07, "3. yes"): the work lane at the idle check, as this session's open
+ * 0.1.5: the work lane at the idle check, as this session's open
  * idle episode reads it now: its summary's facts, with the units running now and no result in.
  * Undefined with no episode open (none since the last idle compaction, or a person's message closed
  * it): no lane is read between compactions, so none counts as finished.
@@ -663,8 +662,7 @@ export function startsWork(tool: string, result: unknown): boolean {
 
 /**
  * The text of the digest turn the plugin submits right after an idle compaction with nothing
- * running (`idle_digest: submit`; owner xxxxxxxx-09; `off` is the default of this version, owner
- * rule (c)). The resume block follows it.
+ * running (`idle_digest: submit`; `off` is the default of this version). The resume block follows it.
  */
 export function digestLine(name: string): string {
   return `Note from the user's ${name} plugin: the session was compacted while the user was away, and the work lane reads finished or blocked. Follow the resume block below: it asks for the away digest.`
@@ -672,7 +670,7 @@ export function digestLine(name: string): string {
 
 /**
  * The one-line form of a finished or blocked lane, in place of the away digest: a note after the
- * digest went out, and every text under `idle_digest: off` (owner rule (c), 2026-10-28).
+ * digest went out, and every text under `idle_digest: off`.
  */
 function laneLine(r: LaneResult, basis: string): string {
   return `say in one line that the lane is now ${r.lane} (Basis: ${basis}), then last, Needs you (numbered, each with what it blocks) or Nothing needed from you.`
@@ -700,7 +698,7 @@ export function laneNote(name: string, r: LaneResult, basis: string, again = fal
 
 /**
  * The text of the digest turn the plugin submits after a result's turn did the step that result
- * unblocked and the lane now reads finished or hard-blocked (owner 2026-10-28 digest rules (b);
+ * unblocked and the lane now reads finished or hard-blocked (digest rule (b);
  * digest.ts `laneTurnEnd`). `basis` is `laneBasis` now. `off`: the one-line form, no digest. No
  * production caller passes it: `submitResultDigest` returns before this text under any setting
  * but `idle_digest: submit`; it stays so the texts of both forms are tested side by side.

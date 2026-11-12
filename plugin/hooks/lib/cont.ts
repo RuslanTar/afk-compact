@@ -1,4 +1,4 @@
-// Auto-continue, the hourly cap, halt mode and the thrash rule (MOD-SPEC §9, S-14).
+// Auto-continue, the hourly cap, halt mode and the thrash rule.
 import type { Deps } from './deps'
 import { submitPending, submitSettled, userFirst } from './deps'
 import type { HaltReason } from './handoff-turn'
@@ -9,7 +9,7 @@ import { submitDropped } from './idle'
 
 export const HOUR_MS = 3600000
 
-/** MOD-SPEC §9: the continue text's fixed line (the resume block follows when §3.4 requires it). */
+/** The continue text's fixed line (the resume block follows when the measure requires it). */
 export function continueLine(name: string): string {
   return `Note from the user's ${name} plugin: the session was compacted at the checkpoint you reached. Continue from Step 1 of the summary; questions the user owns stay open.`
 }
@@ -94,7 +94,7 @@ export async function contStamps(d: Deps, sid: string, now: number): Promise<num
 }
 
 /**
- * MOD-SPEC §9.1 last cycle, computed at the nudge: halt mode (`2-nonok`, `thrash`, `cap`), the
+ * The last cycle, computed at the nudge: halt mode (`2-nonok`, `thrash`, `cap`), the
  * hourly cap already reached (`cap`, checked now, not after the compaction), or
  * `max_auto_continues_per_hour` 0 (`continue-off`); null for a cycle that will auto-continue.
  */
@@ -108,7 +108,7 @@ export async function lastCycleOf(d: Deps, sid: string): Promise<HaltReason | nu
 
 /**
  * The nudged turn of a last cycle ended with `answer`: no auto-continue follows. A capped cycle
- * enters halt `cap` now, before its handoff turn and compaction (DP-13); the `continue` row says
+ * enters halt `cap` now, before its handoff turn and compaction; the `continue` row says
  * why this cycle does not continue.
  */
 export async function lastCycleEnd(d: Deps, sid: string, last: HaltReason): Promise<void> {
@@ -122,7 +122,7 @@ export async function lastCycleEnd(d: Deps, sid: string, last: HaltReason): Prom
 }
 
 /**
- * SESSION-RESTART §5.3: autoContinue's own checks, with no row and no change: whether the
+ * autoContinue's own checks, with no row and no change: whether the
  * continue after this compaction would be submitted (`go`), else why not: `not-after` (no
  * nudge-driven compaction), `halt`, `asks-user`, `disabled` (`max_auto_continues_per_hour` 0) or
  * `cap` (the hour's continues used up: autoContinue would enter halt, so no restart runs there).
@@ -139,7 +139,7 @@ export async function continueDecision(d: Deps, sid: string): Promise<{ go: bool
 }
 
 /**
- * SESSION-RESTART §5.3: the continue a restart carried, submitted in the new load: the `cont:<sid>`
+ * The continue a restart carried, submitted in the new load: the `cont:<sid>`
  * stamp, `continue {result: submitted, after: restart}` and the bare continue line (the resume
  * block arrives by `prompt.context` from the armed record). False when the cap is used up or the
  * submit failed (`skipped:submit-failed`).
@@ -199,7 +199,7 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
   }
   let text = continueLine(d.name)
   const pend = s.pending && s.pending.sid === sid ? s.pending : undefined
-  // IC-1 D7 (ii): a `/clear` since the compaction: the old session's continue (and its block)
+  // A `/clear` since the compaction: the old session's continue (and its block)
   // never reaches the new conversation. Checked before the `prompt.submit` claim: the rollup
   // reads the claim file first, so a claim for a block this continue then drops would report
   // it delivered. A block another channel already claimed keeps that channel.
@@ -220,7 +220,7 @@ export async function autoContinue(d: Deps, sid: string): Promise<void> {
     if (pend) d.invalidateContext()
     return
   }
-  /** Where this continue leaves the pending block (F2-3 `resume`). */
+  /** Where this continue leaves the pending block (`resume`). */
   let resume: string | undefined
   if (pend) {
     const c = await claimBy(d, sid, pend.nonce, 'prompt.submit')

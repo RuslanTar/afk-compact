@@ -1,4 +1,4 @@
-// U tests through the kit: the watcher's first-run notice (WATCHER-SPEC §8 item 8, W-BETA A).
+// U tests through the kit: the watcher's first-run notice.
 import { expect, test } from 'claude-code/testing'
 import { leftovers } from '../../hooks/lib/assemble'
 import { NOTICE_ID, NOTICE_MAX, noticeFallback, noticeSpec, shippedNotice } from '../../hooks/lib/notice'
@@ -56,7 +56,7 @@ test('the helper refuses or is missing: no toast', async ($, on) => {
   expect(w.toasts.length).toBe(0)
 })
 
-test('core-to-mod §20: the claim prints off (the helper reads watcher off): no toast; once the claim says show, one toast', async ($, on) => {
+test('notice claim: the claim prints off (the helper reads watcher off): no toast; once the claim says show, one toast', async ($, on) => {
   const w = new World().install(on)
   w.replies.notice = () => ({ exitCode: 0, stdout: 'off\n' })
   await w.start($)

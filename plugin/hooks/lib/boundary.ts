@@ -1,5 +1,5 @@
-// The turn-end scheduler and the self-call path (MOD-SPEC §4, §9), and the scheduling of the
-// handoff turn and the compaction after it (§9.1). The engine skips our own `session.compact`
+// The turn-end scheduler and the self-call path, and the scheduling of the
+// handoff turn and the compaction after it. The engine skips our own `session.compact`
 // hook for our `$.session.compact`, so everything happens at the call site. In a headless
 // session, where that call always rejects, the compaction runs as a `/compact` command instead,
 // and its after-step runs in our own hook (`onOwnCompact`), which that command does reach.
@@ -26,7 +26,7 @@ import { undeliveredCheck } from './resume'
 import { restartMoment } from './restart'
 import { shadowPrepM3, startShadow } from './shadow'
 
-/** MOD-SPEC §9: the nudged turn ended on a user-owned question (`?` on the last non-blank line). */
+/** The nudged turn ended on a user-owned question (`?` on the last non-blank line). */
 export function endsWithQuestion(answer: string): boolean {
   const lines = answer.split('\n').map(l => l.trim()).filter(l => l !== '')
   const last = lines[lines.length - 1]
@@ -35,9 +35,9 @@ export function endsWithQuestion(answer: string): boolean {
 
 export type TurnEnd = { reason: string; answer: string }
 
-/** What one plugin compaction is exempt from, and the handoff turn it follows (MOD-SPEC §9.1). */
+/** What one plugin compaction is exempt from, and the handoff turn it follows. */
 export type BoundaryOpts = {
-  /** A last cycle's compaction for `cap` or `continue-off` runs although halt is on (DP-4). */
+  /** A last cycle's compaction for `cap` or `continue-off` runs although halt is on. */
   exemptHalt?: boolean
   /** The compaction after a handoff turn: also exempt from cooldown and the target check. */
   afterHandoff?: {
@@ -52,18 +52,18 @@ export type BoundaryOpts = {
   /**
    * The dispatch record already written for this compaction, when a native one started while it
    * was written: the rerun after that one's end uses it (same nonce, same text), never a second
-   * record (REG-boundary-205, MOD-SPEC §3.1 step 0).
+   * record (REG-boundary-205).
    */
   prepared?: { nonce: string; text: string; pref: ResumePref; prodConsent?: string }
   /**
    * The checkpoint already taken for this compaction, when a native compaction that was running
    * stopped it before its dispatch record was written: the rerun after that one's end reuses it
    * (same nonce, the first sweep's evidence), never a second checkpoint with the same id6, whose
-   * sweep would answer `skipped: swept` with no rows (DP-30 (1)).
+   * sweep would answer `skipped: swept` with no rows.
    */
   checked?: { nonce: string; named: string | undefined; prev: string | undefined; cp: Checkpoint | undefined }
   /**
-   * Owner 2026-10-27 03:4x ("Compact (Recommended)"): the idle compaction of the 55.5-min check
+   * The idle compaction of the 55.5-min check
    * while agents run (idle.ts), with the seconds since the last main turn end. Exempt from the
    * cooldown and the target check (the check applied Claude Code's idle floor); an idle dispatch
    * record and resume block (`[idle]`), not counted for the thrash rule, and no continue after it.
@@ -73,12 +73,12 @@ export type BoundaryOpts = {
    * The plugin's own idle compaction (idle.ts): its guards asked once more after the checkpoint,
    * which can take seconds, and before the dispatch record is written. A reason (a turn started
    * or ended, a compaction other than ours started or ran, a person at the prompt) stops it
-   * there, with no record behind (D13).
+   * there, with no record behind.
    */
   idleRecheck?: () => Promise<string | undefined>
 }
 
-/** Main `turn.complete`: bookkeeping, then the boundary guards and timer (MOD-SPEC §9, §9.1). */
+/** Main `turn.complete`: bookkeeping, then the boundary guards and timer. */
 export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<void> {
   const s = d.state
   s.mainTurnRunning = false
@@ -93,14 +93,14 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   s.lastTurnAsksUser = s.askOpen > 0 || s.askedThisTurn || endsWithQuestion(t.answer)
   turnQuestion(s, t)
   if (t.reason !== 'answer') s.resumeAfter = false
-  // §9.4: the idle episode starts at a human-origin turn's end; the timer is (re)armed at every
+  // The idle episode starts at a human-origin turn's end; the timer is (re)armed at every
   // main turn end, whatever its origin.
   const endAt = await d.now()
   s.lastTurnEndAt = endAt
   s.lastTurnAnswer = t.reason === 'answer'
   if (isHuman(s.turnOrigin)) s.idleEpisode = { since: endAt, done: false }
   await armIdle(d, sid, endAt)
-  // Keep-warm (D-14): the gap's ping timer, beside the idle timer (keepwarm.ts decides at its due).
+  // Keep-warm: the gap's ping timer, beside the idle timer (keepwarm.ts decides at its due).
   await armKeepWarm(d, sid, endAt)
   await undeliveredCheck(d, sid)
   const end = await endHandoffTurn(d, sid, t.reason, t.answer)
@@ -126,11 +126,11 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
   }
   if (tokens === undefined) return
   await thrashCheck(d, sid, tokens >= eff.target)
-  // A thrash halt found just now outranks the cap or continue-off the nudge saw (DP-4).
+  // A thrash halt found just now outranks the cap or continue-off the nudge saw.
   const last = nudged === null ? null : haltWins(d, nudged)
   let exemptHalt = false
   if (last !== null) {
-    // A last cycle: no continue; its handoff turn comes before the compaction (§9.1).
+    // A last cycle: no continue; its handoff turn comes before the compaction.
     await lastCycleEnd(d, sid, last)
     const h = await planHandoff(d, sid, last, eff, tokens)
     if (h) {
@@ -154,7 +154,7 @@ export async function onTurnComplete(d: Deps, sid: string, t: TurnEnd): Promise<
     return
   }
   if (s.busy) return
-  // §9.3: with `precompact_turn: model`, an eligible turn end that was not nudged gets its
+  // With `precompact_turn: model`, an eligible turn end that was not nudged gets its
   // pre-compaction handoff turn first; a skip leaves the normal compaction, as with `code`.
   // A headless session gets no pre-compaction turn: the plugin submits no model turn there.
   if (!s.nudgedThisTurn && last === null && !s.halt.active && !s.headless) {
@@ -177,7 +177,7 @@ function schedule(d: Deps, delay: number, opts: BoundaryOpts): void {
 }
 
 /**
- * §9.1 step 3: after `boundary_delay_ms` the handoff turn is opened and submitted; a main
+ * After `boundary_delay_ms` the handoff turn is opened and submitted; a main
  * `turn.start` first cancels the timer (alive.ts). If it cannot start, a `cap` or
  * `continue-off` cycle gets its normal compaction now, with the full text.
  */
@@ -190,7 +190,7 @@ function startHandoffTimer(d: Deps, sid: string, h: HandoffTurn): void {
     s.inflight = (async () => {
       if (s.handoffTurn !== h || h.phase !== 'delay' || s.mainTurnRunning) return
       if (await openAndSubmit(d, sid, h, n => dispatchExists(d, sid, n))) {
-        // CR-F17: deferred for a prompt that entered and has not started its turn. That turn
+        // Deferred for a prompt that entered and has not started its turn. That turn
         // cancels the handoff turn; a prompt dropped on its way in (now, or already while the
         // close above ran) lets the delay run again.
         if (s.handoffTurn === h && h.phase === 'delay' && !s.mainTurnRunning) {
@@ -218,9 +218,9 @@ export function cancelBoundary(d: Deps): void {
 }
 
 /**
- * MOD-SPEC §3.4: `prompt.context` once it ran in this load, else the classic SessionStart(compact)
+ * `prompt.context` once it ran in this load, else the classic SessionStart(compact)
  * when its hooks run, else the continue text. An idle compaction's block always waits for
- * `prompt.context` (IDLE-COMPACT-SPEC §1.4, IC-1 D3): only that channel adds `[idle]` and
+ * `prompt.context`: only that channel adds `[idle]` and
  * re-measures it on the person's return, and only an unclaimed block on disk reaches the next
  * process (resume-persist). A load that adopted the idle record (a supervisor move, `claude
  * respawn`, `--resume`) has had no prompt yet, so the classic channel would otherwise take the
@@ -234,9 +234,9 @@ async function resumePref(d: Deps, sid: string, idle: boolean): Promise<ResumePr
 }
 
 /**
- * CR-F19, §9.1 End: one compaction after the handoff turn. While a native main compaction runs
+ * One compaction after the handoff turn. While a native main compaction runs
  * it waits for that one's end and is then scheduled again (500 ms): `wait`. A native one that
- * compacted since the turn ended was it (§3.1): `ran`. Synchronous, so a caller can check right
+ * compacted since the turn ended was it: `ran`. Synchronous, so a caller can check right
  * before an await-free call of `d.compact`.
  */
 function nativeCheck(d: Deps, opts: BoundaryOpts): 'wait' | 'ran' | undefined {
@@ -289,7 +289,7 @@ async function stopForNative(d: Deps, sid: string, opts: BoundaryOpts): Promise<
 }
 
 /**
- * D13: how one `boundary()` call went. `ran: false` with the reason when it stopped before a
+ * How one `boundary()` call went. `ran: false` with the reason when it stopped before a
  * compaction was asked for (`compact-off`, `busy`, `asks-user`, `halted`, `compacted` when a
  * native one ran instead, `small-window`, `cooldown`, `small`, or what `idleRecheck` answered:
  * `busy`, `newer-turn`, `compacted`, `present`); `ran: true` once
@@ -303,11 +303,11 @@ export type BoundaryResult = { ran: false; why: string } | { ran: true; ok: bool
 const stopped = (c: 'wait' | 'ran'): BoundaryResult => ({ ran: false, why: c === 'ran' ? 'compacted' : 'busy' })
 
 /**
- * MOD-SPEC §4: one plugin compaction at a clean turn end, then the after-step and continue.
- * After a handoff turn (§9.1) it runs despite halt and cooldown, with `[handoff]` when the
- * handoff was published, and no continue follows. An idle compaction (owner 2026-10-27, and the
+ * One plugin compaction at a clean turn end, then the after-step and continue.
+ * After a handoff turn it runs despite halt and cooldown, with `[handoff]` when the
+ * handoff was published, and no continue follows. An idle compaction (the 55.5-min check's, and the
  * plugin's own idle compaction, idle.ts) skips the cooldown and the target, and no continue
- * follows either. Says how it went (BoundaryResult, D13).
+ * follows either. Says how it went (BoundaryResult).
  */
 export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<BoundaryResult> {
   const s = d.state
@@ -341,7 +341,7 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
       let prev: string | undefined
       let cp: Checkpoint | undefined
       if (opts.checked) {
-        // The rerun after a wait stop: the first checkpoint's nonce and evidence (DP-30 (1)).
+        // The rerun after a wait stop: the first checkpoint's nonce and evidence.
         ({ nonce, named, prev, cp } = opts.checked)
         if (s.nudgeNonce === nonce) s.nudgeNonce = undefined
       } else {
@@ -364,8 +364,8 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
         return { ran: false, why: changed }
       }
       // The checkpoint above can take seconds: a native compaction may have started or run since.
-      // Checked before the dispatch record is written, so a stop leaves no record behind (§3.1
-      // step 0), and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205), which
+      // Checked before the dispatch record is written, so a stop leaves no record behind,
+      // and the nudge's nonce stays this cycle's for the rerun (REG-boundary-205), which
       // reuses this checkpoint.
       const again = await stopForNative(d, sid, { ...opts, checked: { nonce, named, prev, cp } })
       if (again !== undefined) {
@@ -392,11 +392,11 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
     // native's place at the same moment, so the idle arm stays one stratum (trigger `plugin` tells
     // who started it); `m3-plugin` stays the turn-end compactions of an active session.
     const shadow = ah ? undefined : await shadowPrepM3(d, sid, { kind: idle ? 'm3-idle' : 'm3-plugin', nonce, trigger: 'plugin' })
-    // D-80: the usage windows before the compaction, for its change (limits.ts `recordDeltas`).
+    // The usage windows before the compaction, for its change (limits.ts `recordDeltas`).
     const before = await limitsNow(d)
     const beforeAt = s.usageAt
     // `ms` on every path (as on the mod-hook path, compact.ts): from the dispatch record written
-    // (or reused) to the compaction's answer (DP-30 (4)). Read before the check below, so no
+    // (or reused) to the compaction's answer. Read before the check below, so no
     // await sits between that check and the call.
     const t0 = await d.now()
     // Once more after the dispatch write, with no await between this check and the call. A
@@ -432,11 +432,11 @@ export async function boundary(d: Deps, opts: BoundaryOpts = {}): Promise<Bounda
       settled = await settleSelf(d, sid, run, r)
     } catch {
       // Only the bookkeeping after the call failed: it compacted unless Claude Code skipped it,
-      // which is what the idle failure count goes by (§1.7). Nothing follows either way.
+      // which is what the idle failure count goes by. Nothing follows either way.
       return r.skip === undefined ? { ran: true, ok: true } : { ran: true, ok: false, failClass: 'skipped' }
     }
     if (!settled) return { ran: true, ok: false, failClass: 'skipped' }
-    // SESSION-RESTART D2: the restart moment, before the continue; an armed restart owns the
+    // The restart moment, before the continue; an armed restart owns the
     // continue (it runs it once if the restart fails before the process ends).
     let restarting = false
     await guarded(d, sid, 'restart', async () => {
@@ -462,9 +462,9 @@ type SelfRun = {
   ah?: NonNullable<BoundaryOpts['afterHandoff']>
   /** An idle compaction (`BoundaryOpts.idle`): no thrash entry, an idle after-step. */
   idle?: NonNullable<BoundaryOpts['idle']>
-  /** D-80: the usage windows read right before the compaction (none: not read, as on the headless path). */
+  /** The usage windows read right before the compaction (none: not read, as on the headless path). */
   before?: Limit[]
-  /** D-83: when that reading was last refreshed (`LoadState.usageAt` then), for its age. */
+  /** When that reading was last refreshed (`LoadState.usageAt` then), for its age. */
   beforeAt?: number
 }
 
@@ -479,7 +479,7 @@ async function limitsNow(d: Deps): Promise<Limit[] | undefined> {
 
 /**
  * A plugin compaction's result: its `compacted` row, the cache rows, the cooldown and thrash
- * bookkeeping and the after-step (MOD-SPEC §4, §5.2). False when the compaction was skipped.
+ * bookkeeping and the after-step. False when the compaction was skipped.
  * Shared by the self-call and, inside our own hook, by a headless session's `/compact`.
  */
 async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactResult): Promise<boolean> {
@@ -490,13 +490,13 @@ async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactR
     await log(d, sid, 'compacted', { nonce, skip: skipClass(r.skip), tokens_before: null, tokens_after: null, usage_present: false, ms: (await d.now()) - run.t0, ...ht })
     return false
   }
-  // D-80: the plan windows before and after it (the compaction's own response refreshes them); their
+  // The plan windows before and after it (the compaction's own response refreshes them); their
   // change is the measure the limit band goes by.
   const limitsAfter = run.before !== undefined ? await limitsNow(d) : undefined
   const pb = planShares(run.before)
   const pa = planShares(limitsAfter)
   const t1 = await d.now()
-  // D-83: the source of both readings (the session's own) and their ages, by plan window kind.
+  // The source of both readings (the session's own) and their ages, by plan window kind.
   const plan = (l: Limit[] | undefined): Limit[] => (l ?? []).filter(x => x.kind in pb || x.kind in pa)
   const ub = usageFields(ownReadings(plan(run.before), run.beforeAt), run.t0)
   const ua = usageFields(ownReadings(plan(limitsAfter), s.usageAt), t1)
@@ -523,7 +523,7 @@ async function settleSelf(d: Deps, sid: string, run: SelfRun, r: SessionCompactR
     ...(run.idle ? { idle: true } : {}),
   }))
   if (failed !== undefined) stepFailedLine(d, failed)
-  // IDLE-COMPACT D16: the plugin's own idle compaction arms the away digest as Claude Code's does
+  // The plugin's own idle compaction arms the away digest as Claude Code's does
   // (compact.ts onCompact): under `"idleCompaction": false` it is the only idle compaction there is.
   // armDigest skips while anything runs; submitDigest skips a headless session.
   if (run.idle) await guarded(d, sid, 'digest', () => armDigest(d, sid, nonce))

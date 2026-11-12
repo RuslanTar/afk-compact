@@ -1,7 +1,7 @@
 // Shared U-test harness (a *.test.ts file because the kit loads only those; its one self-test
 // runs in every file that imports it). A World stands for the engine beneath the plugin:
 // test hooks answer every `$` call the mod makes, and a fake helper answers `$.process.run`
-// by subcommand, with the stdout forms of BUILD-PLAN §3.1. Synthetic values only.
+// by subcommand, with the helper's stdout forms. Synthetic values only.
 import type { On, SessionCompactResult, SessionMessage } from 'claude-code'
 import type { Engine, MockClock } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
@@ -9,7 +9,7 @@ import { CLOSE, OPEN, detectSummary, markerText, sentinelText } from '../../hook
 import { BRAND } from './_gen/brand.gen'
 
 export const HOME = '/hh/u'
-// STATE-ROOT (0.1.2): the default handoff root (the manifest's, filled in by the load), outside ~/.claude
+// 0.1.2: the default handoff root (the manifest's, filled in by the load), outside ~/.claude
 export const ROOT = HOME + '/.local/state/' + BRAND.name + '/handoffs'
 export const WATCH = ROOT + '/.watch'
 export const SID_A = '5e55a001-0c0f-4f1e-9a00-00000000a001'
@@ -41,17 +41,17 @@ export class World {
   window = 1000000
   version: { version: string; base?: string } = { version: '2.1.306' }
   policy: Record<string, unknown> = {}
-  /** Every `$.settings.read` rejects (IA-2: native idle then reads `unknown`). */
+  /** Every `$.settings.read` rejects (native idle then reads `unknown`). */
   settingsThrow = false
   /**
-   * 0.1.4 T-11: the context breakdown `$.session.usage({ breakdown })` answers (its window fields
+   * 0.1.4: the context breakdown `$.session.usage({ breakdown })` answers (its window fields
    * only); undefined: the reply has none, as from an older Claude Code. `breakdownThrow`: such a
    * call rejects. `usageArgs`: the argument of every `$.session.usage` call.
    */
   breakdown: { rawMaxTokens: number; autocompactSource: string; autoCompactThreshold?: number } | undefined = undefined
   breakdownThrow = false
   usageArgs: unknown[] = []
-  /** `$.agent.list()` (owner xxxxxxxx-38); undefined: the call rejects. */
+  /** `$.agent.list()`; undefined: the call rejects. */
   agents: { id: string; status: string; type?: string }[] | undefined = []
   files = new Map<string, string>()
   writes: string[] = []
@@ -144,12 +144,12 @@ export class World {
   /** Awaited at the bottom of every `session.compact` before it answers (a compaction that runs a while). */
   compactGate: Promise<void> | undefined
   /**
-   * `$.session.usage().rateLimits` (empty: no subscription reading, IC-1 `ttl-5m`). Only a
-   * `five_hour` or `seven_day` window shows the one-hour cache (D15); a window without a kind is none.
+   * `$.session.usage().rateLimits` (empty: no subscription reading, `ttl-5m`). Only a
+   * `five_hour` or `seven_day` window shows the one-hour cache; a window without a kind is none.
    */
   rateLimits: { kind?: string; percentUsed: number }[] = []
   /**
-   * D-83: the entries the fake `usage` helper answers with (the shared usage record: other sessions'
+   * The entries the fake `usage` helper answers with (the shared usage record: other sessions'
    * and status-line readings, `{kind, pct, resets_at, at, src, sid8}` with times in epoch seconds),
    * and the own readings the mod sent it (`usage --stdin`), in order.
    */
@@ -157,24 +157,24 @@ export class World {
   usageNotes: { at: number; windows: { kind: string; pct: number; resets_at: number | null }[] }[] = []
   /** Environment variables the plugin reads beside HOME (`$.env.get`), read when asked. */
   env: Record<string, string> = {}
-  /** `$.session.model()` (MG-4); undefined: the call rejects. */
+  /** `$.session.model()`; undefined: the call rejects. */
   model: string | undefined = 'claude-test-model'
-  /** MG-2 spy: the argument keys of every `session.compact` and `prompt.submit` reaching the bottom. */
+  /** Spy: the argument keys of every `session.compact` and `prompt.submit` reaching the bottom. */
   compactKeys: string[][] = []
   submitKeys: string[][] = []
-  /** The summarizer usage a compaction result carries (MG-3); undefined: none. */
+  /** The summarizer usage a compaction result carries; undefined: none. */
   compactUsage: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number } | undefined
-  /** The usage a `turn.step` result carries (MG-3); null: none. */
+  /** The usage a `turn.step` result carries; null: none. */
   stepUsage: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; model: string } | null = null
-  /** The turn ids `$.turn.abort` was called with (OT-2). */
+  /** The turn ids `$.turn.abort` was called with. */
   aborts: string[] = []
   /** `$.turn.abort` rejects (the turn is not the running one). */
   abortThrow = false
   /** While set, a `prompt.submit` reaching the bottom is not recorded (the person's own prompts of `userTurn`). */
   private quiet = false
-  /** SESSION-RESTART: `$.ui.log` lines (§4.2), less the compaction lines below. */
+  /** Restart on update: `$.ui.log` lines, less the compaction lines below. */
   uiLogs: string[] = []
-  /** Owner 2026-10-30 07:52: the `$.ui.log` line after each main compaction (compact.ts compactLine). */
+  /** The `$.ui.log` line after each main compaction (compact.ts compactLine). */
   compactLines: string[] = []
   /** `$.prompt.read()`'s draft (G8). */
   draft = ''
@@ -182,15 +182,15 @@ export class World {
   surfaceList: string[] | undefined = ['terminal']
   /** How `claude --version` answers (G5): its stdout, or `reject` (it cannot start or timed out). */
   claudeVersion: string | 'reject' = '2.1.306 (Claude Code)'
-  /** `restart_on_update` as `ident` reports it (D1); undefined: no such key. */
+  /** `restart_on_update` as `ident` reports it; undefined: no such key. */
   restartSetting: string | undefined
-  /** `ident`'s `restart_reports` (§2.3). */
+  /** `ident`'s `restart_reports`. */
   restartReports: unknown[] = []
-  /** The `restart gate` reply (§4.1); fields over a passing default. */
+  /** The `restart gate` reply; fields over a passing default. */
   restartGate: Record<string, unknown> = {}
-  /** The `restart claim` reply (§5.2); fields over a "none" default. */
+  /** The `restart claim` reply; fields over a "none" default. */
   restartClaimReply: Record<string, unknown> = {}
-  /** The `restart respawn` reply (§2.2 step 3). */
+  /** The `restart respawn` reply. */
   restartRespawn: Record<string, unknown> = { ok: true, pid: 4321 }
   /** Awaited inside the bottom of `command.run` for `exit` (a `/exit` the test ends itself). */
   exitGate: Promise<void> | undefined
@@ -339,7 +339,7 @@ export class World {
     })
     on('session.attach', (_$, e) => ({ clientId: e.clientId }))
     on('session.detach', (_$, e) => ({ clientId: e.clientId }))
-    // The classic hook events the mod observes (SESSION-RESTART D10): no settings hook beneath.
+    // The classic hook events the mod observes: no settings hook beneath.
     on('classic.Stop', () => ({}))
     on('classic.UserPromptSubmit', () => ({}))
     on('classic.PermissionRequest', () => ({}))
@@ -371,12 +371,12 @@ export class World {
 
   private turnNo = 0
 
-  /** The person types one character into the prompt box (`prompt.edit`, D11; the kit raises it, its 2.1.305 types do not list it). */
+  /** The person types one character into the prompt box (`prompt.edit`, the kit raises it, its 2.1.305 types do not list it). */
   async edit($: Engine): Promise<void> {
     await (($ as unknown as PromptBoxEngine).prompt.edit({ origin: { kind: 'composer' }, text: '', cursor: 0, start: 0, end: 0, inputText: 'x' }))
   }
 
-  /** The prompt box changes by `origin` (`history`, `clear`, `undo`, `engine`, `plugin`, `app`; D11). */
+  /** The prompt box changes by `origin` (`history`, `clear`, `undo`, `engine`, `plugin`, `app`). */
   async change($: Engine, origin: string): Promise<void> {
     const o = origin === 'plugin' ? { kind: 'plugin', name: 'other' } : { kind: origin }
     await (($ as unknown as PromptBoxEngine).prompt.change({ text: 'an earlier prompt', cursor: 0, origin: o }))
@@ -403,7 +403,7 @@ export class World {
   }
 
   /**
-   * A main turn a person's prompt opens: the prompt enters with this origin kind (IC-1 D6:
+   * A main turn a person's prompt opens: the prompt enters with this origin kind (:
    * `composer`, `bridge` and `sdk` are human, so the turn clears halt; `task-notification`,
    * `scheduled-trigger` and the like are not), then its turn starts. The prompt is not recorded in
    * `submits`.
@@ -429,7 +429,7 @@ export class World {
     await s.result
   }
 
-  /** The engine measured the session now (D-80, D-83: the usage reading is fresh from this moment). */
+  /** The engine measured the session now (the usage reading is fresh from this moment). */
   async measure($: Engine): Promise<void> {
     await $.session.measure({ context: { tokens: this.tokens, window: this.window }, rateLimits: this.rateLimits, changed: ['rateLimits'] } as never)
     await this.settle()
@@ -475,7 +475,7 @@ export class World {
           (this.summaryMode === 'truncated' || this.summaryMode === 'unclosed' ? '' : sentinelText(this.name, nonce) + '\n')
   }
 
-  /** The fake helper: one answer per subcommand, the stdout forms of BUILD-PLAN §3.1. */
+  /** The fake helper: one answer per subcommand, in the helper's stdout forms. */
   helper(argv: string[], env: Record<string, string>, stdin?: string): Reply {
     const bin = argv[0] ?? ''
     if (bin === 'claude') {
@@ -509,7 +509,7 @@ export class World {
       case 'restart':
         return ok(JSON.stringify(this.restartReply(args, sid)) + '\n')
       case 'log': {
-        // `--stdin` (F2-6): one JSON object per line, each appended as a row.
+        // `--stdin`: one JSON object per line, each appended as a row.
         const rows = args.includes('--stdin')
           ? (stdin ?? '').split('\n').filter(l => l !== '').map(l => JSON.parse(l) as Row)
           : [JSON.parse(flag('--json')) as Row]
@@ -522,7 +522,7 @@ export class World {
         return ok()
       }
       case 'handoff-turn': {
-        // D-18 B8 (core): `open` exclusive-creates <ht>.json; `supersede` writes the write-once twin.
+        // Core: `open` exclusive-creates <ht>.json; `supersede` writes the write-once twin.
         const ht = flag('--ht')
         const rec = `${WATCH}/${sid}/handoff-turn/${ht}.json`
         if (args[0] === 'open') {
@@ -531,7 +531,7 @@ export class World {
           return ok('ok\n')
         }
         if (args[0] === 'close') {
-          // BL-2 as asked of core (mod-to-core item 5): exclusive-creates <ht>.closed.
+          // Core: exclusive-creates <ht>.closed.
           if (!this.files.has(rec)) return { exitCode: 3, stdout: 'REFUSED: no-ht\n' }
           const closed = `${WATCH}/${sid}/handoff-turn/${ht}.closed`
           if (this.files.has(closed)) return ok('EXISTS\n')
@@ -596,7 +596,7 @@ export class World {
       case 'trial-save':
         return ok('{"why":"absent","written":false}\n')
       case 'notice': {
-        // W-BETA A (core): `notice claim --id I` exclusive-creates <watch>/notice/<I>.shown.
+        // Core: `notice claim --id I` exclusive-creates <watch>/notice/<I>.shown.
         const id = flag('--id')
         if (args[0] !== 'claim' || !/^[a-z0-9-]{1,40}$/.test(id)) return { exitCode: 64, stdout: '' }
         const marker = `${WATCH}/notice/${id}.shown`
@@ -609,7 +609,7 @@ export class World {
     }
   }
 
-  /** The fake `restart` subcommand (SESSION-RESTART; the real one: helper cases RS-*). */
+  /** The fake `restart` subcommand (the real one: helper cases RS-*). */
   restartReply(args: string[], sid: string): Record<string, unknown> {
     const flag = (k: string) => {
       const i = args.indexOf(k)
