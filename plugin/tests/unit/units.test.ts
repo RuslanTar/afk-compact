@@ -112,8 +112,8 @@ const PREV = '~/.claude/handoffs/example-repo/LAB-123/' + 'p'.repeat(141 - '~/.c
 const STORE = '"' + '/' + 'r'.repeat(159) + '/scripts/' + NAME + '-store"'
 const WORST = {
   store: STORE, idle_min: '49',
-  nonce: 'a1b2c3d4', previous_copy: PREV, measured_at: '2026-10-21T04:40:00+03:00', session_id: '00000000-0000-4000-8000-000000000000',
-  saved_copy: PREV, tokens: '612,345', queue_add: NAME + '-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4',
+  nonce: 'a1b2c3d4', previous_copy: PREV, measured_at: '2026-10-21T04:40:00+03:00', session_id: '9f0e1d2c-3b4a-4596-8877-665544332211',
+  saved_copy: PREV, tokens: '612,345', queue_add: NAME + '-store queue-add --sid 9f0e1d2c-3b4a-4596-8877-665544332211 --nonce a1b2c3d4',
   measured_facts: '', remeasure: '', halt_reason: 'compactions keep repeating without progress', max_calls: '34', handoff_path: PREV,
   draft_state: 'present', handoff_finish: '`' + NAME + "-store publish --stage '" + PREV + "' --slug lab-123-retry --status in-progress`",
   idle_used_at: '2026-10-21T04:40:00+03:00',

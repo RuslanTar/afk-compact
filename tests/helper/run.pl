@@ -4408,12 +4408,12 @@ sub assembly_runtime {
     my $prefix = '~/.claude/handoffs/example-repo/LAB-123/';
     my $prev = $prefix . ('p' x (141 - length $prefix));
     my %rt = (nonce => 'a1b2c3d4', previous_copy => $prev, measured_at => '2026-10-21T04:40:00+03:00',
-              session_id => '00000000-0000-4000-8000-000000000000', saved_copy => $prev, tokens => '612,345',
-              queue_add => "$BRAND-store queue-add --sid 00000000-0000-4000-8000-000000000000 --nonce a1b2c3d4", measured_facts => '', remeasure => '',
+              session_id => '9f0e1d2c-3b4a-4596-8877-665544332211', saved_copy => $prev, tokens => '612,345',
+              queue_add => "$BRAND-store queue-add --sid 9f0e1d2c-3b4a-4596-8877-665544332211 --nonce a1b2c3d4", measured_facts => '', remeasure => '',
               # D-18 tokens, the worst case tools/assemble uses (DP-19: max_calls = 1 + call_cap + recipe_cap)
               halt_reason => 'compactions keep repeating without progress', max_calls => '34', handoff_path => $prev,
               draft_state => 'present',
-              handoff_finish => "`$BRAND-store publish --stage '$prev/.staging/xxxxxxxx-a1b2c3d4' --slug example-topic-slug --status in-progress`");
+              handoff_finish => "`$BRAND-store publish --stage '$prev/.staging/9f0e1d2c-a1b2c3d4' --slug example-topic-slug --status in-progress`");
     my $rf = $file // "$FIXTURES_DIR/assembly/runtime.json";
     # runtime.json may spell the brand {{plugin}} (the BT-02 rename drill regenerates goldens first)
     if (-f $rf) { my $j = jsonc::decode(util::read_file($rf)); %rt = (%rt, map { my $v = $j->{$_}; $v =~ s/\{\{plugin\}\}/$BRAND/g if defined $v && !ref $v; ($_ => $v) } keys %$j) if ref $j eq 'HASH' }
