@@ -1,0 +1,15 @@
+{
+  "id": "am-lstart1",
+  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a0b1",
+  "now": "2026-10-21T14:05:12+03:00",
+  "env": {},
+  "seed": [
+    {
+      "copy": "am-lstart1.txt",
+      "to": "$TMP/seeded.txt",
+      "note": "a seed copy is substituted, so its $LSTART1 needs pid 1"
+    }
+  ],
+  "note": "run by AT-RN-11 only (through --fixtures)",
+  "steps": []
+}

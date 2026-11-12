@@ -528,7 +528,10 @@ for my $cf (@CASES) {
     # A case whose text uses $LSTART1 needs unix-pid1 whether or not it says so (uses_lstart1): on a
     # host without pid 1 (MSYS) it skips instead of dying on the start time it cannot read.
     my @needs = @{ ref $case->{needs} eq 'ARRAY' ? $case->{needs} : [] };
-    my $implied = !grep({ $_ eq 'unix-pid1' } @needs) && uses_lstart1($case, File::Basename::dirname($cf));
+    # a sequence case as it will run (seed copies are substituted); one that does not build is left
+    # to run_case, which reports why
+    my $scan = defined $case->{sequence} ? (eval { sequence_case($case) } // $case) : $case;
+    my $implied = !grep({ $_ eq 'unix-pid1' } @needs) && uses_lstart1($scan, File::Basename::dirname($cf));
     push @needs, 'unix-pid1' if $implied;
     my $miss = missing_needs(\@needs);
     # "nonroot": the case makes a file or folder unwritable or unreadable by its mode, which
@@ -1626,7 +1629,8 @@ sub _libs {
 # uses_lstart1(data, case dir) -> 1 when a string in a case uses $LSTART1, or a file the runner
 # fills placeholders in does: a setups/<id>.json a "fixture_setup" runs, a "copy" with "subst",
 # an "append" source (found as src_file finds them). Such a case needs unix-pid1 (the case loop).
-# A use this scan misses still fails loudly on a host without pid 1 (lstart_var).
+# A sequence case is scanned as sequence_case builds it (its input.json env, seed copies and
+# appends). A use this scan misses still fails loudly on a host without pid 1 (lstart_var).
 sub uses_lstart1 {
     my ($d, $cdir, $seen) = @_;
     $seen //= {};
