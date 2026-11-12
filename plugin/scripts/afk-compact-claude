@@ -71,7 +71,7 @@ passthrough() {
   launch exec "$@"
 }
 
-# The flag table (§3.3 of the restart spec). tools/launcher-flags reads the rows between the
+# The flag table. tools/launcher-flags reads the rows between the
 # two marker lines and checks them against `claude --help`. A row: the flag and its aliases,
 # _c= its class, _a= its arity, and _f= for a value Claude Code reads as a file at start.
 #   _c=keep    carried verbatim, in the original order

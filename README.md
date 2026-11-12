@@ -70,16 +70,16 @@ On Windows, running Claude Code inside WSL 2 is the expected route until native 
 At the prompt of a terminal session:
 
 ```
-/plugin install afk-compact --marketplace <owner>/<repo>
+/plugin install afk-compact --marketplace RuslanTar/afk-compact
 ```
 
 From a shell:
 
 ```
-claude plugin install afk-compact --marketplace <owner>/<repo>
+claude plugin install afk-compact --marketplace RuslanTar/afk-compact
 ```
 
-In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `<owner>/<repo>`, then **Add plugin**.
+In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `RuslanTar/afk-compact`, then **Add plugin**.
 
 Answer `y` to add the marketplace, pick a scope (user scope is first), then review the settings screen. Every setting has a working default (see [Settings](#settings)); `/afk-compact:settings` goes through them later, section by section.
 
@@ -737,18 +737,15 @@ On its first Stop after an update, the watcher re-checks the open alerts that an
 
 Making a report deletes nothing and leaves the existing logs as they are.
 
+**Reporting problems.** Open an issue at https://github.com/RuslanTar/afk-compact/issues with what you saw and the plugin version (`/afk-compact:status` shows it); attach a report zip only if you want to share the logs.
+
 ## A local comparison trial (off by default)
 
-The plugin can run a local comparison trial: at each handoff (and, when the file also turns them on, at each compaction) it asks Claude Code for up to two extra replies over the same conversation, one written to an older handoff instruction set and one to a compaction prompt, and saves both for a later side-by-side comparison with what the plugin wrote. It is off unless the file `~/.cache/afk-compact-trial/trial.json` exists and turns it on; there is no setting for it in `/config`. Without the file the plugin only checks, at each turn end, that it is still absent.
+A development aid for comparing handoff instructions; you do not need it to use the plugin. It is off unless the file `~/.cache/afk-compact-trial/trial.json` exists and turns it on, and there is no setting for it in `/config`; without the file the plugin only checks, at each turn end, that it is still absent. The file names two instruction texts of your own with their sha256 sums (the plugin ships neither).
 
-While it is on:
+While it is on, at each handoff (and at each compaction when the file says so) the plugin asks Claude Code for up to two extra replies over the same conversation, one to each text, through the session's own client and credentials, so they use the session's allowance. Each call sends the conversation, the last reply and git and handoff facts (branch, HEAD, recent log and diff stat, the queue list, the previous handoff in the same bucket). The calls do not show in the chat, no turn waits for them, and every tool is denied to them; the plugin's own handoff turn may start up to 3 seconds later. The replies are secret-scanned and redacted, then saved under `~/.cache/afk-compact-trial/` (files 0600) with a content-free record per moment; nothing is written under the handoff root, and nothing leaves your machine except those calls. A moment is skipped when a usage window is at 90% or more or unknown, when the prompt cache would be cold, or when the file's version, repository or folder pins do not match.
 
-- **Up to two model calls at each moment**, through the session's own client and credentials, so they use the same allowance as the session; a call whose instruction text is missing locally is not made. Each call sends the conversation plus the facts the older instructions ask for: git branch, HEAD, recent log and diff stat, `.remember/now.md`, the queue list, the previous handoff in the same bucket in full, and the last reply. They do not show in the chat, no turn waits for them, and every tool is denied to them. The plugin's own handoff turn starts up to 3 seconds later while the facts for the first call are measured.
-- **Your texts, checked.** Both instruction texts are read from the paths the file names and checked against the sha256 sums it lists; the plugin ships neither.
-- **Local, redacted, content-free records.** The replies are secret-scanned and redacted, then saved under `~/.cache/afk-compact-trial/` (files 0600), with one record per moment. A record holds ids, times, hashes, sizes, statuses, token counts, the model and Claude Code version, the worktree path, branch, HEAD and dirty count, the repository and ticket bucket names, and the paths of the two saved replies; never their text. Nothing is written under the handoff root, and nothing leaves your machine except the two calls above.
-- **Skips.** A moment is skipped, with one record, when a rate-limit window is at 90% or more, when no window is known, when the conversation's last request is more than 58 minutes old (its prompt cache would be cold), on a Claude Code version the file does not list, in a repository the file's skip-list names, at a compaction while the file leaves compactions off, and in a session that runs with another `CLAUDE_CONFIG_DIR` or other handoff and log folders than the file pins.
-
-To turn it off, delete the file or set `"on": false` in it; a change takes effect from the end of the current turn. The trial also ends by itself after its `trial_until` date.
+To turn it off, delete the file or set `"on": false` in it; the change takes effect from the end of the current turn. The trial also ends by itself after its `trial_until` date.
 
 ## Privacy
 
@@ -798,4 +795,4 @@ The seated path has been run live under a Team organization (Claude Code 2.1.306
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache License 2.0. See [LICENSE](https://github.com/RuslanTar/afk-compact/blob/main/LICENSE) and [NOTICE](NOTICE).

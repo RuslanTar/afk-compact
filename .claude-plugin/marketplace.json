@@ -7,7 +7,9 @@
       "name": "afk-compact",
       "source": "./plugin",
       "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going.",
-      "version": "0.1.9"
+      "version": "0.1.9",
+      "homepage": "https://github.com/RuslanTar/afk-compact",
+      "repository": "https://github.com/RuslanTar/afk-compact"
     }
   ]
 }
