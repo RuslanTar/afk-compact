@@ -1,6 +1,6 @@
 ---
 name: report
-description: 'Only when the user asks for a report: zip the plugin''s content-free logs, version, settings and probe results for the developer. Nothing is uploaded.'
+description: 'Only when the user asks for a report: zip the plugin''s content-free logs, keep-warm stats, version and settings for the developer. Uploads nothing.'
 argument-hint: "[--since 7d]"
 ---
 

@@ -48,7 +48,7 @@ my %got;
         my $e = $got{e};
         my @names = sort keys %$e;
         my @rows = grep { m{\Arows/} } @names;
-        $E->is(join(',', grep { !m{\Arows/} } @names), 'README.txt,config.json,manifest.json,probes.json,sizes.json',
+        $E->is(join(',', grep { !m{\Arows/} } @names), 'README.txt,config.json,keep-warm.json,manifest.json,probes.json,sizes.json',
                'the fixed B.5 names');
         $E->is(scalar @rows, 1, 'one rows file (one session)');
         $E->ok(($rows[0] =~ m{\Arows/[0-9a-f]{12}\.jsonl\z} ? 1 : 0), "rows file named by a 12-hex hash ($rows[0])") if @rows;
@@ -88,7 +88,7 @@ my %got;
         my ($roll) = grep { $_->{ev} eq 'compaction' } @r;
         $E->is($roll->{copy_path}, 'main', 'rollup copy path becomes its slot');
         $E->is(scalar(grep { $_->{ev} eq 'skip' } @r), 1, 'events/*.json rows are included');
-        $E->ok(($out->{stdout} =~ /^FILES 6: README\.txt, manifest\.json, config\.json, probes\.json, sizes\.json, rows\/ \(1 sessions, \d+ rows, 2026-10-21\.\.2026-10-21\)$/m ? 1 : 0),
+        $E->ok(($out->{stdout} =~ /^FILES 7: README\.txt, manifest\.json, config\.json, probes\.json, sizes\.json, keep-warm\.json, rows\/ \(1 sessions, \d+ rows, 2026-10-21\.\.2026-10-21\)$/m ? 1 : 0),
                "FILES line ($out->{stdout})");
         $E->ok(($out->{stdout} =~ /^NOT INCLUDED: conversation text, summaries, handoffs, commands, file paths, repo and branch names, settings paths$/m ? 1 : 0), 'NOT INCLUDED line');
         $E->ok(($out->{stdout} =~ /^SEND: attach this file to a message to the developer\. Nothing was uploaded\.$/m ? 1 : 0), 'SEND line');

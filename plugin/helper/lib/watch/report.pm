@@ -210,6 +210,148 @@ sub stats {
     return \%s;
 }
 
+# --- keep-warm ------------------------------------------------------------------
+
+# keep_warm({session => [rows]}) -> the keep-warm statistics of those rows (the live rows or the
+# export-transformed ones; counts, durations, enum reasons and versions only):
+#   gaps {armed, warmed, refused, open}: a gap warmed from its `keep_warm_start` row; a
+#     `keep_warm_stop` row with `refused` true, or with no start row open and pings 0 (an older
+#     version's refusal), is a refused gap; a gap with a start row and no stop row yet is open
+#   refused_by, stops_by {why => n}: the refused gaps' reasons; the warmed gaps' stop reasons
+#   pings {sent, hit, missed, late, failed}: sent is the `keep_warm_send` rows (the result rows
+#     where a gap has fewer, an older version); hit `warm`, missed `fork-miss`, late `late`,
+#     failed the rest; ping_results {result => n}; handovers: stops that handed the gap back
+#   next_request {hit, miss, none, not_seen}, miss_reasons {reason => n}: for each gap, the first
+#     `cache_after_gap` row whose response came after the gap's last row and before the next gap
+#   gap_list: per gap, oldest first, at most $KW_GAP_MAX (the newest; gap_list_truncated)
+our $KW_GAP_MAX = 1000;
+my %KW_PING = (warm => 'hit', 'fork-miss' => 'missed', late => 'late');
+sub keep_warm {
+    my ($sessions) = @_;
+    my %k = (v => 1, gaps => { armed => 0, warmed => 0, refused => 0, open => 0 }, refused_by => {}, stops_by => {},
+             pings => { sent => 0, hit => 0, missed => 0, late => 0, failed => 0 }, ping_results => {}, handovers => 0,
+             next_request => { hit => 0, miss => 0, none => 0, not_seen => 0 }, miss_reasons => {}, gap_list => [],
+             gap_list_truncated => \0);
+    my $t_of = sub { my $r = shift; return $r->{_t} // watch::io::parse_iso(ref $r->{ts} ? undef : $r->{ts}) // 0 };
+    my $w = sub { my $v = shift; return (defined $v && !ref $v && $v =~ /\A[a-z][a-z0-9_:-]{0,39}\z/) ? $v : 'other' };
+    my $num = sub { my $v = shift; return (defined $v && !ref $v && $v =~ /\A-?[0-9]+(?:\.[0-9]+)?\z/) ? 0 + $v : undef };
+    my @all;
+    for my $sid (sort keys %$sessions) {
+        my $i = 0;
+        my @rows = map { $_->[1] } sort { $a->[0] <=> $b->[0] || $a->[2] <=> $b->[2] }
+                   map { [ $t_of->($_), $_, $i++ ] } grep { ref $_ eq 'HASH' } @{ $sessions->{$sid} || [] };
+        my (@gaps, @after, $cur);
+        my $close = sub { push @gaps, $cur if $cur; $cur = undef };
+        for my $r (@rows) {
+            my $ev = $r->{ev} // '';
+            my $t = $t_of->($r);
+            if ($ev eq 'keep_warm_start') {
+                $close->();
+                $cur = { outcome => 'warmed', why => undef, start_t => $t, end_t => $t, sent => 0, res => {},
+                         plugin_version => $r->{plugin_version}, cc_version => $r->{cc_version} };
+            } elsif ($ev eq 'keep_warm_send' || $ev eq 'keep_warm_ping' || $ev eq 'keep_warm_wait') {
+                next unless $cur;
+                $cur->{end_t} = $t;
+                $cur->{sent}++ if $ev eq 'keep_warm_send';
+                $cur->{res}{ $w->($r->{result}) }++ if $ev eq 'keep_warm_ping';
+            } elsif ($ev eq 'keep_warm_stop') {
+                my $refused = _b($r->{refused}) || (!$cur && !($num->($r->{pings}) // 0));
+                my $new = sub { +{ outcome => $_[0], start_t => $t, sent => 0, res => {},
+                                   plugin_version => $r->{plugin_version}, cc_version => $r->{cc_version} } };
+                $close->() if $refused;
+                # a stop with pings and no start row: its start was before the window
+                my $g = $refused ? $new->('refused') : $cur // $new->('warmed');
+                @$g{qw(why end_t gap_s)} = ($w->($r->{why}), $t, $num->($r->{gap_s}));
+                $g->{handover} = _b($r->{handover});
+                push @gaps, $g;
+                $cur = undef;
+            } elsif ($ev eq 'cache_after_gap') {
+                my $rt = watch::io::parse_iso(ref $r->{resp_ts} ? undef : $r->{resp_ts}) // $t;
+                push @after, [ $rt, $r ];
+            }
+        }
+        $close->();
+        @after = sort { $a->[0] <=> $b->[0] } @after;
+        my $j = 0;
+        for my $gi (0 .. $#gaps) {
+            my $g = $gaps[$gi];
+            my $next_start = $gi < $#gaps ? $gaps[ $gi + 1 ]{start_t} : undef;
+            next if $g->{outcome} eq 'warmed' && !defined $g->{why};
+            $j++ while $j < @after && $after[$j][0] <= $g->{end_t};
+            next unless $j < @after && (!defined $next_start || $after[$j][0] < $next_start);
+            my $a = $after[ $j++ ][1];
+            $g->{next} = { result => $w->($a->{result}), miss_reason => $w->($a->{miss_reason}),
+                           map { ($_ => $num->($a->{$_})) } grep { defined $num->($a->{$_}) } qw(gap_s cache_read cache_creation input missed_tokens) };
+        }
+        push @all, @gaps;
+    }
+    for my $g (@all) {
+        my $n = 0;
+        $n += $_ for values %{ $g->{res} };
+        $g->{n} = $n;
+        $k{pings}{sent} += $g->{sent} > $n ? $g->{sent} : $n;
+        for my $res (keys %{ $g->{res} }) {
+            $k{ping_results}{$res} += $g->{res}{$res};
+            $k{pings}{ $KW_PING{$res} // 'failed' } += $g->{res}{$res};
+        }
+        $k{gaps}{armed}++;
+        if ($g->{outcome} eq 'refused') { $k{gaps}{refused}++; $k{refused_by}{ $g->{why} }++ }
+        else { $k{gaps}{warmed}++; defined $g->{why} ? $k{stops_by}{ $g->{why} }++ : $k{gaps}{open}++ }
+        $k{handovers}++ if $g->{handover};
+        if ($g->{next}) {
+            my $res = $g->{next}{result};
+            $k{next_request}{ exists $k{next_request}{$res} ? $res : 'none' }++;
+            $k{miss_reasons}{ $g->{next}{miss_reason} }++;
+        } else {
+            $k{next_request}{not_seen}++;
+        }
+    }
+    my @list = map {
+        my $g = $_;
+        +{ outcome => $g->{outcome}, why => $g->{why}, pings => $g->{n},
+           hit => $g->{res}{warm} // 0, late => $g->{res}{late} // 0, missed => $g->{res}{'fork-miss'} // 0,
+           gap_s => $g->{gap_s}, handover => ($g->{handover} ? \1 : \0), next => $g->{next},
+           plugin_version => $g->{plugin_version}, cc_version => $g->{cc_version} }
+    } @all;
+    if (@list > $KW_GAP_MAX) { splice @list, 0, @list - $KW_GAP_MAX; $k{gap_list_truncated} = \1 }
+    $k{gap_list} = \@list;
+    return \%k;
+}
+
+sub _kw_lines {
+    my ($k) = @_;
+    my $cnt = sub { my $h = shift; return join(', ', map { "$_ $h->{$_}" } sort keys %$h) || 'none' };
+    my ($g, $p, $n) = @$k{qw(gaps pings next_request)};
+    return ('none (no keep-warm row)') unless $g->{armed};
+    my @l = (
+        "- Gaps: $g->{armed} armed: $g->{warmed} warmed, $g->{refused} refused, $g->{open} open",
+        '- Refused, by reason: ' . $cnt->($k->{refused_by}),
+        "- Pings: $p->{sent} sent; $p->{hit} hit, $p->{missed} missed, $p->{late} late, $p->{failed} failed",
+        '- Ping results: ' . $cnt->($k->{ping_results}),
+        '- Stops, by reason: ' . $cnt->($k->{stops_by}),
+        "- Hand-overs to the idle path: $k->{handovers}",
+        "- Next main request after a gap: $n->{hit} hit, $n->{miss} miss, $n->{none} none, $n->{not_seen} not seen yet",
+        '- Its cache miss reason: ' . $cnt->($k->{miss_reasons}),
+        '', '| Gap | Outcome | Pings | Hit | Stop | Next request | Pause s | Read share | Miss reason |', '|---|---|---|---|---|---|---|---|---|',
+    );
+    my @list = @{ $k->{gap_list} };
+    my $from = @list > 50 ? @list - 50 : 0;
+    for my $i ($from .. $#list) {
+        my $x = $list[$i];
+        my $nx = $x->{next};
+        my $share = '-';
+        if ($nx && defined $nx->{cache_read}) {
+            my $tot = $nx->{cache_read} + ($nx->{cache_creation} // 0);
+            $share = $tot ? sprintf('%.2f', $nx->{cache_read} / $tot) : '-';
+        }
+        push @l, sprintf('| %d | %s | %d | %d | %s | %s | %s | %s | %s |', $i + 1, $x->{outcome}, $x->{pings}, $x->{hit},
+                         $x->{why} // 'open', ($nx ? $nx->{result} : 'not seen yet'), ($nx ? $nx->{gap_s} // '-' : '-'), $share,
+                         ($nx ? $nx->{miss_reason} : '-'));
+    }
+    push @l, '', '(the newest 50 gaps)' if $from;
+    return @l;
+}
+
 # --- bars ---------------------------------------------------------------------
 
 sub bars {
@@ -386,6 +528,7 @@ sub render {
     push @o, (%{ $s->{verdicts} } ? join(', ', map { "$_ $s->{verdicts}{$_}" } sort keys %{ $s->{verdicts} }) : 'none');
     push @o, '', 'Idle compactions (the rollup `idle` field): ' . ($s->{idle} // 0) . " of $s->{main}";
     push @o, '', "Size join conflicts (rollup vs compaction_boundary, the rollup value kept): $s->{join_conflict}";
+    push @o, '', '## Keep-warm', '', _kw_lines(keep_warm($L->{sessions}));
     my $d = $s->{deny};
     my $cnt = sub { my $h = shift; return join(', ', map { "$_ $h->{$_}" } sort keys %$h) || 'none' };
     push @o, '', '## Denials (permission_denied rows)', '';

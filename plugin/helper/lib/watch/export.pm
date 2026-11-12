@@ -24,7 +24,7 @@ use watch::bundle;
 use watch::alerts;
 
 our $SCHEMA_NAME_SUFFIX = '-report/1';
-our @FIXED = qw(README.txt manifest.json config.json probes.json sizes.json);
+our @FIXED = qw(README.txt manifest.json config.json probes.json sizes.json keep-warm.json);
 our $MAX_MB_DEFAULT = 20;
 our $IDENTITY_MIN = 4;
 our $GIT_REPOS_MAX = 20;
@@ -527,6 +527,9 @@ sub vocabulary {
               system-message watch_error_classes PASS FAIL total kinds classic_stream alerts mod_stream rollup events
               dispatch pending bg handoff-turn checkpoint watch-cache offsets heal resume-claimed jobs fingerprints
               keyset notice reports .orphans key));
+    # keep-warm.json's own keys and words (watch::report::keep_warm)
+    $add->(qw(v gaps armed warmed refused open refused_by stops_by pings sent hit missed late failed ping_results
+              handovers next_request miss not_seen miss_reasons gap_list gap_list_truncated outcome next handover));
     # config.json's own words: its fields, the export classes and path values,
     # the settings key names and the enum values core exports as themselves.
     $add->(qw(keys class value default clamped num bool enum path list unset custom custom-in-home unknown));
@@ -642,8 +645,10 @@ sub _readme {
         '',
         'Inside: manifest.json (versions, operating system, file list with sha256 values), config.json',
         '(your settings as classes: numbers, on/off, default or changed, counts of list items),',
-        'probes.json (capability checks already recorded), sizes.json (log sizes per file kind) and',
-        'rows/ (one file per session: event rows with ids, counts, enum values and times).',
+        'probes.json (capability checks already recorded), sizes.json (log sizes per file kind),',
+        'keep-warm.json (keep-warm counts per idle gap: pings, results, stop reasons, the cache result',
+        'of the next request) and rows/ (one file per session: event rows with ids, counts, enum values',
+        'and times).',
         '',
         @never,
         '',
@@ -990,6 +995,8 @@ sub _assemble {
         [ 'config.json', _canon(_config($ctx)) ],
         [ 'probes.json', _canon(_probes($ctx, $all_raw)) ],
         [ 'sizes.json', _canon(_sizes($ctx->{watch})) ],
+        # 0.1.11: the keep-warm statistics, built from the rows this zip holds (watch::report::keep_warm)
+        [ 'keep-warm.json', _canon(_keep_warm($keep)) ],
     );
     for my $h (sort keys %rows) {
         push @staged, [ "rows/$h.jsonl", join('', map { _canon($_) } @{ $rows{$h} }) ];
@@ -1068,6 +1075,16 @@ sub _assemble {
              rows_n => scalar(@$keep), sessions_n => scalar(keys %rows), from => $from, to => $to,
              truncated => $truncated, with => \%with,
              content_src => { map { ($_->[0] => $_->[2]) } map { @{ $o->{content}{$_} || [] } } @watch::export_schema::CONTENT_KINDS } };
+}
+
+# keep-warm.json: the keep-warm statistics of the exported rows (the transformed ones: counts,
+# durations, enum reasons and versions only), by the same code as `watch report`'s section.
+sub _keep_warm {
+    my ($keep) = @_;
+    my %s;
+    push @{ $s{ $_->[0] } }, $_->[2] for @$keep;
+    require watch::report;
+    return watch::report::keep_warm(\%s);
 }
 
 # The spec's spec_version as a number, else undef (an older or missing spec).

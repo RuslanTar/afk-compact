@@ -87,6 +87,33 @@ sub push_protected {
     return 0;
 }
 
+# 0.1.11: the cache facts of an assistant line, counts and classes only: `usage` {read, creation,
+# input} when the line has numeric cache counts, `msg_id` (one response spans one line per content
+# block), `side` for a sidechain or agent line, and Claude Code's miss reason from
+# `message.diagnostics` (`miss_reason`: a known reason, `other`, `none` when diagnostics is null
+# or has no reason, `not-reported` when the line has no diagnostics; `missed_tokens` its count).
+my %MISS_KNOWN = map { $_ => 1 } qw(model_changed system_changed tools_changed messages_changed previous_message_not_found unavailable);
+sub _cache_facts {
+    my ($f, $r, $msg) = @_;
+    my $n = sub { my $v = shift; return (defined $v && !ref $v && $v =~ /\A[0-9]{1,15}\z/) ? 0 + $v : undef };
+    my $u = ref $msg->{usage} eq 'HASH' ? $msg->{usage} : undef;
+    if ($u) {
+        my ($rd, $cr, $in) = map { $n->($u->{$_}) } qw(cache_read_input_tokens cache_creation_input_tokens input_tokens);
+        $f->{usage} = { read => $rd, creation => $cr // 0, input => $in // 0 } if defined $rd;
+    }
+    $f->{msg_id} = $msg->{id} if defined $msg->{id} && !ref $msg->{id} && $msg->{id} =~ /\A[A-Za-z0-9_-]{1,80}\z/;
+    my $side = $r->{isSidechain};
+    $f->{side} = 1 if (ref $side eq 'SCALAR' ? $$side : $side) || defined $r->{agentId};
+    if (!exists $msg->{diagnostics}) { $f->{miss_reason} = 'not-reported'; return }
+    my $d = $msg->{diagnostics};
+    my $m = ref $d eq 'HASH' && ref $d->{cache_miss_reason} eq 'HASH' ? $d->{cache_miss_reason} : undef;
+    if (!$m) { $f->{miss_reason} = 'none'; return }
+    my $t = $m->{type};
+    $f->{miss_reason} = (defined $t && !ref $t && $MISS_KNOWN{$t}) ? $t : 'other';
+    my $mt = $n->($m->{cache_missed_input_tokens});
+    $f->{missed_tokens} = $mt if defined $mt;
+}
+
 # Facts of one decoded row. `brand` is the plugin name; `outward` the compiled
 # outward classes.
 sub classify {
@@ -231,6 +258,7 @@ sub classify {
             push @calls, \%c;
         }
         $f{calls} = \@calls;
+        _cache_facts(\%f, $r, $msg);
         return \%f;
     }
     $f{kind} = 'other';

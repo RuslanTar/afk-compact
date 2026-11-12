@@ -76,7 +76,7 @@ sub scan_file {
                bad_lines => 0, oversize_lines => 0, partial => 0, restarted => 0, handoff_turn => [],
                turns => { prompts => 0, tool_batches => 0, tool_calls => 0, classes => {}, errors => {},
                           askq => { answered => 0, rejected => 0, timed_out => 0 }, plugin_origin_rows => 0, continues => 0, handoff_turns => 0, outward => {},
-                          nudges => 0, task_status => 0 });
+                          nudges => 0, task_status => 0 }, after_gap => []);
     my @st = stat $path;
     unless (@st && -r _) { $res{unreadable} = 1; return \%res }
     my ($ino, $size) = ($st[1], $st[7]);
@@ -353,6 +353,7 @@ sub _analyze {
         return;
     }
     if ($k eq 'assistant') {
+        _after_gap($res, $c, $f) if $f->{usage} && !$f->{side} && defined $f->{ts};
         $c->{last_assistant_ts} = $f->{ts} if defined $f->{ts};
         $c->{last_rel} = 'assistant';
         $c->{last_text_only} = $f->{text_only} ? 1 : 0;
@@ -423,6 +424,38 @@ sub _analyze {
         }
         return;
     }
+}
+
+# 0.1.11: the first main response after a pause of $GAP_MIN_S s or more since the last one (keep-warm
+# statistics: the report pairs it with the keep-warm gap before it). One entry per such response,
+# for a `cache_after_gap` row: the pause, the response's time, its cache tokens, `hit` (a read
+# share of the cached prefix of 0.5 or more, as a keep-warm ping counts one), `miss`, or `none`
+# (no cache tokens), and Claude Code's miss reason (rows.pm `_cache_facts`). A line of the same
+# response (one per content block) moves the last response's time; a line with no tokens at all
+# (a synthetic reply) is no request. At most $AFTER_GAP_CAP per file and run.
+our $GAP_MIN_S = 300;
+my $AFTER_GAP_CAP = 20;
+sub _after_gap {
+    my ($res, $c, $f) = @_;
+    my $u = $f->{usage};
+    return if !$u->{read} && !$u->{creation} && !$u->{input};
+    my ($id, $prev) = ($f->{msg_id}, $c->{resp_ts});
+    if (defined $id && defined $c->{resp_id} && $id eq $c->{resp_id}) {
+        $c->{resp_ts} = $f->{ts} if !defined $prev || $f->{ts} > $prev;
+        return;
+    }
+    $c->{resp_id} = $id;
+    $c->{resp_ts} = $f->{ts};
+    return unless defined $prev && $f->{ts} - $prev >= $GAP_MIN_S;
+    return if @{ $res->{after_gap} } >= $AFTER_GAP_CAP;
+    my $tot = $u->{read} + $u->{creation};
+    push @{ $res->{after_gap} }, {
+        resp_ts => watch::io::iso($f->{ts}), gap_s => int($f->{ts} - $prev + 0.5),
+        result => (!$tot ? 'none' : $u->{read} / $tot >= 0.5 ? 'hit' : 'miss'),
+        cache_read => $u->{read}, cache_creation => $u->{creation}, input => $u->{input},
+        miss_reason => $f->{miss_reason} // 'not-reported',
+        (defined $f->{missed_tokens} ? (missed_tokens => $f->{missed_tokens}) : ()),
+    };
 }
 
 # Run the sweep over the main transcript (and subagent files when wanted).

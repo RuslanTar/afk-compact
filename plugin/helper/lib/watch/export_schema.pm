@@ -61,6 +61,10 @@ my %USAGE = (usage_src => [list => 'wsrc'], usage_age_s => [counts => 'word'], u
 # `unknown` before
 my $IDLE = [or => 'bool', 'unknown'];
 my @ACUITY = qw(stable watch unstable -);
+# 0.1.11: the cache miss reasons Claude Code writes on a response (`message.diagnostics.cache_miss_reason.type`),
+# `none` (diagnostics null: no reason given) and `not-reported` (no diagnostics on the line)
+our @MISS_REASON = qw(none not-reported model_changed system_changed tools_changed messages_changed
+                      previous_message_not_found unavailable);
 # Claude Code's own tool names (fixed by Claude Code, the same for every install): the only tool
 # names the `tool` class keeps. A name not listed here becomes `other`.
 our @BUILTIN_TOOLS = qw(Agent AskUserQuestion Bash BashOutput CronCreate CronDelete CronList Edit EnterPlanMode
@@ -260,6 +264,12 @@ our %SCHEMA = (
                         pings => 'int', gap_s => 'num', handover => 'bool', refused => 'bool', windows => [list => 'window'],
                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
                         %USAGE },
+    # 0.1.11: the first main response after a pause of 5 minutes or more (the sweep, from the
+    # transcript's usage and Claude Code's `message.diagnostics`): the pause, the response's time,
+    # its cache tokens, `hit`/`miss`/`none` by the read share of the cached prefix, and Claude
+    # Code's cache miss reason (`none`: none reported; `not-reported`: no diagnostics on the line)
+    cache_after_gap => { resp_ts => 'ts', gap_s => 'num', result => [enum => qw(hit miss none)], cache_read => 'num',
+                         cache_creation => 'num', input => 'num', miss_reason => [enum => @MISS_REASON], missed_tokens => 'num' },
     # away digest phase 1: the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents
     # and the measure's running background tasks, at which step), and the digest turn submitted
