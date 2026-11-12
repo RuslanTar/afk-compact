@@ -1,0 +1,146 @@
+{
+ "id": "USAGE-07-reset-cap",
+ "note": "A reset time further ahead than its window is long (five_hour 5 h, seven_day 7 days, plus 10 minutes) is not believed: the shared usage record keeps the entry with no reset time, so it counts only while read or seen in the last 10 minutes (as the plugin reads it, limits.ts RESET_AHEAD_MS). A spend limit has no such cap.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "this session writes five_hour 50 resetting in 6 h and seven_day 30 in 8 days: both kept with no reset time; another session's five_hour resetting in 4 h and seven_day in 7 days and 5 minutes keep theirs",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "five_hour",
+        "pct": 40,
+        "resets_at": 1794240000,
+        "at": 1794225300,
+        "src": "plugin",
+        "sid8": "5e55a002"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 20,
+        "resets_at": 1794830700,
+        "at": 1794225300,
+        "src": "plugin",
+        "sid8": "5e55a003"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "usage",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "at": 1794225540,
+    "windows": [
+     {
+      "kind": "five_hour",
+      "pct": 50,
+      "resets_at": 1794247200
+     },
+     {
+      "kind": "seven_day",
+      "pct": 30,
+      "resets_at": 1794916800
+     }
+    ]
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 4
+     },
+     "readings.0.sid8": "$SID8",
+     "readings.0.kind": "five_hour",
+     "readings.0.resets_at": {
+      "null": 1
+     },
+     "readings.1.sid8": "$SID8",
+     "readings.1.kind": "seven_day",
+     "readings.1.resets_at": {
+      "null": 1
+     },
+     "readings.2.sid8": "5e55a002",
+     "readings.2.resets_at": 1794240000,
+     "readings.3.sid8": "5e55a003",
+     "readings.3.resets_at": 1794830700
+    }
+   }
+  },
+  {
+   "name": "a read alone: five_hour 99 resetting in 30 h, read 20 min ago, is left out (no reset time, not fresh); seven_day 99 resetting in 30 days, read 2 min ago, stays with no reset time; five_hour 97 resetting in 3 h, read 3 h ago, and a spend limit resetting in 30 days, read an hour ago, keep theirs",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "five_hour",
+        "pct": 99,
+        "resets_at": 1794333600,
+        "at": 1794224400,
+        "src": "plugin",
+        "sid8": "5e55a004"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 99,
+        "resets_at": 1796817600,
+        "at": 1794225480,
+        "src": "plugin",
+        "sid8": "5e55a005"
+       },
+       {
+        "kind": "five_hour",
+        "pct": 97,
+        "resets_at": 1794236400,
+        "at": 1794214800,
+        "src": "plugin",
+        "sid8": "5e55a006"
+       },
+       {
+        "kind": "spend_limit",
+        "pct": 95,
+        "resets_at": 1796817600,
+        "at": 1794222000,
+        "src": "plugin",
+        "sid8": "5e55a007"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "usage"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "readings": {
+      "len": 3
+     },
+     "readings.0.sid8": "5e55a005",
+     "readings.0.resets_at": {
+      "null": 1
+     },
+     "readings.1.sid8": "5e55a006",
+     "readings.1.resets_at": 1794236400,
+     "readings.2.sid8": "5e55a007",
+     "readings.2.resets_at": 1796817600
+    }
+   }
+  }
+ ]
+}

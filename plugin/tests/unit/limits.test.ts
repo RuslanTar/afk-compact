@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Deps } from '../../hooks/lib/deps'
 import type { LimitCtx } from '../../hooks/lib/limits'
 import type { Reading } from '../../hooks/lib/limits'
-import { LIMIT_DELTAS_KEY, LIMIT_FRESH_MS, PLAN_CAPS, USAGE_NOTE_MS, judge, noteUsage, ownReadings, planShares, readDeltas, readingsNow, recordDeltas, recordReadings, resetOf, usageFields, verdictOf, windowRule } from '../../hooks/lib/limits'
+import { LIMIT_DELTAS_KEY, LIMIT_FRESH_MS, PLAN_CAPS, RESET_AHEAD_MS, RESET_AHEAD_SLACK_MS, USAGE_NOTE_MS, judge, noteUsage, ownReadings, planShares, readDeltas, readingsNow, recordDeltas, recordReadings, resetOf, usageFields, verdictOf, windowRule } from '../../hooks/lib/limits'
 import { newState } from '../../hooks/lib/deps'
 import { resultJobOpen } from '../../hooks/lib/keepwarm'
 
@@ -399,4 +399,24 @@ test('AT-LM-17: a reading dated more than a minute ahead of the clock (a clock t
   // Through the trust rule: another session's 92 dated 4 min ahead, resetting in 3 days, alone.
   expect(judge([r('seven_day', 92, 'peer', -4, NOW + 3 * DAY)], C)).toMatchObject({ ok: false, band: false, rule: 'stale' })
   expect(judge([r('seven_day', 92, 'peer', -0.5, NOW + 3 * DAY)], C)).toMatchObject({ ok: true, band: true, rule: 'band' })
+})
+
+test('AT-LM-18: a reset time further ahead than its window is long (five_hour 5 h, seven_day 7 days, plus 10 min) is not believed: the reading has no reset time, so it counts only while fresh and no wait goes by it; a spend limit has no such cap', () => {
+  const H = 60 * MIN
+  expect(RESET_AHEAD_MS).toEqual({ five_hour: 5 * H, seven_day: 7 * DAY })
+  expect(RESET_AHEAD_SLACK_MS).toBe(10 * MIN)
+  // 20 min old: within the cap it counts until its reset (stop, cap); past it, it is not fresh (no-fresh).
+  expect(judge([r('five_hour', 99, 'plugin', 20, NOW + 5 * H)], C)).toMatchObject({ ok: false, rule: 'cap', reset: NOW + 5 * H })
+  expect(judge([r('five_hour', 99, 'plugin', 20, NOW + 5 * H + 10 * MIN)], C)).toMatchObject({ ok: false, rule: 'cap' })
+  expect(judge([r('five_hour', 99, 'plugin', 20, NOW + 5 * H + 11 * MIN)], C)).toMatchObject({ ok: true, rule: 'no-fresh', usage: { usage_n: { five_hour: 0 } } })
+  expect(judge([r('seven_day', 99, 'plugin', 20, NOW + 7 * DAY)], C)).toMatchObject({ ok: false, rule: 'cap', reset: NOW + 7 * DAY })
+  expect(judge([r('seven_day', 99, 'plugin', 20, NOW + 8 * DAY)], C)).toMatchObject({ ok: true, rule: 'no-fresh', usage: { usage_n: { seven_day: 0 } } })
+  // A fresh one past the cap still stops, but with no reset time to wait for.
+  const v = judge([r('five_hour', 99, 'plugin', 1, NOW + 30 * H)], C)
+  expect([v.ok, v.rule, v.reset]).toEqual([false, 'cap', undefined])
+  expect(resetOf([w('seven_day', 99, NOW + 30 * DAY)], C)).toBe(undefined)
+  // A far reset cannot keep an old share apart from the window the others read: another session's 40
+  // read 20 min ago with a reset 30 h ahead counts for nothing beside the own fresh 99 (no split).
+  expect(judge([r('five_hour', 99, 'plugin', 1, NOW + 2 * H), r('five_hour', 40, 'peer', 20, NOW + 30 * H)], { ...C, job: false })).toMatchObject({ ok: false, rule: 'cap', usage: { usage_n: { five_hour: 1 } } })
+  expect(judge([r('spend_limit', 95, 'plugin', 20, NOW + 30 * DAY)], C)).toMatchObject({ ok: false, rule: 'spend-90' })
 })

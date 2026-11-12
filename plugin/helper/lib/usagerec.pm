@@ -4,7 +4,8 @@ package usagerec;
 # small file of the plugin's own state at a fixed place no option moves (as cachestate.pm's):
 # ${XDG_STATE_HOME:-~/.local/state}/<plugin>/usage.v1.json (0600). An entry is
 # {kind, pct, resets_at, at, src, sid8}: the window kind Claude Code names (five_hour, seven_day,
-# spend_limit), its share, its reset (epoch seconds, or null), when it was read (epoch seconds),
+# spend_limit), its share, its reset (epoch seconds, or null; a plan window's further ahead than the
+# window is long, %AHEAD_S, is not believed and kept as null), when it was read (epoch seconds),
 # its source and the first 8 characters of the session id. Sources: `plugin`, the mod's
 # $.session.usage() (cmd/usage.pl --stdin), and `statusline`, the rate_limits of the JSON Claude Code
 # sends a status line (cmd/cache.pl --note-usage). No account id, no secret, no content. Claude Code
@@ -35,6 +36,11 @@ use utf8;
 our $FRESH_S = 600;
 # Entries of one kind whose resets are at most this far apart are of one window (limits.ts RESET_SAME_MS).
 our $SAME_RESET_S = 60;
+# How far ahead of the clock a plan window's reset may be: the window's length, plus $AHEAD_SLACK_S
+# (limits.ts RESET_AHEAD_MS). An entry whose reset is further ahead is kept with none. Other kinds
+# have no cap.
+our %AHEAD_S = (five_hour => 5 * 3600, seven_day => 7 * 86400);
+our $AHEAD_SLACK_S = 600;
 our $MAX_ENTRIES = 64;
 our $MAX_BYTES = 65536;
 # A statusline entry with the same share and reset as the one kept moves its `seen` only this
@@ -56,9 +62,10 @@ sub sid8 {
     return substr($s, 0, 8);
 }
 
-# _entry(hash) -> a clean entry, or undef when any field is out of form
+# _entry(hash, now) -> a clean entry, or undef when any field is out of form; a reset further
+# ahead of `now` than %AHEAD_S allows reads as none
 sub _entry {
-    my ($e) = @_;
+    my ($e, $now) = @_;
     return undef unless ref $e eq 'HASH';
     my ($kind, $src, $sid8) = map { ref $_ ? undef : $_ } @$e{qw(kind src sid8)};
     return undef unless defined $kind && $kind =~ /\A[a-z0-9_]{1,40}\z/;
@@ -68,6 +75,7 @@ sub _entry {
     my $at = _num($e->{at});
     return undef unless defined $pct && $pct >= 0 && $pct <= 1000 && defined $at && $at > 0;
     my $r = _num($e->{resets_at});
+    $r = undef if defined $r && defined $AHEAD_S{$kind} && $r - $now > $AHEAD_S{$kind} + $AHEAD_SLACK_S;
     my $seen = _num($e->{seen});
     return { kind => $kind, pct => $pct, resets_at => (defined $r && $r > 0 ? int($r) : undef), at => _t($at), src => $src, sid8 => $sid8,
              (defined $seen && $seen > $at ? (seen => _t($seen)) : ()) };
@@ -76,14 +84,16 @@ sub _entry {
 # _last(entry) -> when the entry was last read or seen
 sub _last { my ($e) = @_; return $e->{seen} // $e->{at} }
 
-# read_all() -> [entry...] as kept (none, unreadable or another schema: [])
+# read_all(now) -> [entry...] as kept (none, unreadable or another schema: []); now: the clock
 sub read_all {
+    my ($now) = @_;
+    $now //= util::now();
     my $f = file() // return [];
     my $raw = util::read_file($f, $MAX_BYTES + 1) // return [];
     return [] if length($raw) > $MAX_BYTES;
     my $j = eval { jsonc::decode($raw) };
     return [] unless ref $j eq 'HASH' && ($j->{schema} // '') eq schema() && ref $j->{readings} eq 'ARRAY';
-    return [ grep { defined } map { _entry($_) } @{ $j->{readings} } ];
+    return [ grep { defined } map { _entry($_, $now) } @{ $j->{readings} } ];
 }
 
 sub _key { my ($e) = @_; return join("\0", @$e{qw(sid8 src kind)}) }
@@ -116,10 +126,10 @@ sub _deciding {
 # note([entry...], now) -> [entry...] kept after the merge (written when anything changed)
 sub note {
     my ($new, $now) = @_;
-    my $all = read_all();
+    my $all = read_all($now);
     my %at = map { (_key($_) => $_) } @$all;
     my $ch = 0;
-    for my $e (grep { defined } map { _entry($_) } @{ $new || [] }) {
+    for my $e (grep { defined } map { _entry($_, $now) } @{ $new || [] }) {
         next if $e->{at} > $now + 300;
         my $old = $at{ _key($e) };
         next if $old && _last($old) >= $e->{at};
