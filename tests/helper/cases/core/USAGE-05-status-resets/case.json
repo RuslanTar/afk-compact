@@ -1,11 +1,11 @@
 {
  "id": "USAGE-05-status-resets",
- "note": "A usage reading counts until its window resets, however old (the share only grows until then); one past its reset counts for nothing, and one with no reset time only for 10 minutes. `status --sid` shows each of the session's readings with its age and reset (marked not counted when it does not count), and the other sessions' readings that count as the near-limit rule reads them: per window kind and reset (within a minute) the latest; with no reset time each session's newest. Read only.",
+ "note": "A usage reading counts until its window resets, however old (the share only grows until then); one past its reset counts for nothing, and one with no reset time only for 10 minutes. `status --sid` shows each of the session's readings with its age and reset (marked not counted when it does not count), and the other sessions' readings that count as the near-limit rule reads them: per window kind and reset (within a minute) the latest; with no reset time each session's newest. Read only. An own reading that is not its window's latest (another session read that window later) says so, with the share that decides. A reading dated more than a minute ahead of the clock is of unknown time (shown so): the window's latest only with a larger share.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
   {
-   "name": "own: seven_day 99 read 20 min ago, resetting in 3 days (counts); five_hour past its reset and a spend limit with no reset time 20 min old (not counted). Peers: 5e55a002's five_hour past its reset left out; seven_day in two windows (5e55a003's 97 is the latest of the 3-day one, 5e55a004's older 90 is the same window; 5e55a002's 21 resets in 5 days); 5e55a007's status line entry with no reset time beside its seven_day with one is that reading, not a window of its own; 5e55a005's spend limit 5 min old counts, 5e55a006's 20 min old does not",
+   "name": "own: seven_day 99 read 20 min ago, resetting in 3 days (counts; 5e55a003's 97 from 5 min ago is that window's latest, so the own item says so); five_hour past its reset and a spend limit with no reset time 20 min old (not counted). Peers: 5e55a002's five_hour past its reset left out; seven_day in two windows (5e55a003's 97 is the latest of the 3-day one, 5e55a004's older 90 is the same window; 5e55a002's 21 resets in 5 days); 5e55a007's status line entry with no reset time beside its seven_day with one is that reading, not a window of its own; 5e55a005's spend limit 5 min old counts, 5e55a006's 20 min old does not",
    "setup": [
     {
      "write": "$HOME/.local/state/$BRAND/usage.v1.json",
@@ -113,7 +113,138 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^usage: five_hour 40% \\(plugin, 30m ago, reset passed: not counted\\) · seven_day 99% \\(plugin, 20m ago, resets in 3d\\) · spend_limit 50% \\(plugin, 20m ago, no reset time: not counted after 10 min\\); other sessions on this machine: seven_day 97% \\(5m ago, resets in 3d\\) · seven_day 21% \\(30m ago, resets in 5d\\) · spend_limit 50% \\(5m ago, no reset time\\)$"
+     "^usage: five_hour 40% \\(plugin, 30m ago, reset passed: not counted\\) · seven_day 99% \\(plugin, 20m ago, resets in 3d; decided by another session's later 97%, 5m ago\\) · spend_limit 50% \\(plugin, 20m ago, no reset time: not counted after 10 min\\); other sessions on this machine: seven_day 97% \\(5m ago, resets in 3d\\) · seven_day 21% \\(30m ago, resets in 5d\\) · spend_limit 50% \\(5m ago, no reset time\\)$"
+    ]
+   }
+  },
+  {
+   "name": "own seven_day 99 read 1 min ago is its window's latest (no note); in that window 5e55a003's 92 from 3 min ago and 5e55a008's 40 dated 4 min ahead (unknown time, a smaller share): the other sessions' window shows the 92",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "seven_day",
+        "pct": 99,
+        "resets_at": 1794484800,
+        "at": 1794225540,
+        "src": "plugin",
+        "sid8": "$SID8"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 92,
+        "resets_at": 1794484800,
+        "at": 1794225420,
+        "src": "plugin",
+        "sid8": "5e55a003"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 40,
+        "resets_at": 1794484820,
+        "at": 1794225840,
+        "src": "plugin",
+        "sid8": "5e55a008"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^usage: seven_day 99% \\(plugin, 1m ago, resets in 3d\\); other sessions on this machine: seven_day 92% \\(3m ago, resets in 3d\\)$"
+    ]
+   }
+  },
+  {
+   "name": "own seven_day 90 read 1 min ago; 5e55a008's 95 in that window dated 4 min ahead (unknown time, a larger share) is the window's latest",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "seven_day",
+        "pct": 90,
+        "resets_at": 1794484800,
+        "at": 1794225540,
+        "src": "plugin",
+        "sid8": "$SID8"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 95,
+        "resets_at": 1794484820,
+        "at": 1794225840,
+        "src": "plugin",
+        "sid8": "5e55a008"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^usage: seven_day 90% \\(plugin, 1m ago, resets in 3d; decided by another session's later 95%, time unknown\\); other sessions on this machine: seven_day 95% \\(time unknown, resets in 3d\\)$"
+    ]
+   }
+  },
+  {
+   "name": "a full tie: own seven_day 97 read 1 min ago and 0aaaaaaa's 97 read at the same time with the same reset (its session id sorts before this one's); the own reading decides, as in the plugin, so no note",
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/usage.v1.json",
+     "json": {
+      "schema": "$BRAND-usage/v1",
+      "updated_at": 1794225540,
+      "readings": [
+       {
+        "kind": "seven_day",
+        "pct": 97,
+        "resets_at": 1794484800,
+        "at": 1794225540,
+        "src": "plugin",
+        "sid8": "$SID8"
+       },
+       {
+        "kind": "seven_day",
+        "pct": 97,
+        "resets_at": 1794484800,
+        "at": 1794225540,
+        "src": "plugin",
+        "sid8": "0aaaaaaa"
+       }
+      ]
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^usage: seven_day 97% \\(plugin, 1m ago, resets in 3d\\); other sessions on this machine: seven_day 97% \\(1m ago, resets in 3d\\)$"
     ]
    }
   }

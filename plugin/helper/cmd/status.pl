@@ -961,7 +961,10 @@ sub keep_warm_lines {
 # than 10 minutes, is marked not counted); then the other sessions' readings on this machine that
 # count, as the plugin's near-limit rule reads them (limits.ts windowsOf): per window kind and
 # reset (within a minute) the latest, with no reset time each session's newest, at most
-# $USAGE_PEERS_SHOWN of them. Read only; one line.
+# $USAGE_PEERS_SHOWN of them. The latest is the one read last; one dated more than a minute ahead
+# of the clock is of unknown time (shown so) and the latest only with a larger share (limits.ts
+# latestOf). An own reading whose window's latest is another session's says so, with that share:
+# the plugin's rule goes by it. Read only; one line.
 our $USAGE_PEERS_SHOWN = 6;
 sub usage_lines {
     my ($sid) = @_;
@@ -977,25 +980,51 @@ sub usage_lines {
         }
         elsif ($counts->($e)) { push @peer, $e }
     }
-    # the other sessions' windows: grouped by kind and reset (a group's resets within a minute of
-    # its earliest), or by kind and session without one, left out where that session has a counted
-    # entry of the kind with a reset (one reading); each one's latest (the larger share on a tie)
+    # a reading's time as the near-limit rule reads it: more than a minute ahead of the clock is
+    # not known (undef), up to a minute ahead is now
+    my $t = sub { my ($e) = @_; return $e->{at} - $now > 60 ? undef : $e->{at} < $now ? $e->{at} : $now };
+    # the latest of one window's readings (limits.ts latestOf): the dated one read last (the larger
+    # share on the same time), unless one of unknown time has a larger share
+    my $latest = sub {
+        my ($dated, $undated);
+        for my $e (@_) {
+            my $x = $t->($e);
+            if (!defined $x) { $undated = $e if !$undated || $e->{pct} > $undated->{pct}; next }
+            my $y = $dated ? $t->($dated) : undef;
+            $dated = $e if !$dated || $x > $y || ($x == $y && $e->{pct} > $dated->{pct});
+        }
+        return $undated && (!$dated || $undated->{pct} > $dated->{pct}) ? $undated : $dated;
+    };
+    # the windows of some readings: grouped by kind and reset (a group's resets within a minute of
+    # its earliest), or by kind and session without one; each group's readings
+    my $windows = sub {
+        my @g;
+        for my $e (sort { $a->{kind} cmp $b->{kind} || ($a->{resets_at} // 0) <=> ($b->{resets_at} // 0) || $a->{sid8} cmp $b->{sid8} } @_) {
+            my $w;
+            if (defined $e->{resets_at}) {
+                $w = $g[-1] if @g && $g[-1][1][0]{kind} eq $e->{kind} && defined $g[-1][0] && $e->{resets_at} - $g[-1][0] <= 60;
+            } else {
+                ($w) = grep { !defined $_->[0] && $_->[1][0]{kind} eq $e->{kind} && $_->[1][0]{sid8} eq $e->{sid8} } @g;
+            }
+            if ($w) { push @{ $w->[1] }, $e } else { push @g, [$e->{resets_at}, [$e]] }
+        }
+        return map { $_->[1] } @g;
+    };
+    # the other sessions' windows, a no-reset entry left out where that session has a counted
+    # entry of the kind with a reset (one reading); each one's latest
     my %timed = map { ("$_->{sid8}\0$_->{kind}" => 1) } grep { defined $_->{resets_at} } @peer;
     @peer = grep { defined $_->{resets_at} || !$timed{"$_->{sid8}\0$_->{kind}"} } @peer;
-    my @win;
-    for my $e (sort { $a->{kind} cmp $b->{kind} || ($a->{resets_at} // 0) <=> ($b->{resets_at} // 0) || $a->{sid8} cmp $b->{sid8} } @peer) {
-        my $g;
-        if (defined $e->{resets_at}) {
-            $g = $win[-1] if @win && $win[-1][1]{kind} eq $e->{kind} && defined $win[-1][0] && $e->{resets_at} - $win[-1][0] <= 60;
-        } else {
-            ($g) = grep { !defined $_->[0] && $_->[1]{kind} eq $e->{kind} && $_->[1]{sid8} eq $e->{sid8} } @win;
-        }
-        if (!$g) { push @win, [$e->{resets_at}, $e]; next }
-        my $o = $g->[1];
-        $g->[1] = $e if $e->{at} > $o->{at} || ($e->{at} == $o->{at} && $e->{pct} > $o->{pct});
+    my @win = map { $latest->(@$_) } $windows->(@peer);
+    # an own counted reading with a reset: its window's latest beside the other sessions' readings
+    # (the own one first, so on a full tie it stays the latest, as in the plugin)
+    my %over;
+    for my $g ($windows->(@peer, grep { defined $_->{resets_at} && $counts->($_) } values %mine)) {
+        my ($own) = grep { defined $s8 && $_->{sid8} eq $s8 } @$g;
+        my $l = $own && $latest->($own, grep { $_ != $own } @$g);
+        $over{ $own->{kind} } = $l if $l && $l != $own;
     }
-    @win = map { $_->[1] } @win;
     my $ago = sub { my $x = $_[0] < 0 ? 0 : int($_[0]); return $x < 60 ? "${x}s" : $x < 3600 ? int($x / 60) . 'm' : $x < 172800 ? int($x / 3600) . 'h' : int($x / 86400) . 'd' };
+    my $when = sub { my ($e) = @_; return defined $t->($e) ? $ago->($now - $e->{at}) . ' ago' : 'time unknown' };
     my $reset = sub {
         my ($e) = @_;
         return $counts->($e) ? 'no reset time' : 'no reset time: not counted after 10 min' unless defined $e->{resets_at};
@@ -1004,11 +1033,13 @@ sub usage_lines {
     };
     my @w = map {
         my $e = $mine{$_};
-        sprintf('%s %s%% (%s, %s ago, %s)', $_, int($e->{pct}), $e->{src} eq 'statusline' ? 'status line' : 'plugin', $ago->($now - $e->{at}), $reset->($e))
+        my $o = $over{$_};
+        sprintf('%s %s%% (%s, %s, %s%s)', $_, int($e->{pct}), $e->{src} eq 'statusline' ? 'status line' : 'plugin', $when->($e), $reset->($e),
+                $o ? sprintf("; decided by another session's later %s%%, %s", int($o->{pct}), $when->($o)) : '')
     } sort keys %mine;
     my $l = 'usage: ' . (@w ? join(' · ', @w) : defined $s8 ? 'no reading of this session' : 'unknown (no session id)');
     if (@win) {
-        my @p = map { sprintf('%s %s%% (%s ago, %s)', $_->{kind}, int($_->{pct}), $ago->($now - $_->{at}), $reset->($_)) } @win[0 .. ($#win < $USAGE_PEERS_SHOWN - 1 ? $#win : $USAGE_PEERS_SHOWN - 1)];
+        my @p = map { sprintf('%s %s%% (%s, %s)', $_->{kind}, int($_->{pct}), $when->($_), $reset->($_)) } @win[0 .. ($#win < $USAGE_PEERS_SHOWN - 1 ? $#win : $USAGE_PEERS_SHOWN - 1)];
         push @p, '+' . (@win - $USAGE_PEERS_SHOWN) . ' more' if @win > $USAGE_PEERS_SHOWN;
         $l .= '; other sessions on this machine: ' . join(' · ', @p);
     }

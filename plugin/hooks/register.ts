@@ -130,8 +130,10 @@ export const register: Register = (on, options) => {
     return yield* next(e)
   })
 
-  // The engine measured the session (after a main turn, or a usage window moved a whole
-  // point, a keep-warm ping's response too): the usage windows are fresh now. Observe only.
+  // The engine measured the session: after each main-thread turn, or when a usage unit moved (a
+  // usage window by a whole point, the context fill or the cost). The usage windows count as fresh
+  // now. The engine does not say whether a keep-warm ping's response can fire this; limits.ts reads
+  // a ping as not refreshing the reading. Observe only.
   on('session.measure', async ($, e, next) => {
     const r = await next(e)
     stampUsage($, state, options)

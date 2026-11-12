@@ -19,7 +19,8 @@
 //   session, while a background job of this session is open, on the one-hour cache (Claude Code's
 //   own TTL switch, else a five-hour or seven-day plan window reported: the idle path's reading,
 //   so never the five-minute cache, whose break-even is under 2 h), and with no usage window it
-//   can read stopping it (limits.ts; none reported: that guard is skipped). Plain user absence never warms
+//   can read stopping it (limits.ts; none reported: the session's own entries in the shared usage
+//   record, with the other sessions' beside them; no own entry there: that guard is skipped). Plain user absence never warms
 //   anything (that would spend usage on every absence). Nor a gap no idle path can take
 //   over (`no-idle-path`): no idle record armed or held for the session (`idle_handoff_turn` and
 //   `idle_compact` both off, or no kind at this context size), or `triggers` off (every idle path
@@ -63,8 +64,9 @@
 //   re-arms the timer (`resumeKeepWarm`), or, while a tick runs, leaves the gap to that tick; the
 //   idle timer it cancelled runs again too (idle.ts `resumeIdle`), so the record `no-idle-path`
 //   reads in the store still has its fire, and the hand-over a taker.
-// Rows: `keep_warm_start {jobs, gap_s, hours, windows, ping_s}` (`windows`: the usage windows read;
-// 0 means the near-limit guard is skipped; `ping_s`: the ping interval, which the cache state's
+// Rows: `keep_warm_start {jobs, gap_s, hours, windows, ping_s}` (`windows`: the usage windows Claude
+// Code reports; 0: none, so the near-limit guard reads the session's own entries in the usage
+// record, and is skipped with none there; `ping_s`: the ping interval, which the cache state's
 // `next_due_at` follows), one `keep_warm_ping {n, result, cache_read, cache_creation,
 // since_s, gap_s, ms, status?}` per ping, one `keep_warm_wait {n, gap_s, next_s, windows, rule}` per
 // wait for a usage window's reset (`next_s`: the seconds to the ping then), one `keep_warm_stop {why, pings, gap_s, handover, windows?}`
@@ -426,8 +428,8 @@ async function refuse(d: Deps, kw: KeepWarm, now: number): Promise<void> {
 }
 
 /**
- * Warming starts for this gap: one `keep_warm_start` row (`windows` 0: no usage window read, the
- * near-limit guard is skipped; `ping_s`: the ping interval, test-seam-scaled). True when nothing disturbed the gap meanwhile; false, with
+ * Warming starts for this gap: one `keep_warm_start` row (`windows` 0: Claude Code reports no usage
+ * window, so the near-limit guard reads the usage record alone; `ping_s`: the ping interval, test-seam-scaled). True when nothing disturbed the gap meanwhile; false, with
  * nothing more to do, when a turn, a prompt or a stop came during its reads (the gap stays `armed`
  * with no row) or during its row's write (a stop then writes its row after this one). The first
  * ping and the idle timer's fire can begin the same gap at once: the one that finds it begun
