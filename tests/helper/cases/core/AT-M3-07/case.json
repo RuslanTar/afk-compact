@@ -612,7 +612,7 @@
      "compactions: 10 in this session; last 5 (1 not ok):",
      "smokeDue: 2.1.306",
      "! \"$STORE\" smoke",
-     "AT-M1-13, AT-M2-05, AT-M4-05"
+     "live smoke checks to re-run: compaction and resume delivery, the compaction nudge, background subagents"
     ],
     "stdout_absent": [
      "retry window",
