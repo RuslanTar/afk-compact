@@ -994,19 +994,11 @@ sub usage_lines {
     }
     # a reading's time as the near-limit rule reads it: more than a minute ahead of the clock is
     # not known (undef), up to a minute ahead is now
-    my $t = sub { my ($e) = @_; return $e->{at} - $now > 60 ? undef : $e->{at} < $now ? $e->{at} : $now };
-    # the latest of one window's readings (limits.ts latestOf): the dated one read last (the larger
-    # share on the same time), unless one of unknown time has a larger share
-    my $latest = sub {
-        my ($dated, $undated);
-        for my $e (@_) {
-            my $x = $t->($e);
-            if (!defined $x) { $undated = $e if !$undated || $e->{pct} > $undated->{pct}; next }
-            my $y = $dated ? $t->($dated) : undef;
-            $dated = $e if !$dated || $x > $y || ($x == $y && $e->{pct} > $dated->{pct});
-        }
-        return $undated && (!$dated || $undated->{pct} > $dated->{pct}) ? $undated : $dated;
-    };
+    my $t = sub { my ($e) = @_; return $e->{at} - $now > $usagerec::SAME_RESET_S ? undef : $e->{at} < $now ? $e->{at} : $now };
+    # the latest of one window's readings (limits.ts latestOf; usagerec::_latest, the record's own
+    # rule): the dated one read last (the larger share on the same time), unless one of unknown time
+    # has a larger share
+    my $latest = sub { return usagerec::_latest($now, @_) };
     # the windows of some readings: grouped by kind and reset (a group's resets within a minute of
     # its earliest), or by kind and session without one; each group's readings
     my $windows = sub {
