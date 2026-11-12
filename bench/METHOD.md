@@ -5,6 +5,8 @@ Version 1.0, written 2026-11-12, before any bench-v2 run.
 
 Inputs this design rests on: the earlier lab runs ([PRIOR.md](PRIOR.md)), the weighting of the earlier plugin text, a profile of real compaction use, a loss analysis of real sessions, and cost data from the author's own use. Reproducible numbers here come from the design scripts `prior_variance.py`, `power_v2.py`, `cost_v2.py` and `calib_usage.py`. None of them calls a model.
 
+Not in the repository yet: the run book (cited below by section), the design, lab and campaign scripts named below (`prior_variance.py`, `gen_harbourline.py`, `report_run.py`, `blind.py`, `run_checks.py`, `stats2.py`, ...), `FREEZE-2.md` and `docs/benchmark.md`. They are published with the results.
+
 ---
 
 ## 0. In one screen
@@ -711,7 +713,7 @@ Caps are set at about 1.6 times the estimate, so a cap hit signals a malfunction
 
 1. **Budget.** Before every pair (both arms start together), `spend_check.py` adds the whole `spend.jsonl` total (all lanes of this campaign) to 1.3 × the pair's estimate. If that exceeds **$1,000**, no new run starts. The campaign stops and reports. Stage B starts only after the cap is raised in writing.
 2. **Account limits.**
-   - A run starts only if every reported `rate_limits` window is below 85%. Readings are read per `resets_at`, because a pool proxy can switch accounts.
+   - A run starts only if every reported `rate_limits` window is below 85%. Readings are read per `resets_at`, because the reporting account can change between readings.
    - If a rate-limit error appears in a run, that run stops and is invalid.
    - In both cases the matrix sleeps in 10-minute steps until `resets_at` plus 2 minutes, then re-checks.
 3. **Gates.** Any pilot gate failure (G0-G12, the run book, section 7) stops the campaign until it is fixed and the pilot re-run. Pilot data never enters an analysis.

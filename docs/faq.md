@@ -19,7 +19,7 @@ It can, in these ways, and each one has an off switch:
 - **Earlier, more frequent compactions** on very large windows, because the plugin compacts at a target size. See `compact_target_tokens` in [Settings](configuration.md#settings).
 - **A handoff turn** before a planned compaction and in a last cycle: an extra turn on your model with the full context, which counts toward your usage. Turn it off with `precompact_turn` or `handoff_turn` set to `false`; see [Handoffs and resume](handoffs-and-resume.md#the-handoff-turn-of-a-last-cycle).
 - **Keep-warm requests** while your background jobs run. Set `keep_warm_hours` to `0` to turn it off; see [keep-warm](keep-warm.md#keeping-the-cache-warm-while-jobs-run).
-- **Plugin idle compaction** and the **idle handoff turn** when a session sits idle. By default the idle handoff turn also runs when a limit is at 90% or more. Set `idle_handoff_turn` to `false`, or `idle_handoff_near_limit` to `skip`, to keep it out; see [Idle compaction](idle-compaction.md#idle-compaction).
+- **Plugin idle compaction** and the **idle handoff turn** when a session sits idle. Set `idle_compact` to `false` to turn plugin idle compaction off. By default the idle handoff turn also runs when a limit is at 90% or more. Set `idle_handoff_turn` to `false`, or `idle_handoff_near_limit` to `skip`, to keep it out; see [Idle compaction](idle-compaction.md#idle-compaction).
 
 ## Does it send data anywhere?
 

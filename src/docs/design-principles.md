@@ -34,4 +34,4 @@ Each setting is listed with its default, what it does and what it costs, and the
 
 ## Numbers only with a method
 
-These pages give no recall, retention, speed or cost-saving number. The benchmark method is fixed in advance ([bench/METHOD.md](../bench/METHOD.md)), and its results will be published there. The dollar figures for idle compaction are labelled estimates. What has not been run live yet is listed in [Limits](limitations.md#limits).
+These pages give no recall, retention, speed or cost-saving number. The benchmark method is fixed in advance ([bench/METHOD.md](../bench/METHOD.md)), and its results will be published there. The one dollar figure, the cost of plugin idle compaction's own summary call, is a labelled estimate and is not set against a cost without the plugin. What has not been run live yet is listed in [Limits](limitations.md#limits).

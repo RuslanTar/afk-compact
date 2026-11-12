@@ -3,7 +3,7 @@
 With `"idleCompaction": false` in your Claude Code settings, afk-compact now compacts long idle sessions itself; before this version that setting meant no idle compaction at all. Set the plugin option `idle_compact` to `false` to keep none.
 
 ```mermaid
-flowchart LR
+flowchart TD
   A["Last request<br/>context at or above the minimum"] --> B{"Native idle compaction<br/>on in your settings?"}
   B -- yes --> C["about 54 min:<br/>native idle compaction"]
   B -- no --> D["about 54 min:<br/>plugin idle compaction"]
@@ -49,7 +49,7 @@ It does not run when:
 
 If it fails twice in a row in a session (a hook refused it, or Claude Code did not compact), it stays off until the plugin loads again, and the idle handoff turn below takes its place. `idle_compact: false` turns it off.
 
-**Cost.** One summary call that reads the warm cache (an estimate: about $0.15–0.35 on Opus at 240,000 tokens at list prices, not measured), plus a smaller first request when you come back. Coming back to the same session uncompacted once its cache has expired reads the whole context again (an estimate: about $1.95 at 240,000 tokens). The idle handoff turn below costs several times the summary call, so the plugin does not run it before plugin idle compaction.
+**Cost.** One summary call that reads the warm cache (an estimate: about $0.15–0.35 on Opus at 240,000 tokens at list prices, not measured), plus a smaller first request when you come back. Coming back uncompacted after the cache has expired reprocesses the whole context as uncached input ([docs](https://code.claude.com/docs/en/costs#why-usage-climbs-in-a-long-session)). The idle handoff turn below costs several times the summary call, so the plugin does not run it before plugin idle compaction.
 
 What the plugin does with an idle compaction, native or plugin:
 

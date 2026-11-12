@@ -21,6 +21,13 @@ From a shell:
 claude plugin install afk-compact --marketplace RuslanTar/afk-compact
 ```
 
+On Claude Code 2.1.287 to 2.1.291, which have no `--marketplace` flag, add the marketplace first, then install from it:
+
+```
+/plugin marketplace add RuslanTar/afk-compact
+/plugin install afk-compact@afk-compact
+```
+
 In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `RuslanTar/afk-compact`, then **Add plugin**.
 
 Answer `y` to add the marketplace, pick a scope (user scope is first), then review the settings screen. Every setting has a working default (see [Settings](configuration.md#settings)); `/afk-compact:settings` goes through them later, section by section.

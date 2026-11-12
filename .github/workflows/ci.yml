@@ -80,9 +80,9 @@ jobs:
             printf 'ci-placeholder-name\n' > "$names"
           fi
           tools/gates plugin README.md docs --names "$names" --no-git-log
-          # The community files and .github get the four gates that apply to hand-written text.
+          # The community files, .github and bench get the four gates that apply to hand-written text.
           for gate in names user-path attribution stale-name; do
-            tools/gates CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md CHANGELOG.md .github \
+            tools/gates CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md CHANGELOG.md .github bench \
               --names "$names" --no-git-log --only "$gate"
           done
 

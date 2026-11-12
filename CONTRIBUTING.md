@@ -106,7 +106,7 @@ CC_TYPES_DIR=/folder/that/holds/claude-code.d.ts tools/typecheck
 tools/gates plugin README.md docs --names <file> --no-git-log
 ```
 
-The gates also run over `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CHANGELOG.md` and `.github`; run `tools/gates CONTRIBUTING.md --names <file> --no-git-log --only attribution` and the same call with `--only names`, `--only user-path` and `--only stale-name` for the files you touched.
+The gates also run over `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CHANGELOG.md`, `.github` and `bench`; run `tools/gates CONTRIBUTING.md --names <file> --no-git-log --only attribution` and the same call with `--only names`, `--only user-path` and `--only stale-name` for the files you touched.
 
 The gates reject things such as absolute paths into a home folder, your account name and git email, leftover template markers, stale plugin names, co-author trailers and generator footers in files and commit messages, and wording rules for the skills and assets. `--names` takes a list of plugin and tool names that the README, the docs and the shipped files must not mention. The maintainer keeps that list outside the repository; for your own runs, any file with one name per line works, such as `printf 'placeholder-name\n' > /tmp/names.txt`. Your run therefore cannot catch a listed name; the maintainer runs the real list before merging your pull request.
 
