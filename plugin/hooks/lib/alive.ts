@@ -28,8 +28,13 @@ export async function writeAlive(d: Deps, sid: string, turnId: string | null): P
 /**
  * Once per load, before any handler acts: the Claude Code version, the effective thresholds
  * (`config_effective` and its rows) and a halt mode persisted by an earlier load.
+ * `inContext`: called from prompt.context, which starts the thresholds' read without waiting for
+ * it. Their compaction window comes from the context breakdown, and that read waits for the
+ * context build, which waits for this hook: on `claude --resume` Claude Code builds the first
+ * message's context at start-up, often before session.start got here, and an awaited read there
+ * never returned (the resumed session made no request).
  */
-export async function prepare(d: Deps): Promise<string> {
+export async function prepare(d: Deps, opts: { inContext?: boolean } = {}): Promise<string> {
   const sid = await d.sessionId()
   const s = d.state
   if (!s.initDone) {
@@ -39,7 +44,8 @@ export async function prepare(d: Deps): Promise<string> {
     } catch {
       s.ccVersion = null
     }
-    await effective(d, sid)
+    if (opts.inContext === true) void effective(d, sid).catch(() => undefined)
+    else await effective(d, sid)
     await loadHalt(d, sid)
     await loadIdle(d, sid)
   }

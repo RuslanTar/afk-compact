@@ -51,6 +51,12 @@ export class World {
   breakdown: { rawMaxTokens: number; autocompactSource: string; autoCompactThreshold?: number } | undefined = undefined
   breakdownThrow = false
   usageArgs: unknown[] = []
+  /**
+   * Awaited before a breakdown call answers: Claude Code counts the first message's context
+   * there, so on `--resume` (that context built at start-up) the call waits for the build, and with
+   * it for every prompt.context hook.
+   */
+  atBreakdown: (() => Promise<unknown>) | undefined
   /** `$.agent.list()`; undefined: the call rejects. */
   agents: { id: string; status: string; type?: string }[] | undefined = []
   files = new Map<string, string>()
@@ -241,9 +247,12 @@ export class World {
     on('session.usage', (_$, e) => {
       this.usageArgs.push(e)
       const asked = typeof e === 'object' && e !== null && 'breakdown' in e && e.breakdown !== undefined
-      if (asked && this.breakdownThrow) throw new Error('no breakdown')
-      const bd = asked && this.breakdown ? { breakdown: this.breakdown as never } : {}
-      return { value: { startedAt: T0, rateLimits: this.rateLimits as never, context: { tokens: this.tokens, window: this.window, ...bd } } }
+      const answer = () => {
+        if (asked && this.breakdownThrow) throw new Error('no breakdown')
+        const bd = asked && this.breakdown ? { breakdown: this.breakdown as never } : {}
+        return { value: { startedAt: T0, rateLimits: this.rateLimits as never, context: { tokens: this.tokens, window: this.window, ...bd } } }
+      }
+      return asked && this.atBreakdown ? this.atBreakdown().then(answer) : answer()
     })
     on('session.version', () => ({ value: this.version }))
     on('session.cwd', () => ({ value: this.cwd }))

@@ -350,6 +350,8 @@ export type LoadState = {
   loadId: string
   initDone: boolean
   eff: Effective | undefined
+  /** The thresholds' read while it runs (config.ts effective): one read per load. */
+  effReading?: Promise<Effective>
   ident: { pid: number | null; pid_lstart: string | null; watch?: string | null; restart?: RestartSetting; restartReports?: RestartReport[] } | undefined
   ccVersion: string | null
   helperMissingLogged: boolean
