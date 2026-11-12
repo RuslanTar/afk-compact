@@ -132,11 +132,18 @@ export const register: Register = (on, options) => {
 
   // The engine measured the session: after each main-thread turn, or when a usage unit moved (a
   // usage window by a whole point, the context fill or the cost). The usage windows count as fresh
-  // now. The engine does not say whether a keep-warm ping's response can fire this; limits.ts reads
-  // a ping as not refreshing the reading. Observe only.
+  // now only when the measure names them (`changed` holds `rateLimits`): one that moved only the
+  // context fill or the cost (after a keep-warm ping, say) leaves the reading's time alone, as its
+  // shares may be old. limits.ts reads a ping as not refreshing the reading. Observe only.
   on('session.measure', async ($, e, next) => {
     const r = await next(e)
-    stampUsage($, state, options)
+    let fresh = false
+    try {
+      fresh = Array.isArray(e.changed) && e.changed.includes('rateLimits')
+    } catch {
+      // not read: the stamp stays the last one
+    }
+    if (fresh) stampUsage($, state, options)
     return r
   }).catch(($, e, next) => next(e))
 
