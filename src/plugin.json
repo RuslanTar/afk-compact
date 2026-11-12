@@ -3,6 +3,8 @@
   "version": "{{version}}",
   "description": "{{description}}",
   "author": { "name": "Ruslan Taranenko" },
+  "homepage": "https://github.com/RuslanTar/afk-compact",
+  "repository": "https://github.com/RuslanTar/afk-compact",
   "license": "Apache-2.0",
   "userConfig": {
     "handoff_root": {
