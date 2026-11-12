@@ -1,5 +1,5 @@
-# AT-WD-10 / AT-WD-11, watcher half on WP-fix's S-21 sequences (needs/fix-to-watch.md 4, 6;
-# PKG-RUNTIME E.1, E.2). Core's cases run the sequences and assert the rows they write
+# AT-WD-10 / AT-WD-11, watcher half on the S-21 sequences.
+# Core's cases run the sequences and assert the rows they write
 # (tests/fixtures/sequences/<id>/expected.json). This case reads those asserted rows as the
 # watcher would find them and checks the watcher's view:
 # - AT-WD-10: S-21-pd (step 5 post-compaction caused_by plugin, step 7 other), S-21-pd-512k
@@ -14,7 +14,7 @@ my @MOD = qw(S-21-mod S-21-mod-conflict);
 my %x;
 for my $id (@PD, @MOD) {
     my $e = T::fixture_json("sequences/$id/expected.json");
-    return { skip => "needs tests/fixtures/sequences/$id (WP-fix FIX-03)" } unless $e;
+    return { skip => "needs tests/fixtures/sequences/$id " } unless $e;
     $x{$id} = $e;
 }
 my %got;

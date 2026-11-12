@@ -1,4 +1,4 @@
-# AT-CK-10 (SK-6, owner xxxxxxxx-14, S-SETTINGS E6): watch_quota_mb drives A-24's watch-size
+# AT-CK-10 (SK-6): watch_quota_mb drives A-24's watch-size
 # warning (watch/rules.pm). With a 12 MB watch folder, 0 (= off) raises nothing; 10 raises one
 # A-24 with the folder's size. Warn only: nothing in the folder is removed.
 my $after_off;

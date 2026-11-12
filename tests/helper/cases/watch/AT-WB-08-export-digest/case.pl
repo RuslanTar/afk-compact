@@ -1,5 +1,5 @@
-# W-BETA D (export schema), away digest: a digest_submit row exports its result as given when it
-# is one of the schema's values, `skipped:off` (idle_digest off, the default of 0.1.1, owner rule
+# Export schema, away digest: a digest_submit row exports its result as given when it
+# is one of the schema's values, `skipped:off` (idle_digest off, the default of 0.1.1, rule
 # (c)) and `skipped:return` among them, and as `other` when it is not. Its lane exports the same
 # way. Rows are given as the watcher reads them.
 my %got;

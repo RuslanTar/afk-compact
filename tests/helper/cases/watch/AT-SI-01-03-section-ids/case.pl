@@ -1,5 +1,5 @@
-# AT-SI-01…03 (SPEC-DELTAS SI; owner xxxxxxxx-34, "Stable section ids", 2026-10-23; REVIEW-NIGHT
-# NR-16): a beta report names each handoff section by a fixed id (`main:next-steps`), never by
+# AT-SI-01…03 (stable section ids): a beta report names each handoff section by a fixed id
+# (`main:next-steps`), never by
 # its position, and says spec_version 2 once.
 # - SI-01: the shipped spec (plugin/assets/handoff-spec.json) is spec_version 2 and gives every
 #   heading of sections_main a `main:<role>` id and every heading of sections_subagent a

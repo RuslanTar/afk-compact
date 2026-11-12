@@ -1,4 +1,4 @@
-# W13 `watch audit` (WATCHER-SPEC §10.2 step 1; BUILD-ROUND-9 WCH-10): per session, the swept
+# W13 `watch audit`: per session, the swept
 # main boundaries equal the main postcompact rows and the rollup rows; every non-precompute
 # dispatch has a `compacted` row or an explained failure; no `watch_error` lacks a class.
 # Failures print first, exit 1; the report lists the same failures at its top.

@@ -1,6 +1,6 @@
 {
  "id": "RR-S21-02-session-end",
- "note": "RR-S21-02 (ROOT-RULINGS F2-1, MOD-SPEC §5.4): a classic-only manual /compact in the S-21 order is deferred for want of proof; the boundary row lands; then /clear ends the session before any Stop. SessionEnd runs reconcile for its session, so P3 proves main and the summary is saved in the main slot and swept, and the raw stash goes",
+ "note": "RR-S21-02: a classic-only manual /compact in the S-21 order is deferred for want of proof; the boundary row lands; then /clear ends the session before any Stop. SessionEnd runs reconcile for its session, so P3 proves main and the summary is saved in the main slot and swept, and the raw stash goes",
  "tz": "Etc/GMT-3",
  "steps": [
   {

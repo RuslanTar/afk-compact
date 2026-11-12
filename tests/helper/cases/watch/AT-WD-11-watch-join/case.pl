@@ -1,4 +1,4 @@
-# AT-WD-11, watcher half (PKG-RUNTIME E.2; BUILD-ROUND-9 WCH-05): the watcher reads core's
+# AT-WD-11, watcher half: the watcher reads core's
 # `compaction_boundary` rows from the rollup stream and joins them to the rollup row by
 # nonce. A null rollup size takes the boundary value; a non-null rollup value is kept and
 # the disagreement is a counted `join_conflict`; a repeated boundary row for a nonce adds

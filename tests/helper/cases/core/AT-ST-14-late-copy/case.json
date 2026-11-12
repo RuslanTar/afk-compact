@@ -1,6 +1,6 @@
 {
  "id": "AT-ST-14 (Late copy defer, $LATE_WINDOW_S)",
- "note": "C-STORE D2 / MOD-SPEC §5.3 step 2 (CORE-07, extends AT-M3-15; the newer-classic and compact_rejected cases are M4-defer-open-only): an unmarked summary defers to the newest open mod dispatch only inside $LATE_WINDOW_S (600 s): (a) 300 s old -> copy_deferred why=mod; (d) 601 s old -> no defer (why=scope); (c) a mod dispatch closed by a compacted row with skip -> no defer; (e) the deferred stash with no after-step is named under the deferred nonce at reconcile, scope from the stash (unknown -> unattributed/ after the settle wait), never the main slot",
+ "note": "Late copy (extends AT-M3-15; the newer-classic and compact_rejected cases are M4-defer-open-only): an unmarked summary defers to the newest open mod dispatch only inside $LATE_WINDOW_S (600 s): (a) 300 s old -> copy_deferred why=mod; (d) 601 s old -> no defer (why=scope); (c) a mod dispatch closed by a compacted row with skip -> no defer; (e) the deferred stash with no after-step is named under the deferred nonce at reconcile, scope from the stash (unknown -> unattributed/ after the settle wait), never the main slot",
  "tz": "Etc/GMT-3",
  "vars": {"S1": "e1e1e1e1-1111-4222-8333-444444444444", "S2": "e2e2e2e2-1111-4222-8333-444444444444", "S3": "e3e3e3e3-1111-4222-8333-444444444444"},
  "steps": [

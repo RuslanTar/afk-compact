@@ -1,6 +1,6 @@
-# IDLE-COMPACT-SPEC §2.3, lane B (export schema): the idle rows of the plugin's own idle compaction
+# Plugin idle compaction, export schema: the idle rows of the plugin's own idle compaction
 # export as given: handoff_skipped's new reasons (error included), its kind and late_s; idle_mode's
-# vetoed / compaction-off, plugin_compact (check: lane B and owner Q2; agents: lane A), compact_min
+# vetoed / compaction-off, plugin_compact (check; agents), compact_min
 # and cache_s; idle_compact's at, late_s and adopted; idle_compact_off. A value outside an enum
 # exports as `other`. Rows are given as the watcher reads them (booleans as 1 and 0).
 my %got;

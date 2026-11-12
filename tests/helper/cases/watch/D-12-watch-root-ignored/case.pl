@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1), the control of D-12-watch-root-in-git: the home
+# Unsafe roots, the control of D-12-watch-root-in-git: the home
 # folder is a dotfiles git repository that ignores .claude/ and .local/state/<plugin>/, so the handoff root and its
 # .watch folder are git-ignored and ok. The watcher writes as before (the PreCompact,
 # PostCompact and sweep rows) and `status` has no refusal line; through the real launcher

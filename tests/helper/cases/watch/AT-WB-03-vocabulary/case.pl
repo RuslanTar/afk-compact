@@ -1,4 +1,4 @@
-# E-W-1 and E-W-3 (provisional; needs/watch-escalations.md; BUILD-ROUND-9 WCH-09):
+# E-W-1 and E-W-3:
 # (1) repo folders named like the bundle's own vocabulary (the brand, `shadow`, `main`) are no
 # identity hit: the report is written and nothing is withheld for them, while a real hole (a
 # `word` field holding another repo folder's name) is still withheld;

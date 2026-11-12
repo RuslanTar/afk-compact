@@ -1,6 +1,6 @@
 {
  "id": "F2-5-core-rows",
- "note": "ROOT-RULINGS F2-5 (SAFE-09, PRIV-09), WATCHER-SPEC W10/W11 and §6.3: core is the one writer of stop_failure and permission_denied (the watcher, on by default, writes no second row); actor is main, or unknown for a payload from a subagent (agent_id); caused_by is plugin only within the first 10 main-thread tool calls after the plugin-injected block (here the compaction's), then session",
+ "note": "F2-5: core is the one writer of stop_failure and permission_denied (the watcher, on by default, writes no second row); actor is main, or unknown for a payload from a subagent (agent_id); caused_by is plugin only within the first 10 main-thread tool calls after the plugin-injected block (here the compaction's), then session",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

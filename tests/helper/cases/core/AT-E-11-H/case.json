@@ -1,6 +1,6 @@
 {
  "id": "AT-E-11-H",
- "note": "MOD-SPEC §10 and AT-E-11 on the helper side (BUILD-PLAN §3.1 checkpoint row): checkpoint --measured over a repo with 30 long-named untracked files and a 12-line STATE.md produces more than 3,000 B of facts; measured_block is cut at a line boundary with (+N lines) and stays <= 3,000 B including its header",
+ "note": "AT-E-11 on the helper side: checkpoint --measured over a repo with 30 long-named untracked files and a 12-line STATE.md produces more than 3,000 B of facts; measured_block is cut at a line boundary with (+N lines) and stays <= 3,000 B including its header",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

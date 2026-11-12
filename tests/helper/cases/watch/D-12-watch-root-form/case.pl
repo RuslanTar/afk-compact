@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1 review finding 1): the watcher checks its roots in
+# Unsafe roots: the watcher checks its roots in
 # core's path form (util::clean_path, as paths::for), so roots.pm's per-string cache answers
 # from core's own check and the watcher runs no git check-ignore of its own. The home folder
 # is a dotfiles repository that ignores .claude/ and .local/state/<plugin>/ (the roots are ok). The real launcher's

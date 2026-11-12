@@ -1,6 +1,6 @@
 {
  "id": "PF-6-since-real-dates",
- "note": "owner ruling PF-6 (2026-10-27 22:40, small flaw 2; reference scenario pf-since-real-dates on the port branch): `report --since`, `watch report --since` and `watch audit --since` take a YYYY-MM-DD date only when it is a real calendar date. 2026-02-31, 2026-02-30, 2026-13-01, 2026-00-10, 2026-04-31 and 2026-02-29 (not a leap year) get the usage text any other bad --since gives (the `--since xyz` steps), exit 64; 2026-02-28, 2026-12-31 and 2028-02-29 (a leap year) are taken, exit 0. Before the fix POSIX::mktime shifted the impossible dates (2026-02-31 became 3 March) and the command ran",
+ "note": "PF-6 (small flaw 2; reference scenario pf-since-real-dates on the port branch): `report --since`, `watch report --since` and `watch audit --since` take a YYYY-MM-DD date only when it is a real calendar date. 2026-02-31, 2026-02-30, 2026-13-01, 2026-00-10, 2026-04-31 and 2026-02-29 (not a leap year) get the usage text any other bad --since gives (the `--since xyz` steps), exit 64; 2026-02-28, 2026-12-31 and 2028-02-29 (a leap year) are taken, exit 0. Before the fix POSIX::mktime shifted the impossible dates (2026-02-31 became 3 March) and the command ran",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {"STORE_TEST_NO_GIT": "1"},

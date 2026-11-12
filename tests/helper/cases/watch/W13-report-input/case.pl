@@ -1,4 +1,4 @@
-# W13 `watch report --input DIR` (WATCHER-SPEC §10.7; W-BETA E; BUILD-ROUND-9 WCH-10): a
+# W13 `watch report --input DIR`: a
 # `report` bundle's rows/ folder is read by the same code as the live folder. The counts match
 # the live report; the transcript-tier lines say `n/a (remote)`, never FAIL; the report is
 # printed (no --out) and nothing is written; `--out FILE` writes it there. `watch audit --input`

@@ -1,6 +1,6 @@
 {
  "id": "AT-IC-10 (SessionStart clear prints nothing)",
- "note": "IC-1 D7 /clear guarantee, helper half (CORE-14 regression): hook SessionStart with source clear prints nothing and writes no resume-claimed/* file, also when this session has a fresh main dispatch record and the classic auto record whose block SessionStart(compact) would deliver; the compact source still delivers (control)",
+ "note": "IC-1 D7 /clear guarantee, helper half (regression): hook SessionStart with source clear prints nothing and writes no resume-claimed/* file, also when this session has a fresh main dispatch record and the classic auto record whose block SessionStart(compact) would deliver; the compact source still delivers (control)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

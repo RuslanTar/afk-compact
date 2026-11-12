@@ -1,6 +1,6 @@
 {
  "id": "RR-S21-06-stale-bucket",
- "note": "RR-S21-06 (ROOT-RULINGS F2-2): a mod session; compaction 1 is saved in work/general; the session is then pinned to work/lab-7; compaction 2's summary repeats compaction 1's marker with another body. The earlier copy is found by this session's copy row for that nonce, not only in the current bucket, so the summary is stale: no copy under the old nonce in the new bucket, and exactly one copy of the second summary",
+ "note": "RR-S21-06 (F2-2): a mod session; compaction 1 is saved in work/general; the session is then pinned to work/lab-7; compaction 2's summary repeats compaction 1's marker with another body. The earlier copy is found by this session's copy row for that nonce, not only in the current bucket, so the summary is stale: no copy under the old nonce in the new bucket, and exactly one copy of the second summary",
  "tz": "Etc/GMT-3",
  "steps": [
   {

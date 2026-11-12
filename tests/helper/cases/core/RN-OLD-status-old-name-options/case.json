@@ -1,6 +1,6 @@
 {
  "id": "RN-OLD-status-old-name-options",
- "note": "Rename order (ruling xxxxxxxx-32, 2026-10-23): plugin options saved in the settings file under the plugin's name before the rename (pluginConfigs keys starting with the old name and @) are not read; /status prints one warning line per such key with its option count and the key to move them to in /config (the key this plugin reads now, else <name>@…). Read-only: the settings file is unchanged; no option value is printed; a key that only starts with the old name's letters, another plugin's key and an empty option set print nothing",
+ "note": "Rename order: plugin options saved in the settings file under the plugin's name before the rename (pluginConfigs keys starting with the old name and @) are not read; /status prints one warning line per such key with its option count and the key to move them to in /config (the key this plugin reads now, else <name>@…). Read-only: the settings file is unchanged; no option value is printed; a key that only starts with the old name's letters, another plugin's key and an empty option set print nothing",
  "now": "2026-10-23T12:30:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

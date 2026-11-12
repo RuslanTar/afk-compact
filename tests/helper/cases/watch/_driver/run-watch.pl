@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# run-watch.pl: library-level driver for the WP-watch cases (WATCHER-SPEC §9).
+# run-watch.pl: library-level driver for the watcher cases.
 #
 # Usage: run-watch.pl [CASE_DIR...]   (default: every case dir beside _driver)
 #
@@ -10,7 +10,7 @@
 # pass, plus `cli` steps that run the real launcher (`stdin_vars => 1` fills
 # $WATCH, $SID, $PROJ, ... in their stdin). Every call's stdout and stderr are
 # captured and must be empty unless a step says otherwise.
-# A case that returns `skip => <reason>` (its input, e.g. a WP-fix fixture, is not on this
+# A case that returns `skip => <reason>` (its input, e.g. a fixture, is not on this
 # branch yet) prints `ok - <id> # SKIP <reason>` and runs nothing. A case that needs a tool
 # not on PATH (`needs => ["cmd:<name>"]`) prints `not ok - <id> # TODO not run: needs <name>
 # ...`, counted as not run, neither passed nor skipped; the run does not fail on it.
@@ -113,14 +113,14 @@ sub spec_for_tests {
     my $c = "\xe2\x9f\xab";
     my $b = quotemeta $T::BRAND;
     return {
-        # `## Approvals` since the 2026-10-23 scoped-approval ruling (spec §2, AP-3).
+        # `## Approvals` since scoped approvals (AP-3).
         sections_main => ['## Resume here', '## User constraints', '## Approvals', '## Decisions and do-not-re-raise', '## In flight',
                           '## Live state', '## Open questions', '## Location', '## Work done and findings',
                           '## Evidence', '## Next steps'],
         sections_subagent => ['## Task as assigned', '## Constraints from the parent', '## Report', '## Done',
                               '## Findings', '## Produced but not yet delivered', '## Own background tasks',
                               '## Next action'],
-        # owner xxxxxxxx-34 ("Stable section ids"): spec_version 2 and the fixed section ids, as shipped
+        # stable section ids: spec_version 2 and the fixed section ids, as shipped
         spec_version => 2,
         section_ids => { '## Resume here' => 'main:resume-here', '## User constraints' => 'main:user-constraints',
                          '## Approvals' => 'main:approvals', '## Decisions and do-not-re-raise' => 'main:decisions',
@@ -190,8 +190,8 @@ sub cli_launcher {
         copy_tree("$REPO/plugin", "$base/plugin");
         require settings;
         write_file("$base/plugin/$settings::TEST_CONSENT_MARK", "watch driver test stage\n", 0644);
-        # WP-watch's `report` command (WCH-09) until WP-core lists it in main.pl's %KNOWN
-        # (needs/watch-to-core.md W2C-1): the staged copy only, never the repo's main.pl.
+        # the watcher's `report` command until core lists it in main.pl's %KNOWN
+        # writes the staged copy only, never the repo's main.pl.
         my $mp = "$base/plugin/helper/main.pl";
         my $m = watch::io::slurp($mp);
         if (defined $m && $m !~ /^\s+watch report\b/m && $m =~ s/^(\s+)watch\n\);/$1watch report\n);/m) {
@@ -251,7 +251,7 @@ sub run_case {
     my $case = do "$dir/case.pl";
     die "case.pl: $@" if $@;
     die "case.pl did not return a hash" unless ref $case eq 'HASH';
-    # `skip => reason`: a case whose input is not on this branch yet (a WP-fix fixture)
+    # `skip => reason`: a case whose input is not on this branch yet (a fixture)
     if (defined $case->{skip}) { $SKIP = $case->{skip}; return () }
     # `needs => [...]`, as in the core runner: "nonroot" skips when this runs as root (uid 0
     # ignores file modes; its user name is a word every bundle holds); "cmd:<name>" is not
@@ -264,7 +264,7 @@ sub run_case {
     if ($> == 0 && grep { $_ eq 'nonroot' } @{ $case->{needs} || [] }) { $SKIP = "needs nonroot (running as root)$note"; return () }
     my $tmp = File::Temp::tempdir('watchcase-XXXXXX', TMPDIR => 1, CLEANUP => 1);
     my %v = (TMP => $tmp, HOME => "$tmp/home", SID => $T::SID, BRAND => $T::BRAND, PLUGIN => "$tmp/plugin");
-    # STATE-ROOT (0.1.2): the default handoff root is the manifest's (~/.local/state/<name>/handoffs)
+    # State root (0.1.2): the default handoff root is the manifest's (~/.local/state/<name>/handoffs)
     my $droot = do { my $m = watch::io::read_json_file("$REPO/plugin/.claude-plugin/plugin.json") || {};
                      ref $m->{userConfig} eq 'HASH' && ref $m->{userConfig}{handoff_root} eq 'HASH' ? $m->{userConfig}{handoff_root}{default} : undef };
     $droot = '~/.local/state/' . $T::BRAND . '/handoffs' unless defined $droot && !ref $droot && $droot ne '';
@@ -280,7 +280,7 @@ sub run_case {
     delete local $ENV{CLAUDE_CONFIG_DIR};
     local $ENV{STORE_TEST_MODE} = '1';
     # A plugin root of our own: manifest + spec-literals for the test (the
-    # real assets are generated from WP-text's handoff-spec.md).
+    # real assets are generated from src/assets/handoff-spec.md).
     write_file("$v{PLUGIN}/.claude-plugin/plugin.json", watch::json::encode({ name => $T::BRAND, version => '0.1.0' }));
     my $spec = $case->{spec} || spec_for_tests();
     write_file("$v{PLUGIN}/assets/handoff-spec.json", watch::json::encode($spec)) unless $case->{no_spec};

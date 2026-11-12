@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): a work tree $HOME/Café/proj whose folder Café is stored
+# Unsafe roots: a work tree $HOME/Café/proj whose folder Café is stored
 # decomposed (NFD), with a .gitignore of `.claude/`. log_dir $HOME/Café/proj/.claude/wlogs is
 # not made yet and git ignores it (`git check-ignore -q --no-index` exits 0). The watcher
 # writes its rows there and status has no refusal. A stdin check-ignore dies on that path

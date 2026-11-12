@@ -1,5 +1,5 @@
-# E-W-6 (provisional; needs W-1 from WP-text, text-escalations E-T9-5): the A-16 text in the
-# spec starts with `{{plugin}}: ` (WATCHER-SPEC A-16), and Stop delivery shows alerts as
+# E-W-6: the A-16 text in the
+# spec starts with `{{plugin}}: ` (A-16), and Stop delivery shows alerts as
 # `<brand> watcher: <text> (<alert_id>)` (handoff-spec §13). The delivered line names the
 # plugin once: the watcher drops a leading `<brand>: ` from the text. `/status` keeps the
 # spec text as it is. Delivery switched to system-message for this case (E-17 ships

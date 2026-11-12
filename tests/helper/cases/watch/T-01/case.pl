@@ -1,4 +1,4 @@
-# T-01 (WATCH §9): native auto boundary with the summary 2-3 rows after it,
+# T-01: native auto boundary with the summary 2-3 rows after it,
 # behind session_context/date attachments -> summary found by content; trigger auto.
 my $ls = T::bash(5, 'ls -la', id => 'toolu_ls');
 {

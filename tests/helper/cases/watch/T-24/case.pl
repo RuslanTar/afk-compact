@@ -1,4 +1,4 @@
-# T-24 (WATCH §9, §1.1): the transcript basename is unchanged but the path
+# T-24: the transcript basename is unchanged but the path
 # moved after --resume, and the stored offset is beyond the new file's size ->
 # the sweep restarts that file at 0; no duplicate boundary (dedupe by uuid).
 my $b1 = T::boundary(100, trigger => 'manual', uuid => 'u-b1-t24');

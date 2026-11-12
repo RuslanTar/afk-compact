@@ -1,4 +1,4 @@
-# AT-P5-05, watcher half (P5-FOLD A4; BUILD-ROUND-9 WCH-04): every WP-watch source file
+# AT-P5-05, watcher half: every watcher source file
 # declares `use utf8`, so a later non-ASCII literal is a character, never two or three bytes
 # read as Latin-1 (one rule, no exceptions: comment-only files too). The pragma sits right
 # after `use warnings;`, before any other code. No step; the check reads the source.

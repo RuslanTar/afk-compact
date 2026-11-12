@@ -1,5 +1,5 @@
-# WCH-05, report and status half (PKG-RUNTIME E.1, E.2; WATCHER-SPEC D-13, FR-14, §6.3
-# compaction_boundary; BUILD-ROUND-9 WCH-05): `watch report` reads the `permission_denied`
+# Report and status half (D-13, FR-14) of the denials and the boundary join:
+# `watch report` reads the `permission_denied`
 # rows' `turn_kind` and `caused_by` into a Denials section, keeps the `classifier-unavailable`
 # reason apart as the control (out of the FR-14 guard classes, into the control bar), and
 # joins core's `compaction_boundary` rows to the rollup rows by nonce on the rollup path (no

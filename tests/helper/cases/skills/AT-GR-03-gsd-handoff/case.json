@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner 2026-10-26 21:37 (GSD re-entry per session), handoff path: begin prints the session's own gsd object (line and Active driver), publish writes frontmatter gsd = that session's STATE.md (workstream-a's for a workstream-a session; none for a session that did not work with GSD, although the worktree has .planning/STATE.md), and measure <handoff> (resume R3) re-reads only the STATE.md the handoff names, never every worktree's. Root rulings of 2026-10-27: R3, a STATE.md in another checkout (GSD work run with --cwd) is marked to be reported, never rewritten; R4, a handoff that names a driver gets a Driver now line from its session's transcript, so a loop that paused itself after the handoff was written is shown as paused and never run",
+ "note": "GSD re-entry per session, handoff path: begin prints the session's own gsd object (line and Active driver), publish writes frontmatter gsd = that session's STATE.md (workstream-a's for a workstream-a session; none for a session that did not work with GSD, although the worktree has .planning/STATE.md), and measure <handoff> (resume R3) re-reads only the STATE.md the handoff names, never every worktree's. Rules: R3, a STATE.md in another checkout (GSD work run with --cwd) is marked to be reported, never rewritten; R4, a handoff that names a driver gets a Driver now line from its session's transcript, so a loop that paused itself after the handoff was written is shown as paused and never run",
  "now": "2026-10-26T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -565,7 +565,7 @@
           "id": "toolu_0054",
           "name": "Skill",
           "input": {
-           "skill": "catch-up",
+           "skill": "ask-queued",
            "args": "--ws workstream-b"
           }
          }
@@ -586,7 +586,7 @@
         "content": [
          {
           "type": "text",
-          "text": "Base directory for this skill: /opt/skills/catch-up\n\n# One shot\n\nAsk the queued questions in one pass, then stop.\n\n\nARGUMENTS: --ws workstream-b"
+          "text": "Base directory for this skill: /opt/skills/ask-queued\n\n# One shot\n\nAsk the queued questions in one pass, then stop.\n\n\nARGUMENTS: --ws workstream-b"
          }
         ]
        },

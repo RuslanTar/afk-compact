@@ -1,4 +1,4 @@
-# AT-WB-05 (Dev-6; W-BETA B; BUILD-ROUND-9 WCH-09): `report --dry-run` creates no file at all.
+# AT-WB-05 (Dev-6): `report --dry-run` creates no file at all.
 # The trees of <watch> and of the out folder are equal before and after; no salt and no
 # install id are created; the REPORT line says nothing was written and no REVEAL or COPY
 # line is printed. The default out folder is not created either.

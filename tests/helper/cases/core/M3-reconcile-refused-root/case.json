@@ -1,6 +1,6 @@
 {
  "id": "M3-reconcile-refused-root",
- "note": "MOD-SPEC §1.2 unsafe roots, §2.5 content-free rows, §5.4 (reconcile <= 2 s): while handoff_root is refused (inside a git work tree, not ignored), PostCompact with a proven main summary logs one failed copy row and keeps the stash; Stops under the refused root do not retry the save (no extra copy row per Stop); a Stop with a safe root saves the stash late. A summary with no scope proof (ROOT-RULINGS F2-1) is only stashed: refused Stops leave it, and the safe Stop saves it as unattributed",
+ "note": "Unsafe roots, content-free rows, reconcile (<= 2 s): while handoff_root is refused (inside a git work tree, not ignored), PostCompact with a proven main summary logs one failed copy row and keeps the stash; Stops under the refused root do not retry the save (no extra copy row per Stop); a Stop with a safe root saves the stash late. A summary with no scope proof is only stashed: refused Stops leave it, and the safe Stop saves it as unattributed",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {

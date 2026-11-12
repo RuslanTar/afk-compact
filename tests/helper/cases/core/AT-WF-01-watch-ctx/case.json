@@ -1,6 +1,6 @@
 {
  "id": "AT-WF-01",
- "note": "PKG-RUNTIME D.1 (CORE-06): a ctx-recording watcher seam (stage_overlay over lib/watch.pm) on each of the 6 watcher-called events gets exactly the D.1 keys (sid, event, settings, paths, watch, sid_dir, plugin_root, brand, version, now, cc_version, cc_version_src) of the right types, plus only that event's own extra (Stop: payload and copy_waits, the stashes reconcile left for the next Stop); cc_version and cc_version_src are present (here from CLAUDE_CODE_EXECPATH: 2.1.307 / exec)",
+ "note": "a ctx-recording watcher seam (stage_overlay over lib/watch.pm) on each of the 6 watcher-called events gets exactly the D.1 keys (sid, event, settings, paths, watch, sid_dir, plugin_root, brand, version, now, cc_version, cc_version_src) of the right types, plus only that event's own extra (Stop: payload and copy_waits, the stashes reconcile left for the next Stop); cc_version and cc_version_src are present (here from CLAUDE_CODE_EXECPATH: 2.1.307 / exec)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "stage_overlay": {"helper/lib/watch.pm": "$CASE/watch-recorder.pm"},

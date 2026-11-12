@@ -1,6 +1,6 @@
 {
  "id": "AD-04-copy-status-blocked-runnable",
- "note": "Away digest phase 1 (owner 2026-10-27 12:5x; build item 6): a blocked Status whose Step 1 is set with `Gate: none` (a step that can run; owner xxxxxxxx-08) is in-progress, as the plugin's lane check reads it (review of fix round 1; otherwise as AT-M3-01)",
+ "note": "Away digest phase 1: a blocked Status whose Step 1 is set with `Gate: none` (a step that can run) is in-progress, as the plugin's lane check reads it (review of fix round 1; otherwise as AT-M3-01)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

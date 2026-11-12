@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1 review finding 3): the watcher's command-line writers
+# Unsafe roots: the watcher's command-line writers
 # check the roots as its hooks do. The home folder is a dotfiles git repository that does not
 # ignore .claude/, so the handoff root and its .watch folder are root-in-git. `watch prune`,
 # `watch report` (default reports/ folder), `watch report --export` (the salt) and `report`

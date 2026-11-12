@@ -1,6 +1,6 @@
 {
   "id": "AT-C-04",
-  "note": "dispatch: file 0600 in a 0700 directory; JSON parses; every field of MOD-SPEC 2.3 present; a second write of the same nonce is refused (exit 3)",
+  "note": "dispatch: file 0600 in a 0700 directory; JSON parses; every field of the dispatch record present; a second write of the same nonce is refused (exit 3)",
   "now": "2026-10-21T14:05:12+03:00",
   "tz": "Etc/GMT-3",
   "steps": [

@@ -1,9 +1,9 @@
 {
- "id": "AT-PB-02, AT-PB-03 (protected_branches in the carry gate and risk, owner xxxxxxxx-29)",
+ "id": "AT-PB-02, AT-PB-03 (protected_branches in the carry gate and risk)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner xxxxxxxx-29 (\"add the add-only setting now\"): every place that decides protected-push reads the user's protected_branches beside the shipped list. AT-PB-02 (approvals carry gate, measure --compact --copy): without the setting a checked approval to push to qa-env carries (in words and as a refspec; origin/qa-env exists in the repo, since a name without a slash names a branch only when it is one there, owner xxxxxxxx-10 P-2); with qa-env, or the glob QA-*, in the setting it is the protected-push gate (re-ask) while a push to feat/x still carries; an entry that tries to remove main (`!main`, `-main`, `main/`, a regex) is ignored and the push to main stays a gate; an invalid entry beside a valid one never widens the carry (the valid one still applies). AT-PB-03 (risk): a push to qa-env is protected-push only with the setting (refspec, and a bare push on branch qa-env through a glob); `!main` leaves a push to main protected-push",
+ "note": "The add-only protected_branches setting: every place that decides protected-push reads the user's protected_branches beside the shipped list. AT-PB-02 (approvals carry gate, measure --compact --copy): without the setting a checked approval to push to qa-env carries (in words and as a refspec; origin/qa-env exists in the repo, since a name without a slash names a branch only when it is one there, P-2); with qa-env, or the glob QA-*, in the setting it is the protected-push gate (re-ask) while a push to feat/x still carries; an entry that tries to remove main (`!main`, `-main`, `main/`, a regex) is ignored and the push to main stays a gate; an invalid entry beside a valid one never widens the carry (the valid one still applies). AT-PB-03 (risk): a push to qa-env is protected-push only with the setting (refspec, and a bare push on branch qa-env through a glob); `!main` leaves a push to main protected-push",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

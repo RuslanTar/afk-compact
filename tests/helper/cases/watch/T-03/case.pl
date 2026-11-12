@@ -1,4 +1,4 @@
-# T-03 (WATCH §9): a replaced summary without isCompactSummary or
+# T-03: a replaced summary without isCompactSummary or
 # preservedSegment -> summary found by content; summary_flags records the absence.
 {
     transcript => [

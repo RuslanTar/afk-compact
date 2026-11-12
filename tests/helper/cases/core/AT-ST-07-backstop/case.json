@@ -1,6 +1,6 @@
 {
  "id": "AT-ST-07 (backstop full scan)",
- "note": "C-STORE D4 'Backstop' / MOD-SPEC §5.8 (CORE-07): stashes of ended sessions that have no marker (a build before markers) are found by the first pass after an install (no cursor yet) and after a plugin version change (the cursor names another version), resume from the cursor (.orphans/.fullscan: a sid at or before 'after' is not walked again), and are always found by the user-run reconcile --orphans --full; once the scan is done for this version, a normal pass finds no unmarked stash",
+ "note": "stashes of ended sessions that have no marker (a build before markers) are found by the first pass after an install (no cursor yet) and after a plugin version change (the cursor names another version), resume from the cursor (.orphans/.fullscan: a sid at or before 'after' is not walked again), and are always found by the user-run reconcile --orphans --full; once the scan is done for this version, a normal pass finds no unmarked stash",
  "tz": "Etc/GMT-3",
  "vars": {"G": "a7a7a7a1-1111-4222-8333-444444444444", "H": "a7a7a7a2-1111-4222-8333-444444444444", "I": "a7a7a7a3-1111-4222-8333-444444444444", "J": "a7a7a7a4-1111-4222-8333-444444444444", "K": "a7a7a7a5-1111-4222-8333-444444444444"},
  "steps": [

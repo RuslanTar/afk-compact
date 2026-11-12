@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "publish lint reads its literals from the spec block (BUILD-PLAN §3.4; TF-5): id_range_re (an em-dash range is blocking; 0.1.5: one running backwards, which publish cannot list as its ids), claim_tags.verified_re with time_re (an unprinted [verified …] time is blocking, a printed one is not), and the clutter classes code-block (max_lines, a ~~~ fence), log-line (CRITICAL), hash-run (min_run, backticked hashes); RV-24 time-format: the same time in its short form (HH:MM) is caught by time-format, not unprinted-time (AT-TS-02)",
+ "note": "publish lint reads its literals from the spec block: id_range_re (an em-dash range is blocking; 0.1.5: one running backwards, which publish cannot list as its ids), claim_tags.verified_re with time_re (an unprinted [verified …] time is blocking, a printed one is not), and the clutter classes code-block (max_lines, a ~~~ fence), log-line (CRITICAL), hash-run (min_run, backticked hashes); RV-24 time-format: the same time in its short form (HH:MM) is caught by time-format, not unprinted-time (AT-TS-02)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

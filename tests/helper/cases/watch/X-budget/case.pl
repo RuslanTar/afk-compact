@@ -1,4 +1,4 @@
-# WATCH §1.1/W9 budgets: a run reads at most RUN_BYTES (5 MB shipped; 700 B
+# W9 budgets: a run reads at most RUN_BYTES (5 MB shipped; 700 B
 # here); the rest is read at the next Stop, whole lines only, each boundary
 # once. Reading a backlog at that pace is normal: the sweep rows say
 # `partial`, but no `sweep_partial` row is written and A-25 stays quiet. A hard

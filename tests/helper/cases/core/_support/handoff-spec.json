@@ -1,5 +1,5 @@
 {
-  "_note": "Interim spec literals for the WP-core helper cases only, used by tests/helper/run.pl when plugin/assets/handoff-spec.json does not exist yet (WP-text writes the real block in src/assets/handoff-spec.md). Values follow CONSISTENCY section 1 and MOD-SPEC 2.2, 5.1, 10. {{plugin}} is filled by the runner.",
+  "_note": "Interim spec literals for the core helper cases only, used by tests/helper/run.pl when plugin/assets/handoff-spec.json does not exist yet. {{plugin}} is filled by the runner.",
   "sections_main": ["## Resume here", "## User constraints", "## Decisions and do-not-re-raise", "## In flight", "## Live state", "## Open questions", "## Location", "## Work done and findings", "## Evidence", "## Next steps"],
   "sections_location": ["### GSD", "### Environment", "### Guards in force", "### Ownership"],
   "sections_subagent": ["## Task as assigned", "## Constraints from the parent", "## Report", "## Done", "## Findings", "## Produced but not yet delivered", "## Own background tasks", "## Next action"],

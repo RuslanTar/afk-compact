@@ -1,6 +1,6 @@
 {
    "id" : "AT-ST-09 c, d (fill: a failed verification keeps the old copy; main and unattributed copies untouched)",
-   "note" : "C-STORE D5 / MOD-SPEC Â§5.9 steps 3 and 5 (CORE-09): (c) the fill writes the new name, a test seam flips one byte before the read-back: the verification fails, the new file is removed, the old sub-unknown copy stays, one copy_attribution_failed {why: verify}, and the fill is not retried at the next Stop; (d) an agent summary row that holds the nonce of a main copy, or the body of an unattributed copy, never touches either copy",
+   "note" : "(c) the fill writes the new name, a test seam flips one byte before the read-back: the verification fails, the new file is removed, the old sub-unknown copy stays, one copy_attribution_failed {why: verify}, and the fill is not retried at the next Stop; (d) an agent summary row that holds the nonce of a main copy, or the body of an unattributed copy, never touches either copy",
    "steps" : [
       {
          "argv" : [

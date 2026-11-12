@@ -1,5 +1,5 @@
 #!/bin/sh
-# Stub --via wrapper for tests/launcher/run.sh (like `teamclaude run --`): records its
+# Stub --via wrapper for tests/launcher/run.sh (like a `wrapper run --` launcher): records its
 # arguments, then runs the words after `--`.
 D=${STUB_DIR:?STUB_DIR is not set}
 n=$(cat "$D/vias" 2>/dev/null) || n=0

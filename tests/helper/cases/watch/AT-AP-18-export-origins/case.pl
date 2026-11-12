@@ -1,4 +1,4 @@
-# AT-AP-18, watcher half (owner xxxxxxxx-12 "Count, log origin", 2026-10-26; NIGHT-REVIEW 3.6):
+# AT-AP-18, watcher half:
 # the approvals_carry row's `origins` (the carried approvals counted by the origin kind of the
 # row their quote was found in) is exported as counts of fixed class words: a listed kind keeps
 # its name, any other key becomes `other`, a value that is not a number is dropped. Nothing of

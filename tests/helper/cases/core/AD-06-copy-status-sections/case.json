@@ -1,6 +1,6 @@
 {
  "id": "AD-06-copy-status-sections",
- "note": "Away digest phase 1 (owner 2026-10-27 12:5x; build item 6): only Next steps items count as steps: a `· todo` in another section leaves a finished Status with every step marked done completed (review of fix round 1; otherwise as AT-M3-01)",
+ "note": "Away digest phase 1: only Next steps items count as steps: a `· todo` in another section leaves a finished Status with every step marked done completed (review of fix round 1; otherwise as AT-M3-01)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

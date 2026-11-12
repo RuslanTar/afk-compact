@@ -3,7 +3,7 @@
  "needs": [
   "fixture:setups/st-09-fill-scope.json"
  ],
- "note": "C-STORE D5 step 5 (scope of fill) / MOD-SPEC §5.9 (CORE-09) on the WP-fix setup st-09-fill-scope: three 0400 copies of the P5 subagent's compactions in compact/, compact/unattributed/ and compact/subagents/, each fillable by the nonce of a summary row in agent-a494e1b0fa1a73786.jsonl. One Stop runs reconcile: only the subagents/ copy is renamed (-aa494e1b0, one copy_attributed for d21582); the main and unattributed copies keep their bytes and get no attribution row. Skipped until the WP-fix fixtures are merged.",
+ "note": "Scope of fill, on the setup st-09-fill-scope: three 0400 copies of the P5 subagent's compactions in compact/, compact/unattributed/ and compact/subagents/, each fillable by the nonce of a summary row in agent-a494e1b0fa1a73786.jsonl. One Stop runs reconcile: only the subagents/ copy is renamed (-aa494e1b0, one copy_attributed for d21582); the main and unattributed copies keep their bytes and get no attribution row. Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",

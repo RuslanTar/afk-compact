@@ -1,9 +1,9 @@
-# AT-WB-03 / AT-WB-02 host and account canaries (W-BETA B.3; needs/fix-to-watch.md 1, 7): the
+# AT-WB-03 / AT-WB-02 host and account canaries: the
 # identity list takes the host name from `hostname -s` run through PATH (as B.3 writes it,
 # besides uname) and the account name from USER and LOGNAME (besides the user database). A
 # PATH stub `hostname` and USER/LOGNAME canaries put both on the list: a session whose
 # word-class field holds one of them is withheld (fail closed), and neither string is in any
-# shipped file. This is the hook WP-fix's wb-canary-install recipe relies on (no
+# shipped file. This is the hook the wb-canary-install recipe relies on (no
 # STORE_TEST_HOSTNAME seam is needed).
 my ($host, $acct) = ('wbstubhost42', 'wbstubacct42');
 my $files = T::beta_install();

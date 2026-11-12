@@ -1,6 +1,6 @@
 {
  "id": "PD-long-session",
- "note": "BUILD-PLAN §3.3 PermissionDenied (2 s) row: a long session (60,000 classic and 60,000 mod rows before this turn) does not push PermissionDenied past its timeout; the turn kind still comes from the newest rows: a resume_receipt after the last Stop gives turn_kind resume, a nudge gives nudge",
+ "note": "a long session (60,000 classic and 60,000 mod rows before this turn) does not push PermissionDenied past its timeout; the turn kind still comes from the newest rows: a resume_receipt after the last Stop gives turn_kind resume, a nudge gives nudge",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

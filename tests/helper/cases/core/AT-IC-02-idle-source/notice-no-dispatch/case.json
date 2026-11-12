@@ -3,7 +3,7 @@
  "needs": [
   "fixture:transcripts/idle-cases.json"
  ],
- "note": "ID-2 (SPEC-DELTAS §3.14; WATCHER-SPEC idle_unshaped, A-29): the notice-mod-idle transcript with no plugin dispatch record: native idle compaction ran with no plugin dispatch. The next Stop reads the native idle row after the main boundary and writes one idle_unshaped {boundary_uuid} row (content-free; the uuid only); a second Stop adds none. Skipped until the WP-fix fixtures are merged.",
+ "note": "ID-2 (A-29): the notice-mod-idle transcript with no plugin dispatch record: native idle compaction ran with no plugin dispatch. The next Stop reads the native idle row after the main boundary and writes one idle_unshaped {boundary_uuid} row (content-free; the uuid only); a second Stop adds none. Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "tz": "Etc/GMT-3",
  "steps": [

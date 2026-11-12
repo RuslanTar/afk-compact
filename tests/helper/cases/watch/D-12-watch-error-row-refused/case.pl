@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): no watch_error row under a refused root. HOME is a
+# Unsafe roots: no watch_error row under a refused root. HOME is a
 # dotfiles git repository that does not ignore .claude/ (root-in-git), and the hook dies in
 # watcher_on, before its own refusal check: error_row checks the roots itself and writes
 # nothing. Without that check a watch_error row lands in <root>/.watch/<sid>.classic.jsonl.

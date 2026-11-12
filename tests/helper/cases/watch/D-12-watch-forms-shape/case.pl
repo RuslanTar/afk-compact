@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): git::check_ignore_forms reads four NUL-terminated
+# Unsafe roots: git::check_ignore_forms reads four NUL-terminated
 # fields per path asked. Output of any other length is the wrong shape and reads unknown
 # (undef), so roots::check_path refuses the root (root-in-git). git::cmd is swapped for a sub
 # that prints canned output: three records for two paths, each naming the folder-only pattern

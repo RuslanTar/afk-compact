@@ -1,10 +1,10 @@
 # Restart launcher: protocol 1 file contract and tests
 
 `plugin/scripts/<brand>-claude` (built by `tools/build` from `src/claude-launcher.tmpl`) is the
-opt-in launcher of restart on update (SESSION-RESTART §3). It starts `claude` as a child, waits,
+opt-in launcher of restart on update. It starts `claude` as a child, waits,
 and starts the same session again only when the plugin's note proves that the plugin itself
 ended the session to restart it. This file is the contract the plugin side (the mod and the
-helper's `restart` command, lane RS-A) must meet. The cases in `run.sh` hold the launcher to it
+helper's `restart` command) must meet. The cases in `run.sh` hold the launcher to it
 with hand-written notes (`notes/`) and a stub `claude` (`stub/claude`).
 
 Names below use the brand `afk-compact`; a rename changes every one of them (`tools/build`
@@ -162,7 +162,7 @@ its pattern exactly.
    `last-refusal` with `start-failed`, and exit with its code. No retry.
 8. Otherwise the loop goes on with the next exit of claude (step 1).
 
-## 6. What the plugin side must do (D9: no launcher-only refusal)
+## 6. What the plugin side must do (no launcher-only refusal)
 
 A refusal after the plugin's `/exit` closes a session that was meant to continue, so the plugin
 runs every check the launcher can fail before it arms (G3a), on the exact note it would write:

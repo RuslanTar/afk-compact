@@ -1,6 +1,6 @@
 {
  "id": "AT-DH-22-trial-texts-facts",
- "note": "TRIAL-DUAL-HANDOFF 4.2/4.2b: the old skill and template read at run time with their sums and the two H10 fills (the trial old root; queue_cmd or the note); the native head and tail for the running version, arm (default control) and transcript flag (t0 with no transcript); a changed byte -> no-old-skill sum, an unlisted version file -> no-native-prompt; facts: the repo by the git common dir, the ticket from the branch, the newest genuine old file of the bucket in full, never the plugin's (kind:) and never a manual file built on one (counted as flagged), this session's own old shadow for Step 0",
+ "note": "the old skill and template read at run time with their sums and the two H10 fills (the trial old root; queue_cmd or the note); the native head and tail for the running version, arm (default control) and transcript flag (t0 with no transcript); a changed byte -> no-old-skill sum, an unlisted version file -> no-native-prompt; facts: the repo by the git common dir, the ticket from the branch, the newest genuine old file of the bucket in full, never the plugin's (kind:) and never a manual file built on one (counted as flagged), this session's own old shadow for Step 0",
  "now": "2026-10-27T10:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,6 +1,6 @@
 {
  "id": "F2-11-sweep-private",
- "note": "ROOT-RULINGS F2-11 (MOD-SPEC §10 sweep scope): recorded temp paths in the macOS realpath forms /private/var/folders/ and /private/tmp/ are in scope like /var/folders/ and /tmp/; the paths here sit outside the child's TMPDIR and do not exist, so each is listed as missing (out of scope they would not be listed at all); a path outside every temp root is still skipped",
+ "note": "F2-11: recorded temp paths in the macOS realpath forms /private/var/folders/ and /private/tmp/ are in scope like /var/folders/ and /tmp/; the paths here sit outside the child's TMPDIR and do not exist, so each is listed as missing (out of scope they would not be listed at all); a path outside every temp root is still skipped",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

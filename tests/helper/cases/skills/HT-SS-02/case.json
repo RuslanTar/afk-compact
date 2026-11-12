@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "stash <path> runs the secret gate before the copy (TPL §5, HK-44; PRIV-06): a redact verdict (a log or JSON file with any hit, another file with a WARN hit) writes a redacted copy and names the rule ids, never the values: WARN as `ADVISORY secret-warn rules=<ids>` (D-13), HARD as `ADVISORY secret-hard rules=<ids>`; the copy path stays the last line; the source is untouched; a HARD hit in another file is refused (withheld)",
+ "note": "stash <path> runs the secret gate before the copy: a redact verdict (a log or JSON file with any hit, another file with a WARN hit) writes a redacted copy and names the rule ids, never the values: WARN as `ADVISORY secret-warn rules=<ids>` (D-13), HARD as `ADVISORY secret-hard rules=<ids>`; the copy path stays the last line; the source is untouched; a HARD hit in another file is refused (withheld)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

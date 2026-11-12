@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "AP-5 (SPEC-DELTAS §3.1): measure <handoff> lists the own chain's checked, unused (or standing) non-gate approvals under Approvals (checked) and gate ones under Approvals (gate, re-ask); a used once approval is spent; a fork successor (O-12 interim) and another session (O-1) carry nothing. measure --compact --copy checks a summary's approvals against this session's transcript; a copy not saved yet prints not checked (copy pending); without --copy nothing is printed. --brief is one line <= 600 B for ID-3. Rows hold counts and class ids only (canary). Provisional: O-1, O-12; O-3 decided (owner xxxxxxxx-09, all four quote-source rules kept).; REVIEW-NIGHT-3: gates named in words beside a class hit, src:dst refspecs, a local merge into a protected branch and the remote default branch (R3-02; owner xxxxxxxx-10 \"Push names\": all four push readings kept); a fork link anywhere on the lineage path and a file outside the store carry nothing (R3-03); an id on two lines is not carried (R3-05); U3-01 (root ruling 2026-10-23 11:56): a checked line carries only when it matches the hash publish recorded in .sessions/approvals/<sid>.<nonce>.json; an added line, edited targets, an edited quote, an edited id, a file without a record and a record of another file are context only (re-ask); 0.1.2 D-8: context-only own lines (a plugin handoff turn) are listed under Approvals (context only, re-ask) as written as context, never checked, even when approvals_checked was edited to name them; 0.1.2 AC-4: a file marked requested_by: plugin (publish writes it in a plugin handoff turn) carries no approval, a hashed usable line included, and lists its lines as (plugin handoff)",
+ "note": "AP-5: measure <handoff> lists the own chain's checked, unused (or standing) non-gate approvals under Approvals (checked) and gate ones under Approvals (gate, re-ask); a used once approval is spent; a fork successor (for now) and another session carry nothing. measure --compact --copy checks a summary's approvals against this session's transcript; a copy not saved yet prints not checked (copy pending); without --copy nothing is printed. --brief is one line <= 600 B for ID-3. Rows hold counts and class ids only (canary). All four quote-source rules are kept; gates named in words beside a class hit, src:dst refspecs, a local merge into a protected branch and the remote default branch (R3-02); a fork link anywhere on the lineage path and a file outside the store carry nothing (R3-03); an id on two lines is not carried (R3-05); U3-01: a checked line carries only when it matches the hash publish recorded in .sessions/approvals/<sid>.<nonce>.json; an added line, edited targets, an edited quote, an edited id, a file without a record and a record of another file are context only (re-ask); 0.1.2 D-8: context-only own lines (a plugin handoff turn) are listed under Approvals (context only, re-ask) as written as context, never checked, even when approvals_checked was edited to name them; 0.1.2 AC-4: a file marked requested_by: plugin (publish writes it in a plugin handoff turn) carries no approval, a hashed usable line included, and lists its lines as (plugin handoff)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -161,7 +161,7 @@
    }
   },
   {
-   "name": "O-12 interim: a fork successor carries nothing",
+   "name": "for now a fork successor carries nothing",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -181,7 +181,7 @@
    }
   },
   {
-   "name": "O-1: another session's handoff carries nothing",
+   "name": "another session's handoff carries nothing",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -361,7 +361,7 @@
    }
   },
   {
-   "name": "REVIEW-NIGHT-3 setup",
+   "name": "gates in words, refspecs and merges: setup",
    "setup": [
     {
      "git": [
@@ -406,7 +406,7 @@
    ]
   },
   {
-   "name": "R3-02: a gate named in words beside a push, a src:dst refspec to main, a local merge into main, the remote default branch (owner xxxxxxxx-10: all four push readings kept)",
+   "name": "R3-02: a gate named in words beside a push, a src:dst refspec to main, a local merge into main, the remote default branch (all four push readings kept)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -429,7 +429,7 @@
    }
   },
   {
-   "name": "R3-03: a predecessor behind a fork link carries nothing (O-12 over every hop)",
+   "name": "R3-03: a predecessor behind a fork link carries nothing (over every hop)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",

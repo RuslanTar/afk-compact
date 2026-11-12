@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "small-rulings §2.1/§2.4 (RV-19 refined): the carry base is the newest handoff whoever wrote it. Own older + foreign newer: previous_kind foreign, own_previous_handoff, carry_notice, next_ids = max over both files + 1, newer_foreign without the base, foreign_commits based on the own file; the stage records the carry; begin JSON <= 3,072 B (AT-CF-06). Publish lint: a foreign line without a [from …] tag is carry-provenance; a tagged approval marked used is carry-approval; tagged lines with the context-only note publish, and the frontmatter carries previous_kind and own_previous_handoff",
+ "note": "the carry base is the newest handoff whoever wrote it. Own older + foreign newer: previous_kind foreign, own_previous_handoff, carry_notice, next_ids = max over both files + 1, newer_foreign without the base, foreign_commits based on the own file; the stage records the carry; begin JSON <= 3,072 B (AT-CF-06). Publish lint: a foreign line without a [from …] tag is carry-provenance; a tagged approval marked used is carry-approval; tagged lines with the context-only note publish, and the frontmatter carries previous_kind and own_previous_handoff",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -193,7 +193,7 @@
    "name": "AT-CF-04 tagged lines publish; frontmatter keeps the carry"
   },
   {
-   "name": "small-rulings 2.5: measure follows the foreign hop and labels it",
+   "name": "measure follows the foreign hop and labels it",
    "argv": [
     "measure",
     "$ROOT/repo/LAB-7/$STEM.md"

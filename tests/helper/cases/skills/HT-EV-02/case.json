@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "RRP-01 (TPL §5 scratch-clone patch series, handoff-spec §10 deny names and actions) as changed by BD-1 (C-STORE D7, AT-ST-10): evidence --clone gates each patch before anything is written. A patch that touches a deny-listed path (.netrc, *.sqlite, also as an uncommitted change) is rebuilt without it: 0001-<sha8>.partial.patch holds README.md only, with one withheld row <clone>#<sha8>:app.sqlite; a commit or uncommitted diff whose every path is blocked gives only the withheld row and no patch file; a patch whose text has a HARD hit is withheld whole; a harmless patch is copied. No raw patch is left anywhere under the handoff root (.staging included): grep_absent of the .netrc password, the sqlite text and the token over $ROOT",
+ "note": "Evidence (scratch-clone patch series, handoff-spec §10 deny names and actions) as changed by BD-1 (AT-ST-10): evidence --clone gates each patch before anything is written. A patch that touches a deny-listed path (.netrc, *.sqlite, also as an uncommitted change) is rebuilt without it: 0001-<sha8>.partial.patch holds README.md only, with one withheld row <clone>#<sha8>:app.sqlite; a commit or uncommitted diff whose every path is blocked gives only the withheld row and no patch file; a patch whose text has a HARD hit is withheld whole; a harmless patch is copied. No raw patch is left anywhere under the handoff root (.staging included): grep_absent of the .netrc password, the sqlite text and the token over $ROOT",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

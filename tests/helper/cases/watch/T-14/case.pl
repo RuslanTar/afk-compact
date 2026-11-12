@@ -1,4 +1,4 @@
-# T-14 (WATCH §9): a foreign marker header in custom_instructions and in the
+# T-14: a foreign marker header in custom_instructions and in the
 # summary -> verdict unshaped (the core detector's verdict, passed through),
 # ci_foreign_header true; never ok.
 my $foreign = "\xe2\x9f\xaaotherplug v2 n=12345678 s=main\xe2\x9f\xab";

@@ -1,4 +1,4 @@
-# T-10 (WATCH §9, RV-24, AT-TS-04): three summaries, each with its own dispatch.
+# T-10 (RV-24, AT-TS-04): three summaries, each with its own dispatch.
 #   a) `checked 14:05` (legacy form), measured:false          -> 1 fabricated token
 #   b) `checked 2026-10-21 14:05 +0300`, measured:false        -> 1
 #   c) a stamp equal to the measured block's stamp, measured:true -> 0

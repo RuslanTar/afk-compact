@@ -1,7 +1,7 @@
-# AT-ST-04, watcher status half (C-STORE D4/D10; BUILD-ROUND-9 WCH-06): `status` lists the
+# AT-ST-04, watcher status half: `status` lists the
 # sessions whose stash no cross-session finish can reach because they left no per-process
 # record. The kept mismatch stashes are core's status line (`kept mismatch stashes: N` with
-# their paths, needs/core-to-watch.md §8): the watcher does not repeat their count.
+# their paths): the watcher does not repeat their count.
 # A session with a `live-` or `ended-` record is reachable and not listed; a kept
 # `*.mismatch.md` is not an open stash. Counts and sid8s only. Nothing is shown at zero.
 my @other = ('0e0e0e0e-1111-4111-8111-111111111111', '0f0f0f0f-2222-4222-8222-222222222222',

@@ -1,11 +1,11 @@
-# AT-WB-08, watcher half (W-BETA B.5, D; needs/core-to-watch.md §4; BUILD-ROUND-9 WCH-09):
+# AT-WB-08, watcher half:
 # `report` writes config.json from core's `settings::export_view`, which returns an ordered
 # object (`jsonc::obj`, a blessed array of key/value pairs) of exported values. The watcher
 # wraps it: {available: true, keys: {<key>: {class, value, default, clamped}}}. `class` comes
 # from `%settings::EXPORT`; `default` compares the exported value with core's export of the
 # key's default (`export_view({values => defaults})`); `clamped` marks a number the clamp
 # would move (the manifest's min/max, the window floor, the handoff-turn token bounds, and
-# the MOD-SPEC §1.2 soft max and target clamp). `report` runs without rc::init, so the
+# the settings' soft max and target clamp). `report` runs without rc::init, so the
 # watcher passes the resolved settings (settings::resolve) instead of relying on export_view's
 # no-argument rc::settings() read. A failing export_view gives
 # {available: false, why: export-view-failed}. The file passes the identity and secret scans

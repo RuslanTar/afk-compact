@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "begin: JSON <=3 KB with every HDN §6 key (+ reuse_window_min, D-14; + store_root, with bucket.path and the other store paths relative to it, U-04; no trimmed key when nothing is cut); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted, and also when the flag differs from it (degraded sid-mismatch); --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket; no queue_cmd: \"queue\": {\"mode\": \"off\"}, no Queued: line, no queue call (Q-ADAPTER QA-1)",
+ "note": "begin: JSON <=3 KB with every begin key (+ reuse_window_min, D-14; + store_root, with bucket.path and the other store paths relative to it, U-04; no trimmed key when nothing is cut); unsubstituted ${user_config.…} and empty values -> defaults with a note; ~ expanded; session id from the per-process record when the flag is unsubstituted, and also when the flag differs from it (degraded sid-mismatch); --topic-explicit re-pins the bucket to the topic after an ownership check (RV-28), refused when another live session's pin holds that bucket; no queue_cmd: \"queue\": {\"mode\": \"off\"}, no Queued: line, no queue call",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
@@ -179,7 +179,7 @@
    }
   },
   {
-   "note": "TPL §6, HDN §8: the passed id is a cross-check only; on a mismatch the per-process record's id wins and the identity is degraded",
+   "note": "The passed id is a cross-check only; on a mismatch the per-process record's id wins and the identity is degraded",
    "cwd": "$TMP/repo",
    "argv": [
     "begin",
@@ -270,7 +270,7 @@
    }
   },
   {
-   "note": "MOD §7: the process's session is its live- record with no ended- record; after a /clear across the DST change the ended session's earlier-but-larger ts string must not win",
+   "note": "the process's session is its live- record with no ended- record; after a /clear across the DST change the ended session's earlier-but-larger ts string must not win",
    "write": "$ROOT/.sessions/by-pid/1-1792886400.live-00000000.json",
    "content": "{\"pid\": 1, \"pid_lstart\": \"Sun Oct 25 01:00:00 2026\", \"session_id\": \"00000000-0000-4000-8000-000000000000\", \"cwd\": \"$TMP/repo\", \"worktree\": \"$TMP/repo\", \"source\": \"startup\", \"ts\": \"2026-10-25T02:50:00+03:00\"}"
   },

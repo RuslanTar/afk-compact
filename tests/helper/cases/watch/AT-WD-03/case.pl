@@ -1,4 +1,4 @@
-# AT-WD-03 (small-rulings §4.1 item 3; REVIEW B-9): no hook path runs `watch prune`; a hand-run
+# AT-WD-03: no hook path runs `watch prune`; a hand-run
 # `watch prune` takes a session only when EVERY file of it is older than the cut. That includes
 # the per-session files other parts keep under <watch>/<sid>/ (Dev-1 jobs.jsonl and
 # jobs-pending.jsonl, D-10 queue-adds.jsonl, D-18 handoff-turn/, the watcher's own

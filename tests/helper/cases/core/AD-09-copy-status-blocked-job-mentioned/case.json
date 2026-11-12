@@ -1,6 +1,6 @@
 {
  "id": "AD-09-copy-status-blocked-job-mentioned",
- "note": "Owner 2026-10-28 digest rules (a): a step that only mentions a job or its end inside its words (`log a message when the build is done`), with no trigger leading its clause, is not held on a job: a blocked Status stays in-progress while it can run (owner xxxxxxxx-08; otherwise as AD-04)",
+ "note": "Away digest: a step that only mentions a job or its end inside its words (`log a message when the build is done`), with no trigger leading its clause, is not held on a job: a blocked Status stays in-progress while it can run (otherwise as AD-04)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

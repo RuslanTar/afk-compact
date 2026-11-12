@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "BD-1 (C-STORE D7, handoff-spec §10 \"Clone patches\"; replaces HT-EV-02's withhold-whole expectation): a commit touching src/a.rb and .netrc gives 0001-<sha8>.partial.patch with src/a.rb only plus one withheld row <clone>#<sha8>:.netrc (rules deny-name, no bytes, no hash); the same for the uncommitted diff (uncommitted.partial.patch, <clone>#uncommitted:.netrc); a commit with only blocked paths (add db.sqlite) and the rename db.sqlite -> notes.txt (both sides withheld, notes.txt rename-from-denied) give withheld rows and no patch file; renames into the names \"a b.txt\", \"x*[y].env\" and one holding a newline are excluded literally: xay.env (which the glob x*[y].env would match) stays in 0005-<sha8>.partial.patch. The MANIFEST meaning and the row label say partial. No blocked text is written anywhere under the root.",
+ "note": "BD-1 (replaces HT-EV-02's withhold-whole expectation): a commit touching src/a.rb and .netrc gives 0001-<sha8>.partial.patch with src/a.rb only plus one withheld row <clone>#<sha8>:.netrc (rules deny-name, no bytes, no hash); the same for the uncommitted diff (uncommitted.partial.patch, <clone>#uncommitted:.netrc); a commit with only blocked paths (add db.sqlite) and the rename db.sqlite -> notes.txt (both sides withheld, notes.txt rename-from-denied) give withheld rows and no patch file; renames into the names \"a b.txt\", \"x*[y].env\" and one holding a newline are excluded literally: xay.env (which the glob x*[y].env would match) stays in 0005-<sha8>.partial.patch. The MANIFEST meaning and the row label say partial. No blocked text is written anywhere under the root.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-14 (production read under scoped carry, owner xxxxxxxx-28)",
+ "id": "AT-AP-14 (production read under scoped carry)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Owner 2026-10-23 xxxxxxxx-28 (\"Named read carries. forbit setting is default rule, but user explicit ask/approval always wins\"): a checked approval that names one production read and its targets carries like a fresh yes, also under unattended_prod_reads: forbid (the default here); a production write stays the prod-write gate. Fail closed, an allow list (re-review of the PR-28 build): a production approval is a read only when its action is exactly one command of the read grammar (kubectl get/describe/logs/top/explain/version/api-resources, helm list/status/get/history, or a readonly_cmd_re command; U-2, U-18..U-22) in plain ASCII words with listed flags only, its targets are `<identity> @ <state>` with no clause word, and no outward class, plain outward word or write word appears in its action or targets. Anything else is a gate: a read told in plain words (U-3), a root path (U-9), a second step or chain (U-14..U-17), an unlisted separator (U-23..U-25), no separator (U-26, U-27), a line break (U-28, U-29), a look-alike character (U-30..U-32), an unlisted flag (U-33), a second step in a target (U-34, U-35, U-41), a subcommand outside the read lists (U-36, U-37), a write or outward word in a target (U-38..U-40), an unclear production action (\"run the migration on prod\"). A kubectl read outside production is no infrastructure gate either (U-8), but only when the whole action is one read command of the grammar (slice A review: a hyphenated subcommand, U-42..U-44, or a plain-words second step, U-45, stays the infra-write gate; U-46, U-47 carry). The setting does not change what measure lists; the resume text (R7, R9 stop 2, resume-context step 4) lets a carried read run under forbid.",
+ "note": "A named read carries: the forbid setting is the default rule, and the user's explicit ask or approval wins: a checked approval that names one production read and its targets carries like a fresh yes, also under unattended_prod_reads: forbid (the default here); a production write stays the prod-write gate. Fail closed, an allow list (re-review of the PR-28 build): a production approval is a read only when its action is exactly one command of the read grammar (kubectl get/describe/logs/top/explain/version/api-resources, helm list/status/get/history, or a readonly_cmd_re command; U-2, U-18..U-22) in plain ASCII words with listed flags only, its targets are `<identity> @ <state>` with no clause word, and no outward class, plain outward word or write word appears in its action or targets. Anything else is a gate: a read told in plain words (U-3), a root path (U-9), a second step or chain (U-14..U-17), an unlisted separator (U-23..U-25), no separator (U-26, U-27), a line break (U-28, U-29), a look-alike character (U-30..U-32), an unlisted flag (U-33), a second step in a target (U-34, U-35, U-41), a subcommand outside the read lists (U-36, U-37), a write or outward word in a target (U-38..U-40), an unclear production action (\"run the migration on prod\"). A kubectl read outside production is no infrastructure gate either (U-8), but only when the whole action is one read command of the grammar (slice A review: a hyphenated subcommand, U-42..U-44, or a plain-words second step, U-45, stays the infra-write gate; U-46, U-47 carry). The setting does not change what measure lists; the resume text (R7, R9 stop 2, resume-context step 4) lets a carried read run under forbid.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -118,7 +118,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-28: under forbid a named production read carries when it is one command of the read grammar (kubectl, helm, a read-only command); a production write, a read told in plain words, any other action, a write word or an outward word is a gate",
+   "name": "under forbid a named production read carries when it is one command of the read grammar (kubectl, helm, a read-only command); a production write, a read told in plain words, any other action, a write word or an outward word is a gate",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -146,7 +146,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-28: a /clear successor carries the same production read",
+   "name": "a /clear successor carries the same production read",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -163,7 +163,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-28: a compaction summary's approvals read the same way (measure --compact --copy)",
+   "name": "a compaction summary's approvals read the same way (measure --compact --copy)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -189,7 +189,7 @@
    }
   },
   {
-   "name": "xxxxxxxx-28: the setting does not change the reading (allow in the settings file)",
+   "name": "the setting does not change the reading (allow in the settings file)",
    "options": {
     "unattended_prod_reads": "allow"
    },

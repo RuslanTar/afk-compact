@@ -1,6 +1,6 @@
-# T-22 (WATCH §9, M-17): a continue row after a native auto compaction that no
+# T-22 (M-17): a continue row after a native auto compaction that no
 # nudge drove -> A-27; a continue after 2 consecutive unshaped main verdicts
-# (a halt condition, MOD-SPEC §9) -> A-19.
+# (a halt condition) -> A-19.
 my $body = "# CANARY-TEXT-topic\n## Summary\nCANARY-TEXT-body\n";
 my $pc = sub { my $at = shift; return { call => 'hook', event => 'PostCompact', at => $at,
                                         payload => { trigger => 'auto', compact_summary => $body },

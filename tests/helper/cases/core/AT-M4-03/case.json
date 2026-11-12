@@ -1,6 +1,6 @@
 {
  "id": "AT-M4-03",
- "note": "PostCompact, no marker, no dispatch match, in the S-21 event order (ROOT-RULINGS F2-1: the boundary row is written after PostCompact): PostCompact stashes and defers (copy_deferred why=scope; no file, no sweep), the next Stop proves the scope with P3: (a) the main transcript gained a boundary row after the PostCompact -> compact/, boundaries.count 1; (b) only subagents/agent-x.jsonl gained one -> compact/subagents/ with -a from the file name; (c) neither -> compact/unattributed/ once SETTLE_S has passed",
+ "note": "PostCompact, no marker, no dispatch match, in the S-21 event order: PostCompact stashes and defers (copy_deferred why=scope; no file, no sweep), the next Stop proves the scope with P3: (a) the main transcript gained a boundary row after the PostCompact -> compact/, boundaries.count 1; (b) only subagents/agent-x.jsonl gained one -> compact/subagents/ with -a from the file name; (c) neither -> compact/unattributed/ once SETTLE_S has passed",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

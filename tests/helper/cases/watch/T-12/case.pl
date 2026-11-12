@@ -1,4 +1,4 @@
-# T-12 (WATCH §9): 4 consecutive compactions, each 2 main turns after the
+# T-12: 4 consecutive compactions, each 2 main turns after the
 # previous (3 rapid refills) -> rapid_refill_run 3, thrash; A-07.
 # (T-12-three holds the 3-compaction half.)
 my @t = (T::prompt(0), T::assistant_text(5));

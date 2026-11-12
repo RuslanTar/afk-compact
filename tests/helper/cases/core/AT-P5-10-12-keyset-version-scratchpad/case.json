@@ -1,6 +1,6 @@
 {
  "id": "AT-P5-10, AT-P5-11, AT-P5-12",
- "note": "P5-FOLD A7 (CORE-06). AT-P5-10: the C5 key-set canary fires once per (event, key set), marker <watch>/keyset/<event>-<keyset_sha8>: a SessionStart with an unknown key while the version is unknown, then the same key set under 2.1.307 -> 1 row; a new key set -> 1 more. AT-P5-11: watcher rows carry the version (sweep_evidence and session rows here, from the exec hint). AT-P5-12: SessionStart(startup) with scratchpad_dir: the private sidecar <watch>/<sid>/scratchpad.json has the path; no row in any stream holds it; the session row has scratchpad present and under_temp_root true (absent and null without it)",
+ "note": "AT-P5-10: the C5 key-set canary fires once per (event, key set), marker <watch>/keyset/<event>-<keyset_sha8>: a SessionStart with an unknown key while the version is unknown, then the same key set under 2.1.307 -> 1 row; a new key set -> 1 more. AT-P5-11: watcher rows carry the version (sweep_evidence and session rows here, from the exec hint). AT-P5-12: SessionStart(startup) with scratchpad_dir: the private sidecar <watch>/<sid>/scratchpad.json has the path; no row in any stream holds it; the session row has scratchpad present and under_temp_root true (absent and null without it)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

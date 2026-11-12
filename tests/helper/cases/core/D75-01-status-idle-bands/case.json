@@ -2,12 +2,12 @@
  "id": "D75-01",
  "layer": "H",
  "owner": "core",
- "note": "D-75 (0.1.6; owner 2026-11-08: tell the plugin's idle compaction from Claude Code's own by separate terms; the owner read idle_handoff_min_tokens 100000 as the idle-compaction minimum): the status `idle compaction:` line names native idle compaction (Claude Code) and plugin idle compaction apart and prints each path's token band from the effective values: the idle-compaction minimum as the mod's idle_mode row has it, else CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS as native reads it (200,000 by default, never below 100,000); the idle handoff turn from idle_handoff_min_tokens (clamped to 100,000 to 1,000,000) up to that minimum, or up from it when the plugin does not compact; no turn band when idle_handoff_min_tokens is not below the minimum.",
+ "note": "D-75 (tell the plugin's idle compaction from Claude Code's own by separate terms, since idle_handoff_min_tokens 100000 could read as the idle-compaction minimum): the status `idle compaction:` line names native idle compaction (Claude Code) and plugin idle compaction apart and prints each path's token band from the effective values: the idle-compaction minimum as the mod's idle_mode row has it, else CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS as native reads it (200,000 by default, never below 100,000); the idle handoff turn from idle_handoff_min_tokens (clamped to 100,000 to 1,000,000) up to that minimum, or up from it when the plugin does not compact; no turn band when idle_handoff_min_tokens is not below the minimum.",
  "now": "2026-11-08T10:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
   {
-   "name": "native off, plugin on, idle_handoff_min_tokens 100000: 200,000+ plugin idle compaction, 100,000-200,000 the turn at 49 min (the owner's setup)",
+   "name": "native off, plugin on, idle_handoff_min_tokens 100000: 200,000+ plugin idle compaction, 100,000-200,000 the turn at 49 min (a common setup)",
    "setup": [
     {
      "write": "$HOME/.claude/settings.json",

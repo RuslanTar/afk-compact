@@ -1,4 +1,4 @@
-# AT-AN-06 (0.1.3 alert noise, root decision 2): a session whose streams hold only the rows the
+# AT-AN-06 (0.1.3 alert noise): a session whose streams hold only the rows the
 # Stop writes itself (no SessionStart, mod or preamble row: the plugin was loaded mid-session on
 # the classic path) is observed from the earliest of those rows. Here an earlier Stop at 1000
 # left its sweep row and a later one at 1200; a boundary from before the first raises no A-01,

@@ -2,7 +2,7 @@
  "id": "HT-WA-05",
  "layer": "H",
  "owner": "skills",
- "note": "Dev-7 D2, REVIEW B-15, DP-14 (4): a FIFO, a directory or a device is refused as not-regular with exit 3 at once, with no blocking open; a marker regex that does not compile, is longer than 200 chars or holds (?{, (??{ or (* is usage (exit 64); a pattern that runs past --max is ended by alarm(max + 5) with exit 70 and no stdout",
+ "note": "Dev-7 D2, DP-14 (4): a FIFO, a directory or a device is refused as not-regular with exit 3 at once, with no blocking open; a marker regex that does not compile, is longer than 200 chars or holds (?{, (??{ or (* is usage (exit 64); a pattern that runs past --max is ended by alarm(max + 5) with exit 70 and no stdout",
  "steps": [
   {
    "name": "make a FIFO",

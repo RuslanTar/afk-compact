@@ -3,7 +3,7 @@
  "needs": [
   "types"
  ],
- "note": "MOD-SPEC §5.6 and AT-M3-14 (F): smoke --skip-cli (validate, test and C8 skipped by flag) with the C9 type declarations of the tested version passes, writes smoke_pass and clears smokeDue; declarations that differ from one baseline hash fail C9 and keep smokeDue; missing declarations fail C9 too (never a pass that compared nothing): with no --types the message names the running version (unknown when it cannot be read) and says to load /plugin-authoring; a --types FILE that does not exist is named; the bundled-skills lookup is AT-M3-14b-bundled-types",
+ "note": "AT-M3-14: smoke --skip-cli (validate, test and C8 skipped by flag) with the C9 type declarations of the tested version passes, writes smoke_pass and clears smokeDue; declarations that differ from one baseline hash fail C9 and keep smokeDue; missing declarations fail C9 too (never a pass that compared nothing): with no --types the message names the running version (unknown when it cannot be read) and says to load /plugin-authoring; a --types FILE that does not exist is named; the bundled-skills lookup is AT-M3-14b-bundled-types",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

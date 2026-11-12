@@ -1,4 +1,4 @@
-# AT-MG-03 (root ruling 2026-10-27 23:16): the cold test of a compaction is the prefix read,
+# AT-MG-03: the cold test of a compaction is the prefix read,
 # cache_read / (cache_read + cache_creation), and the input outside the cache is logged apart.
 # compaction_cache exports nonce, prefix_read and uncovered; compaction_cold exports nonce and
 # prefix_read; rows of an older version keep their read_share. A-28 names the prefix read of a

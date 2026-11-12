@@ -1,6 +1,6 @@
 {
  "id": "AT-E-07",
- "note": "MOD-SPEC §10 AT-E-07: the same temp file (tests/fixtures/tempfiles/at-e-07-dup.json) swept in two compactions of two sessions in two buckets: one copy; the second sweep's row is dup and points at the first copy (evidence-index.tsv)",
+ "note": "AT-E-07: the same temp file (tests/fixtures/tempfiles/at-e-07-dup.json) swept in two compactions of two sessions in two buckets: one copy; the second sweep's row is dup and points at the first copy (evidence-index.tsv)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

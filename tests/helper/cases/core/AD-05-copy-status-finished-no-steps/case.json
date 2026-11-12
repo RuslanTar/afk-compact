@@ -1,6 +1,6 @@
 {
  "id": "AD-05-copy-status-finished-no-steps",
- "note": "Away digest phase 1 (owner 2026-10-27 12:5x; build item 6): a finished Status with no Next steps section (a summary cut near its size cap can lose it; AWAY-DIGEST §4.3) is in-progress, as the plugin's lane check reads it (review of fix round 1; otherwise as AT-M3-01)",
+ "note": "Away digest phase 1: a finished Status with no Next steps section (a summary cut near its size cap can lose it) is in-progress, as the plugin's lane check reads it (review of fix round 1; otherwise as AT-M3-01)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

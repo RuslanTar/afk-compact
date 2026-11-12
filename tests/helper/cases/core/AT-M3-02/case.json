@@ -1,6 +1,6 @@
 {
  "id": "AT-M3-02",
- "note": "five summaries: sentinel missing, trailer after the sentinel, no marker, boundary precomputed:true, s=main under a subagent-proven dispatch -> truncated, ok-trailer, unshaped, stale, scope-leak; S-21 event order (ROOT-RULINGS F2-1): the unmarked one has no proof in PostCompact, so its copy and rollup row come from the next Stop (P3 main); a precomputed install whose dispatch is the precompute one is stale in PostCompact already, before any boundary row exists",
+ "note": "five summaries: sentinel missing, trailer after the sentinel, no marker, boundary precomputed:true, s=main under a subagent-proven dispatch -> truncated, ok-trailer, unshaped, stale, scope-leak; S-21 event order: the unmarked one has no proof in PostCompact, so its copy and rollup row come from the next Stop (P3 main); a precomputed install whose dispatch is the precompute one is stale in PostCompact already, before any boundary row exists",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

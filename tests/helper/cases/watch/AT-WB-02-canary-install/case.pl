@@ -1,5 +1,5 @@
-# AT-WB-02 (and the identity half of AT-WB-03) on WP-fix's canary install (W-BETA B.3, B.4;
-# tests/fixtures/setups/wb-canary-install.json; needs/fix-to-watch.md 1, 7). The recipe plants
+# AT-WB-02 (and the identity half of AT-WB-03) on the canary install
+# (tests/fixtures/setups/wb-canary-install.json). The recipe plants
 # a unique canary in every place B.3 names: the account (USER/LOGNAME, the git remote owner),
 # the host (a `hostname` PATH stub, which B.3's `hostname -s` reads), the repo and its
 # repo_roots entry, the branch, the ticket, the topic bucket, a summary copy, a handoff, a
@@ -14,7 +14,7 @@
 # `log_dir` value, where `report` reads them (watch-to-fix.md W2F-1).
 my $RECIPE = 'setups/wb-canary-install.json';
 my $rc = T::fixture_json($RECIPE);
-return { skip => "needs tests/fixtures/$RECIPE (WP-fix FIX-06)" } unless $rc;
+return { skip => "needs tests/fixtures/$RECIPE " } unless $rc;
 my %got;
 {
     allow_canary => 1,

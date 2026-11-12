@@ -1,4 +1,4 @@
-# AT-WB-04 (W-BETA B.4; BUILD-ROUND-9 WCH-09): a secret-shaped value that passes its field
+# AT-WB-04: a secret-shaped value that passes its field
 # class (a lowercase Slack-token shape in a `word` field) is caught by the secret scan of the
 # staged file: the file is withheld and the manifest records the rule id only, never the
 # value. The WITHHELD line names the rule.

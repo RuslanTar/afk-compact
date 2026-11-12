@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "SR-8 (owner xxxxxxxx-15, D-2 replaced 2026-10-23): receipt takes --cmds-run N and --approvals carried=n,used=n,asked=n, the flags resume R9 passes (NR-09); the resume_receipt row gains cmds_run and approvals_carried/used/asked as counts (content-free); absent flags log null; a bad --approvals is a usage error",
+ "note": "SR-8 (replaces D-2): receipt takes --cmds-run N and --approvals carried=n,used=n,asked=n, the flags resume R9 passes; the resume_receipt row gains cmds_run and approvals_carried/used/asked as counts (content-free); absent flags log null; a bad --approvals is a usage error",
  "now": "2026-10-23T08:05:12+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

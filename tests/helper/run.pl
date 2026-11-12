@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# tests/helper/run.pl: the H-test case runner (BUILD-PLAN §3.5). Owner: WP-core.
+# tests/helper/run.pl: the H-test case runner.
 # Runs `scripts/<name>-store` (a staged copy of plugin/) for every tests/helper/cases/**/case.json
 # given on the command line (files or folders), each case in a fresh temporary HOME
 # with STORE_TEST_MODE=1, and asserts exit codes, stdout, files, log rows and traces.
@@ -7,7 +7,7 @@
 # Usage: tests/helper/run.pl [--filter RE] [--keep] [-v] [--fixtures DIR] <case dir|case.json|cases root>...
 #
 # Case file (JSON): {"id", "sid"?, "tz"?, "env"?, "path_prepend"?, "needs"?: ["baseline","spec"],
-#   "steps": [step...]}  or the one-step form of §3.5 (argv, stdin, setup, expect, then).
+#   "steps": [step...]}  or the one-step form (argv, stdin, setup, expect, then).
 # Step: {"argv", "stdin" (file in the case dir or tests/fixtures/), "stdin_json", "stdin_text",
 #   "env", "now", "setup": [...], "parallel": N, "kill_after_ms": N (+ "kill_signal", default KILL),
 #   "expect": {...}}
@@ -21,7 +21,7 @@
 #   in the zone of the step that uses it; lstart_var), $PLUGIN_VERSION, $STORE (the
 #   real path of the staged launcher, $PLUGIN/scripts/$BRAND-store), $LAUNCH_ENV (the restart
 #   launcher's env name; an env name may hold it too), plus every variable a step captured.
-# Additions used by the WP-skills cases (one runner for every layer, BUILD-PLAN §3.5):
+# Additions used by the skills cases (one runner for every layer):
 #   case "tmp_base": "repo"  the case's temp dir sits under the repo's git-ignored tmp/,
 #                            not the system temp folder (the publish lint treats paths
 #                            under /tmp, /private/tmp and /var/folders as ephemeral); its
@@ -68,7 +68,7 @@
 #   builtin detect_tsv {tsv, sha: "template"}: expected shas over the body with {{plugin}}
 #   placeholders: $SECRET{<id>} (joined corpus fragments), {{plugin}}, {{marketplace}}, $FIXTURES,
 #     $TYPES (claude-code.d.ts; case "needs": ["types"] skips without it; "fixture:<path>" skips
-#     while tests/fixtures/<path> is missing (a WP-fix fixture not merged yet); "nocase-fs" skips
+#     while tests/fixtures/<path> is missing (a fixture not merged yet); "nocase-fs" skips
 #     where the temp folder is case-sensitive; "docker-image:<ref>" skips unless a Docker daemon
 #     answers and holds that image locally; "docker-image-any:<ref>|<ref>" unless it holds one;
 #     "nonroot" skips the whole case when the runner
@@ -95,12 +95,12 @@
 #     manifest: a row per userConfig key in one section, its title, default, min and max the
 #     manifest's; with `common` [keys], each row's tier common when listed, else advanced
 # Hosts for 0.1.0 (this runner and the watch driver, as a normal user, never as root):
-#   macOS, and the Linux rows MX-04 (debian:bookworm-slim + git), MX-09 (fedora:latest +
-#   git) and MX-12 (alpine:latest + perl git). None of the three has make, procps ps or
-#   file; MX-09 and MX-12 have no shasum, MX-09 no cmp, MX-12 no tz database; MX-04 and
-#   MX-12 have no python3. No case needs make, shasum or cmp; a case that needs python3 or
-#   the tz database prints a `not run` line there (AT-WB-07, AT-WB-13 on MX-04 and MX-12;
-#   AT-TS-03 on MX-12). HT-WA-03 needs the wait helper to read a pid's start time without
+#   macOS, and the Linux images debian:bookworm-slim + git, fedora:latest +
+#   git and alpine:latest + perl git. None of the three has make, procps ps or
+#   file; fedora and alpine have no shasum, fedora no cmp, alpine no tz database; debian and
+#   alpine have no python3. No case needs make, shasum or cmp; a case that needs python3 or
+#   the tz database prints a `not run` line there (AT-WB-07, AT-WB-13 on debian and alpine;
+#   AT-TS-03 on alpine). HT-WA-03 needs the wait helper to read a pid's start time without
 #   ps. Other rows are not checked with the full suite.
 # The secret corpus rule: text that looks like a secret is given as "parts" and joined
 # here, so no file in the repo holds a whole token-shaped string.
@@ -152,13 +152,13 @@ my ($REAL_HOME, $REAL_CONFIG_DIR, $ACCOUNT_HOME) = @homeguard::REAL{qw(home conf
 binmode(STDOUT, ':encoding(UTF-8)');
 binmode(STDERR, ':encoding(UTF-8)');
 
-# BH-6 (small-rulings §5.3 R1-R5): the work dirs go as soon as they are not needed. A
+# BH-6: the work dirs go as soon as they are not needed. A
 # passing case's c<N> is removed when it passes; at the end a failing run keeps only the
 # failed cases' c<N> and stage/ (`# kept:`); a run that dies or is killed (INT, TERM,
 # HUP) cleans up the same way in END. Only this process cleans: forked children never do.
 my $OWNER_PID = $$;
 my ($RUN_TMP, $REPO_TMP, $SHORT_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
-# Root ruling R6 (2026-10-27): a stdout byte cap (stdout_max_bytes) of a case outside the repo's
+# R6: a stdout byte cap (stdout_max_bytes) of a case outside the repo's
 # tmp/ counts each of its $TMP paths as this many bytes: the length of a case folder under macOS's
 # default temp folder (/private/var/folders/<2>/<30>/T/store-h-<pid>-<6 hex>/c<N>, 77 to 82
 # bytes), where the caps were sized. A long TMPDIR then no longer fails a cap, and a short one
@@ -186,7 +186,7 @@ while (@ARGV) {
     # in place of <repo>/tmp for tmp_base "repo" cases.
     if ($a eq '--plugin') { $PLUGIN_SRC = shift @ARGV; next }
     if ($a eq '--repo-tmp') { $REPO_TMP_BASE = shift @ARGV; next }
-    # Check a WP-fix fixture set before it merges: read tests/fixtures/ from DIR (an export of
+    # Check a fixture set before it merges: read tests/fixtures/ from DIR (an export of
     # that branch's tests/fixtures), for "fixture:" needs, $FIX, $FIXTURES, stdin and copy sources.
     if ($a eq '--fixtures') { $FIXTURES_DIR = Cwd::abs_path(shift @ARGV); next }
     push @ARGS, $a;
@@ -205,7 +205,7 @@ homeguard::add_throwaway("$REPO/tmp");
 eval { homeguard::add_temp_root($REPO_TMP_BASE); 1 } or do { print STDERR $@; exit 2 };
 
 my ($BRAND, $MARKETPLACE) = do { my $b = jsonc::decode(util::read_file("$REPO/brand.json")); ($b->{name}, $b->{marketplace} // $b->{name}) };
-# The launcher folder (PKG-RUNTIME A.1): one constant, as in tools/build, deps.ts and ctx.pm.
+# The launcher folder: one constant, as in tools/build, deps.ts and ctx.pm.
 my $LAUNCHER_DIR = 'scripts';
 my $HOSTNAME = (POSIX::uname())[1];
 my $CLAUDE_BIN = find_claude_bin();
@@ -270,7 +270,7 @@ sub short_tmp {
 # lstart_in(pid, tz): `ps -o lstart=` for pid as the helper reads it in a case: under the
 # zone the helper call gets (TZ, child_env; undef: no TZ) and the C locale. An lstart is
 # local time, so one read in the runner's own zone matches the helper only while the host's
-# current UTC offset equals the case's (a UTC+2 zone host after the switch to winter time, a
+# current UTC offset equals the case's (a UTC+2 host after its switch to winter time, a
 # Linux container in UTC). One ps call per (pid, zone), the zone keyed by defined-ness (no
 # TZ and TZ='' are not the same zone). Where ps gives no lstart (an image without procps;
 # busybox ps has no lstart) and /proc/<pid>/stat is there, the start time is btime + field
@@ -634,7 +634,7 @@ sub _rm_tree {
 }
 
 # ---------------------------------------------------------------- one case
-# sequence_case(case) -> the case with its steps from tests/fixtures/sequences/<id>/ (the WP-fix
+# sequence_case(case) -> the case with its steps from tests/fixtures/sequences/<id>/ (the
 # sequence format, tests/fixtures/README.md "Sequences"): input.json's sid, now, env,
 # store_test_claude_pid, repo and seed, then each step with its transcript_append appended to
 # the payload's transcript_path before it runs; expected.json's step_asserts join the expect of
@@ -681,7 +681,7 @@ sub sequence_case {
         $st{expect} = \%x;
         push @steps, \%st;
     }
-    # metrics {join_conflict: n}: the status count (CORE-11) after the last step
+    # metrics {join_conflict: n}: the status count after the last step
     if (ref $ex->{metrics} eq 'HASH' && defined $ex->{metrics}{join_conflict}) {
         push @steps, { name => "$case->{sequence}: status counts join_conflict", argv => ['status', '--sid', '$SID'],
                        expect => { exit => 0, stdout_has => ["^compactions: .* . join_conflict $ex->{metrics}{join_conflict}:\$"] } };
@@ -770,7 +770,7 @@ sub run_case {
     $V{PLUGIN_VERSION} = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) }; ref $m eq 'HASH' ? $m->{version} // '0.0.0' : '0.0.0' };
     my %cenv = %{ $case->{env} || {} };
     my $sub = sub { subst($_[0], \%V) };
-    # STATE-ROOT (0.1.2): the default root is the staged manifest's default (~/.local/state/<brand>/handoffs);
+    # State root (0.1.2): the default root is the staged manifest's default (~/.local/state/<brand>/handoffs);
     # $LEGACY is the old default ~/.claude/handoffs, read while handoff_root is unset
     my $droot = do { my $m = eval { jsonc::decode(util::read_file("$V{PLUGIN}/.claude-plugin/plugin.json")) };
                      ref $m eq 'HASH' && ref $m->{userConfig} eq 'HASH' && ref $m->{userConfig}{handoff_root} eq 'HASH'
@@ -992,7 +992,7 @@ sub risk_corpus {
     return @e;
 }
 
-# Inline repo recipe (WP-skills cases): {base, branch, commits: [{files, msg}], ignored, dirty, untracked} at <dir>
+# Inline repo recipe: {base, branch, commits: [{files, msg}], ignored, dirty, untracked} at <dir>
 sub make_repo {
     my ($rc, $at, $V) = @_;
     die "repo recipe needs at\n" unless defined $at && $at ne '';
@@ -1328,7 +1328,7 @@ sub setup {
         my $left = $s->{bytes} // 0;
         my $chunk = ($s->{fill} // 'b') x 65536;
         while ($left > 0) { my $n = $left < 65536 ? $left : 65536; print $fh substr($chunk, 0, $n); $left -= $n }
-        # "tail": text after the filler (a value past the first scan window, RRP-06)
+        # "tail": text after the filler (a value past the first scan window)
         if (defined $s->{tail}) { my $t = $s->{tail}; utf8::encode($t) if utf8::is_utf8($t); print $fh $t }
         close $fh;
         return;
@@ -2951,7 +2951,7 @@ sub builtin {
             my %vc;
             # dispatch column: '' text alone; 'none' a PostCompact with no dispatch at all;
             # a fixtures path (watch/dispatch-<nonce>.json) the record of this compaction,
-            # whose agent_id / channel give the proven scope (MOD-SPEC §2.4 P1); an 8-hex
+            # whose agent_id / channel give the proven scope; an 8-hex
             # nonce is still taken as the dispatch nonce alone.
             my $d = $r{dispatch} // '';
             if ($d eq 'none') {
@@ -3040,8 +3040,8 @@ sub builtin {
         return @e;
     }
     if ($name eq 'floor_lint') {
-        # AT-P-11 (PKG-RUNTIME B.2): every .pl/.pm under plugin/helper (or args.root), three rules.
-        # L1 modules: every use/require is a floor module (RUNTIME §2.4, plus overload, lib and
+        # AT-P-11: every .pl/.pm under plugin/helper (or args.root), three rules.
+        # L1 modules: every use/require is a floor module (plus overload, lib and
         #   utf8, probed present in debian:bookworm-slim perl-base), one of the helper's own
         #   libraries, or sits inside an eval with a fallback. `feature` is the core pragma (its
         #   newer features are L3).
@@ -3055,8 +3055,8 @@ sub builtin {
         my %floor = map { $_ => 1 } qw(strict warnings constant Fcntl POSIX Errno Cwd File::Spec File::Path File::Temp
             File::Basename IPC::Open3 Getopt::Long IO::Handle List::Util Scalar::Util Text::ParseWords IO::File IO::Select
             Socket Exporter Carp parent integer bytes overload lib utf8 feature);
-        # optional: loaded only inside an eval on the same line (W-BETA B.6 allows DEFLATE for the
-        # report zip only when present: watch-to-core W2C-4)
+        # optional: loaded only inside an eval on the same line (DEFLATE is allowed for the
+        # report zip only when present)
         my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes IO::Compress::RawDeflate IO::Uncompress::RawInflate);
         my $root = defined $a->{root} ? $a->{root} : "$REPO/plugin/helper";
         # The floor value has one source in the helper: main.pl's guard (`$] < 5.028`).
@@ -3153,7 +3153,7 @@ sub builtin {
         # gate. An entry's class: HARD -> a HARD hit, WARN -> a hit, none -> no hit. Redaction
         # (all rules, the log/JSON path; HARD only, the summary path for HARD entries) leaves no
         # fragment of 8+ characters. A name: withheld <-> denied by name. Rule ids are reported
-        # (the corpus ids are WP-fix's; they are not compared). `known_gaps` {id: reason} turns
+        # (the corpus ids are the fixtures', they are not compared). `known_gaps` {id: reason} turns
         # that entry's failures into TODO lines (a gap another work package owns).
         my $c = eval { jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json")) };
         return ('no secret corpus') unless ref $c eq 'HASH';
@@ -3191,7 +3191,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'resume_block') {
-        # AT-TX-11 H half (T-TEXT E3) and text-to-core C-1: resumeblock::build over a stand-in
+        # AT-TX-11 H half and C-1: resumeblock::build over a stand-in
         # protocol of protocol_chars, the fixed lines (frame_chars, default 300) and a measured block of
         # remeasure_bytes keeps the block
         # untrimmed within max; the tags it asks the asset for are exactly `tags`, and the
@@ -3233,7 +3233,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'bd2_pins') {
-        # AT-ST-12 (BD-2, C-STORE D6): the corpus pins `redacted` (the exact text after redaction
+        # AT-ST-12 (BD-2): the corpus pins `redacted` (the exact text after redaction
         # with every rule) and `markers` (the marker count) hold, and across every entry's output
         # no two markers touch or sit apart by whitespace only (one marker per merged span).
         my $c = eval { jsonc::decode(util::read_file("$FIXTURES_DIR/secrets/corpus.json")) };
@@ -3579,7 +3579,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'runner_hygiene') {
-        # AT-RN-01..05 (small-rulings §5.3 R1-R5): child runs of this runner on the case-local
+        # AT-RN-01..05: child runs of this runner on the case-local
         # _rn<NN> folders (discovery skips them), each with its own TMPDIR and, for tmp_base
         # "repo" cases, its own --repo-tmp folder, so the real <repo>/tmp is not touched.
         my $which = $a->{which} // die "runner_hygiene: no which\n";
@@ -3662,10 +3662,10 @@ sub builtin {
     }
     if ($name eq 'stamp_spec') {
         # RV-24: util::stamp against the spec's time_re once the spec carries the RV-24 grammar
-        # (WP-text part 1 changes time_re and adds time_legacy_re); until then only the
+        # (once time_re changes and time_legacy_re is added); until then only the
         # built-in shape is checked and a TODO line says so.
         my $re = eval { spec::has('time_legacy_re') ? spec::get('time_re') : undef };
-        print "# TODO stamp_spec: the spec has no RV-24 time_re yet (WP-text part 1)\n" unless defined $re;
+        print "# TODO stamp_spec: the spec has no RV-24 time_re yet\n" unless defined $re;
         my $shape = '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}';
         for my $tz (@{ $a->{tz} || ['UTC'] }) {
             local $ENV{TZ} = host_zone($tz);
@@ -3682,7 +3682,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'assembly_runtime_fill') {
-        # fix-to-core §2: runtime.json values that spell the brand {{plugin}} are filled
+        # runtime.json values that spell the brand {{plugin}} are filled
         my $rt = assembly_runtime($a->{file});
         for my $k (sort keys %{ $a->{want} || {} }) {
             my $w = $a->{want}{$k};
@@ -3691,7 +3691,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'hold_parity') {
-        # AD-11 (owner 2026-10-28 digest rules (a), review 3): the saved copy's hold of a step
+        # AD-11 (away digest, review 3): the saved copy's hold of a step
         # (copies::_hold_of, the staged copy) against the lists the TS lane test checks lane.ts's
         # holdOf with. {file: the test file under the staged plugin, lists: {<const name>: job |
         # user | none}, min: the fewest wordings a list may hold}. Each `const <name> = [` ... `]`
@@ -3805,7 +3805,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'queue_mode') {
-        # CORE-18, skills-to-core §5: queue::mode(sid, cmd) and mode_text(sid, cmd) read only
+        # queue::mode(sid, cmd) and mode_text(sid, cmd) read only
         # that session's record under {watch} (no queue call): {mode, why, text} as expected
         require "queue.pm";
         no warnings "once";
@@ -3818,7 +3818,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'settings_prod') {
-        # S-SETTINGS B (CORE-02): settings::prod over resolved values {values}: reads, the
+        # settings::prod over resolved values {values}: reads, the
         # class id each text matches (null = none), the user pattern count, the invalid entries.
         my $p = settings::prod({ values => $a->{values} || {} });
         push @e, "reads $p->{reads}, want $a->{reads}" if defined $a->{reads} && $p->{reads} ne $a->{reads};
@@ -3835,7 +3835,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'settings_protected') {
-        # Owner xxxxxxxx-29: settings::protected over resolved values {values}: the user entry
+        # settings::protected over resolved values {values}: the user entry
         # count, the id of the user's entry each branch name matches (null = none of the user's;
         # the shipped list is the callers' own check), the ignored entries as key:index.
         my $p = settings::protected({ values => $a->{values} || {} });
@@ -3852,7 +3852,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'user_regex_bound') {
-        # U-06 (REVIEW-NIGHT-2): the user's own patterns run with a wall-clock bound
+        # U-06: the user's own patterns run with a wall-clock bound
         # (lib/userre.pm) and a stopped one takes its setting's safe side. One `check` per step;
         # it runs in a forked child this runner kills after `within_s` (default 20), so code
         # without the bound fails as "hung" instead of backtracking for minutes.
@@ -3904,7 +3904,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'settings_export') {
-        # W-BETA D (CORE-02): settings::export_view; every key has an export class (AT-WB-08).
+        # settings::export_view; every key has an export class (AT-WB-08).
         my @none = grep { !defined $_->[3] || $_->[3] !~ /^(num|bool|enum|path|list|drop)$/ } do { no warnings "once"; @settings::KEYS };
         push @e, 'keys without an export class: ' . join(', ', map { $_->[0] } @none) if @none;
         local $ENV{HOME} = case_home($a->{home}) if defined $a->{home};
@@ -4188,7 +4188,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'no_age_rule') {
-        # AT-ST-06 (RRP-05 "no age limit"): no file-time test in the staged files named (file
+        # AT-ST-06 (no age limit): no file-time test in the staged files named (file
         # tests -M -A -C, a stat() field 8-10, File::stat's ->mtime, the word mtime)
         for my $f (@{ $a->{files} || [] }) {
             my $p = "$STAGE/helper/$f";
@@ -4300,7 +4300,7 @@ sub builtin {
         return @e;
     }
     if ($name eq 'state_root') {
-        # STATE-ROOT (0.1.2): paths::for's handoff root (the default reads under $XDG_STATE_HOME when
+        # State root (0.1.2): paths::for's handoff root (the default reads under $XDG_STATE_HOME when
         # that is an absolute path; any other value is the root as given) and its legacy root;
         # watch::ctx::_state_root agrees for the same value; paths::named and watch::ctx::_named fall
         # back to `plugin` (ctx::brand's last name) when no plugin name can be read.
@@ -4425,7 +4425,7 @@ sub assembly_runtime {
 # (nonce defaults to tests/fixtures/assembly/runtime.json's, the one tools/assemble used)
 # the goldens joined, with the goldens' nonce replaced by the first n=<8 hex> in
 # stdout (the helper draws its own). Exact bytes, so no banner, prefix or trailer
-# can pass (BUILD-PLAN §3.3 "exactly as tools/assemble composes it").
+# can pass.
 sub golden_diff {
     my ($g, $got) = @_;
     my ($n) = $got =~ /\bn=([0-9a-f]{8})\b/;
@@ -4614,7 +4614,7 @@ sub check {
                 push @e, "$p: mtime " . ($got // 'none') . ", want $f->{mtime_at}" unless defined $want && defined $got && $got == $want;
             }
             # tree_snapshot <label> keeps a folder's listing (every entry's path, type, mode, size,
-            # mtime and bytes) for a later step's same_tree_as <label> (STATE-ROOT: nothing is written
+            # mtime and bytes) for a later step's same_tree_as <label> (state root: nothing is written
             # under the legacy root)
             if (defined $f->{tree_snapshot}) { $V->{"__tree_$f->{tree_snapshot}"} = tree_sig($p) }
             if (defined $f->{same_tree_as}) {
@@ -4680,7 +4680,7 @@ sub check {
         elsif (!@rows) { push @e, "no $rw->{ev} row" . ($rw->{fields} ? ' with ' . jsonc::encode($rw->{fields}) : '') . " in $rw->{file}" }
     }
     # joined [{nonce, field: value}]: the rollup row as the staged rollup::rows returns it after
-    # the nonce join with compaction_boundary (PKG-RUNTIME E.2)
+    # the nonce join with compaction_boundary
     if ($x->{joined}) {
         _libs();
         require "rollup.pm";

@@ -1,6 +1,6 @@
 {
  "id": "F2-2-stale-marker",
- "note": "ROOT-RULINGS F2-2 (SPEC-03), MOD-SPEC §5.1 stale verdict, §5.3: a summary that repeats an earlier compaction's marker is never lost. Classic path: the first summary (marker N1, no scope proof) is saved under its nonce name at the next Stop; a later summary repeating marker N1 with another body is saved under a content name (h<sha5>, frontmatter nonce null), verdict stale, before and after the first one's copy exists; no copy mismatch. Mod path: a stale marker counts as no marker, so PostCompact defers to the open mod dispatch, whose after-step saves it under its own nonce (verdict stale), and the stash goes",
+ "note": "F2-2, stale verdict: a summary that repeats an earlier compaction's marker is never lost. Classic path: the first summary (marker N1, no scope proof) is saved under its nonce name at the next Stop; a later summary repeating marker N1 with another body is saved under a content name (h<sha5>, frontmatter nonce null), verdict stale, before and after the first one's copy exists; no copy mismatch. Mod path: a stale marker counts as no marker, so PostCompact defers to the open mod dispatch, whose after-step saves it under its own nonce (verdict stale), and the stash goes",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

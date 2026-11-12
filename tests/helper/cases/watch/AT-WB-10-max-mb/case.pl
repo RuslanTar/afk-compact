@@ -1,4 +1,4 @@
-# AT-WB-10 (W-BETA B.6; BUILD-ROUND-9 WCH-09): over `--max-mb` the newest rows are kept and the
+# AT-WB-10: over `--max-mb` the newest rows are kept and the
 # oldest dropped, the written zip fits the cap, the manifest says `truncated: true` with the
 # `from` date of the oldest kept row, and the TRUNCATED line prints. The zip is STORE, so
 # the rows really take room.

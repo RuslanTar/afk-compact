@@ -1,6 +1,6 @@
 {
  "id": "R-4-linux-no-ps",
- "note": "ROOT-RULINGS R-4 on Linux without ps in Docker (debian:bookworm-slim, perl-base 5.36 and no procps, as in the BUILD-PLAN §5.4 MX-04 image before git; offline, read-only root, a tmpfs /tmp, the plugin's helper/ mounted read-only): every start-time reader reads /proc: identity::start_epoch and start_time, skills::core::lstart, skills::ctx::pid_state (another start: gone, not unverified), identity::alive, and the wait helper's pid check (pid@1 of a live pid: reused). Before the fix the wait helper and skills::core read `ps -o lstart=` only, so a live pid read alive at any start (HT-WA-03 failed on MX-04). Skips unless Docker answers and holds the image (no pull).",
+ "note": "R-4 on Linux without ps in Docker (debian:bookworm-slim, perl-base 5.36 and no procps, as in the bookworm test image before git; offline, read-only root, a tmpfs /tmp, the plugin's helper/ mounted read-only): every start-time reader reads /proc: identity::start_epoch and start_time, skills::core::lstart, skills::ctx::pid_state (another start: gone, not unverified), identity::alive, and the wait helper's pid check (pid@1 of a live pid: reused). Before the fix the wait helper and skills::core read `ps -o lstart=` only, so a live pid read alive at any start (HT-WA-03 failed on that image). Skips unless Docker answers and holds the image (no pull).",
  "needs": ["docker-image:debian:bookworm-slim"],
  "steps": [
   {

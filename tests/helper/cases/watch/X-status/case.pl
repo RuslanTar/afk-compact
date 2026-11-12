@@ -1,4 +1,4 @@
-# watch.status_lines (MOD-SPEC §11, WATCH §7.2): this session's open alerts
+# watch.status_lines: this session's open alerts
 # (critical first, fixed texts, ids only) and the last 7 days' counts by rule.
 my $other = '0d0d0d0d-4444-4444-8444-444444444444';
 my $a = sub { my ($t, $rule, $sev, $id) = @_;

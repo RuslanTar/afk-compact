@@ -1,6 +1,6 @@
-# T-17 (WATCH §9): a PreCompact watcher run prints nothing (byte-exact; the
+# T-17: a PreCompact watcher run prints nothing (byte-exact; the
 # driver fails any step with stdout or stderr). Our marker sits mid-line in
-# instructions and is found unanchored, last match wins (MOD §2.2); it is not
+# instructions and is found unanchored, last match wins; it is not
 # a foreign header.
 my $o = "\xe2\x9f\xaa";
 my $c = "\xe2\x9f\xab";

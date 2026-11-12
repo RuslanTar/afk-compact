@@ -1,4 +1,4 @@
-# WATCH W9 hard stop: a Stop that runs out of time logs `sweep_partial`
+# W9 hard stop: a Stop that runs out of time logs `sweep_partial`
 # (reason hard-stop) and keeps no offset, so the boundary it had read is
 # evaluated at the next Stop instead of being skipped: one A-01 for the
 # compaction without a copy, one boundary record.

@@ -1,4 +1,4 @@
-# T-25 (WATCH §9, M-01): an auto boundary right after a prompt row vs after a
+# T-25 (M-01): an auto boundary right after a prompt row vs after a
 # tool_use with no Stop -> auto-turnstart vs auto-midturn.
 {
     transcript => [

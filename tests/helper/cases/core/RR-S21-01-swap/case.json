@@ -1,6 +1,6 @@
 {
  "id": "RR-S21-01-swap",
- "note": "RR-S21-01 (ROOT-RULINGS F2-1, MOD-SPEC §2.4 P3): a classic-only session; a main compaction and an unproven subagent compaction whose PostCompact comes 1.3 s after the main one, after the main boundary row landed. P3 takes as a main row's PostCompact only one at or before the row (the stash time has milliseconds), so the main summary goes to compact/ and the subagent summary to compact/subagents/, never swapped",
+ "note": "RR-S21-01: a classic-only session; a main compaction and an unproven subagent compaction whose PostCompact comes 1.3 s after the main one, after the main boundary row landed. P3 takes as a main row's PostCompact only one at or before the row (the stash time has milliseconds), so the main summary goes to compact/ and the subagent summary to compact/subagents/, never swapped",
  "tz": "Etc/GMT-3",
  "steps": [
   {

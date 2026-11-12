@@ -1,4 +1,4 @@
-# AT-ST-08, watcher reader (C-STORE D5/D10; BUILD-ROUND-9 WCH-06): after a reconcile fill
+# AT-ST-08, watcher reader: after a reconcile fill
 # renamed a `sub-unknown` copy, the watcher's copy-path join takes the newest
 # `copy_attributed` row for the copy's id6 over the `copy` row: the previous summary of a
 # subagent chain is read from the new name (the old one is gone). The actor join takes the

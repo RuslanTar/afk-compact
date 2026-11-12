@@ -1,6 +1,6 @@
 {
  "id": "AD-10-copy-status-blocked-wait-on-user",
- "note": "Owner 2026-10-28 digest rules (a), review 2: a wait whose object is a person (`Wait for the user to run the build`) is held on the user even though a job word follows: release-0.1.1b reads every wait held, and a step it reads held is held on the user (copies.pm _hold_of $HELD_RE, as lane.ts holdOf HELD_RE), so a blocked Status stays blocked (otherwise as AD-08). The copy reads a user hold and a job hold alike (both not free); the TS/Perl parity of the hold kind itself is checked word for word against lane.ts (AD-11)",
+ "note": "Away digest: a wait whose object is a person (`Wait for the user to run the build`) is held on the user even though a job word follows: release-0.1.1b reads every wait held, and a step it reads held is held on the user (copies.pm _hold_of $HELD_RE, as lane.ts holdOf HELD_RE), so a blocked Status stays blocked (otherwise as AD-08). The copy reads a user hold and a job hold alike (both not free); the TS/Perl parity of the hold kind itself is checked word for word against lane.ts (AD-11)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

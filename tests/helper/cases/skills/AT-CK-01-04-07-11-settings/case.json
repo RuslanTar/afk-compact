@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "SK-1..SK-4 (owner xxxxxxxx-12/-13, S-SETTINGS E1-E4; REVIEW-NIGHT-2 test gap): ticket_pattern names the bucket from a numeric branch ticket (AT-CK-01); a secret_extra_rules HARD regex feeds the secret scan as user-hard-1, seen through risk's credential-value class (AT-CK-04, its scan half); resume_proceed is tighten-only: settings confirm, env confirm over a file auto, env auto never loosens a file confirm, default auto (AT-CK-07/08, locate's line); handoff_reuse_window_min 90 is clamped to 60 and 0 stays 0 (AT-CK-11)",
+ "note": "SK-1..SK-4: ticket_pattern names the bucket from a numeric branch ticket (AT-CK-01); a secret_extra_rules HARD regex feeds the secret scan as user-hard-1, seen through risk's credential-value class (AT-CK-04, its scan half); resume_proceed is tighten-only: settings confirm, env confirm over a file auto, env auto never loosens a file confirm, default auto (AT-CK-07/08, locate's line); handoff_reuse_window_min 90 is clamped to 60 and 0 stays 0 (AT-CK-11)",
  "now": "2026-10-23T08:10:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

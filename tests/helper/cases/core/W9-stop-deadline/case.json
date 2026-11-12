@@ -1,6 +1,6 @@
 {
  "id": "W9-stop-deadline",
- "note": "WATCHER-SPEC W9, BUILD-PLAN §3.1 test mode and §3.3 Stop row: hook Stop gives watch.on_stop a hard stop relative to the real clock (at most 3 s, within the 8 s Stop budget shared with reconcile). A fixed test clock a day in the past (STORE_TEST_NOW fixes the clock, never a budget) still sweeps: a sweep row and no sweep_partial",
+ "note": "W9, test mode and the Stop budget: hook Stop gives watch.on_stop a hard stop relative to the real clock (at most 3 s, within the 8 s Stop budget shared with reconcile). A fixed test clock a day in the past (STORE_TEST_NOW fixes the clock, never a budget) still sweeps: a sweep row and no sweep_partial",
  "now": "2026-10-20T10:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

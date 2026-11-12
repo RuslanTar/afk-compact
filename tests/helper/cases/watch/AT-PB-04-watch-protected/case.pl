@@ -1,4 +1,4 @@
-# AT-PB-04 (owner xxxxxxxx-29, "add the add-only setting now"), the watcher half: the sweep reads the
+# AT-PB-04 (the add-only protected_branches setting), the watcher half: the sweep reads the
 # user's protected_branches beside the spec's protected_branch_re. After the boundary, an
 # approvals_carry row lists push. `git push origin feat/x:qa-env` and `…:QA-ENV` (the setting's
 # qa-env, lower-cased) are the protected-push gate, so A-12 stays although push is listed;

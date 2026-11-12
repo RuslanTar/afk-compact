@@ -1,4 +1,4 @@
-# T-07 (WATCH §9): subagent compaction with its boundary only in
+# T-07: subagent compaction with its boundary only in
 # subagents/agent-<id>.jsonl and the PostCompact under the parent sid ->
 # actor <id>; no main record; a summary with s=main -> A-03.
 my $n = 'd0d00007';

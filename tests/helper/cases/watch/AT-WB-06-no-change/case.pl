@@ -1,4 +1,4 @@
-# AT-WB-06 (D-8; W-BETA B.6; BUILD-ROUND-9 WCH-09): after 3 reports every file that was under
+# AT-WB-06 (D-8): after 3 reports every file that was under
 # <watch> before is byte-identical (mode too); the only new files are the zips, the salt
 # (32 bytes, 0600) and the install id (0600). Default out folder: ~/Downloads when it is a
 # writable folder outside a git work tree; inside a work tree (here a home repository that
@@ -21,7 +21,7 @@ my %got;
           } },
         { call => 'cli', at => 3600, argv => [ 'report' ], env => { STORE_TEST_NO_GIT => '1' }, stdout_re => qr/\AREPORT / },
         # a dotfiles repository that ignores .claude/ and .local/state/<plugin>/: Downloads is in a work tree, the handoff
-        # root is git-ignored and ok (a not-ignored root would refuse the report: WATCH §6.1)
+        # root is git-ignored and ok (a not-ignored root would refuse the report: unsafe roots)
         { call => 'code', code => sub {
               my ($v) = @_;
               system('git', 'init', '-q', $v->{HOME}) == 0 or die "git init failed\n";

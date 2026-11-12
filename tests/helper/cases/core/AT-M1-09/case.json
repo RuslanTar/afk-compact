@@ -1,6 +1,6 @@
 {
  "id": "AT-M1-09",
- "note": "SessionStart(compact) with a classic dispatch, then a second SessionStart for the same nonce: the first prints the block (<= 6,000 chars, DP-8; subagent line, [midturn] for trigger auto, @saved_copy@ pending (...), line 1 defines <store> as the launcher word @store@ like the mod does, TXT-06 and PKG-RUNTIME A.2; no raw @token@ left) and claims sessionstart; the second prints nothing",
+ "note": "SessionStart(compact) with a classic dispatch, then a second SessionStart for the same nonce: the first prints the block (<= 6,000 chars, DP-8; subagent line, [midturn] for trigger auto, @saved_copy@ pending (...), line 1 defines <store> as the launcher word @store@ like the mod does; no raw @token@ left) and claims sessionstart; the second prints nothing",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

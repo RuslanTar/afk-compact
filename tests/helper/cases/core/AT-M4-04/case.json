@@ -1,6 +1,6 @@
 {
  "id": "AT-M4-04",
- "note": "SessionStart(compact), classic dispatch, scope unknown: block printed with its subagent line. ESCALATED: AT-M4-04 wants @saved_copy@ = 'not saved (scope unknown)' while AT-M1-09 wants 'pending (...)' for the same classic SessionStart path; the helper follows MOD-SPEC 3.4 (pending) and this case does not assert the saved-copy text",
+ "note": "SessionStart(compact), classic dispatch, scope unknown: block printed with its subagent line. ESCALATED: AT-M4-04 wants @saved_copy@ = 'not saved (scope unknown)' while AT-M1-09 wants 'pending (...)' for the same classic SessionStart path; the helper follows the pending wording and this case does not assert the saved-copy text",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

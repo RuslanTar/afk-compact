@@ -1,4 +1,4 @@
-# AT-AN-05 (0.1.3 alert noise, root decision 1; lib/watch/supersede.pm): the first watcher Stop
+# AT-AN-05 (0.1.3 alert noise; lib/watch/supersede.pm): the first watcher Stop
 # of 0.1.3 re-checks the open A-01, A-05, A-11 and A-15 rows an older version wrote, in every
 # session's alerts log, under the rule as it is now, and closes the ones it would not raise with
 # an `alert_closed` row (reason `superseded: rule changed in 0.1.3`); rows are never deleted.

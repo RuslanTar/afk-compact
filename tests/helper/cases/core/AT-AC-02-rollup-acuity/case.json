@@ -1,6 +1,6 @@
 {
  "id": "AT-AC-02 (rollup acuity and acuity_floor)",
- "note": "T-TEXT E6 / MOD-SPEC §5.4 'Acuity in the rollup' (CORE-11): the rollup row of a shaped summary with '· Acuity: watch ·' logs acuity watch; a summary without the field logs -; acuity_floor comes from the dispatch's checkpoint facts (a running job in the inventory: watch; an operation in progress: unstable), - when the dispatch ran no checkpoint",
+ "note": "the rollup row of a shaped summary with '· Acuity: watch ·' logs acuity watch; a summary without the field logs -; acuity_floor comes from the dispatch's checkpoint facts (a running job in the inventory: watch; an operation in progress: unstable), - when the dispatch ran no checkpoint",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,4 +1,4 @@
-# ROOT-RULINGS F2-4 (SAFE-02), WATCH W6 budget: PostCompact looks up the
+# F2-4: PostCompact looks up the
 # previous saved copy (M-11) from the `copy` rows of both streams, and decodes
 # only those lines: a long session's other rows are skipped before the JSON
 # decode. The copy row is still found (ledger_src copy).

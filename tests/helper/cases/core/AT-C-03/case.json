@@ -3,7 +3,7 @@
  "needs": [
   "corpus"
  ],
- "note": "helper detector on the 41-summary WP-fix corpus vs tests/fixtures/summaries/expected.tsv (the TS detector checks the same file in U)",
+ "note": "helper detector on the 41-summary corpus vs tests/fixtures/summaries/expected.tsv (the TS detector checks the same file in U)",
  "steps": [
   {
    "lib": "detect_tsv",

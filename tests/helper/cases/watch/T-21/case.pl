@@ -1,4 +1,4 @@
-# T-21 (WATCH §9, M-06): PostCompact with no dispatch; the liveness file was
+# T-21 (M-06): PostCompact with no dispatch; the liveness file was
 # NOT written in this turn (its ts is older than the turn's prompt) ->
 # mod_off; A-26. (T-15 holds the "written this turn" half -> A-16.)
 my $body = "# CANARY-TEXT-topic\n## Summary\nCANARY-TEXT-body\n";

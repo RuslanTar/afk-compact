@@ -1,5 +1,5 @@
 {
- "id": "AT-RS-20 (SESSION-RESTART D1, §6.3; owner 2026-10-27 20:38, §9 Q1 (a))",
+ "id": "AT-RS-20 (restart setting)",
  "note": "restart_on_update is a consent key: read from the settings file only (a flag or CLAUDE_PLUGIN_OPTION_* value is ignored with the note 'restart_on_update: settings file only'); off, shadow or on, any other value off with a note and one config_invalid row; ident reports it as `restart`. A CLAUDE_CONFIG_DIR naming another folder gives every consent key its safe value (restart off, relaunch off), unless that folder's settings.json is the consent folder's own settings.json (a symlink to it, or a hard link: the same device and inode; a hard link left after the account file was replaced by a rename is another file, safe values): the same file, so every consent key, relaunch_auto included, is read from it",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",

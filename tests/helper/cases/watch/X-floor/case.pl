@@ -1,4 +1,4 @@
-# AT-P-11 for WP-watch's files (ROOT-RULINGS R-1, RUNTIME §2.4; PKG-RUNTIME B.2 L1-L3).
+# AT-P-11 for the watcher's files (R-1).
 # L1 modules: every `use` or `require` is a floor module, a watcher module, or sits inside
 # an `eval` with a fallback. L2 implicit loads: `%+`, `%-`, `$+{`, `$-{`
 # (Tie::Hash::NamedCapture, missing in Debian 10 perl-base), `\N{NAME}` (charnames),

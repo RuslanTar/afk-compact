@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): HOME is a work tree whose .gitignore says `*`, then
+# Unsafe roots: HOME is a work tree whose .gitignore says `*`, then
 # `!Café/` and `!Café/**` (NFC). log_dir $HOME/Café (NFC) is not made yet. The folder is
 # brought back with its files, so git status would show the watcher's files: root-in-git. The
 # name is NFC-stable, so it is asked on stdin in both forms like an ASCII one (on the command

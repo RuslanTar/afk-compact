@@ -1,6 +1,6 @@
 {
  "id": "AT-WB-09 (watcher off stops stop_failure and permission_denied)",
- "note": "W-BETA A / WATCHER §8 item 6 off switch (CONFIG-REVIEW BG-29, CORE-13): with watcher = off (trimmed and folded as the watcher seam reads it) StopFailure and PermissionDenied write no row; with the default (shadow) each writes its one core row",
+ "note": "with watcher = off (trimmed and folded as the watcher seam reads it) StopFailure and PermissionDenied write no row; with the default (shadow) each writes its one core row",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

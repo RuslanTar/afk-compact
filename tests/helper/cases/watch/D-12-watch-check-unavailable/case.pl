@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): a root check that cannot run refuses, since unknown is
+# Unsafe roots: a root check that cannot run refuses, since unknown is
 # not safe. HOME is a dotfiles repository that ignores .claude/ and .local/state/<plugin>/ (an ok root), but
 # roots::check_path has no body for this call (roots.pm loaded, the sub swapped out), so the library
 # PreCompact writes nothing and `status` says check-unavailable.

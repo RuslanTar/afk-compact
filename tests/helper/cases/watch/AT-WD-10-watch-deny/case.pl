@@ -1,4 +1,4 @@
-# AT-WD-10, watcher half (PKG-RUNTIME E.1; BUILD-ROUND-9 WCH-05): the watcher keeps core's
+# AT-WD-10, watcher half: the watcher keeps core's
 # `permission_denied` rows in its row cache and reads `turn_kind` (with `post-compaction`
 # for the first turn after a deferred PostCompact), `caused_by` and `guard_class` into the
 # D-13 counts. Content-free: classes and counts only.

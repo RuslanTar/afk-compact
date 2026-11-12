@@ -1,4 +1,4 @@
-# AT-AN-12 (0.1.3 alert noise, root decision 1): a closed alert (an `alert_closed` row after it in
+# AT-AN-12 (0.1.3 alert noise): a closed alert (an `alert_closed` row after it in
 # the same log) is not open anywhere it is counted: the verdict without a session id (every
 # session's last 7 days) and `watch report`'s alert counts leave it out; the open one stays.
 my $SID2 = '6b6c3d4e-0000-4000-8000-00000000c0de';

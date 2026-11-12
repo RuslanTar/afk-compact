@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): HOME is a dotfiles work tree whose .gitignore says
+# Unsafe roots: HOME is a dotfiles work tree whose .gitignore says
 # `x/`, and log_dir is $HOME/:(top)x/wlogs, not made yet. Nothing ignores the folder `:(top)x`,
 # so git status would show the watcher's files: root-in-git. The root is sent on stdin relative
 # to the work tree with `./` in front; sent bare, git reads `:(top)x/wlogs` as pathspec magic

@@ -22,7 +22,7 @@ if [ -n "${STUB_VARS-}" ]; then
   done >"${STUB_DIR:?}/vars.tmp"
 fi
 D=${STUB_DIR:?STUB_DIR is not set}
-SID=00000000-0000-4000-8000-000000000000
+SID=5c3d7e1f-1111-4222-8333-444455556666
 n=$(cat "$D/runs" 2>/dev/null) || n=0
 n=$((n + 1))
 echo "$n" >"$D/runs"

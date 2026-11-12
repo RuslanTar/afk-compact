@@ -1,6 +1,6 @@
 {
  "id": "AT-M5-07",
- "note": "one session, three compactions: the same sid in every dispatch, copy and row; no state file renamed or reset (boundaries.count grows to 3); S-21 event order (ROOT-RULINGS F2-1): each boundary row is written 50 ms after its PostCompact, and the next Stop matches the three rows to the three PostCompacts, so boundaries.count is 3",
+ "note": "one session, three compactions: the same sid in every dispatch, copy and row; no state file renamed or reset (boundaries.count grows to 3); S-21 event order: each boundary row is written 50 ms after its PostCompact, and the next Stop matches the three rows to the three PostCompacts, so boundaries.count is 3",
  "tz": "Etc/GMT-3",
  "steps": [
   {

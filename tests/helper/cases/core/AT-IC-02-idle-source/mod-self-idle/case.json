@@ -3,7 +3,7 @@
  "needs": [
   "fixture:transcripts/idle-cases.json"
  ],
- "note": "Owner 2026-10-27 (\"Compact (Recommended)\", SPEC-DELTAS AT-IS-11): the plugin's own idle compaction while agents run is a mod-self idle dispatch (trigger plugin) that Claude Code writes no idle notice for. The none-mod-idle transcript (no native idle row) with such a record: the next Stop gives idle true, idle_source mod and idle_gap_s on the compaction_boundary row, and no idle_mismatch row (a mod-hook idle record there gives one: none-mod-idle). Skipped until the WP-fix fixtures are merged.",
+ "note": "The plugin's own idle compaction while agents run is a mod-self idle dispatch (trigger plugin) that Claude Code writes no idle notice for. The none-mod-idle transcript (no native idle row) with such a record: the next Stop gives idle true, idle_source mod and idle_gap_s on the compaction_boundary row, and no idle_mismatch row (a mod-hook idle record there gives one: none-mod-idle). Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "tz": "Etc/GMT-3",
  "steps": [

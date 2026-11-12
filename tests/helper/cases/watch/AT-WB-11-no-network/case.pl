@@ -1,4 +1,4 @@
-# AT-WB-11 (W-BETA; P-4; BUILD-ROUND-9 WCH-09): no network on the report path. Static: the
+# AT-WB-11 (P-4): no network on the report path. Static: the
 # report modules name no IO::Socket, LWP, HTTP::Tiny or Net::. Runtime: with socket and
 # connect overridden to die (CORE::GLOBAL, set before the helper compiles), `report`
 # still writes its zip and exits 0.

@@ -1,6 +1,6 @@
 {
  "id": "AT-P5-01, AT-P5-02 (P5 corpus)",
  "needs": ["fixture:summaries/p5/expected.tsv"],
- "note": "P5-FOLD A1 (CORE-05): the 6 P5 summaries (FIX-02 tests/fixtures/summaries/p5) read 6/6 ok, 3 inside / 3 after-close, and the AT-P5-02 after-close cases (with copy_trailers.json beside the table) give the verdicts of the table; skipped until the WP-fix fixtures are merged",
+ "note": "the 6 P5 summaries (tests/fixtures/summaries/p5) read 6/6 ok, 3 inside / 3 after-close, and the AT-P5-02 after-close cases (with copy_trailers.json beside the table) give the verdicts of the table; skipped until the fixtures are merged",
  "steps": [{"lib": "detect_tsv", "args": {"tsv": "summaries/p5/expected.tsv"}}]
 }

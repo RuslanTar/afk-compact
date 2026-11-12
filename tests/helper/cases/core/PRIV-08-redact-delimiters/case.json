@@ -1,6 +1,6 @@
 {
  "id": "PRIV-08-redact-delimiters",
- "note": "PRIV-08 (MOD-SPEC §10 'Logs and JSON with any hit -> redacted copy'): a redacted copy keeps the characters beside a value that the cloud-key-bare and high-entropy rules match as boundaries: a JSON evidence copy stays valid JSON with its quotes, a log keeps its line breaks, and two keys one comma apart are both replaced with the comma kept; no value reaches the copy",
+ "note": "PRIV-08: a redacted copy keeps the characters beside a value that the cloud-key-bare and high-entropy rules match as boundaries: a JSON evidence copy stays valid JSON with its quotes, a log keeps its line breaks, and two keys one comma apart are both replaced with the comma kept; no value reaches the copy",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

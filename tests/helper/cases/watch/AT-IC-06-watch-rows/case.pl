@@ -1,5 +1,5 @@
-# AT-IC-06 / AT-QA-03, watcher half (IC-1 D1, D5; Q-ADAPTER QA-2; WATCHER-SPEC §6.3 as folded on
-# 2026-10-22; BUILD-ROUND-9 WCH-12, DP-31 (3)): M-01 `idle` comes from the rollup row (an idle
+# AT-IC-06 / AT-QA-03, watcher half (IC-1 D1, D5; QA-2; the event list as folded on
+# 2026-10-22): M-01 `idle` comes from the rollup row (an idle
 # compaction arrives as trigger `auto`), on the boundary record with `idle_source`; the IC-1
 # row kinds (`handoff_turn_start`/`_end` with reason `idle`, `handoff_skipped {why, reason:
 # idle}`, `idle_mismatch`, `resume_remeasured`/`_failed`, `submit_dropped`) and the

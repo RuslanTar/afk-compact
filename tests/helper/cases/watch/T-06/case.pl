@@ -1,4 +1,4 @@
-# T-06 (WATCH §9): 4 compactions, 1 copy note -> A-01 x3. (`save_gap` as an
+# T-06: 4 compactions, 1 copy note -> A-01 x3. (`save_gap` as an
 # aggregate is W13, deferred.)
 my @t;
 for my $i (0 .. 3) {

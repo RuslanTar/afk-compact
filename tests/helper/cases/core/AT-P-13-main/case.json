@@ -1,6 +1,6 @@
 {
  "id": "AT-P-13-main",
- "note": "BUILD-PLAN §3.1 exit codes ('2 is never used; hook <Event> always exits 0'), ROOT-RULINGS R-2: a plugin copy with no helper/main.pl (partial install or interrupted update) takes the launcher fallback: hook PreCompact and Stop exit 0 with no output and one helper_runtime_missing row each, another subcommand refuses with exit 3; a main.pl that dies with errno ENOENT (perl's own exit 2) or does not compile still gives a hook exit 0 and nothing on stdout or stderr",
+ "note": "Exit codes (2 is never used; hook <Event> always exits 0), R-2: a plugin copy with no helper/main.pl (partial install or interrupted update) takes the launcher fallback: hook PreCompact and Stop exit 0 with no output and one helper_runtime_missing row each, another subcommand refuses with exit 3; a main.pl that dies with errno ENOENT (perl's own exit 2) or does not compile still gives a hook exit 0 and nothing on stdout or stderr",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): the root check itself dies (watch::ctx::_root_refusal
+# Unsafe roots: the root check itself dies (watch::ctx::_root_refusal
 # swapped for a sub that dies) in a home that ignores .claude/ and .local/state/<plugin>/ (an ok root). The hook dies in
 # refused(), error_row asks refused() again, it dies again: unknown is not safe, so no
 # watch_error row. Reading the undefined answer as "not refused" writes one.

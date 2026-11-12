@@ -1,4 +1,4 @@
-# AT-IC-06, watcher half of the idle join (IC-1 D1; needs/core-to-watch.md §6; core
+# AT-IC-06, watcher half of the idle join (IC-1 D1; core
 # rollup::rows): reconcile writes the idle facts on core's `compaction_boundary` row once the
 # boundary row was read, while the PostCompact rollup row says `idle: "unknown"` (or null).
 # The watcher's join (rules::join_row, used by the rules, `status` and `watch report`) gives

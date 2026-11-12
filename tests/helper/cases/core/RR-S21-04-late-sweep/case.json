@@ -1,6 +1,6 @@
 {
  "id": "RR-S21-04-late-sweep",
- "note": "RR-S21-04 (MOD-SPEC §5.3 step 5, §5.4): a mod session; an unmarked main summary is deferred to the mod's after-step, which never runs. The next Stop proves main with P3 and saves the copy late; a main-proven save is swept there too (one sweep_evidence row), as reconcile's step 0 does for scope-deferred saves",
+ "note": "RR-S21-04: a mod session; an unmarked main summary is deferred to the mod's after-step, which never runs. The next Stop proves main with P3 and saves the copy late; a main-proven save is swept there too (one sweep_evidence row), as reconcile's step 0 does for scope-deferred saves",
  "tz": "Etc/GMT-3",
  "steps": [
   {

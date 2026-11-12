@@ -1,4 +1,4 @@
-# The core -> watcher seam through the real launcher (BUILD-PLAN §3.6; the
+# The core -> watcher seam through the real launcher (the
 # T9 incidental "AT-M3-07 shows watch_error 1"). Core's `hook` decodes the
 # payload into character strings and passes its own results: PostCompact
 # `detect` = {scan => {nonce, normalized, marker_line, ...}, verdict, scope,

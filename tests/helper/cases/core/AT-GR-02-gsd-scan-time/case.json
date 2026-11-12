@@ -1,7 +1,7 @@
 {
  "id": "AT-GR-02",
  "sid": "22222222-2222-4222-8222-222222222222",
- "note": "GSD re-entry scan time (owner 2026-10-26): measure --compact over a ~40 MB transcript of 20,000 tool-result rows that mention gsd and .planning/ in their output, the GSD rows at the end: the lines are found and the whole helper call stays well inside the 2 s helper budget; a second call reads only what was appended (cache)",
+ "note": "GSD re-entry scan time: measure --compact over a ~40 MB transcript of 20,000 tool-result rows that mention gsd and .planning/ in their output, the GSD rows at the end: the lines are found and the whole helper call stays well inside the 2 s helper budget; a second call reads only what was appended (cache)",
  "now": "2026-10-26T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

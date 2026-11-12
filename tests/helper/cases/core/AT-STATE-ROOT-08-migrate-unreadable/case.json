@@ -5,7 +5,7 @@
  "needs": [
   "nonroot"
  ],
- "note": "STATE-ROOT (0.1.2): a folder of an old root that migrate cannot open is counted and listed as failed (exit 3), in the dry run too, never skipped silently: its files were not copied. Once it can be read, the rerun copies them. The teardown gives the folder its mode back.",
+ "note": "State root (0.1.2): a folder of an old root that migrate cannot open is counted and listed as failed (exit 3), in the dry run too, never skipped silently: its files were not copied. Once it can be read, the rerun copies them. The teardown gives the folder its mode back.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -1,6 +1,6 @@
 {
  "id": "AT-DH-20-trial-config",
- "note": "TRIAL-DUAL-HANDOFF 4.3 (P-DH-CFG): no trial.json -> absent and nothing written; an unknown key (a cap), on:false, an ended trial_until, a missing pin, an old_skill list without the template sum -> off/bad; a valid config on an unlisted or unknown Claude Code version -> skip cc-version",
+ "note": "no trial.json -> absent and nothing written; an unknown key (a cap), on:false, an ended trial_until, a missing pin, an old_skill list without the template sum -> off/bad; a valid config on an unlisted or unknown Claude Code version -> skip cc-version",
  "now": "2026-10-27T10:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

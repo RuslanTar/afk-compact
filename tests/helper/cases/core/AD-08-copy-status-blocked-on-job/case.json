@@ -1,6 +1,6 @@
 {
  "id": "AD-08-copy-status-blocked-on-job",
- "note": "Owner 2026-10-28 digest rules (a): a blocked Status whose only step that names no gate is triggered by a running job's result (`On the timer notification, reply …`) is held on that job, not a step that can run, so the copy is blocked, as the plugin's lane check (lane.ts JOB_RE) reads it with no result in (otherwise as AD-04)",
+ "note": "Away digest: a blocked Status whose only step that names no gate is triggered by a running job's result (`On the timer notification, reply …`) is held on that job, not a step that can run, so the copy is blocked, as the plugin's lane check (lane.ts JOB_RE) reads it with no result in (otherwise as AD-04)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

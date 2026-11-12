@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): log_dir $HOME/wlogs, not made yet, in a dotfiles home
+# Unsafe roots: log_dir $HOME/wlogs, not made yet, in a dotfiles home
 # whose .gitignore says `wlogs` and then `!wlogs/`: the name is ignored, but a folder of that
 # name is brought back, and files in it are not ignored. Asked as written (git cannot know it
 # will be a folder) the root reads ignored; it is root-in-git all the same, so no call makes it

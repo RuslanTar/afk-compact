@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; STATE-ROOT 0.1.2): HOME is a git work tree (a dotfiles
+# Unsafe roots: HOME is a git work tree (a dotfiles
 # repository) whose .gitignore ignores only .claude/, which kept the handoff root of 0.1.1
 # (~/.claude/handoffs) out of git. The default root is now ~/.local/state/<plugin>/handoffs,
 # which nothing ignores, so it is refused as root-in-git (the guard is right: files written there

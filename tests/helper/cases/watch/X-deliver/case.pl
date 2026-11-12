@@ -1,4 +1,4 @@
-# WATCH §7.2 delivery, built but shipped switched to status-only (E-17): with
+# Alert delivery, built but shipped switched to status-only (E-17): with
 # the switch set to system-message, one Stop prints one JSON object holding at
 # most 3 alerts, critical first, each shown once (exclusive `delivered/` marker),
 # warn at most 1 per rule, info never; no `decision` or `continue` field.

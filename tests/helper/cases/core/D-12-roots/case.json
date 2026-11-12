@@ -1,6 +1,6 @@
 {
  "id": "D-12-roots",
- "note": "BUILD-PLAN 3.1 unsafe roots (MOD-SPEC 1.2 refined by D-12, provisional): handoff_root inside a git work tree and not ignored -> REFUSED: root-in-git; inside a work tree but git-ignored -> saved, one root_in_git {ignored:true} row; inside .planning/ -> REFUSED: root-in-planning; shaping (the PreCompact fallback) still runs under a refused root",
+ "note": "Unsafe roots (D-12): handoff_root inside a git work tree and not ignored -> REFUSED: root-in-git; inside a work tree but git-ignored -> saved, one root_in_git {ignored:true} row; inside .planning/ -> REFUSED: root-in-planning; shaping (the PreCompact fallback) still runs under a refused root",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

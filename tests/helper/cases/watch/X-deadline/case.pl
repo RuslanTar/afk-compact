@@ -1,4 +1,4 @@
-# ROOT-RULINGS F2-4 (SAFE-02), WATCH W9: the rules run inside the Stop's hard
+# F2-4: the rules run inside the Stop's hard
 # stop. A fake clock here jumps past the hard stop as the rules write their
 # `precompute_or_failed` row: the rules stop at their next clock check and the
 # run is dropped (one `sweep_partial {reason: hard-stop, stage: rules}`, no

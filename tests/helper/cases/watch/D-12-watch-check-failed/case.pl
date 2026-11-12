@@ -1,4 +1,4 @@
-# WATCH §6.1 (MOD-SPEC §1.2 D-12; H-1): roots::check_path dies (swapped for a sub that dies)
+# Unsafe roots: roots::check_path dies (swapped for a sub that dies)
 # in a home that ignores .claude/ and .local/state/<plugin>/ (an ok root): refused() says `check-failed`, and the library
 # PreCompact writes nothing under the handoff root. Skipping the failed root instead writes
 # .watch/<sid>.classic.jsonl.

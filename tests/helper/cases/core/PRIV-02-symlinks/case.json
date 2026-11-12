@@ -1,6 +1,6 @@
 {
  "id": "PRIV-02-symlinks",
- "note": "PRIV-02 (MOD-SPEC §10 'never transcripts'; handoff-spec §10 deny names; HK-44): the name gate runs on a path and on its real target. A tasks/<id>.output link to a subagent transcript, a harmless-named link to a .netrc, and a link to a *.jsonl under CLAUDE_CONFIG_DIR/projects are withheld and none of their text reaches a copy; a link whose target passes the gate is still followed and copied",
+ "note": "PRIV-02 (handoff-spec §10 deny names): the name gate runs on a path and on its real target. A tasks/<id>.output link to a subagent transcript, a harmless-named link to a .netrc, and a link to a *.jsonl under CLAUDE_CONFIG_DIR/projects are withheld and none of their text reaches a copy; a link whose target passes the gate is still followed and copied",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
