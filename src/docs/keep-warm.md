@@ -2,6 +2,22 @@
 
 An agent, a workflow or a background shell that runs for more than an hour while the session waits for it outlives the one-hour prompt cache: the turn its result opens then reads the whole conversation again at full price. With `keep_warm_hours` (6 by default) the plugin keeps that cache warm while the job runs: about 50 minutes after the last request of the main session, and then about every 50 minutes, it sends one hidden request on the session's own conversation ("reply with one word"), which reads the conversation from the cache and refreshes it. The request adds nothing to the conversation, runs no tools, and starts no turn of its own (no Stop or prompt hook runs for it).
 
+```mermaid
+sequenceDiagram
+  participant S as Main session (idle)
+  participant J as Background job
+  participant C as One-hour prompt cache
+  S->>J: waits for the result
+  Note over S,C: about 50 min after the last request
+  S->>C: hidden request, cache refreshed
+  Note over S,C: then about every 50 min, at most 58 min apart
+  S->>C: hidden request, cache refreshed
+  J-->>S: result opens a turn (warming stops)
+  Note over S,C: or keep_warm_hours ends, then plugin idle compaction runs
+```
+
+Illustrative timeline; the times are the defaults.
+
 It runs only:
 
 - in the main session, while it is idle, and while at least one of that session's own background jobs is open (an agent, a workflow or a background shell; a Monitor or a scheduled task does not count). A teammate counts only while it works: one that waits idle for a message (Claude Code lists it as running all the same) sends no result, so it is no job here, nor for plugin idle compaction's running agents or the digest's `Basis:` count. It never runs because you are simply away with nothing running;
