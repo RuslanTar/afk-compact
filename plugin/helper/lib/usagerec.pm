@@ -4,7 +4,8 @@ package usagerec;
 # small file of the plugin's own state at a fixed place no option moves (as cachestate.pm's):
 # ${XDG_STATE_HOME:-~/.local/state}/<plugin>/usage.v1.json (0600). An entry is
 # {kind, pct, resets_at, at, src, sid8}: the window kind Claude Code names (five_hour, seven_day,
-# spend_limit), its share, its reset (epoch seconds, or null), when it was read (epoch seconds),
+# spend_limit), its share, its reset (epoch seconds, or null; a plan window's further ahead than the
+# window is long, %AHEAD_S, is not believed and kept as null), when it was read (epoch seconds),
 # its source and the first 8 characters of the session id. Sources: `plugin`, the mod's
 # $.session.usage() (cmd/usage.pl --stdin), and `statusline`, the rate_limits of the JSON Claude Code
 # sends a status line (cmd/cache.pl --note-usage). No account id, no secret, no content. Claude Code
@@ -22,7 +23,8 @@ package usagerec;
 # entry stays until its `resets_at`, however old; one with none only $FRESH_S after it was last
 # read or seen), keep at most $MAX_ENTRIES, a session's entries together (the sessions last read or
 # seen first), never dropping for room the session and kind whose entry is the latest of a window
-# (_deciding(): the reading a near-limit decision goes by), and rename a temp file over it
+# (_deciding(): the reading a near-limit decision goes by, by the same rule, limits.ts latestOf),
+# and rename a temp file over it
 # (cachestate::_put: never inside a git work tree or a .planning folder, so with the state folder
 # in one there is no record). Two writers at once: the last one wins, and the lost entry comes
 # back at that session's next write.
@@ -35,6 +37,11 @@ use utf8;
 our $FRESH_S = 600;
 # Entries of one kind whose resets are at most this far apart are of one window (limits.ts RESET_SAME_MS).
 our $SAME_RESET_S = 60;
+# How far ahead of the clock a plan window's reset may be: the window's length, plus $AHEAD_SLACK_S
+# (limits.ts RESET_AHEAD_MS). An entry whose reset is further ahead is kept with none. Other kinds
+# have no cap.
+our %AHEAD_S = (five_hour => 5 * 3600, seven_day => 7 * 86400);
+our $AHEAD_SLACK_S = 600;
 our $MAX_ENTRIES = 64;
 our $MAX_BYTES = 65536;
 # A statusline entry with the same share and reset as the one kept moves its `seen` only this
@@ -56,9 +63,10 @@ sub sid8 {
     return substr($s, 0, 8);
 }
 
-# _entry(hash) -> a clean entry, or undef when any field is out of form
+# _entry(hash, now) -> a clean entry, or undef when any field is out of form; a reset further
+# ahead of `now` than %AHEAD_S allows reads as none
 sub _entry {
-    my ($e) = @_;
+    my ($e, $now) = @_;
     return undef unless ref $e eq 'HASH';
     my ($kind, $src, $sid8) = map { ref $_ ? undef : $_ } @$e{qw(kind src sid8)};
     return undef unless defined $kind && $kind =~ /\A[a-z0-9_]{1,40}\z/;
@@ -68,6 +76,7 @@ sub _entry {
     my $at = _num($e->{at});
     return undef unless defined $pct && $pct >= 0 && $pct <= 1000 && defined $at && $at > 0;
     my $r = _num($e->{resets_at});
+    $r = undef if defined $r && defined $AHEAD_S{$kind} && $r - $now > $AHEAD_S{$kind} + $AHEAD_SLACK_S;
     my $seen = _num($e->{seen});
     return { kind => $kind, pct => $pct, resets_at => (defined $r && $r > 0 ? int($r) : undef), at => _t($at), src => $src, sid8 => $sid8,
              (defined $seen && $seen > $at ? (seen => _t($seen)) : ()) };
@@ -76,14 +85,16 @@ sub _entry {
 # _last(entry) -> when the entry was last read or seen
 sub _last { my ($e) = @_; return $e->{seen} // $e->{at} }
 
-# read_all() -> [entry...] as kept (none, unreadable or another schema: [])
+# read_all(now) -> [entry...] as kept (none, unreadable or another schema: []); now: the clock
 sub read_all {
+    my ($now) = @_;
+    $now //= util::now();
     my $f = file() // return [];
     my $raw = util::read_file($f, $MAX_BYTES + 1) // return [];
     return [] if length($raw) > $MAX_BYTES;
     my $j = eval { jsonc::decode($raw) };
     return [] unless ref $j eq 'HASH' && ($j->{schema} // '') eq schema() && ref $j->{readings} eq 'ARRAY';
-    return [ grep { defined } map { _entry($_) } @{ $j->{readings} } ];
+    return [ grep { defined } map { _entry($_, $now) } @{ $j->{readings} } ];
 }
 
 sub _key { my ($e) = @_; return join("\0", @$e{qw(sid8 src kind)}) }
@@ -95,31 +106,50 @@ sub kept {
     return [ grep { defined $_->{resets_at} ? $_->{resets_at} > $now : $now - _last($_) <= $FRESH_S } @$all ];
 }
 
-# _deciding(entries) -> { "sid8\0kind" => 1 }: per window (a kind, its entries' resets within
-# $SAME_RESET_S of the window's earliest) the session whose reading is the latest (dated(); the
-# larger share on a tie): the one that decides for that window
+# _latest(now, entry...) -> the latest of one window's entries (limits.ts latestOf): the dated one
+# read last (a time up to $SAME_RESET_S ahead of `now` reads as `now`; at the same time, the larger
+# share), unless one of unknown time (more than $SAME_RESET_S ahead: a clock that stepped back) has
+# a larger share, as the share only grows until the reset
+sub _latest {
+    my ($now, @es) = @_;
+    my $t = sub { my ($e) = @_; return $e->{at} - $now > $SAME_RESET_S ? undef : $e->{at} < $now ? $e->{at} : $now };
+    my ($dated, $undated);
+    for my $e (@es) {
+        my $x = $t->($e);
+        if (!defined $x) { $undated = $e if !$undated || $e->{pct} > $undated->{pct}; next }
+        my $y = $dated ? $t->($dated) : undef;
+        $dated = $e if !$dated || $x > $y || ($x == $y && $e->{pct} > $dated->{pct});
+    }
+    return $undated && (!$dated || $undated->{pct} > $dated->{pct}) ? $undated : $dated;
+}
+
+# _deciding(entries, now) -> { "sid8\0kind" => 1 }: per window (a kind, its entries' resets within
+# $SAME_RESET_S of the window's earliest) the session whose reading is the latest at `now` (dated(),
+# then _latest()): the one that decides for that window
 sub _deciding {
-    my ($all) = @_;
-    my (%out, $win, $first);
+    my ($all, $now) = @_;
+    my (%out, @win, $first);
+    my $close = sub { my $w = _latest($now, @win); $out{"$w->{sid8}\0$w->{kind}"} = 1 if $w };
     for my $e (sort { $a->{kind} cmp $b->{kind} || $a->{resets_at} <=> $b->{resets_at} } grep { defined $_->{resets_at} } @{ dated($all) }) {
-        if (!$win || $win->{kind} ne $e->{kind} || $e->{resets_at} - $first > $SAME_RESET_S) {
-            $out{"$win->{sid8}\0$win->{kind}"} = 1 if $win;
-            ($win, $first) = ($e, $e->{resets_at});
+        if (!@win || $win[0]{kind} ne $e->{kind} || $e->{resets_at} - $first > $SAME_RESET_S) {
+            $close->() if @win;
+            @win = ($e);
+            $first = $e->{resets_at};
             next;
         }
-        $win = $e if $e->{at} > $win->{at} || ($e->{at} == $win->{at} && $e->{pct} > $win->{pct});
+        push @win, $e;
     }
-    $out{"$win->{sid8}\0$win->{kind}"} = 1 if $win;
+    $close->() if @win;
     return \%out;
 }
 
 # note([entry...], now) -> [entry...] kept after the merge (written when anything changed)
 sub note {
     my ($new, $now) = @_;
-    my $all = read_all();
+    my $all = read_all($now);
     my %at = map { (_key($_) => $_) } @$all;
     my $ch = 0;
-    for my $e (grep { defined } map { _entry($_) } @{ $new || [] }) {
+    for my $e (grep { defined } map { _entry($_, $now) } @{ $new || [] }) {
         next if $e->{at} > $now + 300;
         my $old = $at{ _key($e) };
         next if $old && _last($old) >= $e->{at};
@@ -136,7 +166,7 @@ sub note {
     for my $e (@live) { $grp{ $e->{sid8} } = _last($e) if !defined $grp{ $e->{sid8} } || _last($e) > $grp{ $e->{sid8} } }
     my @keep = sort { $grp{ $b->{sid8} } <=> $grp{ $a->{sid8} } || $a->{sid8} cmp $b->{sid8} || _last($b) <=> _last($a) || _key($a) cmp _key($b) } @live;
     if (@keep > $MAX_ENTRIES) {
-        my $dec = _deciding(\@keep);
+        my $dec = _deciding(\@keep, $now);
         my $room = $MAX_ENTRIES - grep { $dec->{"$_->{sid8}\0$_->{kind}"} } @keep;
         @keep = grep { $dec->{"$_->{sid8}\0$_->{kind}"} || $room-- > 0 } @keep;
         splice(@keep, $MAX_ENTRIES) if @keep > $MAX_ENTRIES;

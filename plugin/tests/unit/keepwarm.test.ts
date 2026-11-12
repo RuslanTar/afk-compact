@@ -2463,6 +2463,35 @@ test('D88-08 (the earlier rule kept): going above 90 still needs a fresh reading
   expect(selfCompacts(w)).toBe(0)
 })
 
+for (const c of [
+  { name: 'the context fill', changed: ['context'] },
+  { name: 'the cost', changed: ['cost'] },
+  { name: 'the context fill and the cost', changed: ['context', 'cost'] },
+  { name: 'the rate limits beside the context fill (a window moved a point)', changed: ['context', 'rateLimits'], move: true, rule: 'band', compacts: 1 },
+]) {
+  test(`AT-KW-62: an agent open, five_hour at 93 (change 2, resetting in 4 h) refreshed at 60 min; at 95 a measure names ${c.name}: ${c.rule === 'band' ? 'the reading is fresh, the band holds' : 'the reading keeps its time (41 min old at the ping): no band, stop near-limit (rule stale)'}`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.storeSet('limit_deltas', { five_hour: [2] })
+    const f = forks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w)
+    f.t0 = t0
+    await until(w, t0, 60)
+    const R = new Date(w.clock.now() + 240 * MIN).toISOString()
+    w.rateLimits = [{ kind: 'five_hour', percentUsed: 93, resetsAt: R } as never, { kind: 'seven_day', percentUsed: 30 }]
+    await measured($, w)
+    await until(w, t0, 95)
+    w.tokens = (w.tokens ?? 0) + 1000
+    if (c.move) w.rateLimits = [{ kind: 'five_hour', percentUsed: 94, resetsAt: R } as never, { kind: 'seven_day', percentUsed: 30 }]
+    await $.session.measure({ context: { tokens: w.tokens, window: 1000000 }, rateLimits: w.rateLimits, changed: c.changed } as never)
+    await w.settle()
+    await until(w, t0, 101)
+    expect(f.at).toEqual([50])
+    expect(nearStops(w)).toEqual([['near-limit', true, c.rule ?? 'stale']])
+    expect(selfCompacts(w)).toBe(c.compacts ?? 0)
+  })
+}
+
 test('KW-PING-S (0.1.9): the start row names the gap\'s ping interval (ping_s, 3000 s), which the cache state\'s next_due_at follows', { options: ON }, async ($, on) => {
   const w = world(on)
   const f = forks(on, w)

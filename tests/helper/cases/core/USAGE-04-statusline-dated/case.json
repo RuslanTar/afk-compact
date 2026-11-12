@@ -33,7 +33,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228610,
         "src": "statusline",
         "sid8": "5e55b010"
@@ -49,7 +49,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228611,
         "src": "statusline",
         "sid8": "5e55b011"
@@ -65,7 +65,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228612,
         "src": "statusline",
         "sid8": "5e55b012"
@@ -81,7 +81,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228613,
         "src": "statusline",
         "sid8": "5e55b013"
@@ -97,7 +97,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228614,
         "src": "statusline",
         "sid8": "5e55b014"
@@ -113,7 +113,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228615,
         "src": "statusline",
         "sid8": "5e55b015"
@@ -129,7 +129,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228616,
         "src": "statusline",
         "sid8": "5e55b016"
@@ -145,7 +145,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228617,
         "src": "statusline",
         "sid8": "5e55b017"
@@ -161,7 +161,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228618,
         "src": "statusline",
         "sid8": "5e55b018"
@@ -177,7 +177,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228619,
         "src": "statusline",
         "sid8": "5e55b019"
@@ -193,7 +193,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228620,
         "src": "statusline",
         "sid8": "5e55b020"
@@ -209,7 +209,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228621,
         "src": "statusline",
         "sid8": "5e55b021"
@@ -225,7 +225,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228622,
         "src": "statusline",
         "sid8": "5e55b022"
@@ -241,7 +241,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228623,
         "src": "statusline",
         "sid8": "5e55b023"
@@ -257,7 +257,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228624,
         "src": "statusline",
         "sid8": "5e55b024"
@@ -273,7 +273,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228625,
         "src": "statusline",
         "sid8": "5e55b025"
@@ -289,7 +289,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228626,
         "src": "statusline",
         "sid8": "5e55b026"
@@ -305,7 +305,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228627,
         "src": "statusline",
         "sid8": "5e55b027"
@@ -321,7 +321,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228628,
         "src": "statusline",
         "sid8": "5e55b028"
@@ -337,7 +337,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228629,
         "src": "statusline",
         "sid8": "5e55b029"
@@ -353,7 +353,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228630,
         "src": "statusline",
         "sid8": "5e55b030"
@@ -369,7 +369,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228631,
         "src": "statusline",
         "sid8": "5e55b031"
@@ -385,7 +385,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228632,
         "src": "statusline",
         "sid8": "5e55b032"
@@ -401,7 +401,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228633,
         "src": "statusline",
         "sid8": "5e55b033"
@@ -417,7 +417,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228634,
         "src": "statusline",
         "sid8": "5e55b034"
@@ -433,7 +433,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228635,
         "src": "statusline",
         "sid8": "5e55b035"
@@ -449,7 +449,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228636,
         "src": "statusline",
         "sid8": "5e55b036"
@@ -465,7 +465,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228637,
         "src": "statusline",
         "sid8": "5e55b037"
@@ -481,7 +481,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228638,
         "src": "statusline",
         "sid8": "5e55b038"
@@ -497,7 +497,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228639,
         "src": "statusline",
         "sid8": "5e55b039"
@@ -513,7 +513,7 @@
        {
         "kind": "five_hour",
         "pct": 20,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794228640,
         "src": "statusline",
         "sid8": "5e55b040"
@@ -540,7 +540,7 @@
     "rate_limits": {
      "five_hour": {
       "used_percentage": 20,
-      "resets_at": 1794492000
+      "resets_at": 1794243600
      },
      "seven_day": {
       "used_percentage": 30,
@@ -602,7 +602,7 @@
        {
         "kind": "five_hour",
         "pct": 10,
-        "resets_at": 1794492000,
+        "resets_at": 1794243600,
         "at": 1794229260,
         "src": "plugin",
         "sid8": "5e55a0c3"
@@ -667,7 +667,7 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^usage: no reading of this session; other sessions on this machine: five_hour 10% \\(30s ago, resets in 3d\\) · seven_day 95% \\(50m ago, resets in 3d\\)$"
+     "^usage: no reading of this session; other sessions on this machine: five_hour 10% \\(30s ago, resets in 3h\\) · seven_day 95% \\(50m ago, resets in 3d\\)$"
     ]
    }
   }

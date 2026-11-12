@@ -98,6 +98,24 @@ export const RESET_ANOMALY_MS = 60 * 60000
 /** Readings of a kind whose resets are at most this far apart are of one window. */
 export const RESET_SAME_MS = 60000
 
+/**
+ * How far ahead of the clock a plan window's reset may be: the window's length (lib/usagerec.pm
+ * %AHEAD_S), plus `RESET_AHEAD_SLACK_MS`. A reset further ahead is not believed: the reading has no
+ * reset time (`resetKnown`). Other kinds have no cap.
+ */
+export const RESET_AHEAD_MS: Readonly<Record<string, number>> = { five_hour: 5 * 3600000, seven_day: 7 * 86400000 }
+/** The slack on `RESET_AHEAD_MS` (a clock a little behind the server's). */
+export const RESET_AHEAD_SLACK_MS = 10 * 60000
+
+/** The reading as `judge` reads it at `now`: without its reset time when that is past `RESET_AHEAD_MS`. */
+export function resetKnown(r: Reading, now: number): Reading {
+  const max = RESET_AHEAD_MS[r.kind]
+  if (r.resetsAt === undefined || max === undefined || !(r.resetsAt - now > max + RESET_AHEAD_SLACK_MS)) return r
+  const out: Reading = { ...r }
+  delete out.resetsAt
+  return out
+}
+
 /** The session's own windows as readings, read at `at` (`LoadState.usageAt`). */
 export function ownReadings(limits: readonly Limit[], at: number | undefined): Reading[] {
   return limits.map(l => ({ ...l, at, src: 'plugin' as const }))
@@ -133,7 +151,8 @@ export function windowRule(l: Limit, c: LimitCtx): string {
   // NaN reads as at the cap.
   if (!(l.percentUsed < cap)) return 'cap'
   if (!c.job) return 'no-job'
-  if (c.usageAt === undefined || c.now - c.usageAt > LIMIT_FRESH_MS) return 'stale'
+  // A time more than a minute ahead (a clock that stepped back) is not known (as in `latestOf`).
+  if (c.usageAt === undefined || c.now - c.usageAt > LIMIT_FRESH_MS || c.usageAt - c.now > RESET_SAME_MS) return 'stale'
   const ds = c.deltas[l.kind] ?? []
   if (ds.length === 0) return 'no-delta'
   return l.percentUsed + Math.max(LIMIT_DELTA_FLOOR, ...ds) + 1 < cap ? 'band' : 'delta'
@@ -217,8 +236,8 @@ function anomalies(ws: readonly Reading[]): Reading[] {
 
 /**
  * The trust rule and its windows: the verdict over every reading (`ruleOf` each one's rule,
- * by default the rule above at its own time). Per window kind: a reading whose reset has
- * passed counts for nothing; the counted ones (`counts`) make the kind's windows (`windowsOf`), and
+ * by default the rule above at its own time). A reset further ahead than its window is long is
+ * not believed (`resetKnown`). Per window kind: a reading whose reset has passed counts for nothing; the counted ones (`counts`) make the kind's windows (`windowsOf`), and
  * each window's latest reading decides for it: any `ok` lets the action run (`split` when another
  * stops it), else any `band` holds it in the band, else the kind stops it with the rule of the own
  * session's window (else the newest). A kind with no counted reading never stops it (`no-fresh`
@@ -226,7 +245,7 @@ function anomalies(ws: readonly Reading[]): Reading[] {
  * `split`, `no-fresh` or `90`.
  */
 export function judge(all: readonly Reading[], c: LimitCtx, ruleOf: (r: Reading) => string = r => windowRule(r, { ...c, usageAt: r.at })): Verdict {
-  const rs = all.filter(r => r.resetsAt === undefined || r.resetsAt > c.now)
+  const rs = all.map(r => resetKnown(r, c.now)).filter(r => r.resetsAt === undefined || r.resetsAt > c.now)
   const kinds = [...new Set(rs.map(r => r.kind))]
   const reps: Reading[] = []
   const n: Record<string, number> = {}
