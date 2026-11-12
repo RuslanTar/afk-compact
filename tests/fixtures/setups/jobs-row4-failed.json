@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "jobs-row4-failed",
-  "ruling": "Dev-1 D4 row 4",
+  "ruling": "background job table, row 4: failed",
   "tests": [
     "AT-J-04",
     "AT-J-08"

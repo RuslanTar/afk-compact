@@ -1,11 +1,11 @@
 {
   "v": 1,
   "id": "st-09-fill-scope",
-  "ruling": "C-STORE D5 step 5 (scope of fill)",
+  "ruling": "the scope of fill",
   "tests": [
     "AT-ST-09"
   ],
-  "note": "AT-ST-09 (d): three copies of the P5 subagent's compactions c1-c3, each with the marker nonce of a summary row in agent-a494e1b0fa1a73786.jsonl, so a nonce join (a) would match all three. Only the control in compact/subagents/ with actor sub-unknown may be filled (renamed to -aa494e1b0, copy_attributed); the main copy in compact/ and the one in compact/unattributed/ stay byte-identical under their names, with no copy_attributed or copy_attribution_* row for their id6. The copies are mode 0400 and have copy rows in the classic stream and their classic dispatch records; the invoke is one Stop (reconcile).",
+  "note": "AT-ST-09 (d): three copies of the P5 subagent's compactions c1-c3, each with the marker nonce of a summary row in agent-a5e55a005f5000005.jsonl, so a nonce join (a) would match all three. Only the control in compact/subagents/ with actor sub-unknown may be filled (renamed to -aa5e55a00, copy_attributed); the main copy in compact/ and the one in compact/unattributed/ stay byte-identical under their names, with no copy_attributed or copy_attribution_* row for their id6. The copies are mode 0400 and have copy rows in the classic stream and their classic dispatch records; the invoke is one Stop (reconcile).",
   "clock": "the case sets now to 2026-10-21T14:05:12+03:00 (ids.json)",
   "invoke": {
     "argv": [
@@ -40,7 +40,7 @@
         "nonce": "d2158267",
         "id6": "d21582",
         "filled": true,
-        "renamed_to": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001-aa494e1b0_c1-d21582.md"
+        "renamed_to": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001-aa5e55a00_c1-d21582.md"
       }
     },
     "rows_absent_for_id6": [
@@ -54,7 +54,7 @@
         "count": 1,
         "fields": {
           "id6": "d21582",
-          "actor": "a494e1b0fa1a73786"
+          "actor": "a5e55a005f5000005"
         }
       }
     ]
@@ -68,8 +68,8 @@
       "to": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001.jsonl"
     },
     {
-      "copy": "transcripts/P5-replay/subagents/agent-a494e1b0fa1a73786.jsonl",
-      "to": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/subagents/agent-a494e1b0fa1a73786.jsonl"
+      "copy": "transcripts/P5-replay/subagents/agent-a5e55a005f5000005.jsonl",
+      "to": "$HOME/.claude/projects/-tmp-example-repo/5e55a001-0c0f-4f1e-9a00-00000000a001/subagents/agent-a5e55a005f5000005.jsonl"
     },
     {
       "copy": "watch/dispatch-da24cc4a.json",

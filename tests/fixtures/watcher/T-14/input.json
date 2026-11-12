@@ -15,7 +15,7 @@
         "PreCompact"
       ],
       "stdin": "watcher/T-14/payloads/01-PreCompact.json",
-      "note": "stdout is the classic fallback text (MOD §3.2); the watcher part adds nothing",
+      "note": "stdout is the classic fallback text; the watcher part adds nothing",
       "expect": {
         "exit": 0,
         "stdout": null

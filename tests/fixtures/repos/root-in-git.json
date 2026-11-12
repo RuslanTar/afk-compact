@@ -3,7 +3,7 @@
   "id": "root-in-git",
   "dir": "example-repo",
   "git": true,
-  "note": "D-12: $TMP/example-repo/handoffs-tracked is in the work tree and not ignored (REFUSED: root-in-git); .local-handoffs is ignored (proceed, root_in_git row with ignored:true)",
+  "note": "$TMP/example-repo/handoffs-tracked is in the work tree and not ignored (REFUSED: root-in-git); .local-handoffs is ignored (proceed, root_in_git row with ignored:true)",
   "branch": "main",
   "author": {
     "name": "Fixture Author",

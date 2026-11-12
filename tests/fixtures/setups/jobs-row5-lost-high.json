@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "jobs-row5-lost-high",
-  "ruling": "Dev-1 D4 row 5",
+  "ruling": "background job table, row 5: lost, high confidence",
   "tests": [
     "AT-J-04",
     "AT-J-06",

@@ -1,6 +1,6 @@
 {
   "id": "S-21-bd3",
-  "spec": "T-TEXT E5 (BD-3 rollup fields), MOD-SPEC §5.4; AT-BD-01",
+  "spec": "the rollup fields of a compaction; AT-BD-01",
   "step_asserts": [
     {
       "after_step": 5,

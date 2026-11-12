@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "rm-worktrees",
-  "ruling": "D-12 §1.5.1, §1.5.4, §1.5.7",
+  "ruling": "repo mode: main checkout and worktrees",
   "tests": [
     "AT-RM-06",
     "AT-RM-11",

@@ -1,6 +1,6 @@
 {
   "id": "S-21-mod",
-  "spec": "MOD-SPEC §2.4 scope proof, §5.3, §5.4; ROOT-RULINGS F2-1",
+  "spec": "scope proof, PostCompact copy and rollup",
   "observed_order": [
     "mod session.compact before (writes the dispatch record; mod variant only)",
     "PreCompact",
@@ -45,7 +45,7 @@
     },
     {
       "after_step": 5,
-      "why": "PKG-RUNTIME E.2: reconcile matched the main boundary row to the nonce that has a rollup row: one compaction_boundary row with the boundary's sizes, duration and version",
+      "why": "reconcile matched the main boundary row to the nonce that has a rollup row: one compaction_boundary row with the boundary's sizes, duration and version",
       "rows": [
         {
           "file": "$WATCH/$SID/compactions.jsonl",
@@ -75,7 +75,7 @@
     },
     {
       "after_step": 6,
-      "why": "PKG-RUNTIME E.2: the copy is not rewritten by the join: it keeps mode 0400 and the bytes it had after PostCompact, and its frontmatter still has no tokens_before/tokens_after (null on the mod path, so the keys are left out); the joined rollup row has the boundary's non-null sizes and no join_conflict",
+      "why": "the copy is not rewritten by the join: it keeps mode 0400 and the bytes it had after PostCompact, and its frontmatter still has no tokens_before/tokens_after (null on the mod path, so the keys are left out); the joined rollup row has the boundary's non-null sizes and no join_conflict",
       "files": [
         {
           "path": "$ROOT/example-repo/general/compact/*_c1-1a2b3c.md",

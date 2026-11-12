@@ -1,6 +1,6 @@
 {
   "id": "S-21-pd-512k",
-  "spec": "PKG-RUNTIME E.1 (the same 512 KB read as _calls_since, one read), AT-WD-10",
+  "spec": "turn_kind (the same 512 KB read as _calls_since, one read), AT-WD-10",
   "step_asserts": [
     {
       "after_step": 5,

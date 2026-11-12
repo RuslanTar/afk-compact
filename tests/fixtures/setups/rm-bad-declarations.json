@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "rm-bad-declarations",
-  "ruling": "D-12 §1.5.2",
+  "ruling": "repo mode: the declaration check",
   "tests": [
     "AT-RM-04"
   ],
@@ -18,7 +18,7 @@
       "r-version": "repo-decl-invalid",
       "r-ok": "repo (accepted)"
     },
-    "note": "D-12 §1.5.2 puts ../x, /abs, a/../../x, .git/x and .planning/x in the declaration check, so every one of them is repo-decl-invalid (the status line reads `private (repo-decl-invalid)`); the unknown key of r-ok is ignored with a decl_unknown_keys note."
+    "note": "The declaration check refuses ../x, /abs, a/../../x, .git/x and .planning/x, so every one of them is repo-decl-invalid (the status line reads `private (repo-decl-invalid)`); the unknown key of r-ok is ignored with a decl_unknown_keys note."
   },
   "setup": [
     {

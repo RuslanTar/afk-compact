@@ -87,7 +87,7 @@
           "--scope",
           "main"
         ],
-        "note": "PostCompact defers (copy-deferred, MOD §5.3 step 2); the after-step saves under the nonce name"
+        "note": "PostCompact defers (copy-deferred); the after-step saves under the nonce name"
       }
     },
     {

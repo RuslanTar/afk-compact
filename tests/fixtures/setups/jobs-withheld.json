@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "jobs-withheld",
-  "ruling": "Dev-1 D1 (secret gate), AT-J-03",
+  "ruling": "the secret gate on job commands, AT-J-03",
   "tests": [
     "AT-J-03"
   ],

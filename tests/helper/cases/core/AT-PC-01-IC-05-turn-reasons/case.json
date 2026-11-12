@@ -1,6 +1,6 @@
 {
  "id": "AT-PC-01, AT-IC-05 (handoff-turn open reasons precompact and idle)",
- "note": "The pre-compaction turn and the pre-idle turn (IC-1 D5), core part: handoff_turn %REASONS gains precompact and idle, so `handoff-turn open --reason precompact|idle` creates the ht record with that reason and one handoff_turn_open row; another reason stays a usage error",
+ "note": "The pre-compaction turn and the pre-idle turn, core part: handoff_turn %REASONS gains precompact and idle, so `handoff-turn open --reason precompact|idle` creates the ht record with that reason and one handoff_turn_open row; another reason stays a usage error",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

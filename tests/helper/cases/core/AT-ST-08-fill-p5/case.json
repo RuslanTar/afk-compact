@@ -3,7 +3,7 @@
    "needs" : [
       "fixture:transcripts/P5-replay/replay.json"
    ],
-   "note" : "On the P5 replay: six PostCompacts with a classic dispatch and an s=sub marker save six sub-unknown copies; the next Stop reads the agent transcript's boundary and summary rows (nonce and sha only) and fills all six by nonce: -aa494e1b0_c1..6-<id6>.md, actor = the agent id, renamed_from, attributed_by reconcile-a, mode 0400, six copy_attributed rows with the boundary sizes, the old names gone, nothing else added; a second Stop is a no-op. Skipped until the fixtures are merged (tests/helper/run.pl --fixtures DIR checks it before).",
+   "note" : "On the P5 replay: six PostCompacts with a classic dispatch and an s=sub marker save six sub-unknown copies; the next Stop reads the agent transcript's boundary and summary rows (nonce and sha only) and fills all six by nonce: -aa5e55a00_c1..6-<id6>.md, actor = the agent id, renamed_from, attributed_by reconcile-a, mode 0400, six copy_attributed rows with the boundary sizes, the old names gone, nothing else added; a second Stop is a no-op. Skipped until the fixtures are merged (tests/helper/run.pl --fixtures DIR checks it before).",
    "sid" : "5e55a001-0c0f-4f1e-9a00-00000000a001",
    "steps" : [
       {
@@ -18,9 +18,9 @@
                "to" : "$TMP/projects/-tmp-example-repo/$SID.jsonl"
             },
             {
-               "copy" : "transcripts/P5-replay/subagents/agent-a494e1b0fa1a73786.jsonl",
+               "copy" : "transcripts/P5-replay/subagents/agent-a5e55a005f5000005.jsonl",
                "subst" : true,
-               "to" : "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a494e1b0fa1a73786.jsonl"
+               "to" : "$TMP/projects/-tmp-example-repo/$SID/subagents/agent-a5e55a005f5000005.jsonl"
             }
          ]
       },
@@ -203,7 +203,7 @@
                {
                   "count" : 1,
                   "frontmatter" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "attributed_at" : "*",
                      "attributed_by" : "reconcile-a",
                      "compaction_seq" : "1",
@@ -211,12 +211,12 @@
                      "renamed_from" : "/_5e55a001_c1-da24cc\\.md$/"
                   },
                   "mode" : "0400",
-                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c1-da24cc.md"
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa5e55a00_c1-da24cc.md"
                },
                {
                   "count" : 1,
                   "frontmatter" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "attributed_at" : "*",
                      "attributed_by" : "reconcile-a",
                      "compaction_seq" : "2",
@@ -224,12 +224,12 @@
                      "renamed_from" : "/_5e55a001_c2-f5d2cc\\.md$/"
                   },
                   "mode" : "0400",
-                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c2-f5d2cc.md"
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa5e55a00_c2-f5d2cc.md"
                },
                {
                   "count" : 1,
                   "frontmatter" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "attributed_at" : "*",
                      "attributed_by" : "reconcile-a",
                      "compaction_seq" : "3",
@@ -237,12 +237,12 @@
                      "renamed_from" : "/_5e55a001_c3-d21582\\.md$/"
                   },
                   "mode" : "0400",
-                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c3-d21582.md"
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa5e55a00_c3-d21582.md"
                },
                {
                   "count" : 1,
                   "frontmatter" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "attributed_at" : "*",
                      "attributed_by" : "reconcile-a",
                      "compaction_seq" : "4",
@@ -250,12 +250,12 @@
                      "renamed_from" : "/_5e55a001_c4-4dae03\\.md$/"
                   },
                   "mode" : "0400",
-                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c4-4dae03.md"
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa5e55a00_c4-4dae03.md"
                },
                {
                   "count" : 1,
                   "frontmatter" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "attributed_at" : "*",
                      "attributed_by" : "reconcile-a",
                      "compaction_seq" : "5",
@@ -263,12 +263,12 @@
                      "renamed_from" : "/_5e55a001_c5-228e0c\\.md$/"
                   },
                   "mode" : "0400",
-                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c5-228e0c.md"
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa5e55a00_c5-228e0c.md"
                },
                {
                   "count" : 1,
                   "frontmatter" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "attributed_at" : "*",
                      "attributed_by" : "reconcile-a",
                      "compaction_seq" : "6",
@@ -276,7 +276,7 @@
                      "renamed_from" : "/_5e55a001_c6-084ad8\\.md$/"
                   },
                   "mode" : "0400",
-                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa494e1b0_c6-084ad8.md"
+                  "path" : "$ROOT/*/*/compact/subagents/*_5e55a001-aa5e55a00_c6-084ad8.md"
                },
                {
                   "count" : 6,
@@ -292,7 +292,7 @@
                   "count" : 1,
                   "ev" : "copy_attributed",
                   "fields" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "id6" : "da24cc",
                      "nonce" : "da24cc4a",
                      "post_tokens" : 4866,
@@ -306,7 +306,7 @@
                   "count" : 1,
                   "ev" : "copy_attributed",
                   "fields" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "id6" : "f5d2cc",
                      "nonce" : "f5d2ccf6",
                      "post_tokens" : 5340,
@@ -320,7 +320,7 @@
                   "count" : 1,
                   "ev" : "copy_attributed",
                   "fields" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "id6" : "d21582",
                      "nonce" : "d2158267",
                      "post_tokens" : 5269,
@@ -334,7 +334,7 @@
                   "count" : 1,
                   "ev" : "copy_attributed",
                   "fields" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "id6" : "4dae03",
                      "nonce" : "4dae03c4",
                      "post_tokens" : 5424,
@@ -348,7 +348,7 @@
                   "count" : 1,
                   "ev" : "copy_attributed",
                   "fields" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "id6" : "228e0c",
                      "nonce" : "228e0cc9",
                      "post_tokens" : 5398,
@@ -362,7 +362,7 @@
                   "count" : 1,
                   "ev" : "copy_attributed",
                   "fields" : {
-                     "actor" : "a494e1b0fa1a73786",
+                     "actor" : "a5e55a005f5000005",
                      "id6" : "084ad8",
                      "nonce" : "084ad868",
                      "post_tokens" : 5473,
@@ -408,7 +408,7 @@
                },
                {
                   "count" : 6,
-                  "path" : "$ROOT/*/*/compact/subagents/*-aa494e1b0_c*.md"
+                  "path" : "$ROOT/*/*/compact/subagents/*-aa5e55a00_c*.md"
                }
             ],
             "rows" : [

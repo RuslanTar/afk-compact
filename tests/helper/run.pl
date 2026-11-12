@@ -3661,11 +3661,11 @@ sub builtin {
         return @e;
     }
     if ($name eq 'stamp_spec') {
-        # RV-24: util::stamp against the spec's time_re once the spec carries the RV-24 grammar
+        # util::stamp against the spec's time_re once the spec carries the whole-stamp grammar
         # (once time_re changes and time_legacy_re is added); until then only the
         # built-in shape is checked and a TODO line says so.
         my $re = eval { spec::has('time_legacy_re') ? spec::get('time_re') : undef };
-        print "# TODO stamp_spec: the spec has no RV-24 time_re yet\n" unless defined $re;
+        print "# TODO stamp_spec: the spec has no whole-stamp time_re yet\n" unless defined $re;
         my $shape = '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4}';
         for my $tz (@{ $a->{tz} || ['UTC'] }) {
             local $ENV{TZ} = host_zone($tz);
@@ -3780,7 +3780,7 @@ sub builtin {
         return (@e, json_expect($d, $a->{json}));
     }
     if ($name eq 'handoff_turn_api') {
-        # D-18 B7/B8: the seams begin and publish call (lib/handoff_turn.pm): the open ht
+        # The seams begin and publish call (lib/handoff_turn.pm): the open ht
         # begin binds (newest, no .published, at most 60 min old), one stage per ht
         # (resumed), one published handoff per ht.
         for my $l (qw(bucket handoff_turn)) { require "$l.pm" }
@@ -4410,7 +4410,7 @@ sub assembly_runtime {
     my %rt = (nonce => 'a1b2c3d4', previous_copy => $prev, measured_at => '2026-10-21T04:40:00+03:00',
               session_id => '9f0e1d2c-3b4a-4596-8877-665544332211', saved_copy => $prev, tokens => '612,345',
               queue_add => "$BRAND-store queue-add --sid 9f0e1d2c-3b4a-4596-8877-665544332211 --nonce a1b2c3d4", measured_facts => '', remeasure => '',
-              # D-18 tokens, the worst case tools/assemble uses (DP-19: max_calls = 1 + call_cap + recipe_cap)
+              # handoff-turn tokens, the worst case tools/assemble uses (max_calls = 1 + call_cap + recipe_cap)
               halt_reason => 'compactions keep repeating without progress', max_calls => '34', handoff_path => $prev,
               draft_state => 'present',
               handoff_finish => "`$BRAND-store publish --stage '$prev/.staging/9f0e1d2c-a1b2c3d4' --slug example-topic-slug --status in-progress`");

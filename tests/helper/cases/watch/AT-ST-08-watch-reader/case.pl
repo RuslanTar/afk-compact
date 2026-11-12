@@ -5,13 +5,13 @@
 # attributed agent over `unattributed` for a P-only compaction, so a main marker in that
 # summary is a scope leak (A-03). Read-only: no row of core's kinds is written.
 my ($n1, $n2, $n3) = ('f0f00021', 'f0f00022', 'f0f00023');
-my $agent = 'a494e1b0fa1a73786';
+my $agent = 'a5e55a005f5000005';
 my $prev = "---\nkind: compact-summary\nactor: $agent\n---\n"
          . T::main_body(nonce => $n1, scope => 'sub', D => ['D-7 keep the cache ' . "\xe2\x80\x94" . ' because CANARY-TEXT-a',
                                                             'D-9 stay on main ' . "\xe2\x80\x94" . ' because CANARY-TEXT-c']);
 my $cur = T::main_body(nonce => $n2, scope => 'sub', D => ['D-9 stay on main ' . "\xe2\x80\x94" . ' because CANARY-TEXT-c']);
 my $old = 'repo/general/compact/subagents/2026-10-21_13-50-00_1b2c3d4e_c1-f0f000.md';
-my $new = 'repo/general/compact/subagents/2026-10-21_13-50-00_1b2c3d4e-aa494e1b0_c1-f0f000.md';
+my $new = 'repo/general/compact/subagents/2026-10-21_13-50-00_1b2c3d4e-aa5e55a00_c1-f0f000.md';
 my $leak = "# CANARY-TEXT-topic\n## Resume here\nCANARY-TEXT-body\n";
 {
     files => [
@@ -25,7 +25,7 @@ my $leak = "# CANARY-TEXT-topic\n## Resume here\nCANARY-TEXT-body\n";
                      T::row('postcompact', 40, writer => 'classic', nonce_found => $n3, scope_found => 'main',
                             verdict => 'ok', trigger => 'auto'),
                      T::row('copy_attributed', 45, writer => 'helper', id6 => 'f0f003', nonce => $n3,
-                            rel_path => 'repo/general/compact/subagents/x-aa494e1b0_c2-f0f003.md', actor => $agent,
+                            rel_path => 'repo/general/compact/subagents/x-aa5e55a00_c2-f0f003.md', actor => $agent,
                             proof => 'a', seq => 2, pre_tokens => 80000, post_tokens => 8000) ] },
         { path => '$WATCH/$SID/compactions.jsonl',
           jsonl => [ T::row('compaction', 41, writer => 'helper', nonce => $n3, id6 => 'f0f003', actor => 'sub-unknown',

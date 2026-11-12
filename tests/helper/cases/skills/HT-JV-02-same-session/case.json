@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "Dev-1 D4 in the origin session itself: a job on this process's task list is RUNNING (leave); one off the list with no exit marker while this process and session own it is ENDED-UNEXPLAINED (ask, never automatic); seen from another process of the same session it is RUNNING-ELSEWHERE (report); a job whose old process is gone (a --resume in a new process) is LOST and relaunches",
+ "note": "The job table in the origin session itself: a job on this process's task list is RUNNING (leave); one off the list with no exit marker while this process and session own it is ENDED-UNEXPLAINED (ask, never automatic); seen from another process of the same session it is RUNNING-ELSEWHERE (report); a job whose old process is gone (a --resume in a new process) is LOST and relaunches",
  "tz": "Etc/GMT-3",
  "steps": [
   {

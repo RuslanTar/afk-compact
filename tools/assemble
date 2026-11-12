@@ -401,7 +401,7 @@ def longest(asset, variants, drop=()):
 
 
 def submit_checks():
-    """AT-LT-18 (DP-24 g) and AT-IC-12: no handoff-turn render, at any tag combination, starts
+    """AT-LT-18 and AT-IC-12: no handoff-turn render, at any tag combination, starts
     with "/" or has a line that starts with "/" (the host refuses such a submit). Once the asset
     has [submit-idle] lines, every render with that tag says "launch no agents or workflows"."""
     bad = False
@@ -420,7 +420,7 @@ def submit_checks():
 
 
 def store_checks():
-    """AT-PK-03 (assembler half), never skipped: since BLD-01 the launcher is not on the Bash PATH,
+    """AT-PK-03 (assembler half), never skipped: the launcher is not on the Bash PATH,
     so no render of any assembled asset (FILES: handoff and subagent instructions, resume context,
     nudge, handoff turn) names the bare `<name>-store`, with or without a subcommand after it (the
     texts call it through @store@ or the `<store>` token; the filled @store@ word holds it only

@@ -5,7 +5,7 @@
   ],
   "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
   "nonce": "1d1e0c0a",
-  "note": "IC-1 D1: after this compaction's main boundary row, the first system row whose content starts with a native prefix (canary-baseline C8) gives idle_source; only the prefix is matched and no text is logged. The `return` text past its prefix is a fixture tail (F5 gives the prefix only). Seed watch/dispatch-1d1e0c0a.json (mod idle true) or watch/dispatch-1d1e0c0a-not-idle.json (mod idle false) at $WATCH/$SID/dispatch/1d1e0c0a.json.",
+  "note": "after this compaction's main boundary row, the first system row whose content starts with a native prefix (canary-baseline C8) gives idle_source; only the prefix is matched and no text is logged. The `return` text past its prefix is a fixture tail (F5 gives the prefix only). Seed watch/dispatch-1d1e0c0a.json (mod idle true) or watch/dispatch-1d1e0c0a-not-idle.json (mod idle false) at $WATCH/$SID/dispatch/1d1e0c0a.json.",
   "prefixes": {
     "notice": "Compacted while idle",
     "return": "Compacted using a summary written while you were away"

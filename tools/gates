@@ -17,9 +17,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   names        every list entry, case-insensitive, as a whole token (letters, digits, `_`, `-`
-               do not continue it); generic words are kept off the list by its curator. An
-               entry written `*name` matches anywhere in a word instead (for a former name that
-               may sit inside a longer word: `name-research`, `names`)
+               do not continue it); generic words are kept off the list by its curator
   user-path    `/Users/`, `/home/`, this machine's login name (case-sensitive whole token),
                the git user.email, and the name of the folder that holds the repo
   markers      `<!--` and `{{`
@@ -27,10 +25,10 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                in files and in every commit message reachable from HEAD
   stale-name   BT-01: `⟪X v1`, `⟪/X n=`, `/X:handoff|resume|status|settings`, `X-store`, `X:handoff skill`
                and manifest names have X equal to the brand; no other candidate name
-               (`compactseam`, `wheelover`, `hold-thread`) and not the name before the rename
-               (`compactinue`), matched case-insensitively anywhere in a word (`compactseams`,
-               `wheelover2` and `compactinue-store` count); other former names go in the
-               --names list as `*name` entries. Markers written as `\\uXXXX` escapes (the generated
+               (`compactseam`, `wheelover`, `hold-thread`), no `compact-handoff` and not the
+               name before the rename (`compactinue`), matched case-insensitively anywhere
+               in a word (`compact-handoff-research`, `compactseams`, `wheelover2` and
+               `compactinue-store` count). Markers written as `\\uXXXX` escapes (the generated
                fixture modules, which hold foreign test markers on purpose) are not read;
                the BT-02 drill regenerates those modules under the new name instead. The
                pre-rename name on the `our @FORMER_NAMES = (…);` line of a folder target's
@@ -170,7 +168,7 @@ B = r"(?<![A-Za-z0-9_-])"
 E = r"(?![A-Za-z0-9_-])"
 ATTRIBUTION = re.compile(r"Co-Authored-By|Generated with|noreply@anthropic\.com|claude\.ai/code", re.I)
 MARKERS = re.compile(r"<!--|\{\{")
-OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compactinue"]
+OTHER_NAMES = ["compactseam", "wheelover", "hold-thread", "compact-handoff", "compactinue"]
 # /status warns about options saved under the name
 # before the rename, so the helper declares that name once. Only the pre-rename name, only on the
 # declaration line of helper/lib/settings.pm inside a folder target, is not a stale-name hit.
@@ -834,7 +832,7 @@ def section_caps_hits(target, brand):
     return out
 
 
-# AT-TX-05 (T-TEXT E8): the recorded first word of every cross-reference target. A renumbering
+# AT-TX-05: the recorded first word of every cross-reference target. A renumbering
 # that keeps a number but changes its meaning fails; a new target must be recorded here.
 XREF_TEMPLATE = {"1": "Core", "2": "Size", "3": "Frontmatter", "4": "Body", "4.1": "Resume", "4.2": "User",
                  "4.3": "Decisions", "4.4": "In", "4.5": "Live", "4.6": "Open", "4.7": "Location", "4.8": "Work",
@@ -864,7 +862,7 @@ def _first_word(s):
 
 
 def xref_hits(target, brand):
-    """AT-TX-05 (T-TEXT E8 (1)-(4)): every cross-reference resolves, and its target's first word
+    """AT-TX-05: every cross-reference resolves, and its target's first word
     equals the recorded map."""
     out = []
     tpath, tlines = _shipped(target, TEMPLATE_REL, brand)
@@ -1316,7 +1314,7 @@ NUDGE_DIRTY = "Dirty in <folder git ran in>:"
 
 
 def nudge_folder_hits(target, brand):
-    """AT-TX-13 (T-TEXT E1): nudge step 3 has the current-folder fallback, and its Dirty line
+    """AT-TX-13: nudge step 3 has the current-folder fallback, and its Dirty line
     starts `Dirty in <folder git ran in>:`."""
     path, lines = _shipped(target, NUDGE_REL, brand)
     if lines is None:
@@ -1856,7 +1854,7 @@ USE_UTF8 = re.compile(r"^\s*use\s+utf8\s*;", re.M)
 
 
 def perl_utf8_hits(target, brand):
-    """AT-P5-06 (P5-FOLD A4): a helper .pm/.pl with a non-ASCII character on a code line and no
+    """AT-P5-06: a helper .pm/.pl with a non-ASCII character on a code line and no
     `use utf8` fails; comment-only non-ASCII passes."""
     if not _is_plugin(target):
         return []
@@ -2589,9 +2587,7 @@ def main(argv):
         with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
             brand = json.load(f)["name"]
 
-    # A `*name` entry matches anywhere in a word, as OTHER_NAMES do; any other entry, as a whole token.
-    name_res = [(n[1:], re.compile(re.escape(n[1:]), re.I)) if n.startswith("*") and len(n) > 1
-                else (n, re.compile(B + re.escape(n) + E, re.I)) for n in names]
+    name_res = [(n, re.compile(B + re.escape(n) + E, re.I)) for n in names]
     user_res = [("/Users/", re.compile(r"/Users/")), ("/home/", re.compile(r"/home/"))]
     login = getpass.getuser()
     if login:

@@ -49,7 +49,7 @@ in GEN files (tools/build, helper-replies-gen, canary-baseline, assemble), stray
 only GEN tools write (a stray _gen/goldens*.gen.ts, which tools/build accepts, by assemble), the
 goldens modules under a 64 KiB test cap (overflow modules that the same cap's checks and the
 test kit pass; goldens-split), a golden larger than the module cap, other candidate names inside
-longer words, a `*name` names-list entry inside a longer word, npm manifests or node_modules under
+longer words, npm manifests or node_modules under
 plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md description over the BT-09
 rule, the text gates (AT-W-01 wait text, AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03
 write-first line, AT-J-13 self-heal table and resume SKILL size), a resume protocol over its
@@ -337,7 +337,8 @@ def probes(name):
 
     def other_names(d):
         write_text(os.path.join(d, "plugin", "README.md"),
-                   "\nP6 the compactseams and wheelover2 variants, and HOLD-THREADS\n"
+                   "\nP5 cache at ~/.cache/compact-handoff-research and the compact-handoffs folder\n"
+                   "P6 the compactseams and wheelover2 variants, and HOLD-THREADS\n"
                    "P7 options left under the old Compactinue2 key\n", "a")
         # The former name is allowed on the FORMER_NAMES line only, not on another
         # line of the same file, and not for another candidate name on that line.
@@ -348,15 +349,6 @@ def probes(name):
         if t2 == t:
             raise Fail("X-tools: other-names found no FORMER_NAMES line to plant on")
         write_text(p, t2 + "# options left under compactinue@inline\n")
-
-    def star_names_list(d):
-        """A names list with one whole-token entry and one `*` entry, outside the scanned plugin/."""
-        write_text(os.path.join(d, "names-probe.txt"), "# probe list\nxqzwhole\n*xqzformer\n")
-
-    def star_names(d):
-        write_text(os.path.join(d, "plugin", "README.md"),
-                   "\nP8 cache at ~/.cache/xqzformer-research and the xqzformers folder\n"
-                   "P9 the xqzwhole tool\n", "a")
 
     def planning_track(d):
         """A commit that added a .planning/ note (since untracked again), and a nested
@@ -1026,13 +1018,9 @@ def probes(name):
           r"^stale plugin/tests/unit/_gen/stray\.gen\.ts$", r"^stale plugin/\.claude-plugin/extra\.json$",
           r"^stale plugin/notes\.txt$", r"^stale plugin/skills/handoff/\.hidden$"], None),
         ("other-names", "other names", gates_only("stale-name"), other_names,
-         ["^GATE stale-name " + readme + n + "$" for n in ("compactseam", "wheelover", "hold-thread", "compactinue")]
+         ["^GATE stale-name " + readme + n + "$" for n in ("compact-handoff", "compactseam", "wheelover", "hold-thread", "compactinue")]
          + [r"^GATE stale-name plugin/helper/lib/settings\.pm:\d+: wheelover$",
             r"^GATE stale-name plugin/helper/lib/settings\.pm:\d+: compactinue$"], None),
-        ("star-names", "names list `*name` entries",
-         ["tools/gates", "plugin", "--names", "names-probe.txt", "--brand", name, "--no-git-log", "--only", "names"],
-         star_names,
-         [r"^GATE names " + readme + r"xqzformer$", r"^GATE names " + readme + r"xqzwhole$"], star_names_list),
         ("npm", "BT-06", gates_only("npm"), npm,
          [r"^GATE npm plugin/package\.json: BT-06", r"^GATE npm plugin/node_modules/: BT-06",
           r"^GATE npm plugin/helper/package-lock\.json: BT-06"], None),

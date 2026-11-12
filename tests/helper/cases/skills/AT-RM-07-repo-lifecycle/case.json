@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "D-12 repo mode: a full repo-mode lifecycle (project init, a compaction copy, swept evidence, a refused draft, a published handoff, watch rows) leaves only the declaration, README, .gitignore and the export under the toplevel (git status --porcelain --ignored); copies, evidence and rows stay in the private store",
+ "note": "Repo mode: a full repo-mode lifecycle (project init, a compaction copy, swept evidence, a refused draft, a published handoff, watch rows) leaves only the declaration, README, .gitignore and the export under the toplevel (git status --porcelain --ignored); copies, evidence and rows stay in the private store",
  "tz": "Etc/GMT-3",
  "steps": [
   {

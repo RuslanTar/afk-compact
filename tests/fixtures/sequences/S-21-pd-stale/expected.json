@@ -1,6 +1,6 @@
 {
   "id": "S-21-pd-stale",
-  "spec": "PKG-RUNTIME E.1, MOD-SPEC §1.3 turn_kind; AT-WD-10",
+  "spec": "turn_kind; AT-WD-10",
   "step_asserts": [
     {
       "after_step": 5,

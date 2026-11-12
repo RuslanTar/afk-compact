@@ -1,6 +1,6 @@
 {
   "id": "T-25",
-  "spec": "WATCHER-SPEC §9 T-25",
+  "spec": "watcher test T-25",
   "spec_input": "auto boundary right after a prompt row vs after a tool_use with no Stop",
   "spec_expected": "`auto-turnstart` vs `auto-midturn`",
   "v1_scope": "sweep rows: auto-midturn vs turnstart",
@@ -24,7 +24,7 @@
         }
       }
     ],
-    "note": "trigger_detail is M-01's field; WATCH §6.3 does not list it among the sweep boundary fields"
+    "note": "trigger_detail is M-01's field; the row spec does not list it among the sweep boundary fields"
   },
   "metrics": {
     "M-01": [

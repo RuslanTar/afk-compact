@@ -1,6 +1,5 @@
-# AT-IC-06 / AT-QA-03, watcher half (IC-1 D1, D5; QA-2; the event list as folded on
-# 2026-10-22): M-01 `idle` comes from the rollup row (an idle
-# compaction arrives as trigger `auto`), on the boundary record with `idle_source`; the IC-1
+# AT-IC-06 / AT-QA-03, watcher half (the event list below): M-01 `idle` comes from the rollup row (an idle
+# compaction arrives as trigger `auto`), on the boundary record with `idle_source`; the idle
 # row kinds (`handoff_turn_start`/`_end` with reason `idle`, `handoff_skipped {why, reason:
 # idle}`, `idle_mismatch`, `resume_remeasured`/`_failed`, `submit_dropped`) and the
 # `queue_contract {why}` row are kept in the watcher's row cache (read-only) and exported with

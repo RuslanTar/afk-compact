@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "stamp: a full stamp YYYY-MM-DD HH:MM +hhmm on the stage's day and after midnight alike (RV-24, AT-TS-01); each stamp appended to stamps.log; a directory that is not a stage -> REFUSED: no-stage",
+ "note": "stamp: a full stamp YYYY-MM-DD HH:MM +hhmm on the stage's day and after midnight alike (AT-TS-01); each stamp appended to stamps.log; a directory that is not a stage -> REFUSED: no-stage",
  "now": "2026-10-21T23:58:00+03:00",
  "tz": "Etc/GMT-3",
  "setup": [

@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "rm-submodule",
-  "ruling": "D-12 §1.5.3 item 5",
+  "ruling": "repo mode: a root inside a submodule is refused",
   "tests": [
     "AT-RM-04"
   ],

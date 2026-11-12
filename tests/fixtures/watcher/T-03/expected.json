@@ -1,6 +1,6 @@
 {
   "id": "T-03",
-  "spec": "WATCHER-SPEC §9 T-03",
+  "spec": "watcher test T-03",
   "spec_input": "replaced summary without `isCompactSummary` or `preservedSegment`",
   "spec_expected": "summary found; `summary_flags` records the absence",
   "v1_scope": "sweep rows: summary flags",

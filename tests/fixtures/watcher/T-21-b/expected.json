@@ -1,6 +1,6 @@
 {
   "id": "T-21-b",
-  "spec": "WATCHER-SPEC §9 T-21",
+  "spec": "watcher test T-21",
   "spec_input": "PostCompact with no dispatch; liveness file written this turn vs not written",
   "spec_expected": "`bypass_suspected:true` (A-16) vs `mod_off:true` (A-26)",
   "v1_scope": "bypass_suspected vs mod_off, A-16 / A-26",

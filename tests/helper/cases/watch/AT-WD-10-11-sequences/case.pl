@@ -14,7 +14,7 @@ my @MOD = qw(S-21-mod S-21-mod-conflict);
 my %x;
 for my $id (@PD, @MOD) {
     my $e = T::fixture_json("sequences/$id/expected.json");
-    return { skip => "needs tests/fixtures/sequences/$id " } unless $e;
+    return { skip => "needs tests/fixtures/sequences/$id" } unless $e;
     $x{$id} = $e;
 }
 my %got;

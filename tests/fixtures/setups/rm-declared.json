@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "rm-declared",
-  "ruling": "D-12 §1.5.2, §1.5.5",
+  "ruling": "repo mode: a valid declaration and the export rewrite",
   "tests": [
     "AT-RM-01",
     "AT-RM-02",

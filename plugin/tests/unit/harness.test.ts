@@ -58,7 +58,7 @@ export class World {
   calls: Call[] = []
   rows: Row[] = []
   pathRows: Row[] = []
-  /** Raw lines the mod sent to `log --stream jobs` (Dev-1), and the reply that stream gives. */
+  /** Raw lines the mod sent to `log --stream jobs`, and the reply that stream gives. */
   jobLines: Record<string, unknown>[] = []
   jobsReply: Reply = { exitCode: 0, stdout: '' }
   /** `$.session.cwd()`. */

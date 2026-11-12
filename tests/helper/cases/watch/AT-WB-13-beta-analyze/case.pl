@@ -120,7 +120,7 @@ push @{ $alog->{jsonl} },
               };
               main::write_file("$in/good.zip", $z, 0600);
               main::write_file("$in/good-copy.zip", $z, 0600);
-              # The re-sent bundle is newer (the manifest's own `YYYY-MM-DD HH:MM +hhmm` stamp, RV-24)
+              # The re-sent bundle is newer (the manifest's own `YYYY-MM-DD HH:MM +hhmm` stamp)
               # and carries a config.json with the B.5 default marks: it is the install's latest.
               $got{created0} = $m0->{created};
               my $cfg = '{"available":true,"keys":{"disposable_keep_days":{"class":"num","clamped":false,"default":false,"value":3},'
@@ -242,7 +242,7 @@ push @{ $alog->{jsonl} },
                    '## Config changed from default', '## Notice and watcher off') {
             $has->($md, qr/^\Q$h\E$/m, "BETA-REPORT has $h");
         }
-        $has->($md, qr/^## Benefit bars(?: \([^)]*\))?$/m, "BETA-REPORT has ## Benefit bars");
+        $has->($md, qr/^## Benefit bars$/m, "BETA-REPORT has ## Benefit bars");
         $has->($md, qr/^- Bundles: 14 \(3 valid, 2 quarantined, 8 refused at intake, 1 duplicate, 0 unverified\)$/m, 'header counts');
         $has->($md, qr/^\| Uptake \| >=3 installs each return >=1 valid bundle \| 2 \| FAIL \|$/m, 'uptake bar');
         $has->($md, qr/^\| Bundle validity \| .* \| 3 of 13 valid, 2 quarantined \| FAIL \|$/m, 'validity bar');

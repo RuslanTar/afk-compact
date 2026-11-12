@@ -1,6 +1,6 @@
 {
   "id": "T-02",
-  "spec": "WATCHER-SPEC §9 T-02",
+  "spec": "watcher test T-02",
   "spec_input": "mod-driven compaction: summary row right after the boundary, `postTokens` after `preservedMessages`",
   "spec_expected": "parsed by key; `trigger:plugin` from the self-call dispatch",
   "v1_scope": "rollup trigger: plugin",

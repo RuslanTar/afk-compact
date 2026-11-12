@@ -11,10 +11,10 @@
 # `expect.identity_list` entry; the zip verifies. Skipped until the fixture is on the branch.
 # $WATCH is the install's effective watch folder: the recipe's settings set `log_dir`, and a
 # safe `log_dir` is the watch folder (lib/rc.pm), so `$WATCH/...` files are planted under the
-# `log_dir` value, where `report` reads them (watch-to-fix.md W2F-1).
+# `log_dir` value, where `report` reads them.
 my $RECIPE = 'setups/wb-canary-install.json';
 my $rc = T::fixture_json($RECIPE);
-return { skip => "needs tests/fixtures/$RECIPE " } unless $rc;
+return { skip => "needs tests/fixtures/$RECIPE" } unless $rc;
 my %got;
 {
     allow_canary => 1,

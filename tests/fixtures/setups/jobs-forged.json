@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "jobs-forged",
-  "ruling": "Dev-1 D3 V1, AT-J-10",
+  "ruling": "a forged job row fails the record check, AT-J-10",
   "tests": [
     "AT-J-10"
   ],

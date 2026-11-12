@@ -113,8 +113,8 @@ sub output_path {
     my ($in, $sid) = @_;
     my $rt = path_from_result_text($in->{result_text}, $in->{task_id});
     my $ly = path_from_layout($sid, $in->{cwd}, $in->{task_id});
-    # The slug is the session's project folder, not the shell's cwd after a `cd` (lab
-    # e1-f49d74, job bpu7ylqls): the session start cwd gives a second layout candidate.
+    # The slug is the session's project folder, not the shell's cwd after a `cd` (as
+    # a lab run showed): the session start cwd gives a second layout candidate.
     my $ls = path_from_layout($sid, $in->{session_cwd}, $in->{task_id});
     $ls = undef if defined $ls && defined $ly && $ls eq $ly;
     my $bo = (defined $in->{background_output_path} && !ref $in->{background_output_path}

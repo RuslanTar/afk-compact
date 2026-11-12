@@ -1,7 +1,7 @@
 # AT-WD-03: no hook path runs `watch prune`; a hand-run
 # `watch prune` takes a session only when EVERY file of it is older than the cut. That includes
-# the per-session files other parts keep under <watch>/<sid>/ (Dev-1 jobs.jsonl and
-# jobs-pending.jsonl, D-10 queue-adds.jsonl, D-18 handoff-turn/, the watcher's own
+# the per-session files other parts keep under <watch>/<sid>/ (jobs.jsonl and
+# jobs-pending.jsonl, queue-adds.jsonl, handoff-turn/, the watcher's own
 # config-note-watcher): an old set goes whole, one new file anywhere in it keeps the whole
 # set, a symlink keeps it. <watch>/queue-caps.json and the other global files are never
 # touched.

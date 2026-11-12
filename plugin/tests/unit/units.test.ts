@@ -836,7 +836,7 @@ test('isoLocal in a named zone: the offset of each instant across a DST change, 
 })
 
 test('zoneOfPath: the IANA name where /etc/localtime leads, only a zone the engine knows', () => {
-  expect(zoneOfPath('/private/var/db/timezone/tz/2026a.1.0/zoneinfo/CET')).toBe('CET')
+  expect(zoneOfPath('/private/var/db/timezone/tz/2026a.1.0/zoneinfo/Etc/GMT-1')).toBe('Etc/GMT-1')
   expect(zoneOfPath('/usr/share/zoneinfo/America/Argentina/Buenos_Aires')).toBe('America/Argentina/Buenos_Aires')
   expect(zoneOfPath('/usr/share/zoneinfo/posix/Asia/Kolkata')).toBe('Asia/Kolkata')
   expect(zoneOfPath('/usr/share/zoneinfo/UTC')).toBe('UTC')

@@ -1,6 +1,6 @@
 {
  "id": "CR-F5-repo-roots-case",
- "note": "CR-F5 (D-12): a repo_roots entry that differs from git's toplevel only in letter case names the same folder on a case-insensitive file system (macOS default), so it accepts the repository (matched by folder identity, not by spelling) and is not reported stale. Skipped where the temp folder is case-sensitive",
+ "note": "CR-F5: a repo_roots entry that differs from git's toplevel only in letter case names the same folder on a case-insensitive file system (macOS default), so it accepts the repository (matched by folder identity, not by spelling) and is not reported stale. Skipped where the temp folder is case-sensitive",
  "needs": ["nocase-fs"],
  "now": "2026-10-22T01:30:00+03:00",
  "tz": "Etc/GMT-3",

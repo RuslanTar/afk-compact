@@ -1,6 +1,6 @@
 {
   "id": "S-21-classic",
-  "spec": "MOD-SPEC §2.4 scope proof, §5.3, §5.4, AT-C-11; ROOT-RULINGS F2-1",
+  "spec": "scope proof, PostCompact copy and rollup; AT-C-11",
   "observed_order": [
     "mod session.compact before (writes the dispatch record; mod variant only)",
     "PreCompact",

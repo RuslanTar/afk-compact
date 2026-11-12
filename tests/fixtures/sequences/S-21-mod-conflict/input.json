@@ -3,7 +3,7 @@
   "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
   "now": "2026-10-21T14:05:12+03:00",
   "order": "S-21",
-  "source": "lab E1/probes/S-21-S-26.md §3b, §3c (2.1.306; runs e1-8f29fa manual and e1-689914 auto showed the same order); ROOT-RULINGS F2-1",
+  "source": "the hook order two lab runs on Claude Code 2.1.306 showed (one manual and one auto compaction)",
   "repo": "repos/main-branch.json",
   "store_test_claude_pid": "43210:Wed Oct 21 09:00:00 2026",
   "env": {},

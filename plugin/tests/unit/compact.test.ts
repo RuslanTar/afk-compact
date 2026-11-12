@@ -454,7 +454,7 @@ test('AT-AP-05 (mod): the after-step measure passes --copy=<the saved copy save-
   expect((last?.args ?? []).some(a => a.startsWith('--copy'))).toBe(false)
 })
 
-// C-STORE: the mod writes the orphan index marker before its stash.
+// The mod writes the orphan index marker before its stash.
 test('AT-ST-03, AT-ST-07 (mod half): the after-step writes <watch>/.orphans/<sid> (empty) before pending/<nonce>.mod.md, main and subagent', async ($, on) => {
   const w = new World().install(on)
   await w.start($)

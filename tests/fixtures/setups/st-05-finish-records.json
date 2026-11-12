@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "st-05-finish-records",
-  "ruling": "C-STORE D4 (§5.8 finish rule), D8 (record shape with host); RRP-05",
+  "ruling": "the cross-session finish rule and the process record shape with host",
   "tests": [
     "AT-ST-04",
     "AT-ST-05"
@@ -150,7 +150,7 @@
         "host": true,
         "ended": false,
         "eligible": true,
-        "case": "AT-ST-05 (a) second half, CORE-08 (C-STORE-1 Recommended, provisional): the pid is alive but its start time changed"
+        "case": "AT-ST-05 (a) second half: the pid is alive but its start time changed"
       },
       "5e55a005": {
         "state": "dead",

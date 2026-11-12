@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "jobs-row2a-running",
-  "ruling": "Dev-1 D4 row 2a",
+  "ruling": "background job table, row 2a: running",
   "tests": [
     "AT-J-04"
   ],

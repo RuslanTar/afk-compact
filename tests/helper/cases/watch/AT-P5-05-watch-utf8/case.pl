@@ -21,6 +21,6 @@ my $helper = Cwd::abs_path(File::Basename::dirname(__FILE__) . '/../../../../../
             $E->ok((utf8::decode(my $copy = $src) ? 1 : 0), "$f: not valid UTF-8");
             $E->ok(($src =~ /^use warnings;\nuse utf8;\n/m ? 1 : 0), "$f: no `use utf8;` right after `use warnings;`");
         }
-        $E->ok($nonascii >= 1, "scanned files with non-ASCII text: $nonascii");
+        $E->ok($nonascii >= 2, "scanned files with non-ASCII text: $nonascii");
     },
 };

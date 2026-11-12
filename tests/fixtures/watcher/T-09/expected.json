@@ -1,6 +1,6 @@
 {
   "id": "T-09",
-  "spec": "WATCHER-SPEC §9 T-09",
+  "spec": "watcher test T-09",
   "spec_input": "plugin-origin continue row, plus a later user row quoting the same text with no origin",
   "spec_expected": "`auto_continue:1`",
   "v1_scope": "sweep marks plugin-origin rows (the count is W13)",
@@ -18,7 +18,7 @@
         ]
       }
     ],
-    "note": "the sweep row's field name for plugin-origin rows is WP-watch's (WATCH §6.3 lists none)"
+    "note": "the sweep row's field name for plugin-origin rows is the watcher's own (the row spec lists none)"
   },
   "metrics": {
     "M-17": {

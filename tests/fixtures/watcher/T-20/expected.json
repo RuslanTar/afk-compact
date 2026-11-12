@@ -1,6 +1,6 @@
 {
   "id": "T-20",
-  "spec": "WATCHER-SPEC §9 T-20",
+  "spec": "watcher test T-20",
   "spec_input": "precompute PreCompact(`auto`, no nonce) with no PostCompact, then an unshaped plugin compaction 0.7 s later",
   "spec_expected": "`precompute_or_failed` (info), no `failed:no-post`; the later compaction does not time-join to the precompute dispatch; `verdict:unshaped`",
   "v1_scope": "precompute_or_failed info row",

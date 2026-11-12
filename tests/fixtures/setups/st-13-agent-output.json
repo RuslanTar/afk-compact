@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "st-13-agent-output",
-  "ruling": "C-STORE D6 (BD-4: agent output is always withheld)",
+  "ruling": "agent output is always withheld",
   "tests": [
     "AT-ST-13"
   ],

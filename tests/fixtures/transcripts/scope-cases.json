@@ -3,7 +3,7 @@
   "id": "AT-C-08 / AT-M4-03",
   "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
   "now": "2026-10-21T14:05:12+03:00",
-  "note": "Each row: dispatch record to seed (empty = none), summary corpus file (`#nonce=X` = replace the corpus nonce with X in marker and sentinel), transcript dir (main.jsonl -> the payload transcript_path, subagents/ -> <session dir>/subagents/), boundaries.count seed, expect_scope = the scope per MOD §2.4 with every proof, as reconcile reads it at the next Stop; expect_scope_postcompact = the scope inside SessionStart(compact) and PostCompact, where P3 does not count because the main boundary row lands after both hooks (ROOT-RULINGS F2-1, lab S-21; see sequences/S-21-*). tools/fixtures-gen --check recomputes both.",
+  "note": "Each row: dispatch record to seed (empty = none), summary corpus file (`#nonce=X` = replace the corpus nonce with X in marker and sentinel), transcript dir (main.jsonl -> the payload transcript_path, subagents/ -> <session dir>/subagents/), boundaries.count seed, expect_scope = the scope with every proof, as reconcile reads it at the next Stop; expect_scope_postcompact = the scope inside SessionStart(compact) and PostCompact, where P3 does not count because the main boundary row lands after both hooks (see sequences/S-21-*). tools/fixtures-gen --check recomputes both.",
   "cases": [
     {
       "id": "p1-main",
@@ -123,7 +123,7 @@
       "boundaries_count": 0,
       "expect_scope": "unknown",
       "expect_scope_postcompact": "unknown",
-      "why": "P1-main and P2-sub both hold: both = unknown by the §2.4 rule (the verdict is still scope-leak, see README)"
+      "why": "P1-main and P2-sub both hold: both = unknown by the scope rule (the verdict is still scope-leak, see README)"
     }
   ]
 }

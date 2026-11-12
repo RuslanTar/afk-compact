@@ -1,6 +1,6 @@
 {
   "id": "T-01",
-  "spec": "WATCHER-SPEC §9 T-01",
+  "spec": "watcher test T-01",
   "spec_input": "native auto boundary with the summary 2–3 rows after it, behind `session_context`/`date` attachments",
   "spec_expected": "summary found by content; `trigger:auto`",
   "v1_scope": "sweep rows: summary found by content",

@@ -1,6 +1,6 @@
 {
  "id": "D-12-roots-budget",
- "note": "PreCompact budget (no git call of its own; 5 s timeout), D-12: handoff_root, log_dir and disposable_root inside a git-ignored folder of a work tree, with a git that takes 3 s per call: the root checks share one 500 ms budget, PreCompact prints the fallback text in well under 5 s, and a check that ran out of time is never reported as root-in-git; with a normal git the same roots are ignored-and-ok (positive control)",
+ "note": "PreCompact budget (no git call of its own; 5 s timeout): handoff_root, log_dir and disposable_root inside a git-ignored folder of a work tree, with a git that takes 3 s per call: the root checks share one 500 ms budget, PreCompact prints the fallback text in well under 5 s, and a check that ran out of time is never reported as root-in-git; with a normal git the same roots are ignored-and-ok (positive control)",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {

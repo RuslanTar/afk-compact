@@ -24,7 +24,7 @@
         "PostCompact"
       ],
       "stdin": "watcher/T-07/payloads/01-PostCompact.json",
-      "note": "parent sid, main transcript_path, no agent_id (TF Q2 §4); the summary carries s=main",
+      "note": "parent sid, main transcript_path, no agent_id; the summary carries s=main",
       "expect": {
         "exit": 0,
         "stdout": ""

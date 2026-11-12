@@ -1,6 +1,6 @@
 {
   "id": "T-04",
-  "spec": "WATCHER-SPEC §9 T-04",
+  "spec": "watcher test T-04",
   "spec_input": "precompute dispatch, then a boundary with `precomputed:true`, `durationMs:20`",
   "spec_expected": "joined; excluded from failure, thrash and duration stats; `verdict:stale` even when the nonce matches (`nonce_match` recorded apart, HK-61)",
   "v1_scope": "rollup verdict: stale (exclusion from stats is W13)",

@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "jobs-row2b-ended-unexplained",
-  "ruling": "Dev-1 D4 row 2b",
+  "ruling": "background job table, row 2b: ended, unexplained",
   "tests": [
     "AT-J-04"
   ],

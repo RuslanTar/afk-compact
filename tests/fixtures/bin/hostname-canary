@@ -1,4 +1,4 @@
 #!/bin/sh
 # AT-WB-02: a hostname that prints the host canary (install it as `hostname` first on PATH).
-# W-BETA B.3 reads `hostname -s`; every argument form prints the same short name.
+# The beta report's identity scan reads `hostname -s`; every argument form prints the same short name.
 echo "${HOSTNAME_CANARY:-wb-canary-host01}"

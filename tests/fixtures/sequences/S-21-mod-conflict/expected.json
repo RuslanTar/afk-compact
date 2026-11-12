@@ -1,6 +1,6 @@
 {
   "id": "S-21-mod-conflict",
-  "spec": "PKG-RUNTIME E.2 (a non-null rollup value is never replaced; a disagreement counts as join_conflict in status); AT-WD-11",
+  "spec": "rollup join (a non-null rollup value is never replaced; a disagreement counts as join_conflict in status); AT-WD-11",
   "metrics": {
     "join_conflict": 1,
     "where": "status (CORE-16 / CORE-11 count; the case maps it)"

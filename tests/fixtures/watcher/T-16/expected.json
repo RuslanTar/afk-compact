@@ -1,6 +1,6 @@
 {
   "id": "T-16",
-  "spec": "WATCHER-SPEC §9 T-16",
+  "spec": "watcher test T-16",
   "spec_input": "malformed JSON line and an unreadable transcript",
   "spec_expected": "`watch_error` row; exit 0; no stdout",
   "v1_scope": "watch_error + exit 0",

@@ -1,5 +1,5 @@
-# Keep-warm (D-14), lane B (export schema): a ping that missed the main prefix exports its result
-# and its gap's stop reason as `fork-miss` (live probe 2026-10-31: the fork's request did not read the
+# Keep-warm, lane B (export schema): a ping that missed the main prefix exports its result
+# and its gap's stop reason as `fork-miss` (a live probe showed that the fork's request did not read the
 # main cache; the main cache had not lapsed). `lapsed` is no keep-warm class: it exports as `other`.
 # Rows are given as the watcher reads them (booleans as 1 and 0).
 my %got;

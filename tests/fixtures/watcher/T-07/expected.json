@@ -1,6 +1,6 @@
 {
   "id": "T-07",
-  "spec": "WATCHER-SPEC §9 T-07",
+  "spec": "watcher test T-07",
   "spec_input": "subagent compaction: boundary only in `subagents/agent-<id>.jsonl`; PostCompact with the parent sid",
   "spec_expected": "`actor:<id>`; no main row; a summary with `s=main` → A-03",
   "v1_scope": "attribution, A-03",

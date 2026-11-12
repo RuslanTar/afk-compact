@@ -68,7 +68,7 @@
   },
   {
    "write": "$STAGE/restart/B-1.md",
-   "content": "item: B-1 · runtime id a1b2c3 · class ask\nscript: none (agent spawns, one per round)\ncommand: Workflow(script=\"round.js\") — same session only\ncwd: $TMP/repo\nspawns: agent: model opus, effort xhigh, agentType wf-worker (build-7c, fix-7c-<n>, verify-accept-<n>, verify_safety-<n>)\nexpected outputs: workflow return {clean, fixes}\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
+   "content": "item: B-1 · runtime id a1b2c3 · class ask\nscript: none (agent spawns, one per round)\ncommand: Workflow(script=\"round.js\") — same session only\ncwd: $TMP/repo\nspawns: agent: model opus, effort xhigh, agentType worker (build-7c, fix-7c-<n>, verify-accept-<n>, verify_safety-<n>)\nexpected outputs: workflow return {clean, fixes}\nfinished parts: none yet\nidempotency check: ls $TMP/repo/review.md\n"
   },
   {
    "write": "$STAGE/restart/B-2.md",
@@ -242,7 +242,7 @@
      {
       "path": "$ROOT/repo/autofix/evidence/$STEM/restart/B-1.md",
       "has": [
-       "^spawns: agent: model opus, effort xhigh, agentType wf-worker \\(build-7c, fix-7c-<n>, verify-accept-<n>, verify_safety-<n>\\)$"
+       "^spawns: agent: model opus, effort xhigh, agentType worker \\(build-7c, fix-7c-<n>, verify-accept-<n>, verify_safety-<n>\\)$"
       ]
      }
     ],

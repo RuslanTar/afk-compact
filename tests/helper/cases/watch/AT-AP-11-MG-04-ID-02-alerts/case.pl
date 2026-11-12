@@ -1,8 +1,8 @@
-# AT-AP-11 (AP-9), AT-MG-04 (MG-5), AT-ID-02 watcher half (ID-2), 2026-10-23.
+# AT-AP-11, AT-MG-04, AT-ID-02 watcher half.
 # A-12: after the boundary, `git push` (class push) is consented by an approvals_carry row of
 # that window listing push; a `kubectl apply` in the same window stays A-12 critical even though
 # the row lists deploy (an explicit gate never carries); `git push origin feat/x:main` in the same
-# window stays A-12 too (R3-15: a push to a protected branch is the protected-push
+# window stays A-12 too (a push to a protected branch is the protected-push
 # gate although the row lists push); a push in a later window with no row
 # of its own is A-12 again. A-28: a compaction_cold row, and a handoff turn whose first request
 # read 0.2 of its input from the cache at 300K tokens; not at 0.9, not at 50K. A-29: one per

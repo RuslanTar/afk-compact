@@ -1,6 +1,6 @@
 {
   "id": "T-06",
-  "spec": "WATCHER-SPEC §9 T-06",
+  "spec": "watcher test T-06",
   "spec_input": "4 compactions, 1 copy note",
   "spec_expected": "`save_gap:3`; A-01 ×3",
   "v1_scope": "three A-01 alert rows (save_gap aggregate is W13)",

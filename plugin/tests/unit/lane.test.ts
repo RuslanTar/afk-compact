@@ -146,7 +146,7 @@ test('measuredRunning, notifiedTasks, startsWork: the units a measure lists, the
   // A teammate row is counted live from the agent list (the measure lists an idle one as running).
   expect(measuredRunning(m.replace('  m1 ·', '  t-1020 · teammate · running\n  m1 ·'))).toEqual(['b1', 'w1'])
   // An id with no status after it (b7) ends nothing (review of fix round 2: a Monitor's event has none).
-  expect(notifiedTasks('<task-notification>\n<task-id>af63d8ad7bcf2ffd4</task-id>\n<status>completed</status>\n</task-notification>\n<task-id>b7</task-id>')).toEqual(['af63d8ad7bcf2ffd4'])
+  expect(notifiedTasks('<task-notification>\n<task-id>a1b2c3d4e5f6a7b8c</task-id>\n<status>completed</status>\n</task-notification>\n<task-id>b7</task-id>')).toEqual(['a1b2c3d4e5f6a7b8c'])
   expect(notifiedTasks('no ids')).toEqual([])
   expect([startsWork('Agent', {}), startsWork('Workflow', {}), startsWork('Bash', { backgroundTaskId: 'b1' }), startsWork('Bash', { stdout: '' }), startsWork('Read', {})])
     .toEqual([true, true, true, false, false])

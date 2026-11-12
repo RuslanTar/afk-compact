@@ -1,6 +1,6 @@
 {
   "id": "T-17",
-  "spec": "WATCHER-SPEC §9 T-17",
+  "spec": "watcher test T-17",
   "spec_input": "PreCompact watcher run",
   "spec_expected": "stdout is empty (byte-exact)",
   "v1_scope": "empty PreCompact stdout",

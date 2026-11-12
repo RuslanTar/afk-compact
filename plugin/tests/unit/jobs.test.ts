@@ -77,7 +77,7 @@ test('TaskStop error: a TaskStop with an error result still records the stop lin
   expect(w.jobLines).toEqual([{ kind: 'stop', task_id: 'b8' }])
 })
 
-test('Dev-1: REFUSED jobs-caller (exit 3) is the helper\'s answer, logged there; the call result is untouched', async ($, on) => {
+test('REFUSED jobs-caller (exit 3) is the helper\'s answer, logged there; the call result is untouched', async ($, on) => {
   const w = new World().install(on)
   w.jobsReply = { exitCode: 3, stdout: 'REFUSED: jobs-caller\n' }
   w.toolAnswer = () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b7' }, text: 'started' })

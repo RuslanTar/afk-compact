@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "rm-exports",
-  "ruling": "D-12 §1.5.5-§1.5.7, §1.5.9",
+  "ruling": "repo mode: exports, locate and project copy",
   "tests": [
     "AT-RM-11",
     "AT-RM-12",

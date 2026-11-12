@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "D-12 project init (DP-5 helper form): accepted with no declaration is private (not-declared); project init creates the declaration, README and .gitignore by exclusive create and shows the mode; a second init prints exists x3 and leaves sha and inode unchanged; init writes no consent (a repository not accepted stays not-accepted, the settings file is byte-identical); a pre-existing different .gitignore is kept and logged once as repo_gitignore_drift; an invalid declaration is not replaced; outside git it refuses",
+ "note": "Project init (helper form): accepted with no declaration is private (not-declared); project init creates the declaration, README and .gitignore by exclusive create and shows the mode; a second init prints exists x3 and leaves sha and inode unchanged; init writes no consent (a repository not accepted stays not-accepted, the settings file is byte-identical); a pre-existing different .gitignore is kept and logged once as repo_gitignore_drift; an invalid declaration is not replaced; outside git it refuses",
  "tz": "Etc/GMT-3",
  "steps": [
   {

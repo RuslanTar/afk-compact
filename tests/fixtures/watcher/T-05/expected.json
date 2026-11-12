@@ -1,6 +1,6 @@
 {
   "id": "T-05",
-  "spec": "WATCHER-SPEC §9 T-05",
+  "spec": "watcher test T-05",
   "spec_input": "precompute dispatch never installed",
   "spec_expected": "`precompute_not_reused:1`",
   "v1_scope": "reconcile precompute_not_reused",

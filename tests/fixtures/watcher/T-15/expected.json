@@ -1,6 +1,6 @@
 {
   "id": "T-15",
-  "spec": "WATCHER-SPEC §9 T-15",
+  "spec": "watcher test T-15",
   "spec_input": "PostCompact with no dispatch, mod loaded, no self-call",
   "spec_expected": "`bypass_suspected:true`; A-16",
   "v1_scope": "bypass_suspected, A-16",

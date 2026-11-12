@@ -253,7 +253,7 @@ function nativeCheck(d: Deps, opts: BoundaryOpts): 'wait' | 'ran' | undefined {
  * The rows for a post-handoff compaction a native one made a second one: `skip why=compacted`,
  * and, when its dispatch record is already written (`prepared`), `compacted` with
  * `skip: native-ran` and that nonce, which closes the record: reconcile and the watcher then do
- * not report it unresolved (DP-29, E-M-15). `user-first`: a compaction dropped after its record
+ * not report it unresolved (DP-29). `user-first`: a compaction dropped after its record
  * was written because a person's turn or prompt came first (`skip why=user-first`).
  */
 async function nativeRan(d: Deps, sid: string, opts: BoundaryOpts, skip: 'native-ran' | 'user-first' = 'native-ran'): Promise<void> {

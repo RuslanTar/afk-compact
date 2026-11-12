@@ -1,6 +1,6 @@
 {
  "id": "AT-ID-07 (idle 2.1.309 summaries)",
  "needs": ["fixture:summaries/idle/expected.tsv"],
- "note": "EXPERIMENT-RESULTS 5.2 (idle lab runs e1-9082cb, e1-1d7d40, e1-0be305 on Claude Code 2.1.309): the helper detector reads the three summaries ok in both forms with the shipped trailers only: the installed message (three engine trailers after the sentinel, the third new in 2.1.309) and the PostCompact compact_summary (an <analysis> block before <summary>, which made the classic writer report unshaped with no marker); both forms of a run give one normalized body",
+ "note": "three idle-compaction summaries recorded on Claude Code 2.1.309: the helper detector reads the three summaries ok in both forms with the shipped trailers only: the installed message (three engine trailers after the sentinel, the third new in 2.1.309) and the PostCompact compact_summary (an <analysis> block before <summary>, which made the classic writer report unshaped with no marker); both forms of a run give one normalized body",
  "steps": [{"lib": "detect_tsv", "args": {"tsv": "summaries/idle/expected.tsv"}}]
 }

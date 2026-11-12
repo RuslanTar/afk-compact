@@ -1,6 +1,6 @@
 {
  "id": "AT-RM-15, AT-RM-16",
- "note": "D-12 repo mode. AT-RM-15: handoff_root set to a tracked path inside the accepted repository keeps the private-store refusal (root-in-git) and status prints the 'must stay outside' line. AT-RM-16: without git the mode is private (repo-git-unavailable); a git that does not answer within the budget gives private (repo-root-unchecked); status still prints its other lines",
+ "note": "Repo mode. AT-RM-15: handoff_root set to a tracked path inside the accepted repository keeps the private-store refusal (root-in-git) and status prints the 'must stay outside' line. AT-RM-16: without git the mode is private (repo-git-unavailable); a git that does not answer within the budget gives private (repo-root-unchecked); status still prints its other lines",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

@@ -3,7 +3,7 @@
  "needs": [
   "fixture:setups/st-09-fill-scope.json"
  ],
- "note": "Scope of fill, on the setup st-09-fill-scope: three 0400 copies of the P5 subagent's compactions in compact/, compact/unattributed/ and compact/subagents/, each fillable by the nonce of a summary row in agent-a494e1b0fa1a73786.jsonl. One Stop runs reconcile: only the subagents/ copy is renamed (-aa494e1b0, one copy_attributed for d21582); the main and unattributed copies keep their bytes and get no attribution row. Skipped until the fixtures are merged.",
+ "note": "Scope of fill, on the setup st-09-fill-scope: three 0400 copies of the P5 subagent's compactions in compact/, compact/unattributed/ and compact/subagents/, each fillable by the nonce of a summary row in agent-a5e55a005f5000005.jsonl. One Stop runs reconcile: only the subagents/ copy is renamed (-aa5e55a00, one copy_attributed for d21582); the main and unattributed copies keep their bytes and get no attribution row. Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
@@ -84,10 +84,10 @@
      },
      {
       "count": 1,
-      "path": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001-aa494e1b0_c1-d21582.md",
+      "path": "$ROOT/example-repo/general/compact/subagents/2026-10-21_14-01-18_5e55a001-aa5e55a00_c1-d21582.md",
       "mode": "0400",
       "frontmatter": {
-       "actor": "a494e1b0fa1a73786",
+       "actor": "a5e55a005f5000005",
        "renamed_from": "/_5e55a001_c3-d21582\\.md$/"
       }
      }
@@ -99,7 +99,7 @@
       "count": 1,
       "fields": {
        "id6": "d21582",
-       "actor": "a494e1b0fa1a73786"
+       "actor": "a5e55a005f5000005"
       }
      },
      {

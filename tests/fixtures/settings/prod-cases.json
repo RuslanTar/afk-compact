@@ -1,7 +1,7 @@
 {
   "v": 1,
   "id": "prod-cases",
-  "ruling": "S-SETTINGS B (unattended_prod_reads, prod_patterns, the effects order), C (relaunch_allow active, no chaining)",
+  "ruling": "unattended_prod_reads, prod_patterns and the effects order; relaunch_allow active, no chaining",
   "tests": [
     "AT-PR-01",
     "AT-PR-02",
@@ -10,7 +10,7 @@
     "AT-RA-01",
     "AT-RA-02"
   ],
-  "note": "Recorded commands (each with the spec end_suffix, as the helper records them) and the effects class the BUILD-PLAN §3.7 order gives under the named settings file (null = no settings file: forbid, no patterns, empty relaunch_allow). `tools/fixtures-gen --check` (`prod`) recomputes every class with a reference of that order: unknown → outward (spec outward_classes) → prod-write (production match and not read-only) → prod-read (production match and read-only) → none (read-only) → local (a relaunch_allow match, a recipe with expected outputs, no unquoted ; && || | & newline $( or backquote once the end_suffix is cut) → unknown. Production match = the shipped prod_classes (spec literal when present, else the S-SETTINGS B prod-token regex) plus the file's valid prod_patterns. `gate` is the heal-check outcome: prod-read relaunches only under allow read from the settings file.",
+  "note": "Recorded commands (each with the spec end_suffix, as the helper records them) and the effects class the effects order gives under the named settings file (null = no settings file: forbid, no patterns, empty relaunch_allow). `tools/fixtures-gen --check` (`prod`) recomputes every class with a reference of that order: unknown → outward (spec outward_classes) → prod-write (production match and not read-only) → prod-read (production match and read-only) → none (read-only) → local (a relaunch_allow match, a recipe with expected outputs, no unquoted ; && || | & newline $( or backquote once the end_suffix is cut) → unknown. Production match = the shipped prod_classes (spec literal when present, else the prod-token regex) plus the file's valid prod_patterns. `gate` is the heal-check outcome: prod-read relaunches only under allow read from the settings file.",
   "placements": {
     "file": {
       "settings_path": "$HOME/.claude/settings.json",

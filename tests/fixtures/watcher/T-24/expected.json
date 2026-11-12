@@ -1,6 +1,6 @@
 {
   "id": "T-24",
-  "spec": "WATCHER-SPEC §9 T-24",
+  "spec": "watcher test T-24",
   "spec_input": "transcript basename unchanged but path moved after `--resume`, offset beyond the new file's size",
   "spec_expected": "sweep restarts at 0; no duplicate rows (dedupe by `uuid`)",
   "v1_scope": "sweep rows: offset restart",

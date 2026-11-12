@@ -63,7 +63,7 @@ my $S = '2026-10-21 14:05 +0300';
         $E->is($got{listed}, 0, 'listed is never counted');
         $E->is($got{unmeasured_stamps_ignored}, 1, 'stamps count only with measured:true');
         $E->is($got{two}, 2, 'one other stamp and one legacy verified');
-        $E->is($got{no_spec_keys}, 2, 'a spec without the keys uses the RV-24 forms');
+        $E->is($got{no_spec_keys}, 2, 'a spec without the keys uses the whole-stamp forms');
         $E->is($got{near_no_zone}, 1, 'checked <date> <time> with no zone counts');
         $E->is($got{near_colon_zone}, 1, 'checked <date> <time> +hh:mm counts');
         $E->is($got{near_iso}, 1, 'checked <ISO time> counts');

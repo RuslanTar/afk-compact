@@ -1,5 +1,5 @@
 #!/bin/sh
-# AT-ST-11 (C-STORE D7, BD-1 fail-closed): a git that ignores exclude pathspecs. Install it as `git`
+# AT-ST-11 (fail-closed): a git that ignores exclude pathspecs. Install it as `git`
 # in a directory first on PATH; it drops every `:(…exclude…)…`, `:!…` and `:^…` argument and runs the
 # next git on PATH, so a rebuilt clone patch still holds the blocked path and the `git apply
 # --numstat` check must withhold the whole patch. With GIT_NOEXCLUDE_LOG set, it appends one line

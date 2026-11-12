@@ -1,8 +1,8 @@
-# DP-29 (E-M-15; build round 9 carry-over, watch part): when the mod drops its dispatch because
+# DP-29 (watch part): when the mod drops its dispatch because
 # a native compaction ran, it logs `compacted {skip: native-ran}` with the nonce. Watch A-17
 # (a) and (b) skip such rows: no `skipped:native-ran` alert, and the dispatch, older than
 # 15 min, is settled (no `no-after`). Another skip class still raises A-17 (a), and a mod
-# dispatch with no `compacted` row at all still raises A-17 (b). Headless probe 2026-10-27: a
+# dispatch with no `compacted` row at all still raises A-17 (b). A headless probe showed that a
 # dispatch whose call Claude Code rejected as headless (`compact_rejected {error_class:
 # headless}`) is settled too; a rejection of another class still raises A-17 (b). So is a
 # headless `/compact` the host cannot run (`compact_command {error_class: no-command}`); one that

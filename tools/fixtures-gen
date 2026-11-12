@@ -1476,7 +1476,7 @@ def transcript_row_line(path):
 
 
 def st_semantics(doc, sc):
-    """What the C-STORE setups must have built (AT-ST-04/05 records, AT-ST-13 agent outputs)."""
+    """What the store setups must have built (AT-ST-04/05 records, AT-ST-13 agent outputs)."""
     p = []
     if doc["id"] == "st-05-finish-records":
         byp = sc.v["ROOT"] + "/.sessions/by-pid"
@@ -1629,7 +1629,7 @@ def check_setups(b):
 
 
 # PATH stubs (README "bin/"): bin/git-noexclude must defeat an exclude pathspec that the real git
-# honours (C-STORE D7 BD-1: the rebuilt clone patch, AT-ST-11 fail-closed). Proven on a temp repo.
+# honours (the rebuilt clone patch, AT-ST-11 fail-closed). Proven on a temp repo.
 def numstat_paths(sc, cwd, env, args):
     patch = subprocess.run(["git", "-C", cwd] + args, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
     if patch.returncode != 0:

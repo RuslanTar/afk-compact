@@ -1,6 +1,6 @@
 {
   "id": "T-14",
-  "spec": "WATCHER-SPEC §9 T-14",
+  "spec": "watcher test T-14",
   "spec_input": "foreign marker header in `custom_instructions` and the summary",
   "spec_expected": "`verdict:unshaped`, `ci_foreign_header:true`; never `ok`",
   "v1_scope": "foreign header",

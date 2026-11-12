@@ -1,6 +1,6 @@
 {
  "id": "AT-IC-02 (dispatch --idle, --idle-gap-s)",
- "note": "IC-1 D1: the mod passes --idle=true --idle-gap-s=<s> only on an idle main auto dispatch; the record and the dispatch row carry idle and idle_gap_s; absent -> idle false on a mod record (idle_gap_s null); a classic record has idle null; a bad value is a usage error",
+ "note": "the mod passes --idle=true --idle-gap-s=<s> only on an idle main auto dispatch; the record and the dispatch row carry idle and idle_gap_s; absent -> idle false on a mod record (idle_gap_s null); a classic record has idle null; a bad value is a usage error",
  "now": "2026-10-21T14:04:36+03:00",
  "tz": "Etc/GMT-3",
  "steps": [

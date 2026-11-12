@@ -262,7 +262,7 @@ export const register: Register = (on, options) => {
     // An open dialog counts through askOpen; once it settles, only one left unanswered marks the
     // turn as asking the user (an answered dialog blocks nothing after it).
     if (isAsk) state.askOpen++
-    // Dev-1: the session's directory as the job will see it is read before the call runs.
+    // The session's directory as the job will see it is read before the call runs.
     const job = await jobStart(d, tool)
     // The temp paths of this call are recorded beside it, never before it: the tool does not
     // wait for the helper (one spawn per new path), and nothing is recorded with auto_evidence off.

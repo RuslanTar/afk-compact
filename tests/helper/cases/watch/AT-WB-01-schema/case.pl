@@ -1,5 +1,5 @@
 # AT-WB-01, watcher half: every event type of the watcher's event list
-# (the list below, as folded on 2026-10-22; `bg` is a sidecar file, never exported) and
+# (the list below; `bg` is a sidecar file, never exported) and
 # every `ev` the shipped code writes (found in the plugin source: rc::emit, log_row,
 # log_event/ctx::log, the mod's log()) has an export-schema entry, and every class in the
 # schema is one the transform knows. An `ev` not in the schema drops the whole row (counted). Every

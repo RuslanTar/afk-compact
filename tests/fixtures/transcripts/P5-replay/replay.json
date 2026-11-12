@@ -1,16 +1,16 @@
 {
   "id": "P5-replay",
-  "source": "lab run e1-131fc3 (2.1.307 under the seat): one background subagent, six auto compactions, saved as sub-unknown copies (C-STORE D5, P5-FOLD A1); times shifted to the case day, lab order kept",
+  "source": "a lab run on Claude Code 2.1.307: one background subagent, six auto compactions, saved as sub-unknown copies; times shifted to the case day, lab order kept",
   "tests": [
     "AT-ST-08",
     "AT-P5-01"
   ],
   "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
-  "agent": "a494e1b0fa1a73786",
-  "agent8": "a494e1b0",
-  "agent_transcript": "transcripts/P5-replay/subagents/agent-a494e1b0fa1a73786.jsonl",
+  "agent": "a5e55a005f5000005",
+  "agent8": "a5e55a00",
+  "agent_transcript": "transcripts/P5-replay/subagents/agent-a5e55a005f5000005.jsonl",
   "main_transcript": "transcripts/P5-replay/main.jsonl",
-  "note": "Each PostCompact (classic dispatch, s=sub marker: P2-sub, no agent id) saves a sub-unknown copy under compact/subagents/ named <stamp>_5e55a001_c<seq>-<id6>.md; reconcile at the next Stop fills the agent by nonce (join a) and renames to <stamp>_5e55a001-aa494e1b0_c<seq>-<id6>.md. The summary rows are the engine's transcript form: no <summary> tags, and three engine trailer lines after the body that no copy_trailers list names yet.",
+  "note": "Each PostCompact (classic dispatch, s=sub marker: P2-sub, no agent id) saves a sub-unknown copy under compact/subagents/ named <stamp>_5e55a001_c<seq>-<id6>.md; reconcile at the next Stop fills the agent by nonce (join a) and renames to <stamp>_5e55a001-aa5e55a00_c<seq>-<id6>.md. The summary rows are the engine's transcript form: no <summary> tags, and three engine trailer lines after the body that no copy_trailers list names yet.",
   "compactions": [
     {
       "seq": 1,

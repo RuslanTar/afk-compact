@@ -1,6 +1,6 @@
 {
  "id": "AT-TS-03 (core), AT-TS-05 (measure part)",
- "note": "RV-24: util::stamp prints YYYY-MM-DD HH:MM ±hhmm, the offset of that instant; `measure --compact` names the sidecar time as a full stamp (`In flight (sidecar <stamp>)`), on both sides of a DST change in a zone with a negative offset and in one with a positive offset. The stamp matches the spec's time_re when the spec has one",
+ "note": "util::stamp prints YYYY-MM-DD HH:MM ±hhmm, the offset of that instant; `measure --compact` names the sidecar time as a full stamp (`In flight (sidecar <stamp>)`), on both sides of a DST change in a zone with a negative offset and in one with a positive offset. The stamp matches the spec's time_re when the spec has one",
  "steps": [
   {"setup": [{"mkdir": "$TMP/work"},
              {"write": "$WATCH/$SID/bg/slot-0.json", "json": {"v": 1, "ts": "2026-03-08T06:30:00.000Z", "seq": 1, "set_hash": "aaaaaaaa", "source": "Stop", "tasks": [], "crons": []}}]},

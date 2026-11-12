@@ -1,6 +1,6 @@
 {
   "id": "T-19",
-  "spec": "WATCHER-SPEC §9 T-19",
+  "spec": "watcher test T-19",
   "spec_input": "native auto at 770K with the 800K window",
   "spec_expected": "`band_position:at-native`; A-05",
   "v1_scope": "A-05",
@@ -17,7 +17,7 @@
         "count": 1
       }
     ],
-    "note": "config_effective field names are provisional (MOD §1.2 names the values, not the row keys)"
+    "note": "config_effective field names are provisional (the spec names the values, not the row keys)"
   },
   "metrics": {
     "M-04": {

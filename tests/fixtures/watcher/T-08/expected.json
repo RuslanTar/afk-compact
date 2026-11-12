@@ -1,6 +1,6 @@
 {
   "id": "T-08",
-  "spec": "WATCHER-SPEC §9 T-08",
+  "spec": "watcher test T-08",
   "spec_input": "Stop sidecars with a repeated teammate id across 30 events",
   "spec_expected": "deduped to 1 id; sidecar files ≤20",
   "v1_scope": "sidecar ring <=20, deduped ids",
