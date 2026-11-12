@@ -277,9 +277,13 @@ sub _by_exe {
 # whose parent is the anchor, reads none, and with no anchor (a helper run from a terminal) none
 # is read either. A hop that CLAUDE_PID names is the anchor before its own parent and command are
 # read (0.1.4 T-14): a hook's helper whose parent is Claude Code itself makes no `ps` call here.
+# A walk that starts at pid 1 or below has no parent chain to read (under Git Bash a hook's perl
+# sees getppid() = 1): CLAUDE_PID is then the anchor, and without it the walk finds nothing, as
+# before.
 sub _walk {
     my ($pid) = @_;
     my $env = (defined $ENV{CLAUDE_PID} && $ENV{CLAUDE_PID} =~ /^[1-9][0-9]*$/) ? 0 + $ENV{CLAUDE_PID} : 0;
+    return (0 + $env, 1) if (!$pid || $pid <= 1) && $env;
     my @below;
     for (1 .. 12) {
         last if !$pid || $pid <= 1;
