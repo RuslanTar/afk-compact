@@ -1042,7 +1042,7 @@ for (const c of [
   })
 }
 
-test('AT-KW-38: a fork-miss ping that comes back past the 58-min bound: 0.1.11: result late, stop missed, nothing handed back, no turn', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
+test('AT-KW-38: a fork-miss ping that comes back past the 58-min bound: stop fork-miss, nothing handed back (the cache is cold), no turn (0.1.11: a fork-miss stays fork-miss, never `late`)', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on, {})
   let t0 = 0
   on('model.fork', async () => {
@@ -1052,8 +1052,8 @@ test('AT-KW-38: a fork-miss ping that comes back past the 58-min bound: 0.1.11: 
   })
   t0 = await checkGap($, w)
   await until(w, t0, 70)
-  expect(pings(w).at(-1)).toEqual(['late', 0])
-  expect(stops(w)).toEqual([['missed', false, 0]])
+  expect(pings(w).at(-1)).toEqual(['fork-miss', 0])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
   expect(skips(w)).toEqual([['keep-warm', 'check']])
   expect(w.submits.length).toBe(0)
 })
@@ -2633,4 +2633,54 @@ test('KW-LATE-04 (0.1.11): the 2-min bound is real time, not test-seam-scaled: u
   await w.advance(540 * 1000)
   expect(pings(w)).toEqual([['warm', 1]])
   expect(stops(w)).toEqual([])
+})
+
+test('KW-LATE-05 (0.1.11): a slow api-error (150 s at the first ping) keeps its class and is tried again a minute later; the gap warms on, not `missed`', { options: ON }, async ($, on) => {
+  const w = world(on)
+  let t0 = 0
+  let n = 0
+  on('model.fork', async () => {
+    if (n++ === 0) {
+      await w.clock.sleep(150000)
+      return { value: OVERLOADED } as never
+    }
+    return { value: { isAnswered: true, text: 'OK', usage: WARM } } as never
+  })
+  await w.start($)
+  t0 = await humanTurn($, w)
+  await until(w, t0, 105)
+  expect(pings(w)).toEqual([['api-error', 0], ['warm', 1], ['warm', 2]])
+  expect(w.rowsOf('keep_warm_ping')[0]?.ms).toBe(150000)
+  expect(stops(w)).toEqual([])
+})
+
+test('KW-LATE-06 (0.1.11): a slow fork that missed the main prefix (3 min, cold read) stays fork-miss, not late: stop fork-miss with no hand-over', { options: ON }, async ($, on) => {
+  const w = world(on)
+  let t0 = 0
+  on('model.fork', async () => {
+    await w.clock.sleep(3 * MIN)
+    return { value: { isAnswered: true, text: 'OK', usage: COLD } } as never
+  })
+  await w.start($)
+  t0 = await humanTurn($, w)
+  await until(w, t0, 60)
+  expect(pings(w)).toEqual([['fork-miss', 0]])
+  expect(stops(w)).toEqual([['fork-miss', false, 0]])
+  expect(selfCompacts(w)).toBe(0)
+})
+
+test('KW-OFF-06 (0.1.11): in the limit band with a job open before the first ping, the refused stop row says the record goes back (handover true)', { options: MIN100K }, async ($, on) => {
+  const w = world(on)
+  w.storeSet('limit_deltas', { five_hour: [2] })
+  const f = forks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 150000)
+  f.t0 = t0
+  await until(w, t0, 45)
+  w.rateLimits = [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 30 }]
+  await measured($, w)
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect(offRows(w).map(r => [r[0], r[1], r[3]])).toEqual([['near-limit', 0, true]])
+  expect(ic(w).map(r => [r.at, r.rule])).toEqual([['timer', 'band']])
 })

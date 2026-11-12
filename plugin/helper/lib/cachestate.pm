@@ -29,6 +29,9 @@ use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 our $PING_S = 50 * 60;
 our $LATEST_S = 58 * 60;
 our %TTL_S = ('1h' => 3600, '5m' => 300);
+# 0.1.11: a keep-warm ping reads as pending this long after its keep_warm_send row at most (the
+# plugin's 2-minute `late` bound, keepwarm.ts KEEP_WARM_SLOW_MS, plus slack)
+our $PENDING_S = 150;
 # A ping counts after a main request whose start only prompt_cache's expires_at bounds: its end
 # within this many seconds of that bound (the fork's own touch moves it).
 our $TOUCH_SLACK_S = 5;
@@ -495,13 +498,18 @@ sub _with_kw {
     my $active = defined $started && !$stop && !defined $end && defined $warm && $now <= $warm + $LATEST_S * $scale + 120
                  && (!defined $hours || $now < (_num($kw->{gap_start}) // $started) + $hours * 3600 * $scale + 600)
                  && !(defined $main_at && $main_at > (_num($kw->{last_at}) // $started)) ? 1 : 0;
-    # 0.1.11: a ping of the gap is out (its keep_warm_send row, no result row yet) while it warms
-    my $pending = $active && defined _num($kw->{sent_at}) ? 1 : 0;
+    # 0.1.11: a ping of the gap is out (its keep_warm_send row, no result row yet) while it warms,
+    # for $PENDING_S at most: a fork that runs longer is `late` anyway, and one whose process died
+    # mid-flight writes no result row
+    my $sent = _num($kw->{sent_at});
+    my $pending = $active && defined $sent && $now - $sent <= $PENDING_S ? 1 : 0;
     # 0.1.11: keep-warm refused the current gap before warming: its reason, until a main request
-    # after that row (the transcript's, else the one prompt_cache bounds) opens a new gap
+    # after that row (the transcript's, else the one prompt_cache bounds) opens a new gap; with no
+    # main request time to bound it (caching off, no transcript), for an hour after the row at most
     my $at = $stop ? _num($stop->{at}) : undef;
     my $ref = $main_at // $anchor;
-    my $off = $stop && $stop->{refused} && !defined $end && defined $at && !(defined $ref && $ref > $at) ? $stop->{why} : undef;
+    my $off = $stop && $stop->{refused} && !defined $end && defined $at
+              && (defined $ref ? $ref <= $at : $now < $at + $TTL_S{'1h'}) ? $stop->{why} : undef;
     $r->{keep_warm} = {
         active => jsonc::bool($active), n => _num($kw->{n}) // 0, max => $max, hours => $hours,
         gap_started_at => _int(_num($kw->{gap_start})), next_due_at => ($active ? int($next // $warm + $ping) : undef),

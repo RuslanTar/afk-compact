@@ -1,6 +1,6 @@
 {
  "id": "CACHE-11-keep-warm-off-pending",
- "note": "0.1.11: the cache output says what keep-warm did in the current idle gap. A gap keep-warm refused before its first ping (one keep_warm_stop row, pings 0, refused true; an older plugin's no-idle-path row with no start row counts too) reads keep_warm.off = its reason and `· keep-warm off (<why>)` on the line, until a main request after it. A keep_warm_send row (a ping going out) reads keep_warm.pending true and `· ping pending` until its keep_warm_ping or keep_warm_stop row. A late ping is last_result late. Right after a compaction the context is nearly empty, so the line reads `cache compacted` and the new `label` key reads compacted; `state` stays cold and `why` compacted (v1 stays additive).",
+ "note": "0.1.11: the cache output says what keep-warm did in the current idle gap. A gap keep-warm refused before its first ping (one keep_warm_stop row, pings 0, refused true; an older plugin's no-idle-path row with no start row counts too) reads keep_warm.off = its reason and `· keep-warm off (<why>)` on the line, until a main request after it. A keep_warm_send row (a ping going out) reads keep_warm.pending true and `· ping pending` until its keep_warm_ping or keep_warm_stop row. A late ping is last_result late. Right after a compaction the context is nearly empty, so the line reads `cache compacted` and the new `label` key reads compacted; `state` stays cold and `why` compacted (v1 stays additive). With no main request time to bound it (caching off, no transcript), keep_warm.off lasts at most an hour after its row. A ping out for over 150 s with no result row (its process died) is no longer pending.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
@@ -271,6 +271,48 @@
    "now": "2026-11-09T12:00:30Z"
   },
   {
+   "name": "json: a ping out for over 150 s with no result row (its process died): no longer pending, still active",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-p",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.active": true,
+     "keep_warm.pending": false
+    }
+   },
+   "now": "2026-11-09T12:02:32Z"
+  },
+  {
+   "name": "line: no ping pending past 150 s",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-p",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 8m left ↻0/7\n"
+   },
+   "now": "2026-11-09T12:02:32Z"
+  },
+  {
    "name": "its result row: warm",
    "argv": [
     "log",
@@ -422,6 +464,82 @@
     "json": {
      "state": "unknown",
      "label": "unknown"
+    }
+   }
+  },
+  {
+   "name": "a refused gap on a session with no transcript kept (keep_warm.off has no main request to bound it)",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID-o",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-11-09T11:50:00.000Z\", \"ev\": \"keep_warm_stop\", \"sid\": \"$SID-o\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.319\", \"turn_seq\": 3, \"why\": \"no-jobs\", \"pings\": 0, \"gap_s\": 3000, \"handover\": false, \"refused\": true}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "caching off, 10 min after the refused row: keep_warm.off no-jobs",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-o",
+    "prompt_cache": {
+     "caching_observed": false
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.off": "no-jobs"
+    }
+   }
+  },
+  {
+   "name": "caching off, over an hour after the refused row: keep_warm.off null (no longer read as the current gap)",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID-o",
+    "prompt_cache": {
+     "caching_observed": false
+    }
+   },
+   "now": "2026-11-09T12:50:01Z",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.off": {
+      "null": true
+     },
+     "keep_warm.stop.why": "no-jobs"
+    }
+   }
+  },
+  {
+   "name": "--sid with no transcript, over an hour after the refused row: keep_warm.off null",
+   "argv": [
+    "cache",
+    "--sid",
+    "$SID-o",
+    "--json"
+   ],
+   "now": "2026-11-09T12:50:01Z",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "keep_warm.off": {
+      "null": true
+     }
     }
    }
   }

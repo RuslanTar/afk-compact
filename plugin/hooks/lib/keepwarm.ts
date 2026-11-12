@@ -47,9 +47,12 @@
 //   deadline (idle.ts `heldDeadline`: the turn's 55.5 min, the compaction's 58 from the last warm
 //   request): a retry that would pass it stops first (`deadline`) with the hand-over. A fork that
 //   comes back past that deadline (a slow one) hands nothing over: `missed`, the record dropped.
-// - A fork that takes over about 2 minutes, or comes back past the last warm request plus
-//   58 minutes, is `late` (its ping row's result): the cache may have lapsed meanwhile, so it
-//   counts for nothing and the gap stops `missed`, the record dropped.
+// - A fork that read the cache (`warm`) but took over about 2 minutes, or came back past the last
+//   warm request plus 58 minutes, is `late` (its ping row's result): the cache may have lapsed
+//   meanwhile, so it counts for nothing and the gap stops `missed`, the record dropped. Only a
+//   warm one: a slow `fork-miss` stays `fork-miss` (the main cache is cold), and a slow failure
+//   (`api-error`, `aborted`, `error`, `nothing-to-fork`) keeps its class, its retry and its
+//   hand-over as above.
 // - It stops when a main turn starts (`turn`), the session ends or changes, a compaction ran since
 //   the gap began (`compacted`, Claude Code's own idle one included), no background job is open
 //   (`no-jobs`), the cache is not the one-hour one any more (`ttl-5m`), the main model or Claude
@@ -96,9 +99,9 @@ export const KEEP_WARM_PING_MS = 50 * 60000
  */
 export const KEEP_WARM_LATEST_MS = 58 * 60000
 /**
- * A fork that takes longer than this (about 2 minutes) is `late`, as is one that comes back past the
- * last warm request plus KEEP_WARM_LATEST_MS: the gap stops `missed`. Not test-seam-scaled: a fork's
- * own time is real time (under a small seam the scaled 58-minute bound comes first).
+ * A warm fork that takes longer than this (about 2 minutes) is `late`, as is one that comes back past
+ * the last warm request plus KEEP_WARM_LATEST_MS: the gap stops `missed`. Not test-seam-scaled: a
+ * fork's own time is real time (under a small seam the scaled 58-minute bound comes first).
  */
 export const KEEP_WARM_SLOW_MS = 2 * 60000
 /** A ping that found a request in flight, an API error or an abort is tried again this much later. */
@@ -418,16 +421,17 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | Wait
 
 /**
  * An `armed` gap may not warm, for any reason `blocked` gives: it turns `off` with one
- * `keep_warm_stop {why, pings: 0, handover: false, refused: true}` row (no start row before it; a
+ * `keep_warm_stop {why, pings: 0, handover, refused: true}` row (no start row before it; a
  * `near-limit` one with its windows, rule and readings), once per gap (only an `armed` gap comes
- * here, and it is `off` before the row is written). In the limit band with a job open the idle
- * record that fires next goes back as a job's hand-over (`bandJob`, `holds`).
+ * here, and it is `off` before the row is written). `handover` is false but in the limit band with
+ * a job open, where the idle record that fires next goes back as a job's hand-over (`bandJob`, `holds`).
  */
 async function refuse(d: Deps, kw: KeepWarm, b: Block, now: number): Promise<void> {
   kw.phase = 'off'
-  if (b.why === 'near-limit' && b.job === true) kw.bandJob = true
+  const band = b.why === 'near-limit' && b.job === true
+  if (band) kw.bandJob = true
   await log(d, kw.sid, 'keep_warm_stop', {
-    why: b.why, pings: 0, gap_s: secs(now - kw.start), handover: false, refused: true, ...(b.windows !== undefined ? { windows: b.windows } : {}),
+    why: b.why, pings: 0, gap_s: secs(now - kw.start), handover: band, refused: true, ...(b.windows !== undefined ? { windows: b.windows } : {}),
     ...(b.rule !== undefined ? { rule: b.rule, ...(await tierFields(d)) } : {}), ...b.usage,
   })
 }
@@ -641,6 +645,8 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   if (!ours() || kw.phase !== 'warming') return
   // The main requests before the fork: one that comes while it runs already changed the history.
   const reqs = s.mainReqs
+  // The fork's own time, for the 2-minute bound: from just before it (the checks above take time too).
+  const tf = await d.now()
   let r: unknown
   try {
     r = await d.fork(KEEP_WARM_PROMPT)
@@ -651,9 +657,12 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   const o0 = forkOutcome(r)
   // Set even when the gap moved meanwhile (a prompt a hook then drops resumes this gap): its next check stops it.
   if (o0.result === 'fork-miss') s.keepWarmForkMiss = { sid: kw.sid, reqs }
-  // 0.1.11: a fork that took over about 2 minutes, or came back past the 58-minute bound of the
-  // last warm request, is `late`: its cache may have lapsed meanwhile, so it counts for nothing.
-  const o: Outcome = t1 - now > KEEP_WARM_SLOW_MS || t1 > kw.warm + KEEP_WARM_LATEST_MS * scale ? { ...o0, result: 'late' } : o0
+  // 0.1.11: a warm fork that took over about 2 minutes, or came back past the 58-minute bound of
+  // the last warm request, is `late`: its cache may have lapsed meanwhile, so it counts for nothing.
+  // Any other class stays as it is: a fork-miss is cold whatever its time, and a failure keeps its
+  // retry and hand-over below.
+  const slow = t1 - tf > KEEP_WARM_SLOW_MS || t1 > kw.warm + KEEP_WARM_LATEST_MS * scale
+  const o: Outcome = o0.result === 'warm' && slow ? { ...o0, result: 'late' } : o0
   const live = ours() && kw.phase === 'warming'
   const since = now - kw.warm
   // A warm ping into the gap undisturbed: the gap counts from it at once (a turn starting during
