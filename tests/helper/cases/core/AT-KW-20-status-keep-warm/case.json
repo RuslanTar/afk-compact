@@ -2,7 +2,7 @@
  "id": "AT-KW-20",
  "layer": "H",
  "owner": "core",
- "note": "Keep-warm: /status says whether keep-warm is on (keep_warm_hours, default 6; 0 = off) and, from this session's last keep_warm_start, keep_warm_ping and keep_warm_stop rows, whether the current idle gap is warming with how many pings kept the cache warm so far (a nothing-to-fork ping does not count), or not warming with the last warmed gap's pings and stop reason.",
+ "note": "Keep-warm: /status says whether keep-warm is on (keep_warm_hours, default 6; 0 = off) and, from this session's last keep_warm_start, keep_warm_ping and keep_warm_stop rows, whether the current idle gap is warming with how many pings kept the cache warm so far (a nothing-to-fork ping does not count), or not warming with the last warmed gap's pings and stop reason. 0.1.11: a gap keep-warm refused before its first ping (one keep_warm_stop row with refused true; an older plugin's no-idle-path row with no start row reads alike) shows keep-warm off (<why>) for this gap when the session's last main request (its transcript, kept in the cache state) is not after that row; after a later main request, or with none known, it is the last gap: not warming (the last gap: keep-warm off (<why>)).",
  "now": "2026-10-30T12:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -281,7 +281,7 @@
    }
   },
   {
-   "name": "a gap no idle path could take over, after a warmed one: its stop row with no start row says so as the last refused gap (a newer gap may have an idle path and no ping yet), stopped before its first ping: no-idle-path",
+   "name": "a gap no idle path could take over, after a warmed one: its stop row with no start row (an older plugin's, no refused field) reads as refused; with no main request time known it is the last gap: keep-warm off (no-idle-path), with what it means",
    "setup": [
     {
      "write": "$WATCH/$SID.jsonl",
@@ -357,7 +357,387 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last refused gap: stopped before its first ping: no-idle-path, no plugin idle compaction or idle handoff turn to take it over\\)$"
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last gap: keep-warm off \\(no-idle-path\\): no plugin idle compaction or idle handoff turn to take it over\\)$"
+    ],
+    "stdout_lacks": [
+     "last warmed gap"
+    ]
+   }
+  },
+  {
+   "name": "0.1.11: a gap refused before its first ping (no job open), no main request time known (no cache state): the last gap: keep-warm off (no-jobs)",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:50:00+03:00",
+       "ev": "keep_warm_stop",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "why": "no-jobs",
+       "pings": 0,
+       "gap_s": 3000,
+       "handover": false,
+       "refused": true
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last gap: keep-warm off \\(no-jobs\\)\\)$"
+    ],
+    "stdout_lacks": [
+     "last warmed gap"
+    ]
+   }
+  },
+  {
+   "name": "0.1.11: the same refused row, the session's last main request (its transcript, from the cache state) before it: this gap: keep-warm off (no-jobs)",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:50:00+03:00",
+       "ev": "keep_warm_stop",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "why": "no-jobs",
+       "pings": 0,
+       "gap_s": 3000,
+       "handover": false,
+       "refused": true
+      }
+     ]
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1",
+       "timestamp": "2026-10-30T07:00:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "transcript": "$TMP/proj/$SID.jsonl"
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: keep-warm off \\(no-jobs\\)$"
+    ],
+    "stdout_lacks": [
+     "last gap"
+    ]
+   }
+  },
+  {
+   "name": "0.1.11: a main request after the refused row (a later turn, this skill's own included): that gap is over: not warming (the last gap: keep-warm off (no-jobs))",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:50:00+03:00",
+       "ev": "keep_warm_stop",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "why": "no-jobs",
+       "pings": 0,
+       "gap_s": 3000,
+       "handover": false,
+       "refused": true
+      }
+     ]
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1",
+       "timestamp": "2026-10-30T08:30:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "transcript": "$TMP/proj/$SID.jsonl"
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: not warming \\(the last gap: keep-warm off \\(no-jobs\\)\\)$"
+    ]
+   }
+  },
+  {
+   "name": "0.1.11: a refused gap after a warmed one, the last main request (08:30Z) before its row (09:00Z): this gap: keep-warm off (near-limit)",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:50:00+03:00",
+       "ev": "keep_warm_start",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "jobs": 1,
+       "gap_s": 3000,
+       "hours": 6,
+       "windows": 2
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T11:40:00+03:00",
+       "ev": "keep_warm_stop",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "why": "turn",
+       "pings": 1,
+       "gap_s": 6000,
+       "handover": false
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T12:00:00+03:00",
+       "ev": "keep_warm_stop",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "why": "near-limit",
+       "pings": 0,
+       "gap_s": 1000,
+       "handover": false,
+       "refused": true,
+       "windows": [
+        "five_hour:95"
+       ],
+       "rule": "90"
+      }
+     ]
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1",
+       "timestamp": "2026-10-30T08:30:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "transcript": "$TMP/proj/$SID.jsonl"
+     }
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: keep-warm off \\(near-limit\\)$"
+    ],
+    "stdout_lacks": [
+     "last warmed gap"
+    ]
+   }
+  },
+  {
+   "name": "0.1.11: a refused gap, then a newer gap that warms: warming again",
+   "setup": [
+    {
+     "write": "$WATCH/$SID.jsonl",
+     "jsonl": [
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:00:00+03:00",
+       "ev": "session",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "phase": "start",
+       "mod_loaded": true
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T10:50:00+03:00",
+       "ev": "keep_warm_stop",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "why": "no-jobs",
+       "pings": 0,
+       "gap_s": 3000,
+       "handover": false,
+       "refused": true
+      },
+      {
+       "v": 1,
+       "ts": "2026-10-30T12:00:00+03:00",
+       "ev": "keep_warm_start",
+       "sid": "$SID",
+       "actor": "main",
+       "writer": "mod",
+       "jobs": 1,
+       "gap_s": 3000,
+       "hours": 6,
+       "windows": 2
+      }
+     ]
+    }
+   ],
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^keep-warm: on \\(up to 6 h of an idle gap, only while this session's own background jobs run, on the one-hour cache\\) · this gap: warming, 0 pings so far$"
     ],
     "stdout_lacks": [
      "last warmed gap"

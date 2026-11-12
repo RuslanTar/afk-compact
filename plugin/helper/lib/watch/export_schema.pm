@@ -61,6 +61,10 @@ my %USAGE = (usage_src => [list => 'wsrc'], usage_age_s => [counts => 'word'], u
 # `unknown` before
 my $IDLE = [or => 'bool', 'unknown'];
 my @ACUITY = qw(stable watch unstable -);
+# 0.1.11: the cache miss reasons Claude Code writes on a response (`message.diagnostics.cache_miss_reason.type`),
+# `none` (diagnostics null: no reason given) and `not-reported` (no diagnostics on the line)
+our @MISS_REASON = qw(none not-reported model_changed system_changed tools_changed messages_changed
+                      previous_message_not_found unavailable);
 # Claude Code's own tool names (fixed by Claude Code, the same for every install): the only tool
 # names the `tool` class keeps. A name not listed here becomes `other`.
 our @BUILTIN_TOOLS = qw(Agent AskUserQuestion Bash BashOutput CronCreate CronDelete CronList Edit EnterPlanMode
@@ -239,10 +243,15 @@ our %SCHEMA = (
     # keep-warm: an idle gap with this session's own background jobs open warms
     # its one-hour cache with fork pings (counts and classes only: the cache tokens each ping read
     # and wrote, its result, an HTTP status), then stops for one reason, handing the idle timer's
-    # record back to the idle path or not; or a gap no idle path could take over refuses before warming
-    # (one stop row, why no-idle-path, pings 0, with no start row before it)
+    # record back to the idle path or not; or a gap refuses before warming (one stop row with no start
+    # row before it, pings 0; 0.1.11: for every reason, with `refused` true, and `handover` true only
+    # in the limit band with a job open, when the idle record that fires next goes back). 0.1.11: a
+    # ping going out (keep_warm_send, before its result row); a warm fork that took over about
+    # 2 minutes or came back past the 58-minute bound is the result `late` (a fork-miss or a failure
+    # keeps its own class)
     keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int', ping_s => 'int' },
-    keep_warm_ping => { n => 'int', result => [enum => qw(warm fork-miss nothing-to-fork api-error aborted error)], cache_read => 'num',
+    keep_warm_send => { n => 'int', gap_s => 'num', since_s => 'num' },
+    keep_warm_ping => { n => 'int', result => [enum => qw(warm fork-miss nothing-to-fork api-error aborted error late)], cache_read => 'num',
                         cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int',
                         # 0.1.8: a reading at the limit that did not stop the ping
                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word', windows => [list => 'window'], %USAGE },
@@ -252,9 +261,15 @@ our %SCHEMA = (
     keep_warm_stop => { why => [enum => qw(turn session-end session-changed compacted missed fork-miss no-jobs ttl-5m prefix-changed
                                              near-limit cutoff off error held-elsewhere reload nothing-to-fork deadline
                                              no-idle-path)],
-                        pings => 'int', gap_s => 'num', handover => 'bool', windows => [list => 'window'],
+                        pings => 'int', gap_s => 'num', handover => 'bool', refused => 'bool', windows => [list => 'window'],
                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
                         %USAGE },
+    # 0.1.11: the first main response after a pause of 5 minutes or more (the sweep, from the
+    # transcript's usage and Claude Code's `message.diagnostics`): the pause, the response's time,
+    # its cache tokens, `hit`/`miss`/`none` by the read share of the cached prefix, and Claude
+    # Code's cache miss reason (`none`: none reported; `not-reported`: no diagnostics on the line)
+    cache_after_gap => { resp_ts => 'ts', gap_s => 'num', result => [enum => qw(hit miss none)], cache_read => 'num',
+                         cache_creation => 'num', input => 'num', miss_reason => [enum => @MISS_REASON], missed_tokens => 'num' },
     # away digest phase 1: the work lane code read
     # after an idle compaction (the summary's Status word, the state, how, the units running: agents
     # and the measure's running background tasks, at which step), and the digest turn submitted

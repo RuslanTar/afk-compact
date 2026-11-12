@@ -30,7 +30,7 @@ sub run {
         eval { usagerec::note(usagerec::from_statusline($in, util::now()), util::now()) } if $opt->{'note-usage'} && ref $in eq 'HASH';
     }
     my $r = eval { cachestate::report(sid => $opt->{sid}, input => $in) };
-    $r //= { schema => cachestate::schema(), sid => undef, now => int(util::now()), state => 'unknown', why => 'no-data' };
+    $r //= { schema => cachestate::schema(), sid => undef, now => int(util::now()), state => 'unknown', label => 'unknown', why => 'no-data' };
     if ($opt->{json}) { print STDOUT jsonc::encode_bytes($r) . "\n"; return 0 }
     my $l = eval { cachestate::line($r) } // '';
     args::out($l) if $l ne '';

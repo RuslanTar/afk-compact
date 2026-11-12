@@ -1825,7 +1825,7 @@ def verify_ref(path):
             if hashlib.sha256(z.read(f["name"])).hexdigest() != f["sha256"]:
                 return "quarantined", "sha256 " + f["name"]
     for n, t in sorted(texts.items()):
-        if n.startswith("rows/") or n in ("config.json", "probes.json", "sizes.json"):
+        if n.startswith("rows/") or n in ("config.json", "probes.json", "sizes.json", "keep-warm.json"):
             for rx in PATTERN_CLASSES:
                 if rx.search(t):
                     return "quarantined", "pattern " + n

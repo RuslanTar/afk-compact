@@ -169,6 +169,8 @@ sub on_stop {
             watch::ctx::error_row($ctx, 'sweep', 'unreadable') if $f->{unreadable};
             watch::ctx::error_row($ctx, 'sweep', 'bad-json') if $f->{bad_lines};
             watch::ctx::log_row($ctx, 'sweep', $_, actor => $f->{actor}) for watch::sweep::rows_for($f);
+            # 0.1.11: the main responses after a pause, for the keep-warm statistics
+            watch::ctx::log_row($ctx, 'cache_after_gap', $_, actor => $f->{actor}) for @{ $f->{after_gap} || [] };
             # Only a time cut is a budget breach (A-25); a
             # file left over by the 5 MB cap is `sweep.partial` alone.
             if ($f->{time_cut}) {
