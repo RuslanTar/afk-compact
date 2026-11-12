@@ -1,6 +1,6 @@
 package detect;
-# lib/detect.pm: marker/sentinel detector, normalized body and verdict (MOD-SPEC
-# §5.1, §2.2). Owner: WP-core. Grammar and headings come from the spec literals.
+# lib/detect.pm: marker/sentinel detector, normalized body and verdict.
+# Grammar and headings come from the spec literals.
 #
 # Normalized body: strip the head parts (a `This session is being continued…`
 # line, a <tools-used-before-summary>…</tools-used-before-summary> block, a closed
@@ -9,7 +9,7 @@ package detect;
 # tools-used block in it, 2.1.311), a `Summary:` line, a `<summary>` tag, and blank
 # lines between them), cut before the first `</summary>` when present, else cut installed-message trailers
 # (spec `copy_trailers`, canary-baseline `copy_trailers`), trim trailing blank
-# lines. Sentinel after the close tag (MOD-SPEC §5.1, P5-FOLD A1): when the first non-blank
+# lines. Sentinel after the close tag: when the first non-blank
 # text after `</summary>` (the rest of that line, else the next non-blank line) matches
 # `sentinel_re`, that line is appended as the body's last line and the lines after it
 # follow as trailers (listed ones cut, never the moved sentinel); any other first line
@@ -65,7 +65,7 @@ sub normalize {
             next;
         }
         # The summarizer's scratch block that a PostCompact compact_summary keeps before
-        # <summary> (Claude Code 2.1.309, idle lab runs 2026-10-23); an unclosed one is body.
+        # <summary> (seen on Claude Code 2.1.309); an unclosed one is body.
         if ($x =~ /^\s*<analysis>/) {
             my $j = $i;
             $j++ while $j < @l && $l[$j] !~ m{</analysis>};
@@ -73,8 +73,8 @@ sub normalize {
             $i = $j + 1;
             next;
         }
-        # The reminder block the installed message wraps the tools-used block in (Claude Code
-        # 2.1.311, live probe 2026-10-27); an unclosed one is body.
+        # The reminder block the installed message wraps the tools-used block in (seen on Claude
+        # Code 2.1.311); an unclosed one is body.
         if ($x =~ /^\s*<system-reminder>/) {
             my $j = $i;
             $j++ while $j < @l && $l[$j] !~ m{</system-reminder>};
@@ -190,7 +190,7 @@ sub unclosed {
 }
 
 # alias_scan(text, name) -> scan() with the marker and sentinel grammar written under a former
-# plugin name (owner 2026-10-23 xxxxxxxx-26, "Read-only alias"): the spec's marker_re and
+# plugin name (a read-only alias): the spec's marker_re and
 # sentinel_re with the plugin name replaced by `name`. undef when the name is not a plain lower-case
 # word or the grammar does not hold the plugin name. Read-only: nothing writes this grammar.
 sub alias_scan {
@@ -210,7 +210,7 @@ sub alias_scan {
     return scan($text, mre => $re{marker_re}, sre => $re{sentinel_re});
 }
 
-# acuity(scan) -> the Acuity word of a shaped summary (spec acuity_re, T-TEXT E6), or -
+# acuity(scan) -> the Acuity word of a shaped summary (spec acuity_re), or -
 our $ACUITY_RE = '(?:^|· )Acuity: (stable|watch|unstable)\b';
 sub acuity {
     my ($s) = @_;
@@ -219,7 +219,7 @@ sub acuity {
     return '-';
 }
 
-# verdict(scan, %ctx) -> verdict string (first match of the MOD-SPEC §5.1 table)
+# verdict(scan, %ctx) -> verdict string (first match of the verdict table)
 #   ctx: precomputed (bool), scope (main|sub|unknown), dispatch_nonce (expected),
 #        marker_has_record (0 = our marker without any dispatch record),
 #        marker_earlier (1 = the marker's nonce belongs to an earlier dispatch)

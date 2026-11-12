@@ -1,9 +1,9 @@
 # cmd/trial-save.pl: `trial-save --sid S` with one JSON object on stdin -> one JSON line
-# naming what was written (TRIAL-DUAL-HANDOFF §4.3-§4.6). Owner: WP-core.
+# naming what was written.
 # stdin: {"kind": "moment"|"skip"|"late"|"failed", "moment_id": "<sid8>-<8 hex>", "repo", "ticket",
 #         "moment": {content-free fields}, "old": {arm fields, "reply"?}, "native": {arm fields, "reply"?},
 #         "arm": "old"|"native" (late only)}
-# `failed` is the mod's second, minimal call after a `moment` save that failed (§4.7 "One row"):
+# `failed` is the mod's second, minimal call after a `moment` save that failed (one row):
 # the moment's status `save-failed` and each arm's status and times, no reply, no shadow.
 # Writes only under <home>/.cache/<brand>-trial/ (the trial folder), never under the handoff root:
 #   old/<repo>/<ticket>/<YYYY-MM-DD_HH-MM-SS>_<sid8>_<slug>.old-handoff.txt          0600, exclusive
@@ -14,7 +14,7 @@
 # is kebab `[a-z0-9-]{1,60}` with no secret-scan hit, else `handoff`; a repo or ticket that is not
 # one safe path component is filed under its bucket name (trial::bucket). `REUSE <path>` is taken
 # only for an existing old shadow of this bucket (else `bad-reuse`). The record holds ids, sums, sizes, statuses and usage only.
-# A config that is not on (or not this owner's, for shadows) writes nothing: `{"written":false}`.
+# A config that is not on (or not the account's own, for shadows) writes nothing: `{"written":false}`.
 use strict;
 use warnings;
 use utf8;
@@ -65,7 +65,7 @@ sub run {
         args::out(jsonc::encode({ written => jsonc::true(), record => $p }));
         return 0;
     }
-    # Shadows: only in the owner's own config, on a listed version, outside the skip-list.
+    # Shadows: only in the account's own config, on a listed version, outside the skip-list.
     return $none->('not-owner-config') if defined trial::owner_skip($cfg);
     my ($name, $ticket) = ($in->{repo}, $in->{ticket});
     die "usage: bad repo or ticket\n" unless defined $name && !ref $name && $name ne '' && defined $ticket && !ref $ticket && $ticket ne '';

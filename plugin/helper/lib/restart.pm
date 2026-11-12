@@ -1,13 +1,13 @@
 package restart;
-# lib/restart.pm: restart on update (SESSION-RESTART), the helper's part. Owner: WP-core.
-# The setting `restart_on_update` (D1, a consent key); the session file of the relaunch
-# permission mode (D10); the gate (G3, G3a, G3b, G4, G5b, G7, G12 and the mode checks of G10, §4.1); the
+# lib/restart.pm: restart on update, the helper's part.
+# The setting `restart_on_update` (a consent key); the session file of the relaunch
+# permission mode; the gate (launcher, cap, mode and the other checks); the
 # two notes of the terminal route, in the launcher's file contract (protocol 1,
 # tests/launcher/README.md: launch note `restart.note` written as `restart.note.tmp` then
-# renamed, `sid` bound once with O_EXCL); the carry note `<watch>/<sid>/restart.json` (§5.1);
-# the claim in the new load (§5.2); the background route's detached `claude respawn` (§2.2 step 3)
-# and its cancel; the scan for background restarts that failed after the kill (§2.3) and for the
-# launcher's refusals (§3.5). Rows and replies hold no argv, path, model or env value.
+# renamed, `sid` bound once with O_EXCL); the carry note `<watch>/<sid>/restart.json`;
+# the claim in the new load; the background route's detached `claude respawn`
+# and its cancel; the scan for background restarts that failed after the kill and for the
+# launcher's refusals. Rows and replies hold no argv, path, model or env value.
 use strict;
 use warnings;
 use utf8;
@@ -15,16 +15,16 @@ use POSIX ();
 use Fcntl qw(O_WRONLY O_CREAT O_EXCL);
 
 our $PROTO = 1;
-# The ship gate of the terminal route (SESSION-RESTART D3, §3.4, §8.4 step 1): the plugin's own
-# /exit, then the launcher's relaunch. RS-P1 run 2 ended in outcome (c): with an item the plugin
-# cannot see, the exit dialog stays open and blocks queued input, so the route waits for the
-# owner's ship decision. 0: an `on` session that passes every gate on that route logs
+# The ship gate of the terminal route: the plugin's own
+# /exit, then the launcher's relaunch. A trial run ended with: with an item the plugin
+# cannot see, the exit dialog stays open and blocks queued input, so the route stays off
+# until it ships. 0: an `on` session that passes every gate on that route logs
 # `refresh_skipped {why: fg-not-shipped}` and goes on as if the setting were shadow. Test seam:
 # STORE_TEST_RESTART_FG=1 in test mode.
 our $FG_ROUTE = 0;
 sub fg_route { return 1 if $FG_ROUTE; return util::test_mode() && ($ENV{STORE_TEST_RESTART_FG} // '') eq '1' ? 1 : 0 }
-# The ship gate of the background route (§2.2, §8.4 step 2): off until the respawn-restriction
-# gate (`restriction-lost`, B9) is in and a full RS-P5 on this helper's own `restart respawn`
+# The ship gate of the background route: off until the respawn-restriction
+# gate (`restriction-lost`) is in and a full trial on this helper's own `restart respawn`
 # passes. 0: an `on` background session that passes every gate logs `refresh_skipped {why:
 # bg-not-shipped}` and goes on as if the setting were shadow. Test seam: STORE_TEST_RESTART_BG=1
 # in test mode.
@@ -34,24 +34,24 @@ sub bg_route { return 1 if $BG_ROUTE; return util::test_mode() && ($ENV{STORE_TE
 # os_name() -> $^O; in test mode STORE_TEST_OS stands in for it (AT-RS-25: MSWin32).
 sub os_name { return util::test_mode() && ($ENV{STORE_TEST_OS} // '') ne '' ? $ENV{STORE_TEST_OS} : $^O }
 
-# G3: the launcher must be an ancestor of this claude within this many processes.
+# The launcher must be an ancestor of this claude within this many processes.
 our $ANCESTOR_MAX = 8;
-# G3a: the launcher's own cap (contract §5: 3 relaunches in 3600 s).
+# The launcher's own cap (contract §5: 3 relaunches in 3600 s).
 our ($CAP_N, $CAP_S) = (3, 3600);
-# §5.2, §2.3: a carry note older than this is not claimed; a `sent` one is a failure.
+# A carry note older than this is not claimed; a `sent` one is a failure.
 our $CLAIM_MAX_MS = 600000;
-# §2.3: a non-zero respawn result this old whose note is still `sent` is a failure after the kill
+# A non-zero respawn result this old whose note is still `sent` is a failure after the kill
 # (before the kill the mod's watchdog settles the note within seconds).
 our $AFTERKILL_MS = 60000;
 # /status lists failed background restarts and launcher refusals this recent.
 our $REPORT_MS = 7 * 86400 * 1000;
-# D10: a read of the last turn may be stamped up to this much before that turn's start (its
+# A read of the last turn may be stamped up to this much before that turn's start (its
 # UserPromptSubmit comes before turn.start; a perl without Time::HiRes keeps whole seconds).
 our $MODE_SLACK_MS = 1000;
-# §2.2 step 3: the respawn client's output kept, and its time bound.
+# The respawn client's output kept, and its time bound.
 our $OUT_MAX = 65536;
 our $RESPAWN_MS = 180000;
-# G5b: a Claude Code cache file larger than this is not read (as deps.ts SERVED_MAX_CHARS).
+# A Claude Code cache file larger than this is not read (as deps.ts SERVED_MAX_CHARS).
 our $HOLD_MAX = 8000000;
 
 # R5: the names `/restart` removes from the respawn client's environment (`$st`, Claude Code
@@ -60,12 +60,12 @@ our @ST = qw(CLAUDE_CODE_SESSION_KIND CLAUDE_CODE_SESSION_NAME CLAUDE_CODE_RESUM
              CLAUDE_CODE_RESUME_INTERRUPTED_TURN_MAX_AGE_MS CLAUDE_CODE_RESUME_PROMPT
              CLAUDE_CODE_RESUME_SHOWS_CUT_OFF_CALLS CLAUDE_CODE_RESUME_REASON CLAUDE_CODE_RESUME_SOURCE_ALIVE
              CLAUDE_CODE_RELAUNCH_HOME_TRUST);
-# B6: the respawn client's failure codes (and its no-op), found in its output; the specific ones
+# @B6: the respawn client's failure codes (and its no-op), found in its output; the specific ones
 # first, the generic spawn failure last.
 our @B6 = qw(job_respawn_kill_unconfirmed cwd_gone crashed_during_spawn in_flight_spawn_failed
              resume_session_live_elsewhere stopped_during_respawn already_alive job_respawn_spawn_failed);
 
-# B9: what a restart of a background job keeps of its respawnFlags (Claude Code 2.1.312, the
+# What a restart of a background job keeps of its respawnFlags (Claude Code 2.1.312, the
 # sanitizer that reads them back, whose warning is "stripped respawnFlags token(s) that a restart
 # does not re-apply"). A flag that takes a value is kept with its value (@KEEP_VAL; @KEEP_VAR
 # takes the following words too); a flag without one is kept by name (@KEEP_BOOL). Every other
@@ -112,7 +112,7 @@ my %DROP_OK = map { $_ => 1 } @DROP_OK;
 my %KEEPSET_CHECKED = map { $_ => 1 } @KEEPSET_CHECKED;
 my %LOSS_OK = map { $_ => 1 } @LOSS_OK;
 
-# Permission modes from the narrowest (D10's "more restrictive"): plan and dontAsk are both
+# Permission modes from the narrowest ("more restrictive" first): plan and dontAsk are both
 # below default and are not ordered against each other (narrower() answers undef for that pair).
 my %MODE_RANK = (plan => 0, dontAsk => 0, default => 1, acceptEdits => 2, auto => 3, bypassPermissions => 4);
 
@@ -204,11 +204,11 @@ sub _json_file {
     return ref $j eq 'HASH' ? $j : undef;
 }
 
-# ---------------------------------------------------------------- the session file (D10, G12)
+# ---------------------------------------------------------------- the session file
 # <watch>/<sid>/restart-mode.json (0600): the newest main Stop's permission_mode and effort level
 # with its time, and the transcript path the hooks noted. Only names the patterns allow are
 # kept; the path stays in this private file and never enters a row. (PostCompact, PreCompact and
-# SessionEnd inputs carry no permission_mode on Claude Code 2.1.312: RS-P1 run 3.)
+# SessionEnd inputs carry no permission_mode on Claude Code 2.1.312.)
 sub read_mode { my ($d) = @_; return defined $d ? (_json_file(mode_path($d)) // {}) : {} }
 
 sub _write_mode {
@@ -245,8 +245,8 @@ sub note_stop {
     return 1;
 }
 
-# note_post(sid_dir, payload): a main PostCompact notes the transcript path (G12); its input has
-# no permission_mode (F8 is false on 2.1.312).
+# note_post(sid_dir, payload): a main PostCompact notes the transcript path; its input has
+# no permission_mode (not on 2.1.312).
 sub note_post {
     my ($d, $p) = @_;
     return 0 unless defined $d && ref $p eq 'HASH' && !defined $p->{agent_id};
@@ -269,8 +269,8 @@ sub narrower {
     return $rx < $ry ? $x : $y;
 }
 
-# relaunch_mode(%a) -> (mode, effort, undef) or (undef, undef, 'mode-unknown') (D10, root call
-# 2026-10-28 00:23): the newest permission_mode of a main hook input: the session file's Stop
+# relaunch_mode(%a) -> (mode, effort, undef) or (undef, undef, 'mode-unknown'):
+# the newest permission_mode of a main hook input: the session file's Stop
 # (any process of this session) and the mod's own reads of this load (`seen`: Stop,
 # UserPromptSubmit, PermissionRequest), when it is from the last main turn or later (`turn_at`:
 # the start of this load's last main turn; with no turn in this load, the load's start, so a read
@@ -296,7 +296,7 @@ sub relaunch_mode {
     return ($r, $e, undef);
 }
 
-# ---------------------------------------------------------------- the launcher (G3, G3a)
+# ---------------------------------------------------------------- the launcher
 # launcher(launch, sid) -> {ok => 1, token, pid, lj} or {why => 'no-launcher' |
 # 'launcher-invalid:<reason>'}: the launch folder as the launcher made it (absolute, private,
 # `L-<token>` in a private runtime folder), its launcher.json of protocol 1 with that token, the
@@ -346,7 +346,7 @@ sub bound_sid {
 
 # rebindable(binder, claude) -> 1 when the claude process that bound the launch folder is this
 # one (a `/clear` or `/resume` changed the session id in the launcher's own child) or is gone (the
-# launcher's earlier child, before a relaunch; G3 has just shown this claude is the first one
+# launcher's earlier child, before a relaunch; the ancestor check has just shown this claude is the first one
 # under the launcher). A file with no binder line is never taken over.
 sub rebindable {
     my ($by, $c) = @_;
@@ -370,7 +370,7 @@ sub stamps {
     return scalar grep { /\A[1-9][0-9]{0,10}\z/ && $now - $_ < $CAP_S } split /\n/, $raw;
 }
 
-# launcher_why(lr, mode, now_s) -> G3a's helper part on the exact note: bypass only when the
+# launcher_why(lr, mode, now_s) -> the launcher check's helper part on the exact note: bypass only when the
 # launch made it available (`bypass-not-available`), every launch file a readable regular file
 # (`launch-file`), and fewer than $CAP_N relaunches in the hour (`launcher-cap`); undef when all
 # hold.
@@ -386,13 +386,13 @@ sub launcher_why {
     return undef;
 }
 
-# ---------------------------------------------------------------- background (G3, G3b)
+# ---------------------------------------------------------------- background
 # job(job_dir, sid, mode, to) -> {ok => 1, short} or {why}: a background session's job folder
-# whose state.json names this session (`job-unknown` otherwise); its respawnFlags (B9) a list
+# whose state.json names this session (`job-unknown` otherwise); its respawnFlags a list
 # whose restrictions a restart keeps (`restriction-lost`: a flag the keep-set drops, or no list
 # at all, which Claude Code reads as none and respawns with no flag), and, on a target `to` whose
 # keep-set was not checked, no flag outside @LOSS_OK (`keepset-unverified`); no bypass the relaunch
-# mode has left (`bypass-left`, B7): `--dangerously-skip-permissions`, or `--permission-mode
+# mode has left (`bypass-left`): `--dangerously-skip-permissions`, or `--permission-mode
 # bypassPermissions` (`=` form too), while the mode is not bypassPermissions.
 # `--allow-dangerously-skip-permissions` alone is carried, as /restart carries it.
 sub job {
@@ -403,7 +403,7 @@ sub job {
     return { why => 'job-unknown' } unless is_short($short);
     my $st = _json_file("$dir/state.json", 4 * 1024 * 1024) // return { why => 'job-unknown' };
     return { why => 'job-unknown' } unless defined $st->{sessionId} && !ref $st->{sessionId} && $st->{sessionId} eq $sid;
-    # B9: a restriction in the job's flags that a restart would not apply again
+    # a restriction in the job's flags that a restart would not apply again
     return { why => 'restriction-lost' } if respawn_drops($st->{respawnFlags});
     return { why => 'keepset-unverified' } if !keepset_checked($to) && risky_flags($st->{respawnFlags});
     return { why => 'bypass-left' } if defined $mode && $mode ne 'bypassPermissions' && bypass_flags($st->{respawnFlags});
@@ -473,7 +473,7 @@ sub respawn_drops {
 }
 
 # flags_mode(respawnFlags) -> the last --permission-mode value (`=` form too), or undef. Claude
-# Code patches it as the mode changes (B7), so it is the mode the respawn would start in.
+# Code patches it as the mode changes, so it is the mode the respawn would start in.
 sub flags_mode {
     my ($f) = @_;
     my @a = ref $f eq 'ARRAY' ? grep { defined && !ref } @$f : (defined $f && !ref $f) ? split(/\s+/, $f) : ();
@@ -496,7 +496,7 @@ sub bypass_flags {
     return 0;
 }
 
-# ---------------------------------------------------------------- G5b, G7, G12
+# ---------------------------------------------------------------- hold, background work, transcript
 # claude_json() -> Claude Code's own config file: <CLAUDE_CONFIG_DIR>/.claude.json, else
 # $HOME/.claude.json (as deps.ts servedHint).
 sub claude_json {
@@ -506,7 +506,7 @@ sub claude_json {
     return "$d/.claude.json";
 }
 
-# hold(to) -> undef, 'on-hold' or 'version-unknown' (G5b, /restart's above_max_version): the
+# hold(to) -> undef, 'on-hold' or 'version-unknown' (/restart's above_max_version): the
 # cached `tengu_max_version_config.external`; set and older than `to` holds it. An unreadable
 # file or a value that is not a version refuses too: an unknown hold is never skipped.
 sub hold {
@@ -526,7 +526,7 @@ sub hold {
     return vcmp($to, $x) > 0 ? 'on-hold' : undef;
 }
 
-# background(sid_dir) -> (why, types) from the newest Stop sidecar slot (G7): any task listed is
+# background(sid_dir) -> (why, types) from the newest Stop sidecar slot: any task listed is
 # in flight (`background-work`, with its type words), a session cron (`crons`); no slot: none.
 sub background {
     my ($d) = @_;
@@ -541,7 +541,7 @@ sub background {
 }
 
 # transcript_ok(sid_dir, sid) -> 1 when the noted transcript exists, is not empty and is
-# <sid>.jsonl (G12, /restart's saving_off, not_written, gone).
+# <sid>.jsonl (/restart's saving_off, not_written, gone).
 sub transcript_ok {
     my ($d, $sid) = @_;
     my $t = read_mode($d)->{transcript};
@@ -549,16 +549,16 @@ sub transcript_ok {
     return (-f $t && -s _ > 0) ? 1 : 0;
 }
 
-# ---------------------------------------------------------------- the gate (§4.1, helper part)
+# ---------------------------------------------------------------- the gate (helper part)
 # gate(%a) -> {ok, why, setting, route, mode, effort, job_short, token, types, items, launcher}.
 # a: sid, sid_dir, setting, route (fg|bg), launch, job_dir, from, to, model, seen_mode, seen_at,
-# turn_at (D10, the mod's reads), now (ms). First failure wins, in this order: off,
+# turn_at (the mod's reads), now (ms). First failure wins, in this order: off,
 # unsupported-os, the route (no-launcher, launcher-invalid:*, job-unknown, restriction-lost,
 # keepset-unverified), mode-unknown, note-pattern, bypass-not-available, launch-file, launcher-cap,
 # bypass-left, background-work, crons, transcript, on-hold, version-unknown, then the ship gates
 # fg-not-shipped and bg-not-shipped (not for shadow).
-# Shadow (§6.3, the trial data of the terminal route's ship decision): the launcher's checks and
-# background work do not refuse; `launcher` says what G3 found (`ok` or its why) and `items` lists
+# Shadow (the trial data of the terminal route's ship decision): the launcher's checks and
+# background work do not refuse; `launcher` says what the launcher check found (`ok` or its why) and `items` lists
 # the background task types the newest Stop listed (items Claude Code's exit dialog would count).
 sub gate {
     my (%a) = @_;
@@ -599,8 +599,8 @@ sub gate {
             return $no->($w) if defined $w;
         }
     } else {
-        # `bypass-left` against the relaunch mode (D10); the respawn reads the job's flags again and
-        # checks them against the mode they hold then (a Shift+Tab during the grace, B7).
+        # `bypass-left` against the relaunch mode; the respawn reads the job's flags again and
+        # checks them against the mode they hold then (a Shift+Tab during the grace).
         $jr = job($a{job_dir}, $a{sid}, $mode, $a{to});
         return $no->($jr->{why}) unless $jr->{ok};
     }
@@ -695,7 +695,7 @@ sub write_c {
 
 # arm(%a) -> {ok, why}: binds the launch folder to this session (fg: `<launch>/sid` once,
 # O_EXCL; another session's id refuses `launcher-invalid:other-session`), then writes the launch
-# note (fg) and the carry note, both `armed` (§3.4 step 1, §2.2 step 1). The setting read again
+# note (fg) and the carry note, both `armed`. The setting read again
 # here must be `on` (`off` otherwise: a `shadow` arms nothing), and the terminal route needs its
 # ship gate (`fg-not-shipped`), a second check behind the gate's. a: sid, sid_dir, setting,
 # route, nonce, from, to, continue, mode, effort, model, launch, job_short, load_id, now (ms).
@@ -740,7 +740,7 @@ sub arm {
 }
 
 # set_state(%a) -> {ok, l, c}: one state change of both notes with this nonce, the launch note
-# first (§3.4: the `go` that the launcher acts on is the first write). l and c: `written`,
+# first (the `go` that the launcher acts on is the first write). l and c: `written`,
 # `absent`, `mismatch` (another nonce or session) or `final` (the note already ended). The two
 # states the launcher acts on are checked again behind the gate and the arm, nothing written
 # when they fail: `exiting` and `go` need the terminal route's ship gate (`fg-not-shipped`), and
@@ -798,7 +798,7 @@ sub _set_state {
 }
 
 # claim(%a) -> {claimed, why, route, from, to, continue, nonce, refused}: the new load takes the
-# carry note (§5.2) by renaming it to restart.claimed-<load_id>.json (one winner). fg: route fg,
+# carry note by renaming it to restart.claimed-<load_id>.json (one winner). fg: route fg,
 # state exiting or go, the launch folder `L-<launch_token>` and its restart.used holding this
 # nonce and session (the launcher consumed this very note). bg: route bg, a background session,
 # state sent. Both: this session and under $CLAIM_MAX_MS old. A `sent` note (or an fg note left in
@@ -889,7 +889,7 @@ sub refusals {
 }
 
 # ---------------------------------------------------------------- the background respawn
-# claude_bin() -> `claude` from PATH, else $HOME/.local/bin/claude when executable (§2.2 step 3)
+# claude_bin() -> `claude` from PATH, else $HOME/.local/bin/claude when executable
 sub claude_bin {
     my $c = util::which('claude');
     return $c if defined $c;
@@ -897,7 +897,7 @@ sub claude_bin {
     return -x $h ? $h : undef;
 }
 
-# code_of(output, rc) -> the first B6 code the respawn client's output names; `other` for a
+# code_of(output, rc) -> the first @B6 code the respawn client's output names; `other` for a
 # non-zero rc without one, undef for rc 0 without one.
 sub code_of {
     my ($out, $rc) = @_;
@@ -916,9 +916,9 @@ sub code_of {
 # as its own child (stdout and stderr captured, at most $OUT_MAX bytes) and waits; it writes
 # restart-respawn.out (0600), restart-respawn.json {nonce, rc, code, at} and, on a non-zero rc,
 # one `refresh_failed {route: bg, why: respawn-failed, code}` row. Before any of it, the job's
-# state.json is read again (G3b): this session's, and no bypass in its respawnFlags that the mode
-# they hold now (the last --permission-mode, which Claude Code keeps current, B7; else the
-# gate's relaunch mode) has left (`bypass-left`), and the B9 checks against the target (`to`).
+# state.json is read again: this session's, and no bypass in its respawnFlags that the mode
+# they hold now (the last --permission-mode, which Claude Code keeps current; else the
+# gate's relaunch mode) has left (`bypass-left`), and the keep-set checks against the target (`to`).
 # First of all, a second check behind the gate's and the arm's: the background route's ship gate
 # (`bg-not-shipped`) and the setting read again (`off` unless it is `on`, so turning it off during
 # the grace stops the respawn). a: sid, sid_dir, setting, short, nonce, to, job_dir, mode, wait_ms
@@ -935,7 +935,7 @@ sub respawn {
     my $fm = $jr->{flags_mode};
     $jr = job($a{job_dir}, $a{sid}, is_mode($fm) ? $fm : $a{mode}, $a{to});
     return { ok => 0, why => $jr->{why} } unless $jr->{ok};
-    # §2.2 step 3: the carry note becomes `sent` in the call that starts the respawn
+    # the carry note becomes `sent` in the call that starts the respawn
     my $sent = lock::with(lock_path($d), { sid => $a{sid}, actor => 'restart' }, sub {
         my $c = read_c($d);
         return 0 unless $c && ($c->{nonce} // '') eq $a{nonce} && ($c->{route} // '') eq 'bg' && ($c->{state} // '') eq 'armed';
@@ -957,7 +957,7 @@ sub respawn {
         open(STDIN, '<', '/dev/null');
         open(STDOUT, '>', '/dev/null');
         open(STDERR, '>', '/dev/null');
-        # §2.2 step 4: the pid record first, so a cancel from here on finds this process group
+        # the pid record first, so a cancel from here on finds this process group
         # (the helper above may be stopped by its time bound at any moment)
         my $rec = eval {
             util::write_atomic(pid_path($d), jsonc::encode_bytes(jsonc::obj(nonce => $a{nonce}, pid => 0 + $$,
@@ -1054,7 +1054,7 @@ sub respawn_result { my ($d) = @_; return defined $d ? _json_file(result_path($d
 # background note still `armed` or `sent` becomes `state` (`cancelled`, or `failed` for the mod's
 # failures), so a detached respawn that has not reached its own check of the note never runs the
 # client (`note` 1 when written); then TERM to the grandchild's process group when its record
-# holds this nonce and that process still runs with the start time recorded (§2.2 step 4).
+# holds this nonce and that process still runs with the start time recorded.
 sub respawn_cancel {
     my ($d, $nonce, $state) = @_;
     $state = 'cancelled' unless defined $state && $state eq 'failed';
@@ -1073,7 +1073,7 @@ sub respawn_cancel {
     my $p = _json_file(pid_path($d), 4096);
     return { ok => 1, killed => 0, note => $note } unless $p && ($p->{nonce} // '') eq $nonce && ($p->{pid} // '') =~ /\A[1-9][0-9]*\z/;
     my $pid = $p->{pid};
-    # a start time this call cannot read never authorises the TERM (alive_verified, RF-3)
+    # a start time this call cannot read never authorises the TERM (alive_verified)
     return { ok => 1, killed => 0, note => $note } unless identity::alive_verified($pid, $p->{lstart});
     my $n = kill('TERM', -$pid);
     $n += kill('TERM', $pid);
@@ -1081,7 +1081,7 @@ sub respawn_cancel {
     return { ok => 1, killed => $n ? 1 : 0, note => $note };
 }
 
-# ---------------------------------------------------------------- after-kill scan (§2.3)
+# ---------------------------------------------------------------- after-kill scan
 # failed_bg(watch, now_ms, include_reported) -> ({sid, short, to, code, at}…): background carry
 # notes whose restart failed with nobody left in the session: still `sent` past $CLAIM_MAX_MS, or
 # with a non-zero respawn result older than $AFTERKILL_MS (`reported` ones too for /status,

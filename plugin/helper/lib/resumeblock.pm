@@ -1,16 +1,14 @@
 package resumeblock;
-# lib/resumeblock.pm: the post-compaction resume block (MOD-SPEC §3.4):
+# lib/resumeblock.pm: the post-compaction resume block:
 # resume-context.txt with [midturn]/[nonok], exactly one of [prod-forbid]/[prod-allow], and
-# [driver] when the re-measure names this session's Active driver (lib/gsd.pm; owner 2026-10-26),
-# [auto-mode] when the newest main Stop ran in auto permission mode (D-22), [resumed] with the
-# fixed first line (0.1.3 resume-text A: this path reads no Step 1, see $RESUMED_FALLBACK) unless a
-# script reads the reply (0.1.4 R-2, script_reader),
-# @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@ (C-5). Total soft
-# 6,500 chars (compaction-rem-6; soft since the owner overturned ratify xxxxxxxx#R3 on 2026-10-23,
-# SPEC-DELTAS RP-2): a block over it logs resume_block_over_soft {nonce, chars}. Hard runtime cap
+# [driver] when the re-measure names this session's Active driver (lib/gsd.pm),
+# [auto-mode] when the newest main Stop ran in auto permission mode, [resumed] with the
+# fixed first line (0.1.3: this path reads no Step 1, see $RESUMED_FALLBACK) unless a
+# script reads the reply (0.1.4, script_reader),
+# @session_id@, @saved_copy@, @measured_at@, @remeasure@ (<= 3,000 B), @store@. Total soft
+# 6,500 chars (soft, not a hard limit): a block over it logs resume_block_over_soft {nonce, chars}. Hard runtime cap
 # 9,500 chars, under the 10,000-char SessionStart cutoff: over it the measured block is cut first,
 # at a line boundary. No transcript path.
-# Owner: WP-core.
 use strict;
 use warnings;
 use utf8;
@@ -20,15 +18,15 @@ our $SOFT_CHARS = 6500;
 # 0.1.3 resume-text A: the [resumed] line's fixed text, as resume.ts RESUMED_FALLBACK. The classic
 # SessionStart(compact) payload has no summary, and its copy is saved by PostCompact around the
 # same time (the saved-copy line says pending), so this path has no Step 1 to show.
-# 0.1.4 R-6 probe (2026-11-03, Claude Code 2.1.317, a scratch plugin logging both hooks with a 1 s
+# 0.1.4 probe (Claude Code 2.1.317, a scratch plugin logging both hooks with a 1 s
 # PostCompact): in all 6 compactions (3 `claude -p --resume <id> /compact`, 3 `/compact` in a
 # terminal session) SessionStart(compact) started and ended before PostCompact started, and the
 # mod's session.compact returned after PostCompact. So no copy or summary of this compaction exists
 # when this path builds its block: the fixed form stays.
 our $RESUMED_FALLBACK = 'Resumed after compaction';
 
-# 0.1.4 R-2: CLAUDE_CODE_ENTRYPOINT values whose reply a script reads (`claude -p`: sdk-cli; the
-# Agent SDK: sdk-ts, sdk-py). Probe 2026-11-03 on 2.1.317: every hook of a `-p` run saw sdk-cli, every
+# 0.1.4: CLAUDE_CODE_ENTRYPOINT values whose reply a script reads (`claude -p`: sdk-cli; the
+# Agent SDK: sdk-ts, sdk-py). A probe on 2.1.317: every hook of a `-p` run saw sdk-cli, every
 # hook of a terminal session cli.
 our %SCRIPT_ENTRYPOINTS = map { $_ => 1 } qw(sdk-cli sdk-ts sdk-py);
 
@@ -37,26 +35,26 @@ sub build {
     my @tags;
     push @tags, 'midturn' if $a{midturn};
     push @tags, 'nonok' if $a{nonok};
-    # step 4 is two tagged lines (S-SETTINGS B, XR-19): exactly one prod tag, prod-allow only when
+    # step 4 is two tagged lines: exactly one prod tag, prod-allow only when
     # this helper's own unattended_prod_reads (settings file only) is allow. The classic path has
     # no idle signal at SessionStart, so it never pushes idle (never with midturn).
     my $prod = eval { settings::prod(rc::settings()) };
     push @tags, (($prod && ($prod->{reads} // '') eq 'allow') ? 'prod-allow' : 'prod-forbid');
-    # @store@ (TXT-06 line 1 defines <store>; PKG-RUNTIME A.2): the launcher word that
+    # @store@ (line 1 of the text defines <store>): the launcher word that
     # handoff_turn::finish_command stands for, as the mod's storeRuntime fills it. A root no
     # quoting can carry (store_path_unquotable) has no word: drop the lines that hold the token.
     my $store = ctx::store_cmd();
     my $re = $a{remeasure} // '';
-    # Owner 2026-10-26 (GSD re-entry per session): the re-enter line only beside a measured driver
+    # GSD re-entry per session: the re-enter line only beside a measured driver
     # (never with [idle-halt], which this classic path never sets).
     push @tags, 'driver' if $re =~ /^Active driver: /m;
-    # D-22 (root 2026-10-31): in auto permission mode the classifier blocks a gated outward action
-    # a carried approval covers (0.1.4 R-1: destructive git and external writes; a plain push
+    # In auto permission mode the classifier blocks a gated outward action
+    # a carried approval covers (0.1.4: destructive git and external writes; a plain push
     # passes), so [auto-mode] asks first. The mode is the newest main Stop's,
-    # which on_Stop already keeps (restart::note_stop, D10); no new probe.
+    # which on_Stop already keeps (restart::note_stop); no new probe.
     push @tags, 'auto-mode' if auto_mode(rc::sid_dir());
-    # 0.1.3 resume-text A: one fixed first line before any tool call (no handoff ack or idle-again
-    # here); 0.1.4 R-2: not when a script reads the reply.
+    # 0.1.3: one fixed first line before any tool call (no handoff ack or idle-again
+    # here); 0.1.4: not when a script reads the reply.
     push @tags, 'resumed' unless script_reader();
     my $max = 3000;
     my $text;
@@ -76,7 +74,7 @@ sub build {
 }
 
 # script_reader() -> 1 when a script reads this session's reply, so the block has no [resumed]
-# line (0.1.4 R-2, as the mod's resume.ts scriptReader): CLAUDE_CODE_ENTRYPOINT, which Claude Code
+# line (0.1.4, as the mod's resume.ts scriptReader): CLAUDE_CODE_ENTRYPOINT, which Claude Code
 # sets for the hooks it runs, names `claude -p` or the Agent SDK (%SCRIPT_ENTRYPOINTS); any other
 # value (cli, claude-desktop, claude-vscode: a person reads the reply) keeps the line. Unset (an older
 # Claude Code, a host that does not set it): 1 when the mod logged this session headless (its
@@ -125,7 +123,7 @@ sub claim {
     return ('TAKEN', $who // 'unknown');
 }
 
-# arm(sid_dir, sid) -> the armed nonce, or undef (owner 2026-10-27 "Fix in 0.1.1", AT-RP-04).
+# arm(sid_dir, sid) -> the armed nonce, or undef (AT-RP-04).
 # SessionStart with source=resume: the mod's record of a block still pending for this session
 # id (<sid_dir>/resume-pending.json, written at its compaction) becomes resume-armed.json by one
 # rename, so one process wins it. The mod's first prompt.context of this session id delivers it

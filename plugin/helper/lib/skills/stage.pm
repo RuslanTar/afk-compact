@@ -24,7 +24,7 @@ sub open_stage {
         unless defined $bucket && $bucket eq File::Basename::dirname(File::Basename::dirname($dir))
             && File::Basename::basename($dir) eq ($s->{sid8} // '') . '-' . ($s->{nonce} // '');
     my %flags = %{ $s->{settings} || {} };
-    # STATE-ROOT (0.1.2): a stage begun before the update stored the old default root ~/.claude/handoffs
+    # Legacy root (0.1.2): a stage begun before the update stored the old default root ~/.claude/handoffs
     # as its handoff_root. While handoff_root is the default now (the run context reads the old root),
     # the stage takes the current root instead, and its bucket the same <repo>/<bucket> there: the
     # handoff, its evidence, pin, records and .watch rows go to the new root, never the old one. Only
@@ -52,7 +52,7 @@ sub open_stage {
 }
 
 # Stamps the helper printed for this stage (checked_at plus every stamp), whole:
-# date, time and offset (RV-24).
+# date, time and offset.
 sub printed_times {
     my ($dir, $s) = @_;
     my %t;

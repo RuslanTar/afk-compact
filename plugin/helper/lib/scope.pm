@@ -1,6 +1,6 @@
 package scope;
-# lib/scope.pm: scope proof for every classic-side save and inject (MOD-SPEC §2.4, as
-# ROOT-RULINGS F2-1 orders it after the S-21 probe). Owner: WP-core.
+# lib/scope.pm: scope proof for every classic-side save and inject (ordered by the S-21
+# probe).
 #   P1 dispatch record for the nonce: main = agent_id null and channel mod-hook|mod-self;
 #      subagent = agent_id set
 #   P2 summary marker s=sub (s=main alone is no proof: the classic text is scope-neutral)
@@ -11,7 +11,7 @@ package scope;
 #      before it, and a new subagent boundary to an unmatched one.
 #   main = P1-main, or P3-main with no subagent signal; subagent = P1-sub, P2-sub or
 #   P3-sub; both or neither = unknown. Without proof PostCompact stashes and defers the
-#   save to reconcile: no main-slot save and no sweep without proof (MOD-SPEC §0 item 6).
+#   save to reconcile: no main-slot save and no sweep without proof.
 use strict;
 use warnings;
 use utf8;

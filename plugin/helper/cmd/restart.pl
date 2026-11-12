@@ -1,10 +1,10 @@
-# cmd/restart.pl: restart on update (SESSION-RESTART §2, §3.4, §4.1, §5), the helper calls of the
-# mod. One JSON line per call, exit 0; a usage error exits 64. Owner: WP-core.
+# cmd/restart.pl: restart on update, the helper calls of the
+# mod. One JSON line per call, exit 0; a usage error exits 64.
 #   restart gate --sid S --route fg|bg [--launch DIR | --job-dir DIR] --from V --to V
 #                [--model M] [--seen-mode X --seen-at MS] [--turn-at MS] [--now-ms MS]
 #       -> {ok, why, setting, route, mode, effort, job_short, token, types, items, launcher}
 #          (seen: the newest permission_mode the mod read in this load, turn-at: the start of
-#          its last main turn, else of the load; without it no read counts as the last turn's; D10)
+#          its last main turn, else of the load; without it no read counts as the last turn's)
 #   restart arm --sid S --route fg|bg --nonce N --from V --to V --continue 0|1 --mode X
 #               [--effort E] [--model M] [--launch DIR | --job-dir DIR] [--load-id L] [--now-ms MS]
 #       -> {ok, why, token}  (the setting read again: not `on` refuses `off`; a route without

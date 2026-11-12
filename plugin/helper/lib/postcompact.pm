@@ -1,6 +1,6 @@
 package postcompact;
-# lib/postcompact.pm: classic PostCompact, the primary saver (MOD-SPEC §5.3 steps 1-6, as
-# ROOT-RULINGS F2-1 and F2-2 order them). Owner: WP-core. Steps: stash; nonce from the
+# lib/postcompact.pm: classic PostCompact, the primary saver (steps 1-6).
+# Steps: stash; nonce from the
 # marker (a stale marker counts as none); dispatch lookup; scope proof from P1/P2 only
 # (the main compact_boundary row is written after this hook, S-21); defer rules
 # (copy_deferred: to the mod's after-step, or to reconcile when nothing proves the
@@ -11,8 +11,8 @@ use strict;
 use warnings;
 use utf8;
 
-# The Late-copy defer window (MOD-SPEC §5.3 step 2, C-STORE D2, XR-23): a BD-3-class estimate in
-# the same table as reconcile's windows (floor 120 s, tuned by the MOD-SPEC §5.4 rule).
+# The Late-copy defer window: an estimate in
+# the same table as reconcile's windows (floor 120 s, tuned by reconcile's rule).
 our $LATE_WINDOW_S = 600;
 
 # _resolved(sid_dir, classic) -> (\%nonce_resolved, \%nonce_copy_rels): nonces this session
@@ -75,7 +75,7 @@ sub _trigger {
     return $t;
 }
 
-# F2-2 (SPEC-03): does the summary repeat the marker of an earlier compaction of this
+# F2-2: does the summary repeat the marker of an earlier compaction of this
 # session? Yes when that marker's copy, or its unsaved stash, holds another body. Such a
 # summary is saved under a content name (h<sha5>), verdict stale, never lost.
 sub stale_marker {
@@ -149,7 +149,7 @@ sub run {
     my $id6 = copies::id6($emn, $s->{sha256});
 
     # 1. stash (0600, unique name), so reconcile can save if we die or defer; the orphan
-    # index marker first (MOD-SPEC §5.8), so a stash left by a session that ends before it
+    # index marker first, so a stash left by a session that ends before it
     # is settled is found by the cross-session finish
     orphans::mark($sid);
     eval { util::write_excl("$sid_dir/pending/$id6.post.md", $text, 0600) };
@@ -162,7 +162,7 @@ sub run {
     my $join = $erec ? 'nonce' : $tjoin ? 'time' : undef;
 
     # Scope from the proofs a hook can use: P1 (the dispatch record) and P2 (s=sub). P3
-    # (boundary rows) waits for the next Stop: the row is not written yet (S-21, F2-1).
+    # (boundary rows) waits for the next Stop: the row is not written yet (S-21).
     my $sp = scope::prove(dispatch => $erec, marker_scope => ($stale ? undef : $s->{scope}));
     my $scope = $sp->{scope};
     my $agent = $sp->{agent_id};
@@ -170,7 +170,7 @@ sub run {
     my $precomputed = ($boundary && $boundary->{precomputed}) || ($drec && ($drec->{trigger} // '') eq 'precompute') ? 1 : 0;
     my $tokens = $boundary ? [$boundary->{pre}, $boundary->{post}] : undef;
 
-    # defer rule (MOD-SPEC §5.3 step 2): no usable marker, and an unresolved mod-hook/mod-self
+    # defer rule: no usable marker, and an unresolved mod-hook/mod-self
     # dispatch <= $LATE_WINDOW_S old that can still get its after-step. The newest open dispatch
     # decides: a newer classic one (a PreCompact fallback) means this compaction is the
     # classic one; a dispatch the mod logged as rejected or skipped gets no after-step.
@@ -180,7 +180,7 @@ sub run {
                             && $_->{_epoch} >= $now - $LATE_WINDOW_S } reverse @all;
         $deferred = $open if $open && dispatch::is_mod($open);
     }
-    # F2-1: nothing proves the scope here -> no save and no sweep now; reconcile proves it
+    # Nothing proves the scope here -> no save and no sweep now; reconcile proves it
     # with P3 at the next Stop and saves (main, sub, or unattributed when still unknown).
     my $scope_deferred = (!$deferred && $scope eq 'unknown') ? 1 : 0;
     eval {
@@ -224,7 +224,7 @@ sub run {
                              precomputed => $precomputed, verdict => $verdict, queue_lane => $lane, evidence => $evid);
         copies::drop_stash("$sid_dir/pending/$id6.post.md", $save->{result});
         copies::settle_mismatch(path => "$sid_dir/pending/$id6.post.md", save => $save, scan => $s);
-        # Main-proven: sweep whatever the save outcome (MOD-SPEC §5.3 step 5); a refused
+        # Main-proven: sweep whatever the save outcome; a refused
         # copy under an unsafe handoff_root does not stop evidence going to the
         # disposable root, which sweep checks on its own.
         if ($scope eq 'main') {
@@ -234,7 +234,7 @@ sub run {
                                 bucket => ($save->{bucket} ? $save->{bucket}{path} : undef), nonce => $emn);
         }
     }
-    # boundaries.count is reconcile's now: it matches boundary rows to PostCompacts (F2-1).
+    # boundaries.count is reconcile's now: it matches boundary rows to PostCompacts.
 
     my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($agent // 'sub-unknown') : 'unattributed';
     # Deferred to the mod's after-step: the defer rule takes the summary as that dispatch's,
@@ -249,7 +249,7 @@ sub run {
     rollup::write(
         session_id => $sid, actor => $actor, compaction_seq => ($save ? $save->{seq} : undef),
         nonce => ($drec ? $drec->{nonce} : $emn), id6 => $id6, join => $join, trigger => $trigger,
-        # idle: unknown until reconcile reads the native idle row after the boundary (IC-1 D1)
+        # idle: unknown until reconcile reads the native idle row after the boundary
         midturn => ($drec ? $drec->{midturn} : undef), idle => 'unknown', idle_gap_s => ($drec ? $drec->{idle_gap_s} : undef),
         channel => $channel, seat_state => $seat,
         verdict => $verdict, verdict_source => 'postcompact', marker_line => $s->{marker_line},
@@ -264,7 +264,7 @@ sub run {
         evidence => ($tot ? { copied => $tot->{copied}, dup => $tot->{dup}, ref_only => $tot->{'ref-only'},
                               redacted => $tot->{redacted}, withheld => $tot->{withheld} } : undef),
         nudged => undef, continued => undef, halt => undef,
-        # BD-3: P1 (or P2) proved the scope inside this hook; a row for a deferred summary names
+        # P1 (or P2) proved the scope inside this hook; a row for a deferred summary names
         # the mod dispatch by time only (no proof). The lag only when this compaction's own
         # boundary row was already written (S-21: usually not).
         proof => ($deferred ? 'none' : 'P1'),

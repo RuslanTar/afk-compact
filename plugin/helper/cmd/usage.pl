@@ -1,4 +1,4 @@
-# cmd/usage.pl: `usage [--sid <id>] [--stdin]` (0.1.8, D-83). Owner: WP-core.
+# cmd/usage.pl: `usage [--sid <id>] [--stdin]` (0.1.8).
 # The shared usage record (lib/usagerec.pm) for the mod. With --stdin and --sid it first adds the
 # session's own reading, one JSON object: {"at": epoch seconds, "windows": [{"kind", "pct",
 # "resets_at"}]} (source `plugin`); then it prints one JSON line, {"schema", "now", "readings":

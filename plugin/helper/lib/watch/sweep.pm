@@ -1,6 +1,5 @@
 package watch::sweep;
-# lib/watch/sweep.pm: the incremental transcript sweeper (WATCHER-SPEC §1.1).
-# Owner: WP-watch.
+# lib/watch/sweep.pm: the incremental transcript sweeper.
 #
 # Per transcript file one offset file `<watch>/<sid>/offsets/<basename>.off`
 # holds {path, inode, size, offset, line, last_uuid, carry}, written in place
@@ -13,7 +12,7 @@ package watch::sweep;
 # or a file shorter than the offset, restarts that file at 0; rows up to the
 # last processed uuid are skipped and boundaries are deduplicated by uuid.
 # Reading stops at the soft time limit (`time_cut`); the 5 MB cap alone only
-# marks the run `partial` (the rest is read at the next Stop, WATCH §1.1).
+# marks the run `partial` (the rest is read at the next Stop).
 use strict;
 use warnings;
 use utf8;
@@ -144,7 +143,7 @@ sub scan_file {
         unless (ref $r eq 'HASH') { $res{bad_lines}++; next }
         my $f = watch::rows::classify($r, $ctx->{brand}, $outward);
         $last_uuid = $f->{uuid} if defined $f->{uuid};
-        # 0.1.4 (IC-1 D1, the rule reconcile reads the rollup idle by): the first native idle
+        # 0.1.4 (the rule reconcile reads the rollup idle by): the first native idle
         # notice row after a main boundary, before the next one, marks that boundary idle
         if ($is_main && $carry->{ni_b} && ($f->{kind} // '') ne 'boundary' && (my $ni = idle_notice($r))) {
             $_->{idle_notice} = $ni for grep { ($_->{uuid} // '') eq $carry->{ni_b} } @{ $res{boundaries} };
@@ -296,7 +295,7 @@ sub _analyze {
     }
     return unless $is_main;
 
-    # M-17 (DP-14): the plugin-submitted handoff turn is a plugin-origin `user` row like a
+    # The plugin-submitted handoff turn is a plugin-origin `user` row like a
     # continue; an open ht record (handoff-turn/<ht>.json, one submit per ht) makes it a
     # `handoff_turn`. It is a turn, not a continue: no continue event, no A-19/A-27 input.
     # 0.1.4: a submit told by its text (rows.pm $HT_SUBMIT) whose record is gone (all 12 A-27 rows
@@ -436,10 +435,10 @@ sub run {
     return { busy => 1 } unless $fh;
     my $state = _load_state($fh);
     my $outward = watch::spec::classes($ctx->{spec}, 'outward_classes');
-    # AP-9 (REVIEW-NIGHT-3 R3-15): a push to a protected branch is the protected-push gate.
+    # a push to a protected branch is the protected-push gate.
     my $pbr = ref $ctx->{spec} eq 'HASH' ? $ctx->{spec}{protected_branch_re} : undef;
     local $watch::rows::PROTECTED_RE = (defined $pbr && !ref $pbr) ? eval { qr/$pbr/ } : undef;
-    # Owner xxxxxxxx-29: the user's protected_branches entries, compiled by core's settings::protected
+    # The user's protected_branches entries, compiled by core's settings::protected
     # (one reading for the approvals, `risk` and the watcher); beside the spec's list, never instead.
     my $pb = eval { require settings; defined &settings::protected
                     ? settings::protected({ values => { protected_branches => $ctx->{settings}{protected_branches} } }) : undef };

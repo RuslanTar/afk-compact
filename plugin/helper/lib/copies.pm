@@ -1,5 +1,5 @@
 package copies;
-# lib/copies.pm: summary copies (MOD-SPEC §5.3 step 3, §7; OD-11, OD-12). Owner: WP-core.
+# lib/copies.pm: summary copies.
 #   main    -> <bucket>/compact/<stamp>_<sid8>_c<seq>-<id6>.md
 #   sub     -> <bucket>/compact/subagents/<stamp>_<sid8>[-a<agent8>]_c<seq>-<id6>.md
 #   unknown -> <bucket>/compact/unattributed/<stamp>_<sid8>_<id6>.md
@@ -7,7 +7,7 @@ package copies;
 # an existing file is verified by sha (EXISTS sha-match / sha-differs), never
 # replaced; a true h-id collision with other content gets -2. seq under seq.lock.
 # Mode 0400; frontmatter from the dispatch record and the boundary row only.
-# 0.1.5 (E-1, stable ledger): a main copy of a shaped summary (an ok verdict) also holds the
+# 0.1.5 (stable ledger): a main copy of a shaped summary (an ok verdict) also holds the
 # ledger lines of the session's newest earlier ok copy (ledger_base) that the summary dropped
 # without a Superseded line (lib/ledger.pm), copied unchanged into their sections; frontmatter
 # `ledger_carried` names them with the summary's own sha256, which copy_sha returns, so a second
@@ -50,7 +50,7 @@ sub copy_sha {
     my ($fm, $body) = frontmatter::read($raw);
     return (undef, {}) unless $fm;
     if (defined $fm->{redacted} && $fm->{redacted} =~ /sha256 ([0-9a-f]{64})/) { return ($1, $fm) }
-    # 0.1.5 (E-1): a copy with carried ledger lines records the summary's own sha256 too
+    # 0.1.5: a copy with carried ledger lines records the summary's own sha256 too
     if (defined $fm->{ledger_carried} && !ref $fm->{ledger_carried} && $fm->{ledger_carried} =~ /sha256 ([0-9a-f]{64})/) { return ($1, $fm) }
     # The copy holds the normalized body (final \n); an empty body is written as one \n.
     $body = '' if $body eq "\n";
@@ -69,7 +69,7 @@ sub own_stash {
     return (defined $real && defined $dir && util::dirname($real) eq $dir) ? 1 : 0;
 }
 
-# drop_stash(path, result) -> 1 when removed. ROOT-RULINGS F2-7 (PRIV-03): once a copy holds
+# drop_stash(path, result) -> 1 when removed. F2-7: once a copy holds
 # the summary (saved, unattributed, late, or EXISTS sha-match), the plugin's own transient
 # raw stash goes, so a HARD secret redacted in the copy does not stay beside it. Only our
 # stash files; an unsaved stash (refused, mismatch, deferred) stays for reconcile. The
@@ -82,14 +82,14 @@ sub drop_stash {
 }
 
 # settle_mismatch(path => stash, save => copies::save result (EXISTS sha-differs), scan => scan)
-# -> 'dropped' | 'kept' | undef (not our stash, or no mismatch). RRP-04, MOD-SPEC §5.8 cases 2-3:
+# -> 'dropped' | 'kept' | undef (not our stash, or no mismatch):
 #   redundant: the stash verdict is ok-trailer and its body cut after the sentinel line has the
 #     copy's body sha (an engine trailer only in this text, AT-M3-17) -> the stash goes,
 #     row stash_dropped {id6, nonce, why: redundant, copy_rel};
 #   real: the stash is rewritten with the summary-copy redaction (HARD, as a saved copy) to
 #     pending/<id>.<post|mod>.mismatch.md (0600, temp + link, never over an earlier keep), its
 #     sha side file beside it, then the raw stash goes; row stash_kept {id6, nonce, why: mismatch,
-#     redacted_n}. Kept files are never deleted by the plugin (D-8).
+#     redacted_n}. Kept files are never deleted by the plugin.
 sub settle_mismatch {
     my (%a) = @_;
     my ($path, $save) = @a{qw(path save)};
@@ -147,12 +147,12 @@ sub settle_mismatch {
 }
 
 # attribute(path => old copy, agent => agent id, proof => a|b|c) -> {ok => 1, path, rel, seq}
-# or {why}: MOD-SPEC §5.9 step 3 (fill). A sub-unknown copy in compact/subagents/ is
+# or {why}: the fill step. A sub-unknown copy in compact/subagents/ is
 # re-created under <same stamp>_<sid8>-a<agent8>_c<seq'>-<id6>.md (seq' under seq.lock), its
 # frontmatter the old one in the old order with actor, compaction_seq replaced and
 # attributed_by, attributed_at, renamed_from added; the body byte-identical. Exclusive create,
 # 0400, then re-read: the frontmatter parses and the body sha equals the old body's; only then
-# the old name is unlinked (OD-17: a new file, never an edit in place). Any failure leaves the
+# the old name is unlinked (a new file, never an edit in place). Any failure leaves the
 # old file, and a new file that was written but did not verify is unlinked.
 sub attribute {
     my (%a) = @_;
@@ -218,7 +218,7 @@ sub _test_corrupt {
     chmod 0400, $p;
 }
 
-# Away digest phase 1 (owner 2026-10-27 12:5x; AWAY-DIGEST build item 6): the copy's frontmatter
+# Away digest phase 1: the copy's frontmatter
 # status from the summary's own Status word: finished (or the older done) is completed, a blocked
 # lane (hard-blocked, soft-blocked, or the older blocked and waiting-*) is blocked, anything else
 # (working, active, none) is in-progress. The model's word, not a checked fact, read as the
@@ -229,10 +229,10 @@ sub _test_corrupt {
 # - finished counts as completed only with a Next steps section (a summary cut near its cap can
 #   lose it), every listed step marked done, the steps in the summary (not `see handoff`), and
 #   Step 1 none or proposed; else in-progress;
-# - a blocked word counts as in-progress while a step can run (owner xxxxxxxx-08): one marked
+# - a blocked word counts as in-progress while a step can run: one marked
 #   todo that names no gate, ask, pending answer, wait or needed approval, or Step 1 set with
 #   `Gate: none` (Step 1 itself naming none of them). No step with no wait mark reads more held
-#   on a job, or freer, than on release-0.1.1b (owner 2026-10-28 digest rules (a), lane.ts
+#   on a job, or freer, than on release-0.1.1b (lane.ts
 #   `holdOf`): a step 0.1.1b reads held ($HELD_RE, unchanged) is held on the user, a wait on a
 #   job too (`Wait for the timer notification, then reply`: a known limit of 0.1.1); a step it
 #   reads free is held on a job only when a job trigger leads it (`On the timer notification,
@@ -246,7 +246,7 @@ sub _test_corrupt {
 #   one and no step mark read is to do, and the mark of the first Next steps item not done
 #   (Step 1's item), while it is to do, holds Step 1 under `Gate: none`. The form's placeholder
 #   copied as it stands (`waits: job|you`) is no mark.
-# 0.1.5 D-2: the other common marks read too (lane.ts MARK_SRC, word for word): after `—`,
+# 0.1.5: the other common marks read too (lane.ts MARK_SRC, word for word): after `—`,
 # `–`, `•`, `:`, `(` or a spaced `-` or `--`, in any case, and a mark may take a note in brackets
 # (`— done (commit 1a2b3c)`). _step_mark says which one counts.
 my $MARK_RE = qr/(·|•|—|–|:|\(|\s--?)\s*(todo|done)(?=\s*$|\s*[;,.()]|\s+\d+\.\s)/mi;
@@ -437,7 +437,7 @@ sub _seq {
 }
 
 # session_copies(sid, actor) -> [{path, date, epoch}] across <root>/*/*/compact/ of every read root
-# (STATE-ROOT: the legacy root too, so a session that spans the upgrade keeps its previous copy)
+# (the legacy root too, so a session that spans the upgrade keeps its previous copy)
 sub session_copies {
     my ($sid, $actor, $extra_bucket) = @_;
     my $sid8 = substr($sid, 0, 8);
@@ -467,7 +467,7 @@ sub session_copies {
     return [sort { $a->{epoch} <=> $b->{epoch} || $a->{path} cmp $b->{path} } @out];
 }
 
-# The carry base of a main copy (0.1.5 E-1): the newest earlier main copy of the session whose own
+# The carry base of a main copy (0.1.5): the newest earlier main copy of the session whose own
 # verdict was ok. An unshaped copy has no ledger sections, so the chain carries past it; a copy of
 # this summary (its nonce or sha256) ends the search: nothing is carried then.
 sub ledger_base {
@@ -485,7 +485,7 @@ sub ledger_base {
 
 # _ledger(scope, verdict, carry base path, nonce, summary sha, body) -> undef (no carry base, not a
 # main copy of a shaped summary, the base is this summary's) or {text, note, counts}:
-# ledger::check of the body against the previous copy (0.1.5 E-1). A summary is already written,
+# ledger::check of the body against the previous copy (0.1.5). A summary is already written,
 # so nothing refuses: the copy gets the dropped lines, and the counts say what differed.
 sub _ledger {
     my ($scope, $verdict, $prev, $nonce, $sha, $body) = @_;
@@ -526,8 +526,8 @@ sub prev_copy {
     return @$c ? $c->[-1]{path} : undef;
 }
 
-# The writer of a copy the classic PostCompact hook saved, the plugin's main saver (MOD-SPEC
-# §5.3), or that reconcile saved later from its stash: `postcompact`. Copies before 0.1.3 call it
+# The writer of a copy the classic PostCompact hook saved, the plugin's main saver, or that
+# reconcile saved later from its stash: `postcompact`. Copies before 0.1.3 call it
 # `postcompact-fallback` (the same path), so readers take both; `mod` is the mod's after-step.
 our $POSTCOMPACT = 'postcompact';
 sub postcompact_writer { my ($w) = @_; return defined $w && !ref $w && ($w eq 'postcompact' || $w eq 'postcompact-fallback') ? 1 : 0 }
@@ -536,7 +536,7 @@ sub postcompact_writer { my ($w) = @_; return defined $w && !ref $w && ($w eq 'p
 # a: sid text nonce writer scope agent tokens cwd transcript trigger dispatch
 #    seat_state channel precomputed scan verdict_ctx late queue_lane evidence where
 #    content_name (the summary repeats an earlier marker: saved under h<sha5> with no
-#    nonce, ROOT-RULINGS F2-2)
+#    nonce, F2-2)
 sub save {
     my (%a) = @_;
     my $sid = $a{sid};
@@ -569,7 +569,7 @@ sub save {
     my $actor = $scope eq 'main' ? 'main' : $scope eq 'sub' ? ($a{agent} // 'sub-unknown') : 'unknown';
     my $actor_tag = ($scope eq 'sub' && defined $a{agent} && $a{agent} =~ /^[A-Za-z0-9]/) ? '-a' . substr($a{agent}, 0, 8) : '';
 
-    # Secret scan of the summary before writing (S-10): a HARD hit -> redacted copy.
+    # Secret scan of the summary before writing: a HARD hit -> redacted copy.
     my $body = $s->{normalized};
     my $redacted;
     my $hits = secrets::scan($body);
@@ -597,7 +597,7 @@ sub save {
                 last unless $existing;
                 my ($esha, $efm) = copy_sha($existing);
                 # Same id6 from another session or another nonce (6 hex of 8 can repeat)
-                # is a true collision, never "already saved": suffix -2, -3, ... (HK-48).
+                # is a true collision, never "already saved": suffix -2, -3, ...
                 my $same = ($efm->{session_id} // '') eq $sid && ($efm->{nonce} // '') eq ($nonce // '');
                 if ($same && defined $esha && $esha eq $s->{sha256}) {
                     return { kind => 'exists', path => $existing, match => 1, fm => $efm };

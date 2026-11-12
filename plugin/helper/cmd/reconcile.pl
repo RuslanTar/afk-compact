@@ -1,12 +1,11 @@
 # cmd/reconcile.pl: `reconcile --sid S [--transcript PATH] [--cwd DIR] [--final] [--orphans [--full]]`
-# (MOD-SPEC §5.4, §5.8; BUILD-PLAN §3.1) ->
+# ->
 # `reconciled late=<n> unresolved=<n> precompute_not_reused=<n> order_anomaly=<n> undelivered=<n>`,
 # with `--orphans`: `; orphans finished=<n> kept=<n> left=<n>` on the same line.
-#   --final    this session's run in final mode (no SETTLE_S wait; RRP-05)
+#   --final    this session's run in final mode (no SETTLE_S wait)
 #   --orphans  then the cross-session finish pass for ended sessions (≤ 3 sids, 1 s)
 #   --full     the backstop: every <watch>/*/pending/, from the start, 10 s, no sid cap (the
 #              user-run command the status skill offers)
-# Owner: WP-core.
 use strict;
 use warnings;
 use utf8;

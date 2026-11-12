@@ -1,6 +1,6 @@
 package assemble;
-# lib/assemble.pm: the asset grammar (compaction DESIGN-NOTES §2; BUILD-PLAN §3.4),
-# byte-identical with tools/assemble and hooks/lib/assemble.ts (BT-04). Owner: WP-core.
+# lib/assemble.pm: the asset grammar,
+# byte-identical with tools/assemble and hooks/lib/assemble.ts (BT-04).
 #   Build time already stripped review comments and filled the plugin name (assets/*.txt).
 #   Run time: a `[tag] ` line is kept (tag removed) when the tag applies, else
 #   dropped; a line holding a token of a dropped block (`drop`) is dropped; lines
@@ -10,7 +10,7 @@ use strict;
 use warnings;
 use utf8;
 
-# `turn` (handoff-turn.txt, D-18 B6) is assembled by the mod; the helper knows it so the
+# `turn` (handoff-turn.txt) is assembled by the mod; the helper knows it so the
 # BT-04 goldens of every asset compare. Tags are kept only when a caller passes them: the
 # classic paths never pass the mod-only ones (main [handoff], res [handoff] and
 # [handoff-partial], nudge [halt-handoff], the turn's [submit] [near] [spent] [imminent]).
@@ -55,7 +55,7 @@ sub grammar {
     return _strip(join("\n", @out)) . "\n";
 }
 
-# The asset is text (characters): a byte value (a path) is decoded where it joins it (§2.6).
+# The asset is text (characters): a byte value (a path) is decoded where it joins it.
 sub fill {
     my ($s, $runtime) = @_;
     $runtime ||= {};
@@ -80,9 +80,9 @@ sub leftovers {
     return @bad;
 }
 
-# Classic fallback (MOD-SPEC §3.2): main (+[auto], +[chain], +[queue] when queue_cmd is set,
-# never [measured]) followed directly by the subagent text with [fallback]. QA-B3 (owner
-# xxxxxxxx-11): the queue lines ride on the setting, as on the mod path; no queue call here.
+# Classic fallback: main (+[auto], +[chain], +[queue] when queue_cmd is set,
+# never [measured]) followed directly by the subagent text with [fallback]. The queue
+# lines ride on the setting, as on the mod path; no queue call here.
 sub classic_fallback {
     my (%a) = @_;
     my @tags;

@@ -1,5 +1,5 @@
-# cmd/handoff-state.pl: `handoff-state --sid S --ht H` (D-18 B8; BUILD-PLAN §3.1). Owner:
-# WP-core. One line, read-only:
+# cmd/handoff-state.pl: `handoff-state --sid S --ht H`.
+# One line, read-only:
 #   none                                          no stage bound to this ht
 #   staged <stage> draft=<0|1> finish=<command>   begin bound a stage; draft=1 when its
 #                                                 body.md has text; <command> is the literal
@@ -7,7 +7,7 @@
 #   published <path>                              publish wrote the handoff of this ht
 #   publish-failed <path>                         publish claimed this ht but <path> is not
 #                                                 a regular file ending with the stage's
-#                                                 sentinel (CR-F9); the mod reads it as a
+#                                                 sentinel; the mod reads it as a
 #                                                 failed state (full-summary fallback)
 #   superseded <nonce>                            a native compaction ran during the turn
 #                                                 and nothing was staged

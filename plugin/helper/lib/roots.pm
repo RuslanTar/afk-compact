@@ -1,5 +1,5 @@
 package roots;
-# lib/roots.pm: unsafe roots (MOD-SPEC §1.2 Block A, D-12). Owner: WP-core.
+# lib/roots.pm: unsafe roots.
 # Private store (handoff_root, log_dir, disposable_root), in both handoff-root modes:
 #   no absolute path (util::root_form)  -> REFUSED: root-invalid (no git call)
 #   inside a .planning/ directory      -> REFUSED: root-in-planning
@@ -8,7 +8,7 @@ package roots;
 # On a refusal no copy or evidence is written under that root; compaction shaping still
 # runs. The work-tree test walks up for `.git` (no git process); only the ignore test
 # runs `git check-ignore`, and only behind the macOS git guard.
-# Repository root (<toplevel>/<decl.root>, MOD-SPEC §1.5.3): meant to be tracked, so
+# Repository root (<toplevel>/<decl.root>): meant to be tracked, so
 # root-in-git does not apply; repo_check() checks it instead (lstat walk from the
 # toplevel, then `git check-ignore` for the ignored note). A root that fails drops the
 # call to private mode (lib/repomode.pm) and never leads to a write under the repository.
@@ -117,8 +117,8 @@ sub check_path {
     return $r;
 }
 
-# repo_check(toplevel, root) -> {ok => 1, path, ignored => 0|1} | {ok => 0, reason} (D-12
-# §1.5.3). `root` is the declaration's relative path. Checks, in order: the resolved path
+# repo_check(toplevel, root) -> {ok => 1, path, ignored => 0|1} | {ok => 0, reason}.
+# `root` is the declaration's relative path. Checks, in order: the resolved path
 # lies inside realpath(toplevel) (repo-root-escape); no existing component from the
 # toplevel down is a symlink (repo-root-symlink); none is .git or inside it
 # (repo-root-in-git-dir); none is .planning (repo-root-in-planning); no .git file or
@@ -135,7 +135,7 @@ sub repo_check {
     my $p = $rtop;
     for my $i (0 .. $#parts) {
         my $c = $parts[$i];
-        # letter case ignored (CR-F1): on a case-insensitive file system .GIT is the .git folder
+        # letter case ignored: on a case-insensitive file system .GIT is the .git folder
         return { ok => 0, reason => 'repo-root-in-git-dir' } if $c =~ /^\.git/i;
         return { ok => 0, reason => 'repo-root-in-planning' } if lc($c) eq '.planning';
         $p .= "/$c";
@@ -159,7 +159,7 @@ sub repo_check {
 # check(settings) -> {handoff_root => r, log_dir => r, disposable_root => r} for the
 # effective paths (log_dir = the effective watch dir). A root paths::for marks invalid (no
 # absolute form in this platform, util::root_form) is root-invalid with no check_path and no
-# git call: fail closed (RF-2).
+# git call: fail closed.
 sub check {
     my ($settings) = @_;
     my $p = paths::for($settings);

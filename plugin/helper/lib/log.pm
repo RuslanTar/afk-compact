@@ -1,6 +1,6 @@
 package log;
-# lib/log.pm: content-free rows in the WATCHER-SPEC §6.2 envelope (BUILD-PLAN §3.2).
-# Owner: WP-core. Every row is one O_APPEND write of <= 4 KB under flock.
+# lib/log.pm: content-free rows in the watcher's row envelope.
+# Every row is one O_APPEND write of <= 4 KB under flock.
 #   log::row(ev, fields, ctx) -> ordered row object
 #   log::append(stream_path, row) -> 1, or dies "row-too-large"
 # fields: an array ref of key/value pairs (kept in order) or a hash ref (sorted).

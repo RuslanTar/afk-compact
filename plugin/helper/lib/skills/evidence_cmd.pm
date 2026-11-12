@@ -1,6 +1,6 @@
 package skills::evidence_cmd;
 # lib/skills/evidence_cmd.pm: `evidence --stage DIR [--keep P…] [--dispose P…]
-# [--clone DIR…]` (HDN §6, TPL §5). Needed-later copies go to
+# [--clone DIR…]`. Needed-later copies go to
 # <bucket>/evidence/<stem>/, disposable ones to today's
 # <disposable_root>/<YYYY-MM-DD>/<stem>-evidence/. Caps, secret gate and
 # cross-bucket dedupe are the core evidence.copy seam's.
@@ -15,7 +15,7 @@ use skills::stage;
 use skills::gitfacts;
 
 our $FILE_MAX  = 10 * 1024 * 1024;
-# The total is evidence::total_max() (evidence_total_max_mb, SK-5), one value for the
+# The total is evidence::total_max() (evidence_total_max_mb), one value for the
 # sweep and this command.
 our $CLONE_MAX = 50;
 
@@ -49,7 +49,7 @@ sub run {
         my $r;
         if ($patch && $patch->{withhold}) {
             # a path left out of a rebuilt patch, or a patch the numstat check refused:
-            # nothing is written (C-STORE D7)
+            # nothing is written
             my $b = $patch->{bytes};
             $r = { status => 'withheld', copy => undef, scan => 'withheld', rules => $patch->{withhold},
                    bytes => (defined $b ? length $b : undef), sha256 => (defined $b ? skills::util::sha256_hex($b) : undef),
@@ -171,7 +171,7 @@ sub _numstat_paths {
     return \@p;
 }
 
-# BD-1 (C-STORE D7, handoff-spec §10 "Clone patches"): which touched paths are blocked.
+# Clone patches (handoff-spec §10 "Clone patches"): which touched paths are blocked.
 # Returns (\@all, \%blocked) with path bytes as keys: \@all is every path the --no-renames
 # patch holds, %blocked maps a blocked path to its rule (deny-name, or rename-from-denied
 # for the other side of a rename or copy whose one side the name gate refuses). undef when
@@ -206,7 +206,7 @@ sub _paths_z {
     return $p ? [ map { skills::util::text($_) } @$p ] : undef;
 }
 
-# A patch with blocked paths, rebuilt without them (BD-1). Gives the items for the run
+# A patch with blocked paths, rebuilt without them. Gives the items for the run
 # loop: the partial patch (<name>.partial.patch), or the whole patch withheld
 # `exclude-failed` when git fails or `git apply --numstat`
 # over the rebuilt bytes does not list exactly the touched paths minus the blocked ones;
@@ -239,9 +239,9 @@ sub _rebuild {
 }
 
 # Scratch git clone with local commits -> one patch per commit plus the uncommitted diff
-# (TPL §5 "scratch-clone patch series"), built in memory: nothing is written until the
-# gate has run (RRP-01). A patch touching a blocked path is rebuilt without it (BD-1,
-# _rebuild). Returns items {name, label, top, bytes, paths, partial?} or {label,
+# (a scratch-clone patch series), built in memory: nothing is written until the
+# gate has run. A patch touching a blocked path is rebuilt without it
+# (_rebuild). Returns items {name, label, top, bytes, paths, partial?} or {label,
 # withhold, bytes?}; a clone outside git gives one row with no bytes (missing).
 sub _clone_patches {
     my ($clone) = @_;
@@ -282,7 +282,7 @@ sub _clone_patches {
     return @res;
 }
 
-# One in-memory patch through the gate (RRP-01), the way a file is gated (handoff-spec §10):
+# One in-memory patch through the gate, the way a file is gated (handoff-spec §10):
 # over the caps -> ref-only; a touched path that the name gate refuses (.netrc, *.sqlite,
 # a transcript), or a path list git could not give -> withheld whole; a HARD hit in the
 # text -> withheld; a WARN hit -> a redacted copy; else copied. Only the gated result is
@@ -296,7 +296,7 @@ sub _gate_patch {
     if (length($bytes) > $FILE_MAX) {
         return { %r, status => 'ref-only', scan => 'ref-only' };
     }
-    # SK-5 (S-SETTINGS E5): past the total, withheld with rules over-total, as a file is
+    # past the total, withheld with rules over-total, as a file is
     if ($used + length($bytes) > evidence::total_max()) {
         return { %r, status => 'withheld', scan => 'withheld', rules => ['over-total'] };
     }

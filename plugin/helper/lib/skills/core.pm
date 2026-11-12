@@ -1,10 +1,10 @@
 package skills::core;
-# lib/skills/core.pm: the one place where WP-skills calls WP-core's library
-# seams (BUILD-PLAN §3.6). Every assumption about a seam's argument or return
+# lib/skills/core.pm: the one place where the skill subcommands call the core library
+# seams. Every assumption about a seam's argument or return
 # shape is normalised here, so integration changes this file only.
 #
-# Assumed shapes (provisional until WP-core's code lands):
-#   settings::resolve(\%flags)        -> hashref of userConfig keys (MOD §1.2) with the
+# Assumed shapes:
+#   settings::resolve(\%flags)        -> hashref of userConfig keys with the
 #                                        effective values; optional {_source}{key}
 #   paths::for($settings, $sid)        -> {root, watch, disposable}
 #   roots::check($settings)            -> {handoff_root, log_dir, disposable_root}, each
@@ -25,30 +25,30 @@ package skills::core;
 #   queue::call(\@argv, $budget_ms)    -> {rc|exit, out|stdout, timed_out|timeout}
 #   queue::lane($sid, $cmd, $budget_ms) -> {status => ok|off|unknown|timeout, why, lane, open,
 #                                        ids, label, queued_line}: the one `list --json` parser
-#                                        (Q-ADAPTER QA-1; CORE-18 makes the queue-stub/v1 tag
+#                                        (the queue-stub/v1 tag is
 #                                        required: why untagged|schema)
 #   queue::caps_get($cmd)              -> {commands => [..]|undef, listed, add}
-#   queue::mode($cmd)                  -> {mode => off|on|degraded, why} with no queue call (CORE-18)
-#   queue::must_exist($cmd)            -> 1 when the cached commands hold adopt:must-exist (CORE-18)
+#   queue::mode($cmd)                  -> {mode => off|on|degraded, why} with no queue call
+#   queue::must_exist($cmd)            -> 1 when the cached commands hold adopt:must-exist
 #   bucket::resolve($sid, $cwd, $topic, $settings) -> {path, source}; path absolute
 #                                        (<root>/<repo>/<bucket>); settings passed as a 4th
 #                                        argument because a skill flag can move the root
 #   detect::summary($text)             -> {verdict, marker_line, sentinel_from_end, nonce, scope}
-# Seams of the 2026-10-21 rulings (needs/core-to-skills.md):
-#   rc::sid_dir(), rc::mode($cwd)      -> <watch>/<sid>; the D-12 mode record (repomode::decide)
-#   handoff_turn::open_for_begin / bind_stage / stage_of / mark_published / record (D-18 B7, B8)
-#   sidecar::newest($sid_dir)          -> the slot of the highest seq (DP-13)
+# Further seams:
+#   rc::sid_dir(), rc::mode($cwd)      -> <watch>/<sid>; the handoff-root mode record (repomode::decide)
+#   handoff_turn::open_for_begin / bind_stage / stage_of / mark_published / record
+#   sidecar::newest($sid_dir)          -> the slot of the highest seq
 #   transcript::quotes_found($path, [{quote, targets, action}], $sid, since => $epoch [, origins => \@kinds] [, why => \@reasons])
-#                                        -> [1|0|undef…] | undef (AP-4; origins: owner xxxxxxxx-12)
+#                                        -> [1|0|undef…] | undef
 #   sessions::own_start($sid)          -> {since, until, coarse} from the session's per-process
-#                                        records | undef (review of bcdaca6: coarse = no milliseconds)
+#                                        records | undef (coarse = no milliseconds)
 #   sessions::ended($sid)              -> 1 when no per-process record of sid is live (handoff-resume link)
-#   detect::alias_scan($text, $name)   -> scan() under a former plugin name (owner xxxxxxxx-26)
-#   jobrec::record_of / read_rows / jobs_path / add_pending (Dev-1)
+#   detect::alias_scan($text, $name)   -> scan() under a former plugin name (read-only alias)
+#   jobrec::record_of / read_rows / jobs_path / add_pending (job records)
 #   settings::relaunch($resolved)      -> {auto, allow, quiet_s, allow_active, invalid, clamped}
-#   settings::protected($resolved)     -> {globs => [{id, re}], user, invalid} (owner xxxxxxxx-29)
+#   settings::protected($resolved)     -> {globs => [{id, re}], user, invalid}
 #   settings::protected_user($name, $p) -> the id of the user's entry naming the branch | undef
-#   ledger::check($base, $draft, %o) / ledger::carry($draft, $res, %o) (0.1.5 E-1, stable ledger)
+#   ledger::check($base, $draft, %o) / ledger::carry($draft, $res, %o) (0.1.5, stable ledger)
 use strict;
 use warnings;
 use utf8;
@@ -107,7 +107,7 @@ sub roots_check {
     return undef if !defined $r;
     if (ref $r eq 'HASH') {
         return undef if $r->{ok};
-        # WP-core shape: one result per root key, {ok} or {ok => 0, reason}. The skills
+        # core shape: one result per root key, {ok} or {ok => 0, reason}. The skills
         # write under handoff_root and disposable_root; log_dir falls back in core.
         my @per = grep { ref $r->{$_} eq 'HASH' } qw(handoff_root disposable_root);
         if (@per) {
@@ -184,15 +184,15 @@ sub nonce {
     return $n;
 }
 
-# AP-4: the writing session's human-typed rows, or the user's answers in its AskUserQuestion
-# dialogs (NR-14), hold each quote (in memory; nothing logged).
-# $sid: only rows this session wrote after it started count (owner 2026-10-23 xxxxxxxx-27
-# revised, "No: forks re-ask"; REVIEW-NIGHT-3 R3-03): another session's id, forkedFrom, or a time
+# The writing session's human-typed rows, or the user's answers in its AskUserQuestion
+# dialogs, hold each quote (in memory; nothing logged).
+# $sid: only rows this session wrote after it started count (forks
+# re-ask): another session's id, forkedFrom, or a time
 # before the session's first per-process record (sessions::own_start) is a copy; a record without
 # milliseconds leaves its own second to the row-order rule (transcript.pm "Coarse start"). No
 # record: undef (not checked; the line is published unchecked and the next session re-asks).
-# after => epoch: a later floor (a successor's claim on this session, root reading 2026-10-23).
-# origins => \@kinds: filled with the origin class word of each quote found (owner xxxxxxxx-12).
+# after => epoch: a later floor (a successor's claim on this session).
+# origins => \@kinds: filled with the origin class word of each quote found.
 sub quotes_found {
     my ($path, $asks, $sid, %o) = @_;
     return undef unless defined &transcript::quotes_found && defined &sessions::own_start;
@@ -206,14 +206,14 @@ sub quotes_found {
         %w = (since => $f, start => $s->{since});
     }
     $w{origins} = $o{origins} if ref $o{origins} eq 'ARRAY';
-    # `why` (0.1.3 APPROVALS): the reason each quote not found failed (transcript::quotes_found).
+    # `why` (0.1.3): the reason each quote not found failed (transcript::quotes_found).
     $w{why} = $o{why} if ref $o{why} eq 'ARRAY';
     my $r = transcript::quotes_found($path, $asks, $sid, %w);
     return ref $r eq 'ARRAY' ? $r : undef;
 }
 
 # The plugin's former names (settings.pm @FORMER_NAMES, the current brand excluded): a marker
-# under one of them is the read-only alias of owner ruling xxxxxxxx-26.
+# under one of them is the read-only alias.
 sub former_names {
     my $brand = eval { ctx::brand() } // '';
     return grep { defined && !ref && /\A[a-z0-9][a-z0-9-]{0,63}\z/ && $_ ne $brand } @settings::FORMER_NAMES;
@@ -259,11 +259,11 @@ sub classify_file {
 }
 
 # (copy|redact|withhold, [{rule, class}], $scanned): the gate's verdict, its hits (ids,
-# never values) and, for copy and redact, the bytes the gate scanned (RRP-06: write those,
+# never values) and, for copy and redact, the bytes the gate scanned (write those,
 # never a second read of the file).
 sub classify_file_hits {
     my ($path) = @_;
-    my ($r, $hits, $raw) = secrets::classify_file($path);    # WP-core returns (action, \@hits, bytes)
+    my ($r, $hits, $raw) = secrets::classify_file($path);    # core returns (action, \@hits, bytes)
     $r = $r->{action} // $r->{class} if ref $r eq 'HASH';
     return ($r // 'copy', _hits($hits), $raw);
 }
@@ -291,7 +291,7 @@ sub _hits {
 
 sub evidence_copy {
     my ($src, $dir, $caps, $index) = @_;
-    # WP-core keeps the running total behind a scalar ref (caps.used => \$bytes).
+    # core keeps the running total behind a scalar ref (caps.used => \$bytes).
     my %c = %{ $caps || {} };
     $c{used} = \(my $u = $c{used} // 0) unless ref $c{used};
     # The skill writes MANIFEST.tsv itself at publish (exclusive create), and its ref-only
@@ -302,7 +302,7 @@ sub evidence_copy {
     die "evidence: no row\n" unless ref $r eq 'HASH';
     $r->{status} //= $r->{result} // 'missing';
     $r->{copy}   //= $r->{copy_path} // $r->{path};
-    # WP-core does not hash a file withheld by name; the skill's rows and MANIFEST carry
+    # core does not hash a file withheld by name; the skill's rows and MANIFEST carry
     # its sha256 (a hash, never content).
     $r->{sha256} //= sha::hex256_file($src) if $r->{status} eq 'withheld' && -f $src;
     $r->{sha256} //= '';
@@ -311,8 +311,8 @@ sub evidence_copy {
     return skills::util::text_deep($r);
 }
 
-# gsd(sid, cwd, worktree) -> this session's GSD facts from its own transcript (gsd::session; owner
-# 2026-10-26 21:37, never the worktree's .planning alone), or undef when it worked with neither GSD
+# gsd(sid, cwd, worktree) -> this session's GSD facts from its own transcript (gsd::session,
+# never the worktree's .planning alone), or undef when it worked with neither GSD
 # nor a driver skill (or its transcript is not found).
 sub gsd {
     my (%a) = @_;
@@ -361,7 +361,7 @@ sub queue_call {
     };
 }
 
-# ---- queue adapter (Q-ADAPTER QA-1, QA-B2): one parser (queue::lane) for begin; locate
+# ---- queue adapter: one parser (queue::lane) for begin; locate
 # reads the mode without a queue call (queue_mode_now below).
 # Mode: off (queue_cmd empty: no exec, no trace) · degraded (<why>) when the setting is not
 # an executable file or the list reply broke the contract (untagged · schema · not-json ·
@@ -388,8 +388,8 @@ sub queue_mode {
     return { mode => 'degraded', why => $why };
 }
 
-# {mode => off|on|degraded, why => …} without running the queue tool (locate, QA-1): WP-core's
-# queue::mode($cmd) (CORE-18: the setting, the file, and this session's last list outcome, so
+# {mode => off|on|degraded, why => …} without running the queue tool (locate): core's
+# queue::mode($cmd) (the setting, the file, and this session's last list outcome, so
 # a broken reply that begin saw shows as degraded (<why>) here too). No exec, no queue_cmd
 # trace, no caps-cache write. Without that seam (or when it fails or answers another shape):
 # the setting alone (queue_mode_setting).
@@ -428,7 +428,7 @@ sub queue_commands {
     return (ref $c eq 'HASH' && ref $c->{commands} eq 'ARRAY') ? skills::util::text_deep($c->{commands}) : [];
 }
 
-# 1 when `lane adopt` passes --must-exist (QA-2): WP-core's queue::must_exist($cmd) (CORE-18),
+# 1 when `lane adopt` passes --must-exist: core's queue::must_exist($cmd),
 # else the same test over the cached commands (queue_commands).
 sub queue_must_exist {
     my ($cmd) = @_;
@@ -441,14 +441,14 @@ sub queue_must_exist {
 
 sub bucket_resolve {
     my ($sid, $cwd, $topic, $s) = @_;
-    # WP-core: resolve(sid, cwd, topic [, where]) reads the root from the run context,
+    # core: resolve(sid, cwd, topic [, where]) reads the root from the run context,
     # which settings() built from the same flags; the 4th argument is git facts, not settings.
     my $r = bucket::resolve($sid, $cwd, $topic);
     die "bucket: no result\n" unless ref $r eq 'HASH' && $r->{path};
     return skills::util::text_deep($r);
 }
 
-# ---------------------------------------------------------------- 2026-10-21 seams
+# ---------------------------------------------------------------- further seams
 
 # The effective watch dir (log_dir, or its safe default), or undef when neither is safe.
 sub watch_dir { my $w = eval { rc::watch() }; return skills::util::text($w) }
@@ -456,7 +456,7 @@ sub watch_dir { my $w = eval { rc::watch() }; return skills::util::text($w) }
 # <watch>/<sid> of the bound session (the effective watch dir: log_dir, or its safe default).
 sub sid_dir { my $d = eval { rc::sid_dir() }; return skills::util::text($d) }
 
-# The D-12 mode of cwd's worktree: {mode, reason, toplevel, main_checkout, root_rel, root_path,
+# The handoff-root mode of cwd's worktree: {mode, reason, toplevel, main_checkout, root_rel, root_path,
 # ignored, exports, ...}; rc::mode logs handoff_mode once per (mode, reason).
 sub mode {
     my ($cwd) = @_;
@@ -465,7 +465,7 @@ sub mode {
     return skills::util::text_deep($m);
 }
 
-# A worktree's declaration and repository-root check (D-12 §1.5.2, §1.5.3), read-only.
+# A worktree's declaration and repository-root check, read-only.
 sub declaration { my ($top) = @_; my $d = eval { repomode::declaration($top) }; return ref $d eq 'HASH' ? skills::util::text_deep($d) : { present => 0 } }
 sub repo_check  { my ($top, $root) = @_; my $c = eval { roots::repo_check($top, $root) }; return ref $c eq 'HASH' ? skills::util::text_deep($c) : { ok => 0, reason => 'repo-root-unchecked' } }
 sub gitignore_text { return repomode::gitignore_text() }
@@ -473,7 +473,7 @@ sub default_root { return $repomode::DEFAULT_ROOT }
 sub decl_name { return $repomode::DECL }
 sub valid_root { return repomode::valid_root($_[0]) }
 
-# The handoff-turn store (D-18), all read through lib/handoff_turn.pm.
+# The handoff-turn store, all read through lib/handoff_turn.pm.
 sub ht_open_for_begin { my ($d) = @_; return defined $d ? skills::util::text_deep(handoff_turn::open_for_begin($d)) : undef }
 sub ht_stage_of       { my ($d, $ht) = @_; return defined $d ? skills::util::text(handoff_turn::stage_of($d, $ht)) : undef }
 sub ht_bind_stage     { my ($d, $ht, $stage) = @_; return map { skills::util::text_deep($_) } handoff_turn::bind_stage($d, $ht, $stage) }
@@ -483,7 +483,7 @@ sub ht_published_of   { my ($d, $ht) = @_; return defined $d ? skills::util::tex
 sub ht_valid          { return handoff_turn::valid_ht($_[0]) }
 
 # (slot object, slot path) of the highest seq in <sid_dir>/bg, or (): the rule of
-# sidecar::newest (DP-13: by seq, never by mtime; the first of equal seqs in name order).
+# sidecar::newest (by seq, never by mtime; the first of equal seqs in name order).
 sub sidecar_newest {
     my ($sid_dir) = @_;
     return () unless defined $sid_dir && -d "$sid_dir/bg";
@@ -497,16 +497,16 @@ sub sidecar_newest {
     return $best ? ($best, $path) : ();
 }
 
-# Dev-1 job records of a session dir.
+# Job records of a session dir.
 sub job_record { my ($sid_dir, $task) = @_; return skills::util::text_deep(eval { jobrec::record_of($sid_dir, $task) }) }
 sub job_rows   { my ($sid_dir) = @_; my $r = eval { jobrec::read_rows(jobrec::jobs_path($sid_dir)) }; return ref $r eq 'ARRAY' ? skills::util::text_deep($r) : [] }
 sub job_add_pending { my ($sid_dir, $p) = @_; return jobrec::add_pending($sid_dir, $p) }
 sub job_output_source { return $jobrec::OUTPUT_PATH_SOURCE // 'none' }
 
-# CR-F8: the one-line form of a recorded command, as a recipe's `command:` line holds it
+# The one-line form of a recorded command, as a recipe's `command:` line holds it
 # (line breaks become one space each run, outer blanks trimmed). publish writes this form,
 # and heal-check and the lint compare a recipe line with this form of the record; the run
-# line itself is always the record, byte for byte (Dev-1 D5).
+# line itself is always the record, byte for byte.
 sub recipe_command {
     my ($c) = @_;
     return undef unless defined $c;
@@ -532,9 +532,9 @@ sub settings_notes {
     return map { skills::util::text($_) } grep { /\A([a-z_]+):/ && $want{$1} } @n;
 }
 
-# Production (S-SETTINGS B): settings::prod over the run context's resolved settings (WP-core,
-# CORE-02): {reads => forbid|allow, classes => [{id, re}], user => n, invalid => [..]}, the
-# consent key `unattended_prod_reads` read from the settings file only (DP-3) and the classes
+# Production: settings::prod over the run context's resolved settings (core):
+# {reads => forbid|allow, classes => [{id, re}], user => n, invalid => [..]}, the
+# consent key `unattended_prod_reads` read from the settings file only and the classes
 # the shipped prod_classes plus the user's prod_patterns. Without that seam (or when it fails):
 # forbid, and the shipped classes (the spec's prod_classes, else the same prod-token literal
 # core falls back to), so a missing seam never makes the plugin ask less.
@@ -560,7 +560,7 @@ sub prod {
     return { reads => 'forbid', classes => \@classes, user => 0, invalid => [], seam => 'missing' };
 }
 
-# Protected branches (owner xxxxxxxx-29): settings::protected over the run context's resolved
+# Protected branches: settings::protected over the run context's resolved
 # settings: the user's add-only `protected_branches` entries {globs => [{id, re}], user => n,
 # invalid => [..]}. Without that seam (or when it fails): no entries of the user's, while the
 # callers' shipped checks (protected_branch_re, the remote default branch) stay as they are, so a
@@ -584,7 +584,7 @@ sub detect_summary {
     return skills::util::text_deep($r);
 }
 
-# 0.1.5 (E-1, stable ledger): ledger::check and ledger::carry (lib/ledger.pm) with the spec's literals:
+# 0.1.5 (stable ledger): ledger::check and ledger::carry (lib/ledger.pm) with the spec's literals:
 # the main headings, the sections of User constraints, Approvals and Decisions (by their fixed
 # section ids), the fold line, the carry tag and the User constraints none-form.
 sub ledger_opts {

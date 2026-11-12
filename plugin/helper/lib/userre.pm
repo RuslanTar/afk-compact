@@ -1,6 +1,5 @@
 package userre;
-# lib/userre.pm: the user's own regular expressions, matched with a wall-clock bound (U-06,
-# REVIEW-NIGHT-2). Owner: WP-core.
+# lib/userre.pm: the user's own regular expressions, matched with a wall-clock bound (U-06).
 #
 # A pattern from a setting (secret_extra_rules HARD/WARN, prod_patterns, ticket_pattern,
 # relaunch_allow, protected_branches, deny_class_patterns) can backtrack for hours on a large
@@ -406,7 +405,7 @@ sub run {
         # a second try after a busy machine, cut by the budget: still the machine
         $why = 'load' if $why eq 'budget' && $again{$miss};
         # what a run that did not finish by its own limit used, for this session's later calls; a
-        # run the budget cut short says nothing of the pattern (U-06 review: such cuts in tight
+        # run the budget cut short says nothing of the pattern (U-06: such cuts in tight
         # processes added up to its limit and skipped it in processes with room)
         _record($key, $entries->[$miss], $len, $why eq 'timeout' ? int($limit * 1000) : int($c->{cpu} * 1000))
             if $c->{mid} && ($c->{why} eq 'timeout' || $c->{why} eq 'load');

@@ -1,5 +1,4 @@
-# cmd/log.pl: `log --sid S [--stream mod|paths|jobs] (--json ROW | --stdin)` (BUILD-PLAN
-# §3.1, ROOT-RULINGS F2-6). Owner: WP-core.
+# cmd/log.pl: `log --sid S [--stream mod|paths|jobs] (--json ROW | --stdin)`.
 # mod (default): O_APPEND writes <= 4 KB per row to <watch>/<sid>.jsonl; paths: to
 # <watch>/<sid>/paths.jsonl. A row is the caller's (already enveloped), kept as given after
 # a parse check, but for its `ts`, set to this process's local offset (_restamp). `--stdin`
@@ -8,7 +7,7 @@
 # written. A row > 4 KB -> exit 3 `REFUSED: row-too-large` (nothing written); a batch over
 # 1 MB -> exit 3 `REFUSED: batch-too-large`. A mod row of keep-warm or a compaction also updates
 # the session's cache state (lib/cachestate.pm note_rows).
-# jobs (Dev-1, `--stdin` only): the mod's raw fields of a background shell (or a TaskStop),
+# jobs (`--stdin` only): the mod's raw fields of a background shell (or a TaskStop),
 # completed by lib/jobrec.pm and appended to <watch>/<sid>/jobs.jsonl, whatever the
 # watcher mode. Accepted only from the recorded Claude Code parent, else exit 3
 # `REFUSED: jobs-caller` and one `jobs_caller_refused {reason}` row; the command is
@@ -96,7 +95,7 @@ sub run {
         }
         push @rows, $b;
     }
-    # 0.1.7 (D-81): keep-warm and compaction rows also go to the session's cache state, which
+    # 0.1.7: keep-warm and compaction rows also go to the session's cache state, which
     # `cache` reads (lib/cachestate.pm; its own fixed folder, so a refused log_dir does not stop it)
     eval { cachestate::note_rows($sid, [ map { scalar eval { jsonc::decode($_) } } grep { /"ev"\s*:\s*"(?:keep_warm_\w+|compacted)"/ } @rows ]) }
         if $stream eq 'mod';
@@ -129,7 +128,7 @@ sub _jobs {
     my $k = 0;
     # The whole batch is checked before any row is written (a usage error writes nothing).
     # A pending relaunch fulfilled by an earlier row of the batch is not matched again by a
-    # later one (%claimed, CR-F3), as if the earlier row were already on disk.
+    # later one (%claimed), as if the earlier row were already on disk.
     my %claimed;
     for my $line (split /\n/, $raw) {
         $k++;

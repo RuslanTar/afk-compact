@@ -1,11 +1,11 @@
 package trial;
-# lib/trial.pm: the local shadow trial (TRIAL-DUAL-HANDOFF §4.2-§4.6, owner 2026-10-26 21:2x
-# "dual handoffs"): the one trial config at a fixed path, the fail-closed owner checks, the
+# lib/trial.pm: the local shadow trial (dual handoffs): the one trial config at a fixed path,
+# the fail-closed own-config checks, the
 # old-skill and native-prompt files read at run time and checked against their sha256 lists,
 # the facts the old skill's commands would have printed, and the save of the two shadow
 # replies (secret scan and redaction before disk) with one content-free moment record.
-# Owner: WP-core. Everything here is off unless <home>/.cache/<brand>-trial/trial.json exists
-# and says `on`. No text of the owner's skill or of Claude Code's prompt is part of the plugin:
+# Everything here is off unless <home>/.cache/<brand>-trial/trial.json exists
+# and says `on`. No text of the old local skill or of Claude Code's prompt is part of the plugin:
 # both are read from the paths the local config names.
 use strict;
 use warnings;
@@ -66,7 +66,7 @@ sub _sums {
 }
 
 # parse(raw, today) -> {state => off|bad|on, why, cfg}. `today` is YYYY-MM-DD. Unknown keys are
-# refused (a cap, a sampling seed or a typo never passes as a setting: owner "No cap").
+# refused (a cap, a sampling seed or a typo never passes as a setting: there is no cap).
 sub parse {
     my ($raw, $today) = @_;
     my $j = eval { jsonc::decode(util::text($raw)) };
@@ -109,7 +109,7 @@ sub parse {
 
 # load() -> parse's answer, or {state => absent} when the file is not there. The folder is
 # refused when, by real path, it lies inside the handoff root, the log folder, a git work tree
-# or the Claude Code config folder (whole segments; §4.3).
+# or the Claude Code config folder (whole segments).
 sub load {
     my $p = config_path();
     return { state => 'absent' } unless -e $p;
@@ -142,15 +142,15 @@ sub dir_refused {
     return undef;
 }
 
-# owner_skip(cfg) -> undef when this session runs in the owner's own config, else
+# owner_skip(cfg) -> undef when this session runs in the account's own config, else
 # `not-owner-config` with the reason: another CLAUDE_CONFIG_DIR whose settings.json is not the
 # account's own file, a HOME that is not the account home, or a handoff root / log folder other
-# than the pinned ones (lab cells, §4.3).
+# than the pinned ones (lab cells).
 sub owner_skip {
     my ($cfg) = @_;
-    # The owner's same-file rule (2026-10-27 20:38), as for the consent keys: a config folder whose
+    # The same-file rule, as for the consent keys: a config folder whose
     # settings.json is the account's ~/.claude/settings.json (a symlink or a hard link to it) is
-    # the owner's own config; any other config folder is not.
+    # the account's own config; any other config folder is not.
     return 'config-dir' if settings::config_dir_foreign();
     my $acct = settings::consent_dir();
     return 'home' unless defined $acct;
@@ -216,7 +216,7 @@ sub served {
 }
 
 # precompact_hooks(brand) -> 1 when the user's settings.json lists a PreCompact hook that is not
-# this plugin's (its text lands in a real compaction's instructions, §4.2b); 0 none; undef unread.
+# this plugin's (its text lands in a real compaction's instructions); 0 none; undef unread.
 sub precompact_hooks {
     my $raw = util::read_file(settings::config_dir() . '/settings.json', 1048576);
     return 0 unless defined $raw;
@@ -267,7 +267,7 @@ sub native {
     return { %r, status => 'ok', head => $got{head}, tail => $got{tail} };
 }
 
-# ---------------------------------------------------------------- facts (§4.2 item 3)
+# ---------------------------------------------------------------- facts
 
 sub _git_out {
     my ($cwd, $args, $left) = @_;
@@ -382,7 +382,7 @@ sub old_chain {
 }
 
 # place(cwd, budget_ms) -> {w (git::where), repo, ticket, repo_name, t0}: the bucket first, so a
-# skipped repo costs one git call and nothing else is gathered (§4.5 skip-list).
+# skipped repo costs one git call and nothing else is gathered (skip-list).
 sub place {
     my ($cwd, $budget_ms) = @_;
     my $t0 = util::clock_ms();
@@ -396,7 +396,8 @@ sub _left {
     return sub { my $l = $t0 + ($budget_ms // 2500) - util::clock_ms(); return $l < 50 ? 50 : ($l > 2000 ? 2000 : $l) };
 }
 
-# now_md(toplevel) -> the bytes of <toplevel>/.remember/now.md (capped), only when it is a plain
+# now_md(toplevel) -> the bytes of the project note file <toplevel>/.remember/now.md (capped),
+# only when it is a plain
 # file whose real path lies inside the toplevel's (a link out of the repository is never read).
 sub now_md {
     my ($top) = @_;
@@ -458,7 +459,7 @@ sub facts {
              branch => $branch, head => $head, dirty => $dirty, old_chain_flagged => $chain->{flagged} };
 }
 
-# ---------------------------------------------------------------- save (§4.5, §4.6)
+# ---------------------------------------------------------------- save
 
 # scan_redact(text) -> (redacted text, [rule ids]) or (undef, 'no-scan'): nothing is saved when
 # the scanner has no rules or fails (core::secrets_scan would answer [] on a failure).
@@ -533,10 +534,10 @@ sub write_shadow {
 my $ID = qr/^[A-Za-z0-9._:\/-]{1,120}$/;
 # The mod's local times (isoLocal: an offset east of UTC is `+HH:MM`), with optional milliseconds.
 our $TIME = qr/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
-# The served model by the export's own class (watch/export.pm `model`, MG-4): a plain id with
+# The served model by the export's own class (watch/export.pm `model`): a plain id with
 # Claude Code's `[1m]`-style suffix kept; a cloud ARN or profile path (an account id) dropped.
 our $MODEL = qr{^[a-z][a-z0-9._-]{0,63}(?:\[[0-9a-z]{1,8}\])?$};
-# D-76: a near-limit skip's usage windows, each `kind:percent` (`arm:percent` from the idle
+# A near-limit skip's usage windows, each `kind:percent` (`arm:percent` from the idle
 # record), as the export's `window` class takes them; at most 8 kept.
 our $WINDOW = qr/\A[a-z][a-z0-9_]{0,31}:(?:[0-9]{1,4}|unknown)\z/;
 our %MOMENT_FIELD = (

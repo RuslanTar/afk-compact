@@ -1,6 +1,6 @@
 package watch::rows;
-# lib/watch/rows.pm: classify one transcript row by key, never by position
-# (WATCHER-SPEC §1.1, TF Q3 §1a). Owner: WP-watch. Text is read in memory to
+# lib/watch/rows.pm: classify one transcript row by key, never by position.
+# Text is read in memory to
 # compute classes and is dropped; the result holds ids, counts and classes.
 use strict;
 use warnings;
@@ -14,7 +14,7 @@ our $SUMMARY_HEAD = 'This session is being continued from a previous conversatio
 # its [submit-halt], [submit-pre] and [submit-idle] lines), never a continue
 our $HT_SUBMIT = ', so the plugin asks for a handoff while the context is still here.';
 
-# D-01 read-only Bash class (WATCH §4 D-01).
+# The read-only Bash class.
 my $READONLY_BASH = qr/\A\s*(?:git\s+(?:status|log|diff|show|rev-parse|branch)\b|ls\b|rg\b|head\b|tail\b|wc\b|date\b)/;
 my %PROGRESS_TOOLS = map { $_ => 1 } qw(Edit Write NotebookEdit);
 my %SPAWN_TOOLS = map { $_ => 1 } qw(Agent Task Workflow);
@@ -43,8 +43,8 @@ sub bash_classes {
     return \@c;
 }
 
-# AP-9 (REVIEW-NIGHT-3 R3-15): the spec's protected_branch_re, compiled by the sweep for its run;
-# undef = no check. $PROTECTED_USER (owner xxxxxxxx-29): the compiled entries of the user's
+# The spec's protected_branch_re, compiled by the sweep for its run;
+# undef = no check. $PROTECTED_USER: the compiled entries of the user's
 # add-only protected_branches setting, matched the same way, beside the spec's list. $PROTECTED_BOUNDED (U-06):
 # the user's entries that mix `*` and `**`, as settings::protected returns them; settings::protected_user
 # matches them with a time bound (a stopped one counts as protected).

@@ -1,6 +1,6 @@
 package settings_write;
-# lib/settings_write.pm: the plugin's one writer of the user's settings file (0.1.2; the owner's
-# answer of 2026-10-30, "helper writer, safe keys"). Owner: WP-core. `settings set` and
+# lib/settings_write.pm: the plugin's one writer of the user's settings file (0.1.2: one helper
+# writer, safe keys only). `settings set` and
 # `settings reset` (cmd/settings.pl) both plan and apply through it.
 #
 # What it may change: pluginConfigs["<plugin>@<marketplace>"].options in
@@ -300,7 +300,7 @@ sub check_value {
         return ({ data => $n, json => "$n" });
     }
     if ($class eq 'enum') {
-        # D-72: a %SWITCH key takes true or false and its words from before 0.1.6, written as true or false
+        # a %SWITCH key takes true or false and its words from before 0.1.6, written as true or false
         my $x = exists $settings::SWITCH{$key} ? settings::switch_form($key, $t) // lc settings::trim($t) : lc settings::trim($t);
         my @v = @{ $settings::ENUM{$key} || [] };
         return grep({ $_ eq $x } @v) ? $str->($x) : (undef, 'not ' . join(', ', @v[0 .. $#v - 1]) . " or $v[-1]");
@@ -344,7 +344,7 @@ sub same_as_default {
 }
 
 # _saved_list(value) -> the entries of a saved list value (a JSON list of strings or numbers
-# as its entries, ON-5), else none
+# as its entries), else none
 sub _saved_list {
     my ($v) = @_;
     return map { settings::trim("$_") } grep { defined && !ref } @$v if ref $v eq 'ARRAY';
@@ -376,7 +376,7 @@ sub loosens {
 }
 
 # old_form(key, saved value) -> 1 for a saved value of an enum key that is not one of its %ENUM
-# values as written (D-72: a word from before 0.1.6, another case, a JSON true or false)
+# values as written (a word from before 0.1.6, another case, a JSON true or false)
 sub old_form {
     my ($key, $v) = @_;
     my $e = $settings::ENUM{$key} or return 0;

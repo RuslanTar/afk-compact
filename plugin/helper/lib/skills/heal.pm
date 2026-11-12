@@ -1,13 +1,13 @@
 package skills::heal;
 # lib/skills/heal.pm: `heal-check --origin SID --item ID [--bump]` (resume R5
-# restart gate; TPL §4.4; S-11; MOD §7 heal counters). Prints `ok <recipe>|job:<id>`
+# restart gate; heal counters). Prints `ok <recipe>|job:<id>`
 # and `run:` for a job the plugin recorded, or for an own handoff's recipe whose command
 # passes the same checks (`run-source: handoff`), else `REFUSED: <reason>`. At most
 # 1 restart per resume and 2 per chain; the recipe script's sha256 must equal its
 # MANIFEST row. --bump counts the restart before it starts (locked read-modify-write).
 #
-# HC-1 (owner 2026-10-23, ratify R24 overturned: heal-check may offer handoff-text commands
-# within the real-risk reading; DP-27's "no recipe from handoff text is ever ok" is replaced):
+# Handoff recipes (heal-check may offer handoff-text commands
+# within the real-risk reading):
 # with no job record, an own handoff's recipe (relation same-session or successor; never an
 # export, an imported copy or another session's) with a `command:` stands in for the record
 # (V1 `recipe`: in MANIFEST with its sha, class auto); its effects come from the risk
@@ -16,7 +16,7 @@ package skills::heal;
 # `run_source: handoff` (else `recorded`). A recipe that differs from a record is still
 # recipe-mismatch: the record wins.
 #
-# Every item (CR-F13): `signal:` lines V1-V7
+# Every item: `signal:` lines V1-V7
 # (skills/jobs.pm), then
 #   verdict: <status> · confidence <high|low> · effects <class>[ · would-relaunch]
 # then `ok <recipe|job:<id>>` and `run: <line>` (the recorded command byte for byte,
@@ -25,14 +25,14 @@ package skills::heal;
 # relaunch by itself only with relaunch_auto on, relation same-session or successor
 # (recomputed from the lineage; no relation flag exists), status LOST with confidence
 # high (or FAILED with its record and command verified), effects none, local (an allowlisted
-# single command, Q-J1-1, S-SETTINGS C) or prod-read with unattended_prod_reads `allow`
-# (S-SETTINGS B; prod-write always asks), recipe class auto or no recipe,
+# single command) or prod-read with unattended_prod_reads `allow`
+# (prod-write always asks), recipe class auto or no recipe,
 # the recipe sha matching MANIFEST, and the counters. The helper never runs the command:
 # the model runs `run:` through the Bash tool, so the permission system judges it.
 # --bump also stores the run line's sha as pending, so the next recorded job with that
 # command is marked relaunch_of (lib/jobrec.pm).
-# Refusal precedence (REVIEW B-11): recipe-not-local -> relation -> mode-off | shadow ->
-# recipe-mismatch -> the signals and gates. recipe-not-local (D-12): the origin's
+# Refusal precedence: recipe-not-local -> relation -> mode-off | shadow ->
+# recipe-mismatch -> the signals and gates. recipe-not-local: the origin's
 # handoff is only a repository export or an imported copy; a recipe is never read from
 # the repository.
 use strict;
@@ -113,15 +113,15 @@ sub run {
     };
     $refuse->('recipe-not-local') if !$recipe && not_local($ctx, $origin, $docs);
 
-    # CR-F13: every item goes through the Dev-1 re-verification. `ok` needs a job the plugin
+    # Every item goes through the job re-verification. `ok` needs a job the plugin
     # recorded or, with no record (mod off, a subagent's shell, a refused record), an own
-    # handoff's recipe that passes the same checks (HC-1); anything else is refused, a
+    # handoff's recipe that passes the same checks; anything else is refused, a
     # handoff command with `ask-source: handoff`.
     my $task = $recipe ? ($recipe->{rid} // $item) : $item;
     return shell($ctx, $o, $id, $origin, $item, $task, $recipe, $edir, $row, $refuse);
 }
 
-# ---------------------------------------------------------------- Dev-1 shells
+# ---------------------------------------------------------------- recorded shells
 
 sub shell {
     my ($ctx, $o, $id, $origin, $item, $task, $recipe, $edir, $row, $refuse) = @_;
@@ -135,13 +135,13 @@ sub shell {
     $row->{run_source} = $v->{run_source};
     my $rec = $v->{record};
     # A consent or protective value given as a flag or env, or under a foreign config dir, did
-    # not count (DP-3, CR-F34): say so, so the question can name the settings file.
+    # not count (CR-F34): say so, so the question can name the settings file.
     skills::cli::say("note: $_") for skills::core::settings_notes(qw(relaunch_auto relaunch_allow unattended_prod_reads prod_patterns));
     skills::cli::say(skills::jobs::signal_line($_, $v->{signals}{$_})) for @skills::jobs::SIGNALS;
     @$row{qw(verdict confidence effects mode relation new_task_id)} = ($v->{status}, $v->{confidence}, $v->{effects}, $rl->{auto}, $rel, undef);
     $row->{signals} = skills::jobs::states($v);
     $row->{item} = $task;
-    # The production class id only (prod-token, user-prod-<n>), never the command (S-SETTINGS B).
+    # The production class id only (prod-token, user-prod-<n>), never the command.
     $row->{prod_class} = $v->{prod_class} if defined $v->{prod_class};
 
     # Questions name the command and where it came from; a withheld one is never printed.
@@ -185,7 +185,7 @@ sub shell {
     return 0;
 }
 
-# HC-1 (ratify R24 overturned, within the 03:42 real-risk reading): with no job record, an own
+# Handoff recipes (within the real-risk reading): with no job record, an own
 # handoff's recipe whose `command:` is given stands in for the record. Own: the relation is
 # same-session or successor (the relation gate refuses every other), and find_recipe never reads
 # an imported copy. V1' (`recipe`) passes when the recipe is in MANIFEST with its sha and is
@@ -207,7 +207,7 @@ sub _recipe_run {
              effects => skills::jobs::recipe_effects($cmd, $recipe, $rl, $cwd // skills::util::cwd(), $watch) };
 }
 
-# The first failed gate after relation and mode (REVIEW B-11 order: recipe-mismatch, then
+# The first failed gate after relation and mode (recipe-mismatch, then
 # the signals): report-only statuses, a withheld command (it never relaunches by itself),
 # the ask statuses, then the effects class, the recipe class and sha, the run line.
 sub _gate {
@@ -228,7 +228,7 @@ sub _gate {
         return 'not-lost';
     }
     return 'command-withheld' unless ($rec && defined $rec->{command}) || ($v->{run_source} // '') eq 'handoff';
-    # S-SETTINGS B: a production read relaunches by itself only with unattended_prod_reads
+    # A production read relaunches by itself only with unattended_prod_reads
     # `allow` (a consent key, read from the settings file only); a production write never does.
     if ($v->{effects} eq 'local') { return 'effects-local' unless $rl->{allow_active} }
     elsif ($v->{effects} eq 'prod-read') { return 'effects-prod-read' unless (($v->{prod} || {})->{reads} // 'forbid') eq 'allow' }
@@ -243,7 +243,7 @@ sub _gate {
     return undef;
 }
 
-# The resume relation of the origin to this session (A-6 lineage, 3 hops; the helper
+# The resume relation of the origin to this session (lineage, 3 hops; the helper
 # recomputes it, there is no flag): same-session | successor | other.
 sub relation {
     my ($ctx, $id, $origin) = @_;
@@ -252,7 +252,7 @@ sub relation {
     return (grep { $_->{sid} eq $origin } @{ skills::ctx::chain($ctx, $id->{sid}) }) ? 'successor' : 'other';
 }
 
-# D-12 (AT-RM-11): the origin's handoffs here are only imported copies of exports, or the
+# AT-RM-11: the origin's handoffs here are only imported copies of exports, or the
 # origin has none here but an export under this worktree's repository root.
 sub not_local {
     my ($ctx, $origin, $docs) = @_;
@@ -297,7 +297,7 @@ sub find_recipe {
     my ($ctx, $origin, $item) = @_;
     my %b;
     my $pin = skills::ctx::pin_read($ctx, $origin);
-    # STATE-ROOT: the pinned bucket's twin and the buckets of both read roots
+    # the pinned bucket's twin and the buckets of both read roots
     $b{$_} = 1 for $pin && $pin->{bucket_path} ? grep { -d } @{ skills::store::twin_buckets($ctx, $pin->{bucket_path}) } : ();
     my $w = skills::gitfacts::where(skills::util::cwd());
     $b{$_} = 1 for @{ skills::store::read_buckets($ctx, $w->{repo}) };

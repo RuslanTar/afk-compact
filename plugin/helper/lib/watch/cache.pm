@@ -1,6 +1,6 @@
 package watch::cache;
 # lib/watch/cache.pm: the watcher's persisted incremental read state
-# (ROOT-RULINGS F2-4; WATCHER-SPEC W9). Owner: WP-watch.
+# (F2-4).
 #
 # The rules read a fixed list of row kinds (watch::rules::KINDS) from this
 # session's streams (classic, mod, the rollup, the alerts log) and records

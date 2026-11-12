@@ -1,20 +1,19 @@
 package measure;
-# lib/measure.pm: facts measured by code (MOD-SPEC §2.6 `measure --compact`, §10
+# lib/measure.pm: facts measured by code (`measure --compact`, the
 # measured block). Order: the plugin line when sessions started since run another plugin version
-# than this session, or an install replaced this session's copy (0.1.3, 0.1.4 V-1, lib/plugver.pm;
+# than this session, or an install replaced this session's copy (0.1.3, 0.1.4, lib/plugver.pm;
 # first, so the cap never cuts it and no git line sits under it: between the git header and its
-# porcelain list the indented files read as its own, 0.1.3 integration review); this session's GSD lines (lib/gsd.pm: from its own transcript, never
+# porcelain list the indented files read as its own); this session's GSD lines (lib/gsd.pm: from its own transcript, never
 # from the worktree alone; none for a session that worked with neither GSD nor a driver skill;
-# before the git header for the same reason, 0.1.4 R-10: between the header and its list the
+# before the git header for the same reason, 0.1.4: between the header and its list the
 # changed files read as the GSD line's); the git header line; the porcelain list (<= 20 lines);
 # in-flight inventory (every listed id);
 # evidence map (<= 8 rows from this compaction's checkpoint or sweep); the Queued: line when
 # queue_cmd is set. <= 3,000 B, cut at a line boundary with `(+N lines)`: cap() keeps lines from the
 # top, so it drops the Queued:, evidence, in-flight, approvals and porcelain lines, in that order,
 # before a GSD line (on main the GSD lines came after the evidence map and were dropped first). With `--copy`
-# (AP-5) the approvals lines of the summary follow the git and GSD lines (cmd/measure.pl
-# checks them); without it there is none. Times are stamps (`In flight (sidecar 2026-10-21 14:05 +0300)`, RV-24).
-# Owner: WP-core.
+# the approvals lines of the summary follow the git and GSD lines (cmd/measure.pl
+# checks them); without it there is none. Times are stamps (`In flight (sidecar 2026-10-21 14:05 +0000)`).
 use strict;
 use warnings;
 use utf8;
@@ -28,7 +27,7 @@ sub git_lines {
     return ('git: not a repository') if $g->{status} eq 'not-git';
     # With no upstream (a new local branch, a detached HEAD) or one whose ref is gone, the commits
     # not pushed are unknown: the line says so instead of `ahead 0` (the away digest's Basis reads
-    # it; review of the away-digest fix round 2).
+    # it).
     my $u = $g->{upstream} // 'set';
     my $l = sprintf('git: branch %s · HEAD %s · %d changed · %s%s',
                     $g->{branch} // '(detached)', $g->{head} // '-', $g->{count},
@@ -57,7 +56,7 @@ sub inflight_lines {
 }
 
 # 0.1.3 version skew (lib/plugver.pm): one line, only when sessions started since this session
-# run another plugin version, or (0.1.4 V-1) an install replaced this session's copy;
+# run another plugin version, or (0.1.4) an install replaced this session's copy;
 # /reload-plugins is the user's command, so the model relays it.
 sub plugin_lines {
     my $l = plugver::line();
@@ -170,7 +169,7 @@ sub compact {
     $wt //= git::where($cwd, $left->(2000))->{toplevel} if $g->{status} eq 'ok' && $left->(2000) >= 200;
     # The GSD lines go before the git header line: the cap (it keeps lines from the top) cuts every
     # later line (Queued:, evidence, in flight, approvals, porcelain) before them, so the re-enter
-    # command survives, and the git header stays right above its porcelain list (0.1.4 R-10).
+    # command survives, and the git header stays right above its porcelain list (0.1.4).
     my @l = (plugin_lines(), gsd_lines($o{gsd} // gsd_session($sid, $cwd, $wt, $o{transcript}, $left->($gsd::SCAN_MS))), @gl);
     push @l, @{ $o{approvals} } if ref $o{approvals} eq 'ARRAY';
     push @l, inflight_lines(defined $sid_dir ? sidecar::newest($sid_dir) : undef);
@@ -186,7 +185,7 @@ sub compact {
     return $text;
 }
 
-# brief(sid, cwd, %o{git => result}) -> one line <= $BRIEF_MAX bytes for ID-3's `[idle-return]`
+# brief(sid, cwd, %o{git => result}) -> one line <= $BRIEF_MAX bytes for the `[idle-return]`
 # context line: `git: <branch> @ <head>, dirty <n> · in flight: <n> running, <n> ended`. One git
 # call (2 s at most) and the newest sidecar slot; nothing else.
 our $BRIEF_MAX = 600;

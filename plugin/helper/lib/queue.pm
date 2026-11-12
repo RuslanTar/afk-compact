@@ -1,12 +1,12 @@
 package queue;
-# lib/queue.pm: the optional queue integration (OD-21; MOD-SPEC §1.2, §10, §10.3). Owner:
-# WP-core. Called only when `queue_cmd` is set: `list --json --session <sid>` (lane) and,
-# for `queue-add` only, `add --json …` (contract v2, D-10). Never adopt here (the resume
-# skill's `adopt` lives in WP-skills); the mod, the checkpoint and the hooks never add.
+# lib/queue.pm: the optional queue integration.
+# Called only when `queue_cmd` is set: `list --json --session <sid>` (lane) and,
+# for `queue-add` only, `add --json …` (contract v2). Never adopt here (the resume
+# skill's `adopt` lives on the skill side); the mod, the checkpoint and the hooks never add.
 # The caps cache <watch>/queue-caps.json is keyed by the queue_cmd path, mtime and size:
 # a `commands` array in a list reply is kept there (absent = contract v1: list and
 # adopt only), and an `add` the tool rejected as unsupported is kept for 24 h.
-# Modes (Q-ADAPTER QA-1, MOD-SPEC §10.4): mode() is off (queue_cmd empty), degraded (<why>)
+# Modes: mode() is off (queue_cmd empty), degraded (<why>)
 # (not an executable file, or this session's last `list` reply broke the contract: untagged,
 # schema, not-json, exit, timeout), else on. lane() is the one parser of a `list` reply for
 # every caller (checkpoint, measure, postcompact, begin, locate); a contract break logs one
@@ -17,8 +17,8 @@ use utf8;
 
 # call(argv, budget_ms[, max_out]) -> run result (the user's PERL5LIB/PERLLIB restored for the
 # child); max_out (default 256 KiB, the contract's cap) only for `queue check`, which reads one more
-# `out` stays the bytes the tool printed (WP-skills callers decode their own); lane() and
-# add() decode it once where they read it (MOD-SPEC §2.6 text encoding).
+# `out` stays the bytes the tool printed (skill-side callers decode their own); lane() and
+# add() decode it once where they read it.
 sub call {
     my ($argv, $budget_ms, $max_out) = @_;
     util::trace('queue_cmd');
@@ -34,10 +34,10 @@ my $LANE_RE = qr/\A(lane|auto):[A-Za-z0-9._\/-]+\z/;
 # lane(sid, queue_cmd, budget_ms[, quiet]) -> {status: ok|off|unknown|timeout, lane, open, ids, label, queued_line}
 # `quiet` (the local shadow trial's facts): the reply is read the same way, but nothing is recorded
 # (no queue-state.json, no caps cache, no queue_contract row), so the session's queue mode is unchanged.
-# The `list --json` reply is the v1 contract `queue-stub/v1` (ROOT-RULINGS F2-8,
-# provisional): one object {"schema": "queue-stub/v1", "session", "lane": "lane:<repo>/<name>"
+# The `list --json` reply is the v1 contract `queue-stub/v1`:
+# one object {"schema": "queue-stub/v1", "session", "lane": "lane:<repo>/<name>"
 # | "auto:…" | null, "open": n, "pending": n, "preview": bool, "held_by": sid | null,
-# "lanes": [{id, holder, open, preview}]}. The `schema` tag is required (QA-1, QA-2): a reply
+# "lanes": [{id, holder, open, preview}]}. The `schema` tag is required: a reply
 # without it is not read (`untagged`), nor one naming another schema (`schema`). Also taken:
 # `minted` as `preview`, `label`, and the open items as `items`/`open`/`pending` arrays (ids,
 # or objects with `id`). `lanes` is informational and ignored.
@@ -76,7 +76,7 @@ sub lane {
         last if $count;
     }
     my $named = $lane =~ /^lane:/ ? 1 : 0;
-    # "has something pending" (MOD-SPEC §10): v1's `pending` count when given, else the open count
+    # "has something pending": v1's `pending` count when given, else the open count
     my $pending = (defined $j->{pending} && !ref $j->{pending} && $j->{pending} =~ /\A\d+\z/) ? 0 + $j->{pending} : $count;
     return { status => 'unknown', why => 'auto-empty', silent => 1 } if !$named && !$pending && !$count;
     my $label = (defined $j->{label} && !ref $j->{label} && $j->{label} =~ /\A[^\n]{1,80}\z/) ? $j->{label} : $lane;
@@ -88,7 +88,7 @@ sub lane {
     return { status => 'ok', lane => $lane, open => $count, ids => \@ids, label => $label, queued_line => $line };
 }
 
-# ---------------------------------------------------------------- mode (QA-1)
+# ---------------------------------------------------------------- mode
 our %CONTRACT_WHY = map { $_ => 1 } qw(untagged schema not-json exit timeout);
 
 # _state_path([sid]) -> <watch>/<sid>/queue-state.json, this session's when no sid is given;
@@ -118,7 +118,7 @@ sub _contract {
 
 # mode([cmd]) or mode(sid, cmd) -> {mode => off|on|degraded, why => …}: no queue call (the
 # setting, the file and the session's last list outcome: this session's, or sid's record when
-# given, skills-to-core §5). cmd defaults to the queue_cmd setting (also for an undef cmd in the
+# given). cmd defaults to the queue_cmd setting (also for an undef cmd in the
 # two-argument form).
 sub mode {
     my ($sid, $cmd);
@@ -140,7 +140,7 @@ sub mode {
 sub mode_text { my $m = mode(@_); return $m->{mode} eq 'degraded' ? "degraded ($m->{why})" : $m->{mode} }
 
 # must_exist(cmd) -> 1 when the cached `commands` of the last list reply hold adopt:must-exist
-# (`lane adopt` then passes --must-exist; QA-2)
+# (`lane adopt` then passes --must-exist)
 sub must_exist {
     my ($cmd) = @_;
     my $c = caps_get($cmd);
@@ -195,7 +195,7 @@ sub add_supported {
     return 1;
 }
 
-# ---------------------------------------------------------------- add (D-10, MOD-SPEC §10.3)
+# ---------------------------------------------------------------- add
 our %ADD_EXIT = (3 => 'held', 4 => 'no-lane', 5 => 'invalid', 6 => 'error');
 our $ADD_SCHEMA = 'queue-add/v1';
 our $ADD_MAX = 4096;

@@ -1,6 +1,5 @@
 package watch::alerts;
-# lib/watch/alerts.pm: alert rows and delivery (WATCHER-SPEC §7.1, §7.2).
-# Owner: WP-watch.
+# lib/watch/alerts.pm: alert rows and delivery.
 #
 # Every alert is one `alert {alert_id, rule, severity, key, evidence}` row in
 # `<watch>/<sid>.alerts.jsonl`. The id is a stable hash of the rule and its
@@ -14,7 +13,7 @@ package watch::alerts;
 # stays taken).
 #
 # Delivery by Stop `systemMessage` is built but switched to status-only until
-# probe P-W2 passes (BUILD-PLAN E-17, W-Q3): in that mode nothing is printed
+# a delivery probe passes: in that mode nothing is printed
 # and no `delivered/` marker is created; `/status` lists the alerts.
 use strict;
 use warnings;
@@ -24,7 +23,7 @@ use watch::io;
 use watch::spec;
 use watch::json;
 
-our $DELIVERY = 'status-only';    # or 'system-message' after P-W2
+our $DELIVERY = 'status-only';    # or 'system-message' after the delivery probe
 my %SEV_RANK = (critical => 0, warn => 1, info => 2);
 
 our $CLOSED = 'alert_closed';
@@ -115,8 +114,8 @@ sub text_for {
 }
 
 # The text in the display form `<brand> watcher: <text> (<id>)` (handoff-spec §13). A spec
-# text that itself starts with `<brand>: ` (the A-16 text, WATCHER-SPEC A-16) would show the
-# name twice, so that prefix is dropped here (E-W-6, provisional; text-escalations E-T9-5).
+# text that itself starts with `<brand>: ` (the A-16 text) would show the
+# name twice, so that prefix is dropped here.
 sub shown_text {
     my ($ctx, $brand, $rule) = @_;
     my $t = text_for($ctx, $rule);
@@ -124,7 +123,7 @@ sub shown_text {
     return $t;
 }
 
-# Stop delivery (WATCH §7.2). Returns the one JSON line to print, or undef.
+# Stop delivery. Returns the one JSON line to print, or undef.
 # Status-only mode returns undef and touches nothing. `$deadline` (the Stop's
 # hard stop, watch::io::mono clock): past it nothing more is picked; an alert
 # not picked keeps no `delivered/` marker and is shown at a later Stop.

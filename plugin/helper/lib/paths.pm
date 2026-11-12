@@ -1,9 +1,9 @@
 package paths;
-# lib/paths.pm: where things live (MOD-SPEC conventions). Owner: WP-core.
+# lib/paths.pm: where things live.
 # paths::for(settings, sid) -> {root, watch, disposable, watch_default, invalid, from_default, legacy,
 #   disposable_from_default, disposable_legacy, moved}  (invalid: {key => 1} for a root with no
 #   absolute form, util::root_form)
-# STATE-ROOT (0.1.2): the default handoff root is ~/.local/state/<plugin>/handoffs and the default
+# State folder (0.1.2): the default handoff root is ~/.local/state/<plugin>/handoffs and the default
 # disposable root ~/.local/state/<plugin>/disposable. Claude Code asks before every write under
 # ~/.claude in the default permission mode (its protected-path, "sensitive file" prompt, which no
 # allow rule lifts), so the old defaults ~/.claude/handoffs and ~/.claude/trash-staging asked on each
@@ -29,7 +29,7 @@ our %MOVED = (handoff_root => [$DEFAULT_ROOT, $LEGACY_ROOT], disposable_root => 
 sub for {
     my ($settings, $sid) = @_;
     my $v = ref $settings eq 'HASH' && $settings->{values} ? $settings->{values} : $settings;
-    # RF-2: each root is read in this platform's form first (util::root_form: a drive path under
+    # Each root is read in this platform's form first (util::root_form: a drive path under
     # MSYS or Cygwin perl becomes /c/...). One it cannot read as absolute is marked invalid
     # (roots::check refuses it as root-invalid and asks no git) and keeps the cwd-joined form it
     # always had, so the callers that print it still have a path; nothing is written under it.
@@ -74,7 +74,7 @@ sub default_root {
 }
 
 # state_default([key]) -> the default root of key (handoff_root unless given), expanded and clean.
-# STATE-ROOT: under $XDG_STATE_HOME when that is an absolute path and the default lies under
+# Under $XDG_STATE_HOME when that is an absolute path and the default lies under
 # ~/.local/state (the XDG Base Directory rule: a relative value is ignored, so it reads as unset);
 # the manifest's default stays the literal path.
 sub state_default {
@@ -114,7 +114,7 @@ sub named {
 }
 
 # legacy(resolved settings, root[, key]) -> the legacy root of key (handoff_root unless given; expanded
-# and clean) or undef (STATE-ROOT). `for` asks only while key comes from the default (from_default).
+# and clean) or undef. `for` asks only while key comes from the default (from_default).
 # Undef when the folder is missing or is the root itself. Settings without a source (a plain values
 # hash) give undef.
 sub legacy {
@@ -140,7 +140,7 @@ sub _moved {
 }
 
 # follow(moved, path) -> path, or the same relative path under the new root when path is missing and
-# lies under an old default root (STATE-ROOT): MANIFEST.tsv rows and pins record full paths, and
+# lies under an old default root: MANIFEST.tsv rows and pins record full paths, and
 # `migrate --apply` copies the old folders without changing those records, so once the old folder is
 # removed a copy is read where migrate put it. A path that exists, or whose copy does not, is
 # returned as it is. moved is paths::for's `moved` list ([old, new] pairs).

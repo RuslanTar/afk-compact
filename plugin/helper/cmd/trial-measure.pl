@@ -1,6 +1,6 @@
 # cmd/trial-measure.pl: `trial-measure --sid S --cwd DIR [--cc-version V] [--budget-ms N]` ->
 # one JSON line: the local shadow trial's state for this session and, when it runs here, the
-# texts the two shadow forks need (TRIAL-DUAL-HANDOFF §4.1-§4.3). Owner: WP-core. It writes nothing in
+# texts the two shadow forks need. It writes nothing in
 # the trial folder, the handoff buckets or the session's queue state (only the helper's usual session
 # bookkeeping): the queue tool's list is read quiet. The skip-list is tested first, after one git call.
 #   {"state":"absent"}                       no trial config: the mod does nothing at all

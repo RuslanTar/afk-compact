@@ -1,9 +1,9 @@
 package keyset;
-# lib/keyset.pm: C5 payload key-set canary (MOD-SPEC §5.6). Owner: WP-core.
+# lib/keyset.pm: C5 payload key-set canary.
 # The baseline (assets/canary-baseline.json, tools/canary-baseline) lists each
 # event's required and optional top-level keys. A payload with a key outside that
 # set, or without a required key, logs one `keyset_change` per (event, key set): the
-# exclusive-create marker <watch>/keyset/<event>-<keyset_sha8> (P5-FOLD A7: not per version,
+# exclusive-create marker <watch>/keyset/<event>-<keyset_sha8> (not per version,
 # so a key set first seen before the version is known does not fire again under it); the
 # row carries cc_version in its envelope.
 use strict;

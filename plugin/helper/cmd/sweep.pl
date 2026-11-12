@@ -1,6 +1,6 @@
-# cmd/sweep.pl: `sweep --sid S --nonce N [--transcript PATH] [--cwd DIR]` (MOD-SPEC §10;
-# BUILD-PLAN §3.1). One line per file `<status>\t<origin>\t<copy or ->\t<bytes>\t<sha8>`,
-# then `TOTAL …`, then `WARN quota <bucket> <mb>` when over. Owner: WP-core.
+# cmd/sweep.pl: `sweep --sid S --nonce N [--transcript PATH] [--cwd DIR]`.
+# One line per file `<status>\t<origin>\t<copy or ->\t<bytes>\t<sha8>`,
+# then `TOTAL …`, then `WARN quota <bucket> <mb>` when over.
 use strict;
 use warnings;
 use utf8;

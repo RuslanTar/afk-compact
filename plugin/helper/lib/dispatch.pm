@@ -1,12 +1,11 @@
 package dispatch;
-# lib/dispatch.pm: dispatch records <watch>/<sid>/dispatch/<nonce>.json (MOD-SPEC
-# §2.3, BUILD-PLAN §3.4): exclusive create, 0600 in a 0700 directory; every key
-# always present; compaction_seq never in it. Optional `handoff_ht` (8 hex, D-18 B3) only
-# when the dispatch follows or interrupts a handoff turn. `idle` (IC-1 D1): the mod's idle
+# lib/dispatch.pm: dispatch records <watch>/<sid>/dispatch/<nonce>.json:
+# exclusive create, 0600 in a 0700 directory; every key
+# always present; compaction_seq never in it. Optional `handoff_ht` (8 hex) only
+# when the dispatch follows or interrupts a handoff turn. `idle`: the mod's idle
 # predicate, true|false on a mod record (absent flag = false), null on a classic record;
 # `idle_gap_s`: the dispatch ts minus the last main turn end, from the mod, else null.
-# Optional `model` (MG-4): the session's model the mod read, last, only when given.
-# Owner: WP-core.
+# Optional `model`: the session's model the mod read, last, only when given.
 use strict;
 use warnings;
 use utf8;
@@ -16,7 +15,7 @@ our @KEYS = qw(v nonce session_id actor agent_id trigger channel resume_pref mid
 our %TRIGGERS = map { $_ => 1 } qw(manual auto plugin precompute unknown);
 our %CHANNELS = map { $_ => 1 } qw(mod-hook mod-self classic);
 our %PREFS = map { $_ => 1 } qw(prompt.context sessionstart prompt.submit none);
-our %TAGS = map { $_ => 1 } qw(midturn auto chain measured handoff queue);    # queue: QA-B3 (2026-10-23)
+our %TAGS = map { $_ => 1 } qw(midturn auto chain measured handoff queue);    # queue: the queue lines
 
 sub path { my ($watch, $sid, $nonce) = @_; return "$watch/$sid/dispatch/$nonce.json" }
 
@@ -51,7 +50,7 @@ sub record {
     );
 }
 
-# MG-4 (ratify R4 guard, 2026-10-23): a model id as `$.session.model()` gives it
+# A model id as `$.session.model()` gives it
 # (`claude-opus-4-1`, `claude-sonnet-4-5[1m]`); anything else is not recorded.
 sub valid_model {
     my ($m) = @_;

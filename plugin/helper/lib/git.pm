@@ -1,6 +1,6 @@
 package git;
-# lib/git.pm: read-only git facts with budgets (MOD-SPEC §7, §10). Owner: WP-core.
-# macOS guard (R-4): when `git` resolves to /usr/bin/git (a CLT stub on a Mac
+# lib/git.pm: read-only git facts with budgets.
+# macOS guard: when `git` resolves to /usr/bin/git (a CLT stub on a Mac
 # without the Command Line Tools), `xcode-select -p` must exit 0 first; otherwise
 # no git process starts and git facts read `unavailable`.
 use strict;
@@ -31,8 +31,8 @@ sub cmd {
     my ($cwd, $args, $timeout_ms, $stdin) = @_;
     return { exit => -2, out => '', unavailable => 1, ms => 0 } unless available();
     util::trace('git');
-    # `out` is the bytes git printed: paths (toplevel, git dir) stay bytes (SR 1.1); the text
-    # parts (branch, status lines) are decoded once where they are read (MOD-SPEC §2.6)
+    # `out` is the bytes git printed: paths (toplevel, git dir) stay bytes; the text
+    # parts (branch, status lines) are decoded once where they are read
     return util::run([$BIN, "-C", util::fsb($cwd), @$args], timeout_ms => $timeout_ms // 2000,
                      env => { GIT_OPTIONAL_LOCKS => "0", LC_ALL => "C", GIT_TERMINAL_PROMPT => "0" },
                      (defined $stdin ? (stdin => $stdin) : ()));

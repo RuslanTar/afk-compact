@@ -1,11 +1,11 @@
 package lock;
-# lib/lock.pm: advisory locks for read-modify-write of our own files (MOD-SPEC §7).
-# Owner: WP-core. lock::with(path, owner, fn):
+# lib/lock.pm: advisory locks for read-modify-write of our own files.
+# lock::with(path, owner, fn):
 #   flock(LOCK_EX) on the lock file (released by the kernel when a holder dies),
 #   then the owner record inside it: a record left by another holder whose pid is
 #   dead, or whose start time differs, is stale -> taken over, one `lock_stale` row.
 #   A record of a live holder is never broken: we wait up to `wait_ms`, then give up. A
-#   start time this call cannot read is no difference (identity::alive, RF-3): that
+#   start time this call cannot read is no difference (identity::alive): that
 #   holder counts as live.
 # owner = {sid, actor}; pid and start time are this helper process's, host from uname.
 use strict;

@@ -1,7 +1,6 @@
 package watch::prune;
-# lib/watch/prune.pm: `watch prune --days N` (OWNER-DECISIONS D-9; BUILD-PLAN
-# §3.1). Owner: WP-watch. Built and tested, NOT wired into any hook until the
-# owner answers E-8: it is the plugin's only deletion code.
+# lib/watch/prune.pm: `watch prune --days N`. Built and tested, NOT wired into any hook
+# yet: it is the plugin's only deletion code.
 #
 # It deletes only per-session files under <watch> whose session id is a UUID:
 # `<sid>.jsonl`, `<sid>.classic.jsonl`, `<sid>.alerts.jsonl` and the `<sid>/`
@@ -67,7 +66,7 @@ sub prune {
             push @dirs, @$d;
             $bytes += $b;
         }
-        # D-8 (needs/core-to-watch.md §5; F2-7): a stash under <sid>/pending/ (an unsaved raw
+        # F2-7: a stash under <sid>/pending/ (an unsaved raw
         # summary, or one kept after a copy mismatch) is never deleted by the plugin, so a set
         # holding one is kept whole.
         $ok = 0 if $ok && grep { m{\A\Q$watch\E/[^/]+/pending/} } @files;

@@ -1,6 +1,6 @@
 package jobrec;
-# lib/jobrec.pm: Dev-1 job records (MOD-SPEC §7 "Job records"; BUILD-PLAN §3.1 `log
-# --stream jobs`, §3.7). Owner: WP-core. The mod's main tool.call handler records each
+# lib/jobrec.pm: job records (`log --stream jobs`).
+# The mod's main tool.call handler records each
 # background shell after next(e) resolves and sends the raw fields on stdin; this file
 # completes and writes one row to <watch>/<sid>/jobs.jsonl (O_APPEND, 0600):
 #   job:  task_id · launched_at · owner {pid, lstart} (this session's live process
@@ -12,14 +12,14 @@ package jobrec;
 #   stop: task_id (a TaskStop call)
 # Writer guard: accepted only when the helper's parent is the recorded Claude Code
 # process (ppid = the live record's pid, start time matching); else REFUSED: jobs-caller.
-# Residual (REVIEW B-16): a model-run `exec <store> log --stream jobs …` replaces its
+# Residual: a model-run `exec <store> log --stream jobs …` replaces its
 # shell, so its parent is the Claude Code process too and the guard passes. Such a row
 # can only claim a command; heal-check's V1 needs the origin transcript's own Bash
 # tool_use with that command and backgroundTaskId, and the sidecar keeps the runtime's
 # BackgroundTaskSummary.command as a sha (lib/sidecar.pm) for a second, runtime-owned
 # cross-check. Secrets: the command is scanned at write; a HARD hit stores the sha256 and
 # the rule ids, never the text, so such a job never relaunches by itself.
-# Pending relaunches (heal-check --bump, WP-skills): <watch>/<sid>/jobs-pending.jsonl,
+# Pending relaunches (heal-check --bump): <watch>/<sid>/jobs-pending.jsonl,
 # one row per bumped relaunch {sha256 of the run line, origin_sid, task_id, epoch}. A job
 # recorded later in the same session whose command has that sha gets relaunch_of and the
 # next epoch; one still unmatched at a Stop is `relaunch_unmatched`.
@@ -27,12 +27,12 @@ use strict;
 use warnings;
 use utf8;
 
-# Output path source (DP-2 / REVIEW A-2, probe P-D1-6; DP-24 (a)). BackgroundTaskSummary
+# Output path source. BackgroundTaskSummary
 # has no output path (types :820-851) and result.backgroundOutputPath is set only for jobs
 # kept by another process (types :21290). Two candidate sources are read and recorded:
 #   result-text  the Bash tool.call result text names the output file
 #   layout       the observed <tmp>/claude-<uid>/<cwd slug>/<sid>/tasks/<id>.output
-# P-D1-6 passed on 2.1.306 (5/5 jobs: the result text names the layout's file), so the
+# A probe passed on 2.1.306 (5/5 jobs: the result text names the layout's file), so the
 # result text is the source and the layout its cross-check (output_path_check):
 #   agrees     the result-text path equals the layout candidate: used
 #   differs    they name different files: output_path stays null, so the job asks
@@ -78,8 +78,8 @@ sub caller_ok {
     my ($sid) = @_;
     my $o = owner($sid) // return (undef, 'no-record');
     my $pp = getppid();
-    # the parent proven by its start time read now (alive_verified): an unreadable one is not proof
-    # (RF-3). owner() already requires the record's start time to equal the one this process read
+    # the parent proven by its start time read now (alive_verified): an unreadable one is not proof.
+    # owner() already requires the record's start time to equal the one this process read
     # (cached), so this matches alive() today; it keeps the guard off alive-unknown
     return (undef, 'parent') unless $pp == $o->{pid} && identity::alive_verified($pp, $o->{lstart});
     return ($o, undef);
@@ -89,7 +89,7 @@ sub caller_ok {
 # a letter or a digit becomes '-' (/srv/a/.claude -> -srv-a--claude)
 sub cwd_slug { my ($p) = @_; (my $s = $p // '') =~ s/[^A-Za-z0-9]/-/g; return $s }
 
-# Candidate readers (P-D1-6). Each returns an absolute path or undef.
+# Candidate readers. Each returns an absolute path or undef.
 sub path_from_result_text {
     my ($text, $task) = @_;
     return undef unless defined $text && !ref $text && $text ne '';
@@ -151,7 +151,7 @@ sub read_rows {
 
 # The pending entry a new job with command sha `sha` fulfils: the newest one with that
 # sha whose task no job row has named in relaunch_of yet, neither on disk nor earlier in
-# this batch (`claimed`: "task_id\tsha" keys, CR-F3).
+# this batch (`claimed`: "task_id\tsha" keys).
 sub _match_pending {
     my ($sid_dir, $sha, $claimed) = @_;
     my $pend = read_rows(pending_path($sid_dir));
@@ -188,7 +188,7 @@ sub complete {
     my @hard = grep { !$seen{$_}++ } map { $_->{rule} } grep { $_->{class} eq 'HARD' } @$hits;
     my $cwd = (defined $in->{cwd} && !ref $in->{cwd} && $in->{cwd} =~ m{^/}) ? $in->{cwd} : undef;
     my $bg = (defined $in->{backgrounded} && $BACKGROUNDED{ $in->{backgrounded} }) ? $in->{backgrounded} : 'other';
-    # launched_at is kept only when it is a short ISO time (CR-F4: an unbounded fraction
+    # launched_at is kept only when it is a short ISO time (an unbounded fraction
     # would make the row too large); else the time of this write.
     my $launched = (defined $in->{launched_at} && !ref $in->{launched_at} && length($in->{launched_at}) <= $LAUNCHED_MAX
                     && defined util::parse_iso($in->{launched_at})) ? $in->{launched_at} : util::iso(util::now());
@@ -217,7 +217,7 @@ sub complete {
     my $fits = sub { return length(jsonc::encode_bytes($_[0])) + 1 <= $log::MAX };
     my $row = @hard ? $build->(undef, \@hard) : $build->($cmd, undef);
     # A command too long for one row is withheld like a secret: the job never relaunches by
-    # itself. A row still too large (long cwd and paths, CR-F4) drops the candidate paths,
+    # itself. A row still too large (long cwd and paths) drops the candidate paths,
     # then the cwd and the output path. Every field left is bounded, so the level-2 row
     # fits; should it not, the line is a usage error and the batch writes nothing.
     for my $level (0 .. 2) {

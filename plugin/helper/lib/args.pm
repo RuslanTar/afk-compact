@@ -1,5 +1,5 @@
 package args;
-# lib/args.pm: `--key value` / `--flag` parsing for the subcommands. Owner: WP-core.
+# lib/args.pm: `--key value` / `--flag` parsing for the subcommands.
 # parse(\@argv, bools => [names], multi => [names]) -> (\%opt, \@rest) or dies "usage: ..."
 use strict;
 use warnings;
@@ -39,7 +39,7 @@ sub need {
 }
 
 # main(\&run, @argv): runs a subcommand body; `usage:` dies -> exit 64 with one
-# stderr line; other dies -> exit 70 (BUILD-PLAN §3.1 exit codes; 2 is never used).
+# stderr line; other dies -> exit 70 (2 is never used).
 sub main {
     my ($run, @argv) = @_;
     my $code = eval { $run->(@argv) };
@@ -55,11 +55,11 @@ sub main {
 }
 
 # init_sid(opt, writer) -> sid after rc::init with the settings flags of opt. A missing, empty
-# or unsubstituted --sid (CW-1: a Cowork task's skill text kept `${CLAUDE_SESSION_ID}` and its
+# or unsubstituted --sid (a Cowork task's skill text kept `${CLAUDE_SESSION_ID}` and its
 # Bash had the variable empty) is refused with the reason: these commands work on one
 # session's state. Read-only `status` takes no_sid() first and runs without one. A placeholder id
 # the helper itself logs under (reserved_sid) is refused too: its folder is a pool of rows from
-# many sessions, never one session's state (CW-1 review).
+# many sessions, never one session's state.
 sub init_sid {
     my ($opt, $writer) = @_;
     if (no_sid($opt->{sid})) {
@@ -91,8 +91,8 @@ sub no_sid {
 }
 
 # unsubstituted(value) -> 1 for a variable reference the skill text or the shell left as written:
-# `${…}`, `$NAME`, or a bare `CLAUDE_*` name (a model that dropped the braces and the dollar;
-# CW-1 review 2), else 0
+# `${…}`, `$NAME`, or a bare `CLAUDE_*` name (a model that dropped the braces and the dollar),
+# else 0
 sub unsubstituted {
     my ($s) = @_;
     return defined $s && ($s =~ /\A\s*\$/ || $s =~ /\ACLAUDE_[A-Z0-9_]+\z/) ? 1 : 0;

@@ -1,13 +1,12 @@
 package skills::measure_handoff;
-# lib/skills/measure_handoff.pm: the `measure <handoff>` form (RDN helper
-# table, resume R3; D-2, D-21, D-22 resume remaining 4). Called by
-# cmd/measure.pl (WP-core), which prints the returned lines.
-# It measures and never runs a command taken from the handoff. Approvals (AP-5, D-2
-# replaced by scoped carry): `Approvals (checked)` lists the own handoff's approvals whose ids
+# lib/skills/measure_handoff.pm: the `measure <handoff>` form (resume R3). Called by
+# cmd/measure.pl, which prints the returned lines.
+# It measures and never runs a command taken from the handoff. Approvals (scoped
+# carry): `Approvals (checked)` lists the own handoff's approvals whose ids
 # publish wrote to approvals_checked, unused and not a gate; `Approvals (gate, re-ask)` the gate
 # ones (skills/approvals.pm); one content-free approvals_carry row. Commits are "ours" only when the
 # chain names the hash or the commit lies between two git_commit values the
-# chain recorded; every other commit is one "foreign" line (D-21).
+# chain recorded; every other commit is one "foreign" line.
 # Re-check commands in Live state and In flight are linted against the
 # outward/destructive classes and the secret rules; a hit prints
 # `needs-ask <class> line <n>`.
@@ -76,10 +75,10 @@ sub run {
         push @out, "handoff worktree: $wt " . (-d $wt ? 'exists' : 'missing');
     }
     # The GSD state file this handoff names (frontmatter `gsd`, its session's own; an export's is
-    # repository-relative), re-read now; never every worktree's (owner 2026-10-26 21:37). Only a
+    # repository-relative), re-read now; never every worktree's. Only a
     # GSD STATE.md path is read, and for a handoff that is not this session's own (another
-    # session's, an export, an import) only one inside this worktree. Root ruling R3 (2026-10-27):
-    # the resume reconcile rewrites only this worktree's STATE.md, so one in another checkout (GSD
+    # session's, an export, an import) only one inside this worktree.
+    # The resume reconcile rewrites only this worktree's STATE.md, so one in another checkout (GSD
     # work run with --cwd) is marked to be reported.
     if (defined $fm->{gsd} && $fm->{gsd} ne '') {
         my $gp = $fm->{gsd};
@@ -91,7 +90,7 @@ sub run {
             if defined $l && defined _gsd_path_bad($gp, $g->{in_git} ? $g->{worktree} : '');
         push @out, defined $why ? "GSD (handoff): not read ($why)" : "GSD (handoff): $l" if defined $why || defined $l;
     }
-    # Root ruling R4 (2026-10-27): a handoff that names a driver gets the driver of its session as
+    # A handoff that names a driver gets the driver of its session as
     # that session's transcript shows it now (lib/gsd.pm), so a loop that paused itself or ended
     # after the handoff was written is shown, never run. The line may sit indented in a code block
     # under a list item (the template's layout), quoted, or as a list item.
@@ -130,13 +129,13 @@ sub _driver_now {
     return "Driver now ($who): " . (defined $r->{driver} ? $r->{driver} : 'none (the loop ended)');
 }
 
-# D-21 commit ownership.
+# Commit ownership.
 sub _commits {
     my ($ctx, $g, $d) = @_;
     my $gc = $d->{fm}{git_commit};
     my $cs = skills::gitfacts::commits_since($g->{worktree}, $gc) or return ('commits: not measured');
     # Only the handoff's own chain names "our" commits: a foreign hop (another session's
-    # handoff carried as the base, small-rulings §2.5) never does.
+    # handoff carried as the base) never does.
     my @chain = grep { !$_->{foreign} } chain_docs($d, $ctx);
     my $named = join "\n", map { $_->{body} } @chain;
     my %in_range;
@@ -174,7 +173,7 @@ sub _gsd_path_bad {
     return undef unless defined $wt;
     return 'outside this worktree' if $wt eq '';
     # skills::util::abs_path hands Cwd bytes: a character path given to the pure-Perl Cwd (MSYS,
-    # Cygwin) came back encoded twice, so `-e "$d/.git"` missed a nested checkout's .git (RF-1)
+    # Cygwin) came back encoded twice, so `-e "$d/.git"` missed a nested checkout's .git
     my ($rp, $rw) = map { skills::util::text($_) } (-e $p ? skills::util::abs_path($p) : $p), (-d $wt ? skills::util::abs_path($wt) : $wt);
     $rw =~ s{/+\z}{};
     return 'outside this worktree' unless index($rp, "$rw/") == 0;
@@ -188,7 +187,7 @@ sub _gsd_path_bad {
 
 # The handoff and its predecessors by previous_handoff, newest first (≤10), across
 # foreign hops: a predecessor whose session is neither the handoff's nor in its lineage
-# (A-6, 3 hops) is marked {foreign} (small-rulings §2.5).
+# (3 hops) is marked {foreign}.
 sub chain_docs {
     my ($d, $ctx) = @_;
     my $hs = $d->{fm}{session_id} // '';

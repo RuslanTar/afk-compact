@@ -1,6 +1,6 @@
 package watchcall;
-# lib/watchcall.pm: how core calls the watcher (lib/watch.pm, BUILD-PLAN §3.6), shared by the
-# `hook` entry (cmd/hook.pl) and the `reconcile` CLI (cmd/reconcile.pl). Owner: WP-core.
+# lib/watchcall.pm: how core calls the watcher (lib/watch.pm), shared by the
+# `hook` entry (cmd/hook.pl) and the `reconcile` CLI (cmd/reconcile.pl).
 #   ctx(event, extra)        the watch ctx core passes (lib/watch/ctx.pm contract)
 #   call(stage, fn)          run a watcher seam with stdout closed off; an error -> one watch_error row
 #   finished(n, meta, ms)    orphans::pass `after`: the watcher's end pass for a session finished across

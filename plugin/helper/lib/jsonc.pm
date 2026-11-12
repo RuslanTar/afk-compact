@@ -1,10 +1,10 @@
 package jsonc;
-# lib/jsonc.pm: embedded JSON codec (ROOT-RULINGS R-1: one code path, no JSON::PP).
-# Owner: WP-core. Floor modules only.
+# lib/jsonc.pm: embedded JSON codec (one code path, no JSON::PP).
+# Floor modules only.
 #
 # decode(TEXT) -> data. TEXT may be bytes (UTF-8) or characters; strings come
 #   back as Perl character strings. A string that is all ASCII comes back without
-#   the UTF-8 flag (SR 1.1): one non-ASCII character elsewhere in a document must not
+#   the UTF-8 flag: one non-ASCII character elsewhere in a document must not
 #   make its ASCII values character strings, which then mix with the helper's byte
 #   literals (`·`) and print double-encoded. true/false decode to
 #   $jsonc::true()/$jsonc::false(). Dies "json: <reason> at <offset>" on bad input.
@@ -210,7 +210,7 @@ sub encode {
 }
 
 # encode to UTF-8 bytes. Character strings are encoded once and byte strings (taken as
-# UTF-8) pass as they are, so neither comes out double-encoded (CR-F2, SR 1.1).
+# UTF-8) pass as they are, so neither comes out double-encoded (CR-F2).
 sub encode_bytes {
     local $BYTES = 1;
     my $s = encode($_[0]);

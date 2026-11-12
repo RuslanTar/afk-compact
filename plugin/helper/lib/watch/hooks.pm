@@ -1,8 +1,8 @@
 package watch::hooks;
-# lib/watch/hooks.pm: rows written at hook time (WATCHER-SPEC W5, W6; §6.3
-# field lists). Owner: WP-watch. Nothing here prints: PreCompact stdout would
-# become summarizer instructions (WATCH §0). The W10 `stop_failure` and W11
-# `permission_denied` rows have one writer, core's `hook` (ROOT-RULINGS F2-5);
+# lib/watch/hooks.pm: rows written at hook time (the precompact and postcompact
+# field lists). Nothing here prints: PreCompact stdout would
+# become summarizer instructions. The `stop_failure` and
+# `permission_denied` rows have one writer, core's `hook`;
 # the watcher reads them and writes neither.
 use strict;
 use warnings;
@@ -34,7 +34,7 @@ sub _keyset_hash {
     return defined $hex ? substr($hex, 0, 8) : undef;
 }
 
-# A bracketed header line that is not ours (MOD §2.2: foreign headers never match).
+# A bracketed header line that is not ours (foreign headers never match).
 sub foreign_header {
     my ($text, $spec) = @_;
     return 0 unless defined $text && index($text, $OPEN) >= 0;
@@ -48,8 +48,8 @@ sub foreign_header {
     return 0;
 }
 
-# Core's PreCompact passes its detect.instructions result as `instructions`
-# (BUILD-PLAN §3.6, PKG-RUNTIME D.1). ALIAS: `instr` is the older documented name; core never
+# Core's PreCompact passes its detect.instructions result as `instructions`.
+# ALIAS: `instr` is the older documented name; core never
 # passes it. It is still read, and marked for removal after one release.
 sub _ci_nonce {
     my ($ctx, $ci) = @_;
@@ -65,7 +65,7 @@ sub _ci_nonce {
     return _nonce_ok($last) ? $last : undef;
 }
 
-# W5: `precompact {trigger, ci_bytes, ci_has_nonce, ci_nonce, ci_foreign_header, keyset_hash}`.
+# `precompact {trigger, ci_bytes, ci_has_nonce, ci_nonce, ci_foreign_header, keyset_hash}`.
 sub pre_compact {
     my ($ctx) = @_;
     my $p = $ctx->{payload};
@@ -98,7 +98,7 @@ sub _copy_rows {
     return \@r;
 }
 
-# C-STORE D5 (MOD-SPEC §5.9 step 4): a reconcile fill renames a `sub-unknown` copy; the
+# A reconcile fill renames a `sub-unknown` copy; the
 # newest `copy_attributed` row for the copy's id6 has the path that exists now.
 sub _attributed_path {
     my ($rows, $id6) = @_;
@@ -120,7 +120,7 @@ sub _strip_frontmatter {
 }
 
 # A saved copy's text as the summary had it: the body without frontmatter and without the ledger
-# lines the helper carried into it from the previous copy (0.1.5 E-1, frontmatter
+# lines the helper carried into it from the previous copy (0.1.5, frontmatter
 # `ledger_carried`; watch::shape::uncarried), so A-09 still counts what the summary itself lost.
 sub copy_text {
     my ($t, $spec) = @_;
@@ -187,7 +187,7 @@ sub _summary_texts {
     return \@out;
 }
 
-# MOD-SPEC §3.3 / WATCH M-06: did the mod write its liveness file in this turn,
+# Did the mod write its liveness file in this turn,
 # from this process? Core's answer wins when it passes one.
 sub mod_alive_this_turn {
     my ($ctx) = @_;
@@ -217,7 +217,7 @@ sub mod_alive_this_turn {
 # The detector result for compact_summary. Core's PostCompact passes its own
 # result: the detect.summary fields (nonce, the marker's scope, normalized,
 # marker_line, sentinel_from_end) under `scan`, and its final verdict on top.
-# ALIAS (PKG-RUNTIME D.1): a flat `detect` (the detect.summary fields with no `scan`) is the
+# ALIAS: a flat `detect` (the detect.summary fields with no `scan`) is the
 # older documented form; core never passes it. Still read; marked for removal after one release.
 sub _detect {
     my ($ctx) = @_;
@@ -229,7 +229,7 @@ sub _detect {
     return \%m;
 }
 
-# W6: `postcompact` with the shape metrics of compact_summary.
+# `postcompact` with the shape metrics of compact_summary.
 sub post_compact {
     my ($ctx) = @_;
     my $p = $ctx->{payload};
@@ -251,7 +251,7 @@ sub post_compact {
     else { $is_main = _looks_main($body, $ctx->{spec}) }
     my @tags = ref $disp eq 'HASH' && ref $disp->{tags} eq 'ARRAY' ? @{ $disp->{tags} } : ();
     my $measured = grep { $_ eq 'measured' } @tags;
-    # RV-24: the measured block's stamps (the first is the row's `measured_stamp`).
+    # the measured block's stamps (the first is the row's `measured_stamp`).
     my @stamps;
     if ($measured && $nonce) {
         my $cp = watch::io::read_json_file(watch::ctx::sid_dir($ctx) . "/checkpoint/$nonce.json");

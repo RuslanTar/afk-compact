@@ -1,29 +1,28 @@
 package watch::ctx;
 # lib/watch/ctx.pm: the context every watcher entry point works from.
-# Owner: WP-watch.
 #
-# Contract with the caller (WP-core `hook <Event>`, `status`; BUILD-PLAN §3.6).
+# Contract with the caller (core's `hook <Event>`, `status`).
 # ctx is a hashref; every key is optional except `sid`:
 #   sid            full session id
 #   payload        the decoded hook payload (hashref)
-#   settings       resolved settings (MOD-SPEC §1.2 keys, snake_case)
+#   settings       resolved settings (the userConfig keys, snake_case)
 #   watch          the watch dir (<log_dir>, default <root>/.watch)
 #   root           the handoff root
 #   plugin_root    the plugin folder (default: four levels above this file)
 #   pid, pid_lstart  the Claude Code process (identity.claude_pid)
 #   cc_version     Claude Code version when known
-#   cc_version_src which source gave cc_version (mod, exec, transcript, mirror; MOD-SPEC §2.5)
+#   cc_version_src which source gave cc_version (mod, exec, transcript, mirror)
 #   detect         PostCompact: core's result {scan => detect.summary result, verdict,
 #                  scope, seat_state, id6, channel, scope_deferred}. ALIAS: the flat
 #                  detect.summary result (no `scan`), still read, marked for removal
-#                  after one release (PKG-RUNTIME D.1)
+#                  after one release
 #   instructions   PreCompact: detect.instructions result {found, nonce, scope,
 #                  has_record}. ALIAS `instr`: the older name, still read, marked for
-#                  removal after one release (PKG-RUNTIME D.1; core never passes it)
+#                  removal after one release (core never passes it)
 #   dispatch       PostCompact: the dispatch record matched by core, if any
 #   secret_hits    PostCompact: [rule ids] from secrets.scan on the summary
 #   keyset_hash    C5 sha8 of this payload's key set, as core computes it
-#   mod_alive_this_turn  PostCompact: core's liveness answer (MOD-SPEC §3.3)
+#   mod_alive_this_turn  PostCompact: core's liveness answer
 #   copy_waits     Stop: the stashes this Stop's reconcile left for a later run
 #                  {"n:<nonce>" or "i:<id6>" => file in pending/}; their A-01 is held
 #   reconcile_busy Stop: 1 when that reconcile could not take the session's reconcile lock (0.1.4):
@@ -49,7 +48,7 @@ use watch::io;
 use watch::json;
 
 my %DEFAULTS = (
-    # STATE-ROOT (0.1.2); <plugin> is the plugin's name from its manifest (_named)
+    # state folder (0.1.2); <plugin> is the plugin's name from its manifest (_named)
     handoff_root                => '~/.local/state/<plugin>/handoffs',
     log_dir                     => '',
     watcher                     => 'shadow',
@@ -64,9 +63,9 @@ my %DEFAULTS = (
     deny_class_patterns         => '',
     handoff_turn                => 'halt',
     handoff_turn_max_tokens     => 64000,
-    # SK-6 (owner xxxxxxxx-14, S-SETTINGS E6): the watch folder size that raises A-24 (0 = off)
+    # the watch folder size that raises A-24 (0 = off)
     watch_quota_mb              => 50,
-    # owner xxxxxxxx-29: the user's add-only protected branches (a protective key: _settings
+    # the user's add-only protected branches (a protective key: _settings
     # takes it from the resolved settings only, never from env)
     protected_branches          => '',
 );
@@ -78,8 +77,8 @@ sub plugin_root_default {
     return defined $p ? $p : "$THIS_DIR/../../..";
 }
 
-# _named(value) -> value with <plugin> replaced by the plugin's name (the handoff_root fallback default,
-# STATE-ROOT), in ctx::brand's order: the manifest's name, else the launcher's minus `-store`, else `plugin`.
+# _named(value) -> value with <plugin> replaced by the plugin's name (the handoff_root fallback default),
+# in ctx::brand's order: the manifest's name, else the launcher's minus `-store`, else `plugin`.
 sub _named {
     my ($v) = @_;
     return $v unless defined $v && !ref $v && index($v, '<plugin>') >= 0;
@@ -94,7 +93,7 @@ sub _named {
     return $v;
 }
 
-# STATE-ROOT (0.1.2): the pre-0.1.2 default handoff root, the one watch-side copy of core's
+# Legacy root (0.1.2): the pre-0.1.2 default handoff root, the one watch-side copy of core's
 # paths::$LEGACY_ROOT (watch/ modules load no core module). export.pm reads its bucket names.
 our $LEGACY_ROOT = '~/.claude/handoffs';
 
@@ -105,8 +104,8 @@ sub legacy_root {
 }
 
 # _state_root(value) -> the handoff root a value names: the default (as the fallback names it, with ~
-# expanded) reads under $XDG_STATE_HOME when that is an absolute path, as core's paths::state_default
-# (STATE-ROOT); any other value is returned as it is.
+# expanded) reads under $XDG_STATE_HOME when that is an absolute path, as core's paths::state_default;
+# any other value is returned as it is.
 sub _state_root {
     my ($v) = @_;
     return $v unless defined $v && !ref $v;
@@ -144,7 +143,7 @@ sub _settings {
         $given = $r if ref $r eq 'HASH';
     }
     # Core passes settings::resolve's shape {values => {...}, source, notes} (rc::settings),
-    # and the fallback above returns it too; the keys live under `values` (CR-F15). A flat
+    # and the fallback above returns it too; the keys live under `values`. A flat
     # hash (key => value) is read as it is.
     $given = $given->{values} if $given && ref $given->{values} eq 'HASH';
     for my $k (keys %DEFAULTS) {
@@ -183,7 +182,7 @@ sub _settings {
     return \%s;
 }
 
-# `watcher` (WATCHER-SPEC §8 item 6; REVIEW B-22): trimmed and case-folded; `shadow` and
+# `watcher`: trimmed and case-folded; `shadow` and
 # `off` are the only values, anything else (`of`, `Shadow2`, an empty string) counts as
 # `shadow` and is flagged, so a typo can never switch the watcher on or off unseen.
 # Returns (value, unknown). Unset, or an unresolved `${user_config.` placeholder, is the
@@ -199,7 +198,7 @@ sub _watcher_value {
     return ('shadow', 1);
 }
 
-# _switch(key, value) -> the word an on/off key's value reads as (D-72: true or false, or a word
+# _switch(key, value) -> the word an on/off key's value reads as (true or false, or a word
 # from before 0.1.6), as core's settings::switch_read reads it (one table, settings.pm %SWITCH),
 # else undef (and undef when that module cannot load).
 sub _switch {
@@ -209,7 +208,7 @@ sub _switch {
     return defined &settings::switch_read ? (settings::switch_read($key, $raw))[0] : undef;
 }
 
-# _trim(text) -> text without leading and trailing white space, in linear time (U-06 review:
+# _trim(text) -> text without leading and trailing white space, in linear time (U-06:
 # s/\A\s+|\s+\z//g is quadratic in a long inner run of spaces; settings::trim does the same)
 sub _trim {
     my ($s) = @_;
@@ -282,10 +281,10 @@ sub watcher_on {
     return (($ctx->{settings}{watcher} || 'shadow') ne 'off') ? 1 : 0;
 }
 
-# refused(ctx) -> 0, or "<key>: <reason>" when the watcher must write nothing (WATCH §6.1:
-# "if the configured root or watch dir resolves inside a git work tree, the watcher writes
-# nothing and status says why"). Each path gets core's unsafe-root test (roots::check_path,
-# MOD-SPEC §1.2 D-12): inside .planning/ or a not-ignored git work tree is refused, a
+# refused(ctx) -> 0, or "<key>: <reason>" when the watcher must write nothing (if the
+# configured root or watch dir resolves inside a git work tree, the watcher writes
+# nothing and status says why). Each path gets core's unsafe-root test (roots::check_path):
+# inside .planning/ or a not-ignored git work tree is refused, a
 # git-ignored one is ok. Each path is first put in core's form (util::clean_path, as
 # paths::for does), so it hits the roots cache core filled. Order: the watch dir (the
 # configured log_dir, else <root>/.watch, then the folder this call writes to when core
@@ -324,7 +323,7 @@ sub _root_refusal {
                ['handoff_root', $s->{handoff_root}]) {
         my ($key, $p) = @$c;
         next unless defined $p && !ref $p && $p ne '';
-        # RF-2, as paths::for: a root with no absolute form in this platform (relative, \x, C:x,
+        # as paths::for: a root with no absolute form in this platform (relative, \x, C:x,
         # a drive path outside MSYS and Cygwin perl) is refused before any cwd join or git call
         $p = util::root_form($p) // return "$key: root-invalid";
         # core's form (paths::for): roots.pm caches by the exact string, so a raw `~/x/./h`
@@ -350,7 +349,7 @@ sub mod_log     { return $_[0]{watch} . '/' . $_[0]{sid} . '.jsonl' }
 sub alerts_log  { return $_[0]{watch} . '/' . $_[0]{sid} . '.alerts.jsonl' }
 sub sid_dir     { return $_[0]{watch} . '/' . $_[0]{sid} }
 
-# WATCH §6.2 envelope; every key present, unknown = null.
+# The row envelope; every key present, unknown = null.
 sub row {
     my ($ctx, $ev, $fields, %o) = @_;
     if (ref $ctx->{row} eq 'CODE') {
@@ -402,7 +401,7 @@ sub log_row {
 }
 
 # One content-free error row: stage and class only. None under a refused watch dir or
-# handoff root (WATCH §6.1), also when init or watcher_on died before the hook's own check.
+# handoff root, also when init or watcher_on died before the hook's own check.
 sub error_row {
     my ($ctx, $stage, $err) = @_;
     # a check that died is unknown, and unknown is not safe

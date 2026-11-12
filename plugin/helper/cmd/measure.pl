@@ -1,9 +1,9 @@
-# cmd/measure.pl: two forms (BUILD-PLAN §2 note). Owner: WP-core.
+# cmd/measure.pl: two forms.
 #   measure --sid S --compact [--cwd DIR] [--nonce N] [--copy FILE] [--transcript FILE] [--budget-ms MS]
-#                                                     -> the re-measure block <= 3,000 B (MOD-SPEC §2.6)
-#   measure --sid S --compact --brief [--cwd DIR]     -> one line <= 600 B (ID-3 `[idle-return]`)
-#   measure <handoff> [...]                           -> lib/skills/measure_handoff (WP-skills)
-# --copy (AP-5): the saved copy of this compaction's summary; its approvals are checked against this
+#                                                     -> the re-measure block <= 3,000 B
+#   measure --sid S --compact --brief [--cwd DIR]     -> one line <= 600 B (`[idle-return]`)
+#   measure <handoff> [...]                           -> lib/skills/measure_handoff (skill side)
+# --copy: the saved copy of this compaction's summary; its approvals are checked against this
 # session's transcript (--transcript, else <config dir>/projects/<slug of the cwd>/<sid>.jsonl) and
 # printed as `Approvals (checked)` lines; a copy that cannot be read yet prints
 # `Approvals: not checked (copy pending)`. Without --copy the block has no approvals line, so the
@@ -50,7 +50,7 @@ sub run {
     return 0;
 }
 
-# AP-5: the summary's approvals, checked in memory; one content-free approvals_carry row.
+# The summary's approvals, checked in memory; one content-free approvals_carry row.
 sub _approvals {
     my ($sid, $cwd, $copy, $transcript) = @_;
     my $raw = (-f $copy && -r _) ? util::read_file($copy, 1024 * 1024) : undef;

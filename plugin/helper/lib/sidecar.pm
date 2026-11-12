@@ -1,14 +1,14 @@
 package sidecar;
-# lib/sidecar.pm: background sidecar ring (MOD-SPEC §7, HK-23; WATCHER §6.5).
-# Owner: WP-core. Stop and SubagentStop write ids, kinds and status from
+# lib/sidecar.pm: background sidecar ring.
+# Stop and SubagentStop write ids, kinds and status from
 # background_tasks and the ids of session_crons (never last_assistant_message or
 # task text) into 20 slot files <watch>/<sid>/bg/slot-<k>.json, only when the set
 # hash changes; k = write counter mod 20, kept in the slot lock under flock.
-# Output paths (DP-13, Dev-1 incidental 1): BackgroundTaskSummary has no output path
-# (types :820-851), so a task's output_path comes from its Dev-1 job record
-# (lib/jobrec.pm; null until probe P-D1-6 picks the source). The runtime's own
+# Output paths: BackgroundTaskSummary has no output path
+# (types :820-851), so a task's output_path comes from its job record
+# (lib/jobrec.pm; null until the source is picked). The runtime's own
 # `command` (shell tasks, at most 1000 chars) is kept only as command_sha256 and
-# command_chars, a runtime-owned cross-check for heal-check's V1 (REVIEW B-16); the text
+# command_chars, a runtime-owned cross-check for heal-check's V1; the text
 # never enters a slot. Readers pick the newest slot by `seq` (newest()), never by mtime.
 use strict;
 use warnings;
@@ -76,10 +76,10 @@ sub write {
     return $k;
 }
 
-# Session sidecar (P5-FOLD A7, MOD-SPEC §7): the payload's scratchpad_dir, kept as a path in
+# Session sidecar: the payload's scratchpad_dir, kept as a path in
 # the private store <watch>/<sid>/scratchpad.json (0600). No row ever carries the path: the
 # session row logs only `scratchpad: present|absent` and `under_temp_root`. Its uses (sweep
-# temp root, restore-evidence --to scratchpad) wait for probe P-SP-1 (OD-15).
+# temp root, restore-evidence --to scratchpad) wait for a probe.
 sub note_scratchpad {
     my ($sid_dir, $p, $source) = @_;
     return 0 unless defined $sid_dir && defined $p && !ref $p && $p =~ m{^/} && length($p) <= 4096 && $p !~ /[\n\r]/;

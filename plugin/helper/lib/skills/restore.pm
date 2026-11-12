@@ -1,6 +1,6 @@
 package skills::restore;
 # lib/skills/restore.pm: `verify <handoff>`, `restore-evidence <handoff>
-# --to DIR` and `stash <path>` (resume R6, R7; RDN). Copies only, with
+# --to DIR` and `stash <path>` (resume R6, R7). Copies only, with
 # private modes; nothing is moved or deleted.
 use strict;
 use warnings;
@@ -21,9 +21,9 @@ sub _handoff_arg {
 }
 
 # verify: one row per MANIFEST entry, ok · missing · withheld · redacted · pruned (a copy `prune
-# --apply` deleted on purpose, 0.1.6 PRUNE). A copy recorded under an
+# --apply` deleted on purpose, 0.1.6). A copy recorded under an
 # old default root (~/.claude/trash-staging, ~/.claude/handoffs) that is gone there is read under the
-# new root, where `migrate --apply` put it (STATE-ROOT; skills::ctx::follow).
+# new root, where `migrate --apply` put it (skills::ctx::follow).
 sub verify {
     my ($argv) = @_;
     skills::cli::opts($argv);
@@ -76,10 +76,10 @@ sub restore {
 }
 
 # stash: copy one file into today's disposable folder; print the copy path
-# (the last line). The secret gate runs first (TPL §5): withhold → REFUSED:
+# (the last line). The secret gate runs first: withhold → REFUSED:
 # withheld; redact → a redacted copy, its rule ids (never values) printed as
 # `ADVISORY secret-hard rules=<ids>` and, for WARN hits, `ADVISORY secret-warn
-# rules=<ids>` (D-13); copy → a byte copy.
+# rules=<ids>`; copy → a byte copy.
 sub stash {
     my ($argv) = @_;
     skills::cli::opts($argv);
@@ -89,7 +89,7 @@ sub stash {
     my $ctx = skills::ctx::new({});
     my $rr = skills::core::roots_check($ctx->{settings});
     die skills::cli::refuse($rr) if $rr;
-    # The gate's verdict and the bytes it scanned (RRP-06): those bytes are what is written,
+    # The gate's verdict and the bytes it scanned: those bytes are what is written,
     # never a second read of the file (bytes appended in between were never scanned; a file
     # larger than the gate's scan is withheld as too-large).
     my ($verdict, $hits, $raw) = skills::core::classify_file_hits($src);

@@ -1,10 +1,10 @@
 package sessions;
-# lib/sessions.pm: per-process records and lineage (MOD-SPEC §7, HK-49, OD-16).
-# Owner: WP-core. All records are write-once by exclusive create.
+# lib/sessions.pm: per-process records and lineage.
+# All records are write-once by exclusive create.
 #   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.live-<sid8>.json  {pid, pid_lstart, host, session_id, cwd, worktree, head, source, ts}
-#     (host added for the cross-session finish, MOD-SPEC §5.8 / C-STORE D8; additive)
+#     (host added for the cross-session finish; additive)
 #     (head: the work tree's HEAD commit when the record was written, null outside git or on an
-#     unborn branch; owner xxxxxxxx-08, the start HEAD that `risk` compares build files with; additive)
+#     unborn branch; the start HEAD that `risk` compares build files with; additive)
 #   <root>/.sessions/by-pid/<pid>-<lstart_epoch>.ended-<sid8>.json {session_id, reason, ts}
 #     (reason `gone`: written when the same session starts again in another process and the
 #     earlier one ended with no SessionEnd, close_gone; its ts is that later start, not the end,
@@ -19,7 +19,7 @@ use utf8;
 
 sub dir { return rc::root() . '/.sessions' }
 sub by_pid { return dir() . '/by-pid' }
-# STATE-ROOT: the readers below also read the legacy root's records and lineage (rc::read_roots, the
+# Legacy root: the readers below also read the legacy root's records and lineage (rc::read_roots, the
 # effective root first); every write goes to dir() and by_pid() only.
 sub read_dirs { return map { "$_/.sessions" } rc::read_roots() }
 # _pid_files() -> ([folder, name] …): the by-pid file names of every read root.
@@ -40,7 +40,7 @@ sub write_live {
     my $c = rc::claude();
     my $f = by_pid() . '/' . _key($c) . '.live-' . substr($sid, 0, 8) . '.json';
     # ts in milliseconds when Time::HiRes loads (own_start: a row from the record's second may be
-    # the owner's launch prompt); without it no fraction is written, and own_start reads the
+    # the session's own launch prompt); without it no fraction is written, and own_start reads the
     # record as coarse (that second is decided by row order, never by time).
     my $now = util::now();
     my $rec = jsonc::obj(pid => $c->{pid}, pid_lstart => $c->{lstart}, host => identity::host(), session_id => $sid, cwd => $cwd,
@@ -71,7 +71,7 @@ sub _gone {
 
 # close_gone(sid, budget_ms => N) -> the number of ended- records written. A process that
 # stops with no SessionEnd leaves its live- record behind: a background session the supervisor
-# moved to a new version (probe 2026-10-27, P4: SessionStart resume in the new process, none
+# moved to a new version (a probe saw SessionStart resume in the new process, none
 # ended in the old one), `claude --resume` after a crash. When sid starts again, every live-
 # record of sid on this host with no ended- twin whose process is gone (_gone) gets one,
 # reason `gone`, within the budget. Only sid's own records: another session's record may be a
@@ -178,7 +178,7 @@ sub records_for {
 }
 
 # own_start(sid) -> {since, until, coarse} | undef: from when a row of sid's transcript can be
-# sid's own (owner 2026-10-23 xxxxxxxx-27 revised, "No: forks re-ask"). The session's live-
+# sid's own (forks re-ask). The session's live-
 # records (SessionStart writes one before the session writes a row of its own; a launch prompt's
 # row may follow it within the same second). Rows that a fork, a `--fork-session` resume or a
 # background copy carried over keep the parent's times, all before the first record.
@@ -188,7 +188,7 @@ sub records_for {
 #     its second S, and the session may have started anywhere in it: {since => S, until => the
 #     next whole second (or an earlier millisecond record), coarse => 1}. A row at or after
 #     `until` is own by time; a row in [since, until) is own only by the order rule of
-#     transcript::quotes_found (review of bcdaca6): a typed user row that comes after one of this
+#     transcript::quotes_found: a typed user row that comes after one of this
 #     session's SessionStart hook rows (stamped in or after S), with no older row between them.
 #     Time alone never makes such a row own, so no clock resolution can let a copy count.
 # undef: no record (nothing can be shown to be own).
@@ -266,8 +266,7 @@ sub first_row {
 }
 
 # record_live(record) -> 1 when a live- record with no ended- twin still counts as live
-# (MOD-SPEC §5.8, MOD-SPEC §7 liveness). Owner ruling xxxxxxxx-07 (2026-10-22 23:54, CR-1) on
-# question C-STORE-1, "Process gone counts": a record of this host whose pid is gone or runs with
+# (liveness): a record of this host whose pid is gone or runs with
 # another start time counts as ended (a crash). A record with no host field (written before
 # the host field) or of another host counts as live: only an ended- record ends it (fail
 # closed). The literal reading (only an ended- record) is `return 1` here.
@@ -354,7 +353,7 @@ sub prune_records {
     return $n;
 }
 
-# ended(sid) -> 1 when another session may finish sid's stashes (MOD-SPEC §5.8 "Eligible"):
+# ended(sid) -> 1 when another session may finish sid's stashes (eligible):
 # sid has at least one per-process record and none of them is live. A session with no
 # record at all is never touched.
 sub ended {
@@ -368,8 +367,8 @@ sub ended {
 # live when its pid runs with the same start time and it has no ended- record.
 sub live_peers { return _live(_pid_files()) }
 
-# live_in(by-pid folder) -> the same as live_peers, from one folder's records only (STATE-ROOT
-# `migrate`: the sessions that still write in the old handoff root).
+# live_in(by-pid folder) -> the same as live_peers, from one folder's records only
+# (`migrate`: the sessions that still write in the old handoff root).
 sub live_in {
     my ($d) = @_;
     return _live(map { [ $d, $_ ] } util::list_dir($d));

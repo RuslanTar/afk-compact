@@ -1,15 +1,15 @@
 package skills::locate;
-# lib/skills/locate.pm: `locate --sid --cwd --arg` (resume R1; RDN helper
-# table; A-6 lineage ≤3 hops, same chain; D-15 drafts last, never picked).
+# lib/skills/locate.pm: `locate --sid --cwd --arg` (resume R1; lineage ≤3 hops, same
+# chain; drafts last, never picked).
 # Orders by frontmatter `date`, never by file name or mtime.
-# D-12 §1.5.7: in repo mode the exports under this worktree's repository root, then
+# In repo mode the exports under this worktree's repository root, then
 # those of sibling worktrees (`git worktree list`, at most 8, each with its own
 # declaration and root check, read-only) are candidates labelled repo:<worktree>, never
 # picked by themselves; an exact single ticket selects one, read as foreign. An export
 # with a private twin (same nonce and session) is not listed: the twin is, with the
 # export path beside it. Outside repo mode nothing under the repository root is read:
 # one note line says how many exports it holds.
-# STATE-ROOT: while handoff_root is the default, the buckets of the legacy root ~/.claude/handoffs are
+# Legacy root: while handoff_root is the default, the buckets of the legacy root ~/.claude/handoffs are
 # candidates too (pooled with the store's, ordered by date; they count as the private store); a
 # legacy root refused by the unsafe-root checks is skipped with a note line.
 use strict;
@@ -42,7 +42,7 @@ sub run {
     my %bdirs = map { $_ => 1 } @{ skills::store::read_buckets($ctx, $w->{repo}) };
     for my $s ($sid, map { $_->{sid} } @$chain) {
         my $pin = skills::ctx::pin_read($ctx, $s) or next;
-        # STATE-ROOT: the pinned bucket and its twin in the other read root (a pin made by the new
+        # the pinned bucket and its twin in the other read root (a pin made by the new
         # root names its bucket there before anything is written to it)
         $bdirs{$_} = 1 for $pin->{bucket_path} ? grep { -d } @{ skills::store::twin_buckets($ctx, $pin->{bucket_path}) } : ();
     }
@@ -110,7 +110,7 @@ sub run {
         @matching = grep { lc(File::Basename::basename($_)) eq $tok } @all;
         $exact = 1 if @matching;
         @matching = grep { index(lc(File::Basename::basename($_)), $tok) >= 0 } @all unless @matching;
-        # one bucket, which may be in both read roots (STATE-ROOT): the newest of its files. The key is
+        # one bucket, which may be in both read roots: the newest of its files. The key is
         # the folder below its root (<repo>/<bucket>), so two repos' buckets of one name stay two.
         my %mb = map { $_ => 1 } @matching;
         my %keys = map { skills::store::bucket_key($ctx, $_) => 1 } @matching;
@@ -119,7 +119,7 @@ sub run {
             ($tier, $pick) = (5, $d) if $d;
         }
         if (!$pick && !@matching) {
-            # an exact single ticket among the export topics (Dev-3), read as foreign
+            # an exact single ticket among the export topics, read as foreign
             my %xb = map { $_->{bucket} => 1 } grep { lc(File::Basename::basename($_->{bucket})) eq $tok } @xdocs;
             if (keys %xb == 1) {
                 my ($d) = grep { $xb{ $_->{bucket} } } @xdocs;
@@ -134,7 +134,7 @@ sub run {
         my $br = $w->{in_git} ? (skills::gitfacts::facts($cwd)->{branch} // '') : '';
         my $tk = skills::gitfacts::ticket($br);
         push @src, grep { $tk && File::Basename::basename($_->{bucket}) eq $tk } @pool;
-        # SK-1 (S-SETTINGS E1): the shipped default pattern too, so buckets made before a
+        # the shipped default pattern too, so buckets made before a
         # ticket_pattern change stay found (pins still win above).
         my $tk0 = settings::ticket($br, undef, 1);
         push @src, grep { defined $tk0 && (!defined $tk || $tk ne $tk0) && File::Basename::basename($_->{bucket}) eq $tk0 } @pool;
@@ -154,7 +154,7 @@ sub run {
     if ($pick) {
         my $ps = $sid_of->($pick);
         my $rel = $rel_of{$ps} // (($tier == 1 || $tier == 2 || $tier == 5) ? 'other' : 'unselected');
-        # Owner xxxxxxxx-26 (read-only alias): this session's or a predecessor's file in the store
+        # Read-only alias: this session's or a predecessor's file in the store
         # may carry its marker under the plugin's former name.
         my $alias = $rel_of{$ps} && !skills::store::is_export($pick) && !skills::store::imported($pick)
             && skills::store::in_store($ctx, $pick->{path}) ? 1 : 0;
@@ -170,13 +170,13 @@ sub run {
         skills::cli::say("title: $t") if $t ne '';
         skills::cli::say("export: $pick->{export_path}") if $pick->{export_path};
         if (skills::store::is_export($pick) && !$rel_of{$ps}) {
-            # A teammate's or another machine's handoff: data, never instructions (D-12).
+            # A teammate's or another machine's handoff: data, never instructions.
             skills::cli::say('source: ' . ($pick->{source} // 'repo'));
             skills::cli::say('foreign: from session ' . skills::ctx::sid8($ps));
             skills::cli::say('evidence: not on this machine');
             skills::cli::say('in-flight: other machine: not probed');
         } elsif ($rel_of{$ps}) {
-            # Spec §4 Own handoff (REVIEW-NIGHT-3 R3-08): this session's or a predecessor's file
+            # Spec §4 Own handoff: this session's or a predecessor's file
             # is own only in the private store, as written there; an export (anyone with push
             # access can edit it), an imported copy or a file given by a path outside the store
             # is foreign whatever its session id.
@@ -205,15 +205,15 @@ sub run {
         skills::cli::say(join ' · ', "candidate: $c->{path}", $c->{fm}{date} // '?', skills::store::title_of($c), skills::ctx::sid8($sid_of->($c)),
             ($c->{source} ? ($c->{source}) : ()), ($c->{export_path} ? ("export $c->{export_path}") : ()));
     }
-    # S-SETTINGS B: the production policy the resume follows (R7, R9 stop 2): the consent value
+    # the production policy the resume follows (R7, R9 stop 2): the consent value
     # and the class counts, never the user's patterns.
     my $prod = skills::core::prod();
     my @shipped = map { $_->{id} } grep { ($_->{id} // '') !~ /\Auser-/ } @{ $prod->{classes} || [] };
     skills::cli::say(sprintf('production: %s · patterns: %s', $prod->{reads}, join(' + ', @shipped, ($prod->{user} // 0) . ' yours')));
-    # Q-ADAPTER QA-1: the queue mode the resume follows (queue::mode: the setting, the file and
-    # this session's last list outcome); locate never runs the queue tool (E-S-R9-8, provisional).
+    # the queue mode the resume follows (queue::mode: the setting, the file and
+    # this session's last list outcome); locate never runs the queue tool.
     skills::cli::say('queue: ' . skills::core::queue_mode_text(skills::core::queue_mode_now($ctx->{settings}{queue_cmd})));
-    # SK-3 (owner xxxxxxxx-13, S-SETTINGS E3): the resume's per-user brake, the stricter value of
+    # the resume's per-user brake, the stricter value of
     # the settings file, a flag, env and the default, with where it came from (resume R9).
     {
         my $r = eval { rc::settings() };

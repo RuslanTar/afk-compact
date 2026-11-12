@@ -1,11 +1,11 @@
-# cmd/migrate.pl: `migrate [--apply]` (STATE-ROOT, 0.1.2). Owner: WP-core. User-run only: no hook,
+# cmd/migrate.pl: `migrate [--apply]` (0.1.2 state folder move). User-run only: no hook,
 # skill or mod calls it.
 # While handoff_root or disposable_root is the default, the old default folder (~/.claude/handoffs,
 # ~/.claude/trash-staging) is read beside the new one and never written. migrate COPIES what an old
 # folder holds into the new one, so the old folder can later be removed by hand (a full path recorded under it,
 # in MANIFEST.tsv or a pin, is then read under the new folder: skills::ctx::follow):
 #   - a dry run by default: it lists what it would copy and writes nothing; --apply copies;
-#   - it never deletes, moves or overwrites (D-8): a file already in the new folder is left as it is
+#   - it never deletes, moves or overwrites: a file already in the new folder is left as it is
 #     (`same` bytes, or `differs`, listed); links and special files are skipped, never followed;
 #   - copies keep their owner mode bits (so they stay private: folders 0700) and their mtime;
 #   - a copy is written under a temp name and linked into place (util::copy_new), so a failed copy

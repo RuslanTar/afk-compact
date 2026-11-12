@@ -1,6 +1,6 @@
 package util;
-# lib/util.pm: shared low-level helpers (time, files, processes). Owner: WP-core.
-# Floor modules only (RUNTIME §2.4): no File::Copy, File::Find, Time::Local,
+# lib/util.pm: shared low-level helpers (time, files, processes).
+# Floor modules only: no File::Copy, File::Find, Time::Local,
 # Sys::Hostname; Time::HiRes only when it loads.
 use strict;
 use warnings;
@@ -28,7 +28,7 @@ sub os {
 
 # stamp_ms() -> 1 when a record stamp may carry milliseconds (Time::HiRes loads). In test mode
 # STORE_TEST_NO_HIRES=1 answers 0, so a case can write the stamp a perl without Time::HiRes
-# writes on any machine (review of bcdaca6: the start-record tests must not depend on it).
+# writes on any machine (the start-record tests must not depend on it).
 sub stamp_ms {
     return 0 if test_mode() && ($ENV{STORE_TEST_NO_HIRES} // '') eq '1';
     return _hires();
@@ -78,7 +78,7 @@ sub file_stamp {
     return POSIX::strftime('%Y-%m-%d_%H-%M-%S', localtime(int $epoch));
 }
 
-# stamp(epoch) -> 2026-10-21 14:05 +0300 (RV-24, small-rulings §3a): local date, time and
+# stamp(epoch) -> 2026-10-21 14:05 +0000: local date, time and
 # numeric UTC offset, always all three; the offset is the one of that instant (DST). The
 # same text `date '+%Y-%m-%d %H:%M %z'` prints, and the spec's `time_re` matches it.
 sub stamp {
@@ -115,7 +115,7 @@ sub timegm {
     return _days_from_civil($y, $m, $d) * 86400 + $hour * 3600 + $min * 60 + $sec;
 }
 
-# "2026-10-21T14:05:12+03:00", "...12.345Z", "...12" (local) -> epoch
+# "2026-10-21T14:05:12+00:00", "...12.345Z", "...12" (local) -> epoch
 sub parse_iso {
     my ($s) = @_;
     return undef unless defined $s;
@@ -150,7 +150,7 @@ sub expand_tilde {
 sub abbrev {
     my ($p) = @_;
     return $p unless defined $p;
-    $p = text($p);    # display text: a byte path is decoded where it joins text (A4 (3))
+    $p = text($p);    # display text: a byte path is decoded where it joins text
     my $h = text(home());
     return $p if $h eq '' || $h eq '/';
     return '~' if $p eq $h;
@@ -174,7 +174,7 @@ sub basename {
 }
 
 # root_form(raw) -> a store root as configured (handoff_root, log_dir, disposable_root) as an
-# absolute path in this platform's form, or undef when it has none (RF-2): ~ is expanded first;
+# absolute path in this platform's form, or undef when it has none: ~ is expanded first;
 # a path that starts with / is taken as it is; under MSYS or Cygwin perl a drive form (C:/x or
 # C:\x) is read through Cygwin::win_to_posix_path when perl has it. Anything else (a relative
 # path, a rooted \x, a drive-relative C:x, a drive form on macOS or Linux) is undef and is never
@@ -233,7 +233,7 @@ sub real_path {
         unshift @tail, basename($head);
         $head = dirname($head);
     }
-    # a path is bytes (§2.6 text encoding, SR 1.1): the real path and every tail part
+    # a path is bytes: the real path and every tail part
     my $real = Cwd::abs_path(fsb($head)) // fsb($head);
     return @tail ? ($real eq '/' ? '' : $real) . '/' . join('/', map { fsb($_) } @tail) : $real;
 }
@@ -297,7 +297,7 @@ sub _bytes {
 # a character string joined with a byte literal such as `·` prints double-encoded.
 sub to_bytes { return defined $_[0] ? _bytes($_[0]) : undef }
 
-# Text encoding (MOD-SPEC §2.6, P5-FOLD A4): inside the helper text is characters, bytes
+# Text encoding: inside the helper text is characters, bytes
 # are only at the edges. text(s) decodes an input once where it is read (UTF-8; bytes that
 # are not UTF-8 stay as they are and so read as Latin-1, the CR-F2 rule); a character
 # string passes unchanged, so a second call never decodes twice. fsb(path) is the path as
@@ -368,7 +368,7 @@ sub append {
 }
 
 # copy_new(src, dst, mode => M, times => [atime, mtime], expect => [size, mtime]) -> bytes copied, or -1
-# when dst exists. Never overwrites and never leaves a cut-off dst (STATE-ROOT `migrate`): the bytes go
+# when dst exists. Never overwrites and never leaves a cut-off dst (`migrate`): the bytes go
 # to a fresh temp name beside dst (.<name>.part-<pid>-<n>), which link() then also names dst (link fails
 # when dst exists, so nothing is replaced); the temp name is removed either way. A failed copy dies with
 # dst absent, so a rerun copies it again. A src whose size or mtime changes while it is copied (a

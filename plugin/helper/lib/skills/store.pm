@@ -1,6 +1,6 @@
 package skills::store;
-# lib/skills/store.pm: reading the handoff tree (TPL §3, §6; CONSISTENCY
-# "Locations"): buckets, handoffs and copies, frontmatter, integrity.
+# lib/skills/store.pm: reading the handoff tree: buckets, handoffs and copies, frontmatter,
+# integrity.
 use strict;
 use warnings;
 use utf8;
@@ -52,11 +52,11 @@ sub read_doc {
 
 # Integrity of one document (resume R1): ok | possibly truncated | legacy |
 # unshaped | s=sub, plus marker facts.
-# alias => 1 (owner 2026-10-23 xxxxxxxx-26, "Read-only alias"): the caller has shown the file is
+# alias => 1 (read-only alias): the caller has shown the file is
 # in the private store, not an export or an imported copy, and this session's or a lineage
 # predecessor's (own chain); the one exception is skills::session_cmds::link_resume, which reads
 # an ended candidate predecessor's handoff in the private store this way before it links that
-# session into the chain (owner xxxxxxxx-26: resume tomorrow from a handoff written under the old
+# session into the chain (so a session can resume from a handoff written under the old
 # name). Then a `kind: handoff` file with no marker under the current name
 # whose marker and sentinel under a former name (settings.pm @FORMER_NAMES) share one nonce reads
 # as that marker (`former` names it). Without the flag, or with any other mix, such a file stays
@@ -112,7 +112,7 @@ sub repos {
     return [ grep { !/\A\./ && -d "$root/$_" } skills::util::list_dir($root) ];
 }
 
-# STATE-ROOT: the bucket folders of a repo in every read root (skills::ctx::read_roots: the store root,
+# The bucket folders of a repo in every read root (skills::ctx::read_roots: the store root,
 # then the legacy root ~/.claude/handoffs while handoff_root is the default). Readers pool the
 # documents of both and order them by frontmatter date; nothing is written under the legacy root.
 sub read_buckets {
@@ -157,7 +157,7 @@ sub bucket_key {
 }
 
 # in_store(ctx, path) -> 1 when the file's real path lies under a read root (the store root, or
-# the legacy root, which counts as the own store, STATE-ROOT), component by component.
+# the legacy root, which counts as the own store), component by component.
 sub in_store {
     my ($ctx, $path) = @_;
     return 0 unless defined $path && $ctx;
@@ -193,14 +193,14 @@ sub docs_in {
 
 sub is_handoff { my ($d) = @_; return (($d->{fm}{kind} // '') eq 'handoff') ? 1 : 0 }
 
-# A private copy of a repository export (`project copy --from repo`, D-12 §1.5.9): never the
-# carry base (DP-6), and its recipes are not local.
+# A private copy of a repository export (`project copy --from repo`): never the
+# carry base, and its recipes are not local.
 sub imported { my ($d) = @_; return (defined $d->{fm}{imported_from} && $d->{fm}{imported_from} ne '') ? 1 : 0 }
 
-# A repository export (D-12 §1.5.5): `export: repo` in its frontmatter.
+# A repository export: `export: repo` in its frontmatter.
 sub is_export { my ($d) = @_; return (($d->{fm}{export} // '') eq 'repo') ? 1 : 0 }
 
-# Topic folders under a repository's export root <toplevel>/<decl.root> (D-12 §1.5.7),
+# Topic folders under a repository's export root <toplevel>/<decl.root>,
 # read-only: no symlinks followed, dot names skipped.
 sub export_buckets {
     my ($top, $root) = @_;
@@ -226,7 +226,7 @@ sub export_docs {
 }
 
 # Dedupe by (nonce, session_id): a private twin wins over its export, and the export path
-# is kept on the twin as {export_path} (D-12 §1.5.7). Returns the exports with no twin.
+# is kept on the twin as {export_path}. Returns the exports with no twin.
 sub dedupe_exports {
     my ($private, $exports) = @_;
     my %twin;
@@ -243,7 +243,7 @@ sub dedupe_exports {
     return \@rest;
 }
 
-# Refused or unpublished drafts in <bucket>/.staging/ (D-15).
+# Refused or unpublished drafts in <bucket>/.staging/.
 sub drafts_in {
     my ($bucket) = @_;
     my $dir = "$bucket/.staging";

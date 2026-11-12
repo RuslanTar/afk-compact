@@ -1,13 +1,12 @@
 package watch::report;
-# lib/watch/report.pm: W13 `watch report` and `watch audit` (WATCHER-SPEC §10.2, §10.3, §10.7;
-# W-BETA E; BUILD-PLAN §0 W13). Owner: WP-watch.
+# lib/watch/report.pm: `watch report` and `watch audit`.
 #
 # Input: the live <watch> folder (every session's mod, classic, alerts and rollup rows and its
 # events/ files), or with --input DIR a folder of export-transformed rows (a `report` bundle's
 # rows/, one file per session), read by the same code. Rows only: the transcript-derived tier
-# (D-01..D-06, M-18 after-side, the baseline from `watch backfill`) is not built in v1, so
-# those lines say `deferred (derived tier)`, and with --input `n/a (remote)` (the owner has no
-# friend transcript); neither counts as a failure. Output is counts, enums and ids only.
+# (the after-side metrics and the baseline from `watch backfill`) is not built in v1, so
+# those lines say `deferred (derived tier)`, and with --input `n/a (remote)` (no transcripts
+# come with the rows); neither counts as a failure. Output is counts, enums and ids only.
 # `--export` puts the rows through the report export transform first (hashed ids, no paths).
 use strict;
 use warnings;
@@ -61,7 +60,7 @@ sub load {
 
 sub _ev { return $_[0]{ev} // 'compaction' }
 sub _b { my $v = shift; return ref $v eq 'SCALAR' ? ($$v ? 1 : 0) : ($v ? 1 : 0) }
-# An idle value as the word M-01 uses: core writes a JSON bool (decoded 1 or 0) once
+# An idle value as the trigger metric uses it: core writes a JSON bool (decoded 1 or 0) once
 # reconcile settled it, `unknown` before; older rows hold the words.
 sub _idle_word {
     my ($v) = @_;
@@ -71,8 +70,8 @@ sub _idle_word {
 }
 
 # The compactions of one session: the sweep's boundary records (deduped by uuid; they carry
-# the realtime fields M-01..M-20), else the rollup rows, each joined by nonce to core's
-# `compaction_boundary` row (PKG-RUNTIME E.2; the first one per nonce counts): a null rollup
+# the realtime fields), else the rollup rows, each joined by nonce to core's
+# `compaction_boundary` row (the first one per nonce counts): a null rollup
 # size takes the boundary value, a non-null one is kept. In list context also the number of
 # rollup rows whose non-null value disagrees with the boundary row (`join_conflict`).
 sub compactions {
@@ -211,7 +210,7 @@ sub stats {
     return \%s;
 }
 
-# --- bars (§10.3) -------------------------------------------------------------
+# --- bars ---------------------------------------------------------------------
 
 sub bars {
     my ($s, $source) = @_;
@@ -262,7 +261,7 @@ sub bars {
     return \@b;
 }
 
-# --- friction (§5, the row-derivable ones) -------------------------------------
+# --- friction (the row-derivable ones) -----------------------------------------
 
 sub friction {
     my ($s, $source) = @_;
@@ -295,7 +294,7 @@ sub friction {
     return \@f;
 }
 
-# --- audit (§10.2 step 1) ----------------------------------------------------
+# --- audit --------------------------------------------------------------------
 
 sub audit {
     my ($L) = @_;
@@ -373,7 +372,7 @@ sub render {
     push @o, '- Days covered: ' . (@days ? scalar(@days) . " ($days[0]..$days[-1])" : '0'), '';
     push @o, '## Audit', '';
     push @o, @$fails ? (map { "- FAIL $_" } @$fails) : ('- PASS (boundaries = postcompact = rollup rows; every dispatch settled; every watch_error has a class)');
-    push @o, '', '## Bars (WATCHER-SPEC §10.3)', '', '| Bar | Target | Measured | Result |', '|---|---|---|---|';
+    push @o, '', '## Bars', '', '| Bar | Target | Measured | Result |', '|---|---|---|---|';
     push @o, map { "| $_->[0] | $_->[1] | $_->[2] | $_->[3] |" } @{ bars($s, $source) };
     push @o, '', '## Per day', '', '| Day | Main compactions | Alerts |', '|---|---|---|';
     push @o, map { "| $_ | " . ($s->{days}{$_}{compactions} // 0) . ' | ' . ($s->{days}{$_}{alerts} // 0) . ' |' } @days;
@@ -385,17 +384,17 @@ sub render {
     }
     push @o, '', '## Verdict mix (main)', '';
     push @o, (%{ $s->{verdicts} } ? join(', ', map { "$_ $s->{verdicts}{$_}" } sort keys %{ $s->{verdicts} }) : 'none');
-    push @o, '', 'Idle compactions (the rollup `idle` field, IC-1): ' . ($s->{idle} // 0) . " of $s->{main}";
+    push @o, '', 'Idle compactions (the rollup `idle` field): ' . ($s->{idle} // 0) . " of $s->{main}";
     push @o, '', "Size join conflicts (rollup vs compaction_boundary, the rollup value kept): $s->{join_conflict}";
     my $d = $s->{deny};
     my $cnt = sub { my $h = shift; return join(', ', map { "$_ $h->{$_}" } sort keys %$h) || 'none' };
-    push @o, '', '## Denials (permission_denied rows, D-13)', '';
+    push @o, '', '## Denials (permission_denied rows)', '';
     push @o, "- Total: $d->{total}; control (reason classifier-unavailable, kept apart): $d->{control}",
              '- By turn kind: ' . $cnt->($d->{turn_kind}), '- By cause: ' . $cnt->($d->{caused_by}),
              "- In a post-compaction turn caused by the plugin: $d->{post_compaction_plugin}",
              '- By guard class (control excluded): ' . $cnt->($d->{guard_class});
     push @o, '', '## Background survival', '', ($source eq 'remote' ? 'n/a (remote)' : 'deferred (derived tier)');
-    push @o, '', '## Friction (WATCHER-SPEC §5)', '', map { "- $_" } @{ friction($s, $source) };
+    push @o, '', '## Friction', '', map { "- $_" } @{ friction($s, $source) };
     push @o, '', '## Alerts by rule', '';
     my %by;
     push @{ $by{ $_->{rule} // '?' } }, $_ for @{ $s->{alert_rows} };
@@ -447,7 +446,7 @@ sub _opts {
 
 # report_cli(\@argv) -> exit code. Prints `WATCH-REPORT <path>`, or the report itself with
 # --input and no --out. `REFUSED: <key>: <reason>`, exit 3, when it would write under a refused
-# watch dir or handoff root (WATCH §6.1).
+# watch dir or handoff root.
 sub report_cli {
     my ($argv, $seed) = @_;
     my $o = _opts($argv, out => 1, export => 1) or return 64;
@@ -455,7 +454,7 @@ sub report_cli {
     my ($since, $label) = _since_arg($o->{since}, $ctx->{now});
     return 64 if defined $since && $since eq 'bad';
     return 64 if $o->{export} && defined $o->{input};
-    # WATCH §6.1: a report that writes under the watch dir (--export's salt, the default
+    # a report that writes under the watch dir (--export's salt, the default
     # reports/ folder) writes nothing there while the watch dir or handoff root is refused
     if ($o->{export} || (!defined $o->{out} && !defined $o->{input})) {
         if (my $why = watch::ctx::refused($ctx)) { print "REFUSED: $why\n"; return 3 }

@@ -1,9 +1,9 @@
 package identity;
-# lib/identity.pm: Claude Code process id and start time (MOD-SPEC §2.1, S-17).
-# Owner: WP-core. Ancestor walk to the first process whose command is the Claude
+# lib/identity.pm: Claude Code process id and start time.
+# Ancestor walk to the first process whose command is the Claude
 # Code binary (or whose pid CLAUDE_PID names); a nearer process whose command hides the
 # binary but whose executable is it wins (a background session's worker). Start time:
-# Linux, MSYS and Cygwin /proc/<pid>/stat field 22 + btime (R-4, RF-3); else `ps -o lstart=`.
+# Linux, MSYS and Cygwin /proc/<pid>/stat field 22 + btime; else `ps -o lstart=`.
 # Every start-time read of one pid in the helper goes through _read_start; start_epochs reads
 # many at once (the same /proc fields on the same platforms, else one `ps -axo` listing).
 # Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk; STORE_TEST_PROC_ROOT=<dir>
@@ -53,10 +53,10 @@ sub _proc {
 }
 
 # _read_start(pid, ps) -> (epoch, lstart string), both undef when unreadable; never cached.
-# Linux with a readable /proc/<pid>/stat: field 22 + btime (R-4), so no `ps` is needed (a
+# Linux with a readable /proc/<pid>/stat: field 22 + btime, so no `ps` is needed (a
 # slim image has no procps); else `ps -o lstart=` (ps: a path, default the first on PATH).
 # MSYS and Cygwin (Git Bash's perl): /proc/<pid>/stat only, as on Linux; their ps has no -o
-# (RF-3, Windows sitting 2: `ps: unknown option -- o`), so without it the start stays unknown.
+# (`ps: unknown option -- o`), so without it the start stays unknown.
 sub _read_start {
     my ($pid, $ps) = @_;
     return (undef, undef) unless defined $pid && $pid =~ /^\d+$/;
@@ -200,7 +200,7 @@ sub lstart_epoch {
 
 # Test mode: STORE_TEST_PROC=<file> holds a fake process table, one `pid ppid command` line per
 # process; _parent_and_comm reads it instead of /proc or ps (the restart launcher's ancestor
-# check, SESSION-RESTART G3, helper cases AT-RS-21 and AT-RS-29).
+# check, helper cases AT-RS-21 and AT-RS-29).
 sub _fake_proc {
     my ($pid) = @_;
     my $raw = util::read_file($ENV{STORE_TEST_PROC}) // return;
@@ -270,7 +270,7 @@ sub _by_exe {
 
 # _walk(pid) -> (claude pid, 1) or (undef, 0): from pid (the helper's parent) up at most 12
 # processes. The anchor is the first one whose command is the binary, or whose pid CLAUDE_PID
-# names (Claude Code sets it to its own pid for hooks). Probe 2026-10-27: a background session's
+# names (Claude Code sets it to its own pid for hooks). A background session's
 # worker runs under a name that hides the binary, so the walk passed it and took its supervisor
 # (`claude daemon`), whose pid every background session then shared. So the hops below the
 # anchor are checked by their executable first, nearest first; a foreground session's helper,
@@ -317,7 +317,7 @@ sub claude_pid {
         return $CACHED;
     }
     my $first = getppid();
-    # A hook's perl runs as the launcher's child (0.1.4 review F-1: a perl that cannot start falls
+    # A hook's perl runs as the launcher's child (0.1.4: a perl that cannot start falls
     # back), which hands main.pl "<launcher pid>:<its parent>". While the launcher is still this
     # process's parent the walk starts at that parent, as when perl took the launcher's place: the
     # launcher, a shell, costs no parent read (T-14).
@@ -335,14 +335,14 @@ sub claude_pid {
 }
 
 # alive(pid, lstart) -> 1 when the pid runs and its start time matches, or cannot be read now
-# (alive-unknown, RF-3): a record that has a start time is never taken as ended on a start time
+# (alive-unknown): a record that has a start time is never taken as ended on a start time
 # this call cannot read (MSYS before its /proc read, a `ps` that timed out under load), so a lock
 # holder's record waits out lock-timeout and is never broken. A record without a start time
 # rests on kill 0. A caller that acts on the process (a kill, a caller check) asks
 # alive_verified instead.
-# A Linux record written before the R-4 fix holds btime + vsize/HZ in place of the start time.
-# It is judged like any other: its pid runs with another start time, so it counts as ended
-# (S-17). The old code reached the same verdict once the process's size had changed since the
+# A Linux record written before the start-time fix holds btime + vsize/HZ in place of the start time.
+# It is judged like any other: its pid runs with another start time, so it counts as ended.
+# The old code reached the same verdict once the process's size had changed since the
 # record was written (its own reading moved with memory); only a record whose process kept its
 # size gets another verdict now. Such records matter only while processes started before the
 # upgrade still run.
@@ -373,9 +373,9 @@ sub alive_verified {
     return defined $now && $now eq $lstart ? 1 : 0;
 }
 
-# launcher_above(pid, launcher, max) -> 'ok', 'nested' or 'not-ancestor' (SESSION-RESTART G3):
+# launcher_above(pid, launcher, max) -> 'ok', 'nested' or 'not-ancestor':
 # the walk from pid's parent up at most max processes reaches the launcher pid with no
-# process whose command is the Claude Code binary between them. A wrapper (teamclaude, node, a
+# process whose command is the Claude Code binary between them. A wrapper (an account switcher, node, a
 # shell) between them is fine; another claude there means pid is a nested session.
 sub launcher_above {
     my ($pid, $launcher, $max) = @_;

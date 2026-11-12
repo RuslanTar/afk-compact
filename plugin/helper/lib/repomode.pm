@@ -1,11 +1,11 @@
 package repomode;
-# lib/repomode.pm: the handoff-root mode of one worktree (MOD-SPEC §1.5, D-12). Owner:
-# WP-core. Decided per worktree and per helper call, cached for the call:
-#   repo     the worktree's <toplevel>/.claude/handoffs.json is valid (§1.5.2), the
-#            user's repo_roots accepts this repository (§1.5.4, settings file only; an
+# lib/repomode.pm: the handoff-root mode of one worktree.
+# Decided per worktree and per helper call, cached for the call:
+#   repo     the worktree's <toplevel>/.claude/handoffs.json is valid, the
+#            user's repo_roots accepts this repository (settings file only; an
 #            entry names its toplevel, or its main checkout when git made this
 #            worktree for that clone, linked_worktree) and
-#            roots::repo_check passes (§1.5.3). Everything still goes to the private
+#            roots::repo_check passes. Everything still goes to the private
 #            store; publish adds a portable export under <toplevel>/<decl.root>.
 #   private  every other case, with mode_reason not-declared | not-accepted |
 #            repo-decl-invalid | repo-root-escape | repo-root-symlink | repo-root-in-git-dir
@@ -13,7 +13,7 @@ package repomode;
 #            repo-root-unchecked (timed out)
 # The declaration only says where exports go; it cannot change what is exported or
 # anything in the private store. Nothing here writes under the repository: the
-# declaration, README and .gitignore are written by `project init` (WP-skills), the
+# declaration, README and .gitignore are written by `project init`, the
 # exports by `publish`. Rows (once per session, rc once-markers): handoff_mode {mode,
 # reason, declared, accepted}, repo_root_ignored, repo_gitignore_drift, decl_unknown_keys.
 use strict;
@@ -25,7 +25,7 @@ our $DECL_MAX = 4096;
 our $DEFAULT_ROOT = '.claude/handoffs';
 our %DECL_KEYS = map { $_ => 1 } qw(version mode root);
 
-# The generated <decl.root>/.gitignore (§1.5.6): written once by `project init`, never
+# The generated <decl.root>/.gitignore: written once by `project init`, never
 # rewritten or merged into; an existing one that lacks a line is `repo_gitignore_drift`.
 our @GITIGNORE_LINES = ('.staging/', 'compact/', 'evidence/', '*.tmp-*', '*.lock');
 sub gitignore_text {
@@ -56,7 +56,7 @@ sub declaration {
 }
 
 # valid_root(rel) -> 1 for a relative path of 1 to 4 components, each [A-Za-z0-9._-]+,
-# none `.` or `..`, none starting with `.git`, none `.planning` (§1.5.2).
+# none `.` or `..`, none starting with `.git`, none `.planning`.
 sub valid_root {
     my ($r) = @_;
     return 0 unless defined $r && !ref $r && $r ne '' && $r !~ m{^/} && $r !~ m{/$};
@@ -64,7 +64,7 @@ sub valid_root {
     return 0 if @c < 1 || @c > 4;
     for my $c (@c) {
         return 0 unless $c =~ /\A[A-Za-z0-9._-]+\z/;
-        # letter case ignored (CR-F1): .GIT and .Planning are the same folders on a
+        # letter case ignored: .GIT and .Planning are the same folders on a
         # case-insensitive file system
         return 0 if $c eq '.' || $c eq '..' || $c =~ /^\.git/i || lc($c) eq '.planning';
     }
@@ -99,10 +99,10 @@ sub same_dir {
 }
 
 # linked_worktree(toplevel, common_dir) -> 1 when toplevel is a worktree git itself made
-# for that common dir (CR-F7, DP-27, provisional): <toplevel>/.git is a plain file
+# for that common dir: <toplevel>/.git is a plain file
 # `gitdir: <admin>`, <admin> sits in <common_dir>/worktrees/, and <admin>/gitdir names
 # <toplevel>/.git back. A folder whose own .git file merely points at an accepted clone's
-# git dir fails this, so it cannot borrow that clone's acceptance (Q-D12-1: nothing is
+# git dir fails this, so it cannot borrow that clone's acceptance (nothing is
 # written into a repository on the repository's word alone).
 sub linked_worktree {
     my ($top, $cd) = @_;
@@ -135,7 +135,7 @@ sub gitignore_drift {
 }
 
 # exports(dir) -> number of export files (*.md below the topic folders; the README at the
-# top is not one), bounded: 6 levels, 20,000 entries read in all (CR-F6: the walk stops
+# top is not one), bounded: 6 levels, 20,000 entries read in all (the walk stops
 # there; no folder is read past the bound).
 our $EXPORTS_MAX = 20000;
 sub exports {
@@ -188,7 +188,7 @@ sub decide {
     my $listed = sub { my ($p) = @_; return 0 unless defined $p; return 1 if $ok{$p}; my $i = dir_id($p); return (defined $i && $okid{$i}) ? 1 : 0 };
     my $rtop = util::real_path($top) // $top;
     my $rmain = defined $r{main_checkout} ? (util::real_path($r{main_checkout}) // $r{main_checkout}) : undef;
-    # The main checkout counts only for a worktree git made for it (CR-F7); otherwise this
+    # The main checkout counts only for a worktree git made for it; otherwise this
     # toplevel is its own main checkout as far as acceptance goes.
     if (defined $rmain && !same_dir($rmain, $rtop) && !linked_worktree($top, $w->{common_dir})) {
         ($rmain, $r{main_checkout}) = (undef, undef);

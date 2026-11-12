@@ -1,7 +1,7 @@
 package secrets;
-# lib/secrets.pm: the shared secret rule set (MOD-SPEC §10, template §5), read from
+# lib/secrets.pm: the shared secret rule set, read from
 # the spec literals (`secret_rules`: [{id, class HARD|WARN, re, min_entropy?}] and
-# `deny_names`). Owner: WP-core. Rule ids are reported, values never.
+# `deny_names`). Rule ids are reported, values never.
 use strict;
 use warnings;
 use utf8;
@@ -19,7 +19,7 @@ sub _entropy {
 # The sweep's deadline (an epoch ms from util::clock_ms, set with `local` by sweep::run; undef
 # = none). scan and redact check it before each rule and every 256 hits, and die with
 # $OVER_BUDGET once it has passed, so one large file cannot carry the sweep far past its
-# budget (MOD-SPEC §5.3 step 5: the rest become referenced (budget) rows). A file is written
+# budget (the rest become referenced (budget) rows). A file is written
 # only after both passes, so a stop leaves no partial copy. The user's rules (U-06) are checked
 # once before their child starts; inside it their own time bound holds (_user_spans).
 our $DEADLINE;
@@ -47,7 +47,7 @@ sub _matches {
     return @spans;
 }
 
-# SK-2 (owner xxxxxxxx-12, S-SETTINGS E2): the shipped rules, then the user's secret_extra_rules
+# The shipped rules, then the user's secret_extra_rules
 # (HARD/WARN regexes as user-hard-<n>/user-warn-<n>; NAME globs in _denied_base). Additive only:
 # a user rule can withhold more, never less. Read once per value of the setting.
 my %EXTRA;
@@ -144,7 +144,7 @@ sub has_hard { return scalar grep { $_->{class} eq 'HARD' } @{ $_[0] || [] } }
 
 # redact(text [, classes]) -> (text with each hit replaced by [redacted:<rule>], \@hits)
 # Every selected rule runs on the text as given, as scan() does, so the copy and the gate
-# agree (RRP-02): a rule applied to another rule's output can miss, e.g. key-value
+# agree: a rule applied to another rule's output can miss, e.g. key-value
 # rewrites `csrftoken=…` first and the cookie rule then no longer sees the header's
 # later pairs. Overlapping or touching spans merge, then each merged span is replaced
 # once, labelled by the rule that comes first in the spec's list (the most specific:
@@ -212,7 +212,7 @@ sub _denied_base {
     my ($path) = @_;
     my $b = util::basename($path);
     my $deny = spec::deny_names();
-    # SK-2: a user NAME glob withholds whatever the shipped exceptions say (it can only add).
+    # a user NAME glob withholds whatever the shipped exceptions say (it can only add).
     return 1 if grep { $b =~ $_->{re} } @{ _extra()->{names} };
     return 0 if grep { $b =~ $_ } @{ spec::deny_except() || [] };
     return (grep { $b =~ $_ } @$deny) ? 1 : 0;
@@ -261,7 +261,7 @@ our $SCAN_MAX = 12 * 1024 * 1024;
 # classify_file(path) -> (copy|redact|withhold, \@hits, $scanned): the third value is the
 # file's bytes as scanned (copy and redact only), so a caller can write exactly what the
 # gate read rather than read the file again (bytes appended in between were never
-# scanned). A file larger than one scan reads is withheld as `too-large` (RRP-06): the
+# scanned). A file larger than one scan reads is withheld as `too-large`: the
 # part past the scan was never looked at.
 sub classify_file {
     my ($path) = @_;

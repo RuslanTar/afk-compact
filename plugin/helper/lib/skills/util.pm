@@ -1,7 +1,7 @@
 package skills::util;
-# lib/skills/util.pm: small shared tools for the skill subcommands (WP-skills).
-# Floor modules only (RUNTIME §2.4).
-# Text encoding (P5-FOLD A4, MOD-SPEC §2.6): inside the skills, text is characters and
+# lib/skills/util.pm: small shared tools for the skill subcommands.
+# Floor modules only.
+# Text encoding: inside the skills, text is characters and
 # bytes are only at the edges. Every input that becomes text is decoded once where it is
 # read (text(): arguments, file text, JSON, git and queue output, directory names, the
 # environment, the core seams' strings); bytes that are not UTF-8 are taken as Latin-1
@@ -205,7 +205,7 @@ sub _jstring {
 # ---------------------------------------------------------------- sha256
 
 my $HAVE_DIGEST;
-# Character strings are encoded to UTF-8 first (DP-12): Digest::SHA dies on a wide
+# Character strings are encoded to UTF-8 first: Digest::SHA dies on a wide
 # character, and the pure-Perl fallback would hash code points, not bytes.
 sub sha256_hex {
     my ($data) = @_;
@@ -320,7 +320,7 @@ sub iso_local {
     return POSIX::strftime('%Y-%m-%dT%H:%M:%S', localtime $e) . sprintf('%s%02d:%02d', $sg, int($a / 3600), int(($a % 3600) / 60));
 }
 
-# stamp(epoch) -> 2026-10-21 14:05 +0300 (RV-24): local date, time and the numeric UTC
+# stamp(epoch) -> 2026-10-21 14:05 +0000: local date, time and the numeric UTC
 # offset of that instant, always all three; what `date '+%Y-%m-%d %H:%M %z'` prints and
 # the spec's time_re matches. Core's util::stamp is the one source when it is loaded.
 sub stamp {
@@ -410,7 +410,7 @@ sub write_replace {
     return 1;
 }
 
-# One append under flock where the file system allows it (R-4).
+# One append under flock where the file system allows it.
 sub append_line {
     my ($path, $line) = @_;
     my $fh;
@@ -505,12 +505,12 @@ sub abs_path {
     $p = cwd() . '/' . $p unless $p =~ m{\A/};
     # Cwd gets bytes, as util::real_path gives it: the pure-Perl fast_abs_path (Cwd's
     # abs_path under MSYS and Cygwin) joins its byte result to a character file name,
-    # which encoded a non-ASCII folder twice (RF-1)
+    # which encoded a non-ASCII folder twice
     my $r = Cwd::abs_path(bytes($p));
     return defined $r ? text($r) : $p;
 }
 
-# A setting or flag value that counts as unset (MOD §2.6, HDN §6).
+# A setting or flag value that counts as unset.
 sub unset_value {
     my ($v) = @_;
     return 1 if !defined $v || $v eq '';

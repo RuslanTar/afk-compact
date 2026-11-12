@@ -1,6 +1,5 @@
 # cmd/checkpoint.pl: `checkpoint --sid S --nonce N --budget-ms 10000 [--measured]
-# [--cwd DIR] [--transcript PATH]` -> one JSON line <= 6 KB (MOD-SPEC §10;
-# BUILD-PLAN §3.1). Owner: WP-core.
+# [--cwd DIR] [--transcript PATH]` -> one JSON line <= 6 KB.
 use strict;
 use warnings;
 use utf8;

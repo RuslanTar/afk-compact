@@ -1,6 +1,6 @@
 package skills::project_cmd;
-# lib/skills/project_cmd.pm: `project status|init|copy` (D-12 §1.5.8 steps 1 and 3, §1.5.9;
-# BUILD-PLAN §3.1 Block D). DP-5: the consent mod command is not built, so these are
+# lib/skills/project_cmd.pm: `project status|init|copy`. The consent mod command is
+# not built, so these are
 # helper commands only, and none of them writes consent: acceptance (repo_roots) stays a
 # person's gesture through /config or a hand edit of the settings file.
 #   status --cwd D [--json]   the mode line (+ how to accept, ignored, drift, exports);
@@ -13,7 +13,7 @@ package skills::project_cmd;
 #                             project_init. Nothing is committed.
 #   copy --from private|repo (--ticket T | --all) [--apply] [--cwd D]
 #                             copy, never move (repo mode only). Default: a read-only dry
-#                             run (Dev-6) that writes nothing, not even a row. private:
+#                             run that writes nothing, not even a row. private:
 #                             each private handoff of this repository's buckets through the
 #                             publish export pipeline (rewrite, scan, no-replace write).
 #                             repo: each export with no private twin into the private
@@ -73,7 +73,7 @@ sub _accept_line {
     return "accept: add $mc to repo_roots in /config (nothing here writes it)";
 }
 
-# The mode lines of MOD-SPEC §11 Block C.
+# The handoff-root mode lines of /status.
 sub mode_lines {
     my ($m) = @_;
     my @l = ("handoff mode: $m->{mode} ($m->{reason})");
@@ -123,7 +123,7 @@ sub init {
     my $c = skills::core::repo_check($top, $root);
     $refuse->($c->{reason} // 'repo-root-unchecked') unless $c->{ok};
     my $decl = skills::core::decl_name();
-    # The declaration as D-12 §1.5.2 writes it (valid_root: no character needs escaping).
+    # The declaration as written (valid_root: no character needs escaping).
     my $dtext = qq({"version": 1, "mode": "repo", "root": "$root"}\n);
     for my $f ([$decl, $dtext], ["$root/README.md", $README], ["$root/.gitignore", skills::core::gitignore_text()]) {
         my ($rel, $text) = @$f;
@@ -193,7 +193,7 @@ sub copy {
             my $dest = "$ctx->{root}/$w->{repo}/$topic/" . File::Basename::basename($x->{path});
             my $text = _imported_text($x->{text}, "repo:$rel");
             if (!defined $text) { $out->('skip unshaped', $rel); next }
-            # CR-F14 (DP-27): repository text is untrusted; a HARD secret hit is never
+            # Repository text is untrusted; a HARD secret hit is never
             # copied into the private store (as publish refuses one). WARN hits import.
             my ($why, $rules) = skills::export::scan($text);
             if (($why // '') eq 'secret') { $out->('skip secret', $rel, '(rules ' . join(',', @$rules) . ')'); next }

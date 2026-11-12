@@ -1,6 +1,6 @@
-# cmd/claim.pl: `claim --sid S --nonce N --channel sessionstart|prompt.context|prompt.submit`
-# (MOD-SPEC §3.4). Exclusive create of <watch>/<sid>/resume-claimed/<nonce> (content =
-# channel) -> `CLAIMED`, or `TAKEN <channel>`. Row `resume_inject` on CLAIMED. Owner: WP-core.
+# cmd/claim.pl: `claim --sid S --nonce N --channel sessionstart|prompt.context|prompt.submit`.
+# Exclusive create of <watch>/<sid>/resume-claimed/<nonce> (content =
+# channel) -> `CLAIMED`, or `TAKEN <channel>`. Row `resume_inject` on CLAIMED.
 use strict;
 use warnings;
 use utf8;

@@ -1,11 +1,11 @@
-# cmd/smoke.pl: owner-run version smoke (MOD-SPEC §5.6; BUILD-PLAN §3.1). Owner: WP-core.
+# cmd/smoke.pl: maintainer-run version smoke.
 # smoke [--sid S] [--claude BIN] [--types FILE] [--skip-cli]
 # Checks, one line each: `claude plugin validate --strict` and `claude plugin test` on
 # this plugin, C8 binary string counts and C9 type-declaration hashes against
 # assets/canary-baseline.json. Then `SMOKE PASS <version>` (exit 0; clears smokeDue
 # in <watch>/version.json) or `SMOKE FAIL <check>` (exit 1). Never starts a session.
 # A check whose input is missing (no claude binary for C8, no type declarations for
-# C9) fails: a smoke that could not compare cannot clear smokeDue (AT-M3-14; F2-9).
+# C9) fails: a smoke that could not compare cannot clear smokeDue (AT-M3-14).
 # C8 fails only on rare strings and the arm list (c8_compare): a string the baseline
 # counted at most c8.rare_max times is rare (plugin-specific: the flag, its env
 # variable, the notice texts, the experiment's own arm names), and c8.arm_list is the

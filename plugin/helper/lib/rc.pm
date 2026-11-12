@@ -1,6 +1,6 @@
 package rc;
 # lib/rc.pm: the run context of one helper call: session id, settings, paths, root
-# checks, the row envelope and once-per-session markers. Owner: WP-core.
+# checks, the row envelope and once-per-session markers.
 use strict;
 use warnings;
 use utf8;
@@ -25,7 +25,7 @@ sub init {
         $w = ($dr->{ok} && $def ne $R{paths}{watch}) ? $def : undef;
     }
     $R{watch} = $w;
-    # STATE-ROOT (lib/paths.pm legacy): the old default root, read and never written; the unsafe-root
+    # Legacy root (lib/paths.pm legacy): the old default root, read and never written; the unsafe-root
     # checks apply to it too, and a refused one is skipped (legacy_refused names the reason).
     my $l = $R{paths}{legacy};
     if (defined $l) {
@@ -38,7 +38,7 @@ sub init {
 sub sid      { $R{sid} }
 # The session id is held as bytes, as the watch dir is: a skill passes the sid it read from a
 # stage's JSON as a character string, which joined to a non-ASCII watch dir (bytes) made the
-# path a character string and its folder name encoded twice (RF-4: publish wrote its
+# path a character string and its folder name encoded twice (publish wrote its
 # handoff_mode row under a second, double-encoded root). init and as_session hold it the same
 # way; their callers pass bytes today (argv, jsonc's ASCII strings, file names), so there it only
 # keeps the rule.
@@ -51,7 +51,7 @@ sub watch    { $R{watch} }
 sub sid_dir  { return defined $R{watch} && defined $R{sid} ? "$R{watch}/$R{sid}" : undef }
 sub root_ok  { my ($key) = @_; return $R{roots}{$key}{ok} ? 1 : 0 }
 sub root_reason { my ($key) = @_; return $R{roots}{$key}{reason} }
-# legacy() -> the legacy root to read (STATE-ROOT), or undef; legacy_refused() -> the reason a legacy root
+# legacy() -> the legacy root to read, or undef; legacy_refused() -> the reason a legacy root
 # that exists was skipped (root-in-planning, root-in-git, root-unchecked), or undef.
 # read_roots() -> the effective root, then the legacy root when there is one: every reader of the
 # store's own files (pins, lineage, records, claims, approval hashes, buckets) looks in both, in
@@ -82,7 +82,7 @@ sub claude {
 }
 
 # finished_by() -> the finisher's sid8 while this call runs reconcile for another session
-# (the cross-session finish, MOD-SPEC §5.8), else undef. Every row written then carries it.
+# (the cross-session finish), else undef. Every row written then carries it.
 sub finished_by { $R{finished_by} }
 
 # as_session(S, {finished_by => sid8, claude => {pid, lstart} | undef}, fn) -> fn's value:
@@ -106,7 +106,7 @@ sub as_session {
     return wantarray ? @r : $r[0];
 }
 
-# cc_version() / cc_version_src() (PKG-RUNTIME D.2, MOD-SPEC §2.5): the first source present
+# cc_version() / cc_version_src(): the first source present
 # wins: `mod` the matched dispatch record's cc_version (a mod-channel record: $.session.version(),
 # exact for the compaction; note_dispatch), `exec` the CLAUDE_CODE_EXECPATH basename (exact for
 # this process), `transcript` the version of the newest row in the last 64 KB of the payload's
@@ -197,7 +197,7 @@ sub once {
     return $ok ? 1 : 0;
 }
 
-# mode(cwd) -> the handoff-root mode of cwd's worktree (lib/repomode.pm, MOD-SPEC §1.5),
+# mode(cwd) -> the handoff-root mode of cwd's worktree (lib/repomode.pm),
 # decided once per call; the first call for each distinct (mode, reason) in a session
 # logs `handoff_mode {mode, reason, declared, accepted}`.
 sub mode {
@@ -223,7 +223,7 @@ sub preamble {
         }
     }
     emit('config_ambiguous', [candidates => 'several']) if $R{settings}{ambiguous} && once('config_ambiguous');
-    # D-72: an on/off key given in a form from before 0.1.6 (settings::resolve's legacy), once per key
+    # an on/off key given in a form from before 0.1.6 (settings::resolve's legacy), once per key
     my $lg = $R{settings}{legacy} || {};
     for my $k (sort keys %$lg) { emit('config_note', [key => $k, note => $lg->{$k}]) if once("config_note.$k.legacy") }
     for my $n (@{ $R{settings}{notes} || [] }) {
@@ -234,13 +234,13 @@ sub preamble {
         } elsif ($n =~ /^([a-z_]+): HOME is not the account home, safe value used$/) {
             emit('config_note', [key => $1, note => 'home-not-account']) if once("config_note.$1.home");
         } elsif ($n =~ /^(restart_on_update): not off, shadow or on, off used$/) {
-            # SESSION-RESTART D1: an invalid value is off; the row names the key, never the value
+            # restart on update: an invalid value is off; the row names the key, never the value
             emit('config_invalid', [key => $1]) if once("config_invalid.$1");
         }
     }
-    # S-SETTINGS B: an invalid unattended_prod_reads value (forbid used) or a dropped
+    # An invalid unattended_prod_reads value (forbid used) or a dropped
     # prod_patterns entry, once per session each; the row names the position, never the pattern.
-    # Owner xxxxxxxx-29: a protected_branches entry that is ignored (invalid), the same way.
+    # A protected_branches entry that is ignored (invalid), the same way.
     my $p = eval { settings::prod($R{settings}) };
     my $pb = eval { settings::protected($R{settings}) };
     for my $x (@{ $p ? $p->{invalid} : [] }, @{ $pb ? $pb->{invalid} : [] }) {

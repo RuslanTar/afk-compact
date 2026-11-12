@@ -1,7 +1,7 @@
 package watch::status;
-# lib/watch/status.pm: the watcher's lines in `status` (MOD-SPEC §11, WATCH
-# §7.2): open alerts for this session and the last 7 days' counts by rule.
-# Owner: WP-watch. Fixed texts, ids and counts only; never content.
+# lib/watch/status.pm: the watcher's lines in `status`: open alerts for this session and the
+# last 7 days' counts by rule.
+# Fixed texts, ids and counts only; never content.
 use strict;
 use warnings;
 use utf8;
@@ -21,7 +21,7 @@ sub lines {
         return \@out;
     }
     my $mode = $watch::alerts::DELIVERY eq 'status-only'
-             ? 'alerts are shown here only (Stop delivery waits for probe P-W2)'
+             ? 'alerts are shown here only (Stop delivery waits for a delivery probe)'
              : 'alerts are shown at the next Stop and here';
     push @out, "Watcher: shadow; $mode";
     push @out, q(Watcher: the watcher setting is not true or false; it counts as true) if $ctx->{settings}{watcher_unknown};
@@ -126,12 +126,12 @@ sub _rollup_rows {
     return map { $by{$_} } @order;
 }
 
-# C-STORE D4/D10 (MOD-SPEC §5.8): the stashes the cross-session finish cannot reach
+# The stashes the cross-session finish cannot reach
 # because their session left no per-process record (<root>/.sessions/by-pid/*.{live,ended}-
 # <sid8>.json). Counts and sid8s only; one line, shown only when the count is not zero.
-# Read-only (F2-5: core writes these files). The stashes kept after a real mismatch
+# Read-only (core writes these files). The stashes kept after a real mismatch
 # (`pending/*.mismatch.md`) are core's `status` line (`kept mismatch stashes: N`, with their
-# paths; needs/core-to-watch.md §8), so the watcher no longer repeats their count.
+# paths), so the watcher no longer repeats their count.
 our $STASH_SIDS = 5;
 sub stash_lines {
     my ($ctx) = @_;
@@ -158,7 +158,7 @@ sub stash_lines {
     return @o;
 }
 
-# PKG-RUNTIME E.2 (WATCHER-SPEC §6.3 `compaction_boundary`): this session's rollup rows whose
+# This session's rollup rows whose
 # non-null size disagrees with core's boundary row for the same nonce (`join_conflict`; the
 # rollup value is kept). One line, shown only when the count is not zero. Read-only.
 sub join_conflict_lines {

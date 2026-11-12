@@ -1,6 +1,6 @@
 package watch::io;
 # lib/watch/io.pm: files, time and hashes for the watcher (floor modules only).
-# Owner: WP-watch. Row appends follow BUILD-PLAN §3.1/§3.2 and ROOT-RULINGS R-4:
+# Row appends:
 # one O_APPEND write of <= 4 KB under flock(LOCK_EX), umask 077, 0700 dirs,
 # 0600 files. Core may inject its own appender through ctx (lib/watch/ctx.pm).
 use strict;
@@ -18,7 +18,7 @@ BEGIN { $HIRES = eval { require Time::HiRes; 1 } ? 1 : 0 }
 # --- time -------------------------------------------------------------------
 
 # Epoch seconds (fractional when Time::HiRes loads). STORE_TEST_NOW is honoured
-# only with STORE_TEST_MODE=1 (BUILD-PLAN §3.1 test mode).
+# only with STORE_TEST_MODE=1 (test mode).
 sub now {
     if (($ENV{STORE_TEST_MODE} || '') eq '1' && defined $ENV{STORE_TEST_NOW} && $ENV{STORE_TEST_NOW} ne '') {
         my $t = parse_iso($ENV{STORE_TEST_NOW});
@@ -69,7 +69,7 @@ sub _local_offset {
     return timegm(@l[0 .. 4], $l[5] + 1900) - $t;
 }
 
-# Local time with offset and milliseconds (WATCH §6.2 envelope `ts`).
+# Local time with offset and milliseconds (the row envelope's `ts`).
 sub iso {
     my ($t) = @_;
     $t = now() unless defined $t;
@@ -113,7 +113,7 @@ sub sha256_hex {
     my ($bytes, $ctx) = @_;
     return undef unless defined $bytes;
     # A character string (code point above 0xFF, e.g. an em dash in a heading)
-    # is hashed as its UTF-8 bytes (DP-12): Digest::SHA dies on a wide character.
+    # is hashed as its UTF-8 bytes: Digest::SHA dies on a wide character.
     if (utf8::is_utf8($bytes)) { utf8::encode($bytes) }
     if ($ctx && ref $ctx->{sha256} eq 'CODE') {
         my $h = eval { $ctx->{sha256}->($bytes) };

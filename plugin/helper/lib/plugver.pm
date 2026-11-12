@@ -1,6 +1,6 @@
 package plugver;
 # lib/plugver.pm: which plugin copy this session runs against the one sessions started later
-# load (0.1.3 version skew). Owner: WP-core. Claude Code fixes a plugin's folder when a session
+# load (0.1.3 version skew). Claude Code fixes a plugin's folder when a session
 # loads it, so a long session keeps running an older copy after an install (15 sessions after the
 # 0.1.2 install; one ran 0.1.0 for about 18 h).
 #   <root>/.sessions/loads/<load epoch>_<pid>-<lstart epoch>_<version>_<scope tag>.json
@@ -62,8 +62,8 @@ use strict;
 use warnings;
 use utf8;
 
-# A week: the sessions seen lived up to about 2.5 days (started 2026-10-30 07:33, still running
-# 2026-11-01 22:00), so every skew inside a session's life is covered three times over; a newest
+# A week: the sessions seen lived up to about 2.5 days, so every skew inside a session's life is
+# covered three times over; a newest
 # load older than that no longer says what is installed (a later uninstall, update or rollback
 # with no session started since is not seen), so it is not trusted.
 our $WINDOW_S = 7 * 86400;

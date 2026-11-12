@@ -1,6 +1,6 @@
 package skills::export;
 # lib/skills/export.pm: the portable export of a published handoff into the repository
-# (repo mode only; MOD-SPEC §1.5.5, D-12). Used by `publish` (last step, after the private
+# (repo mode only). Used by `publish` (last step, after the private
 # handoff is written and read back) and by `project copy --from private`.
 #   target   <toplevel>/<decl.root>/<topic>/<stem>.md: same stem and nonce as the private
 #            file, <topic> = the private bucket's folder name
