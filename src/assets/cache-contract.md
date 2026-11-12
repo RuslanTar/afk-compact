@@ -1,4 +1,4 @@
-<!-- Source of plugin/assets/cache-contract.md (tools/build: comments stripped, {{plugin}} filled). The command is plugin/helper/cmd/cache.pl, its logic and the state file plugin/helper/lib/cachestate.pm; the shim is kept by the SessionStart hook (plugin/helper/cmd/hook.pl). Facts of Claude Code 2.1.319 checked live on 2026-11-09 (v0.1.7 probes Q2, Q3). -->
+<!-- Source of plugin/assets/cache-contract.md (tools/build: comments stripped, {{plugin}} filled). The command is plugin/helper/cmd/cache.pl, its logic and the state file plugin/helper/lib/cachestate.pm; the shim is kept by the SessionStart hook (plugin/helper/cmd/hook.pl). Facts of Claude Code 2.1.319, checked live. -->
 # The cache command (version 1)
 
 `<store> cache` says whether a session's prompt cache is warm, for a status line or a script of your own. This file is its whole contract. `<store>` is `${XDG_STATE_HOME:-~/.local/state}/{{plugin}}/bin/{{plugin}}-store`, a two-line `#!/bin/sh` file that runs the installed plugin's helper (below), or `"<plugin folder>/scripts/{{plugin}}-store"` itself.

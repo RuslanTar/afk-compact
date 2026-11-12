@@ -1,5 +1,4 @@
-<!-- The one fixed line the native arm of the local shadow trial may add (TRIAL-DUAL-HANDOFF
-§4.1 "Gap to close", P-DH-ASSET): it introduces the last reply and a newly typed prompt before
+<!-- The one fixed line the native arm of the local shadow trial may add: it introduces the last reply and a newly typed prompt before
 the compaction prompt the user's local trial folder holds, only when the local trial config
 sets native_tail. No Claude Code prompt text is part of the plugin. -->
 The conversation above may end before the following, which came after its last request:

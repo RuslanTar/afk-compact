@@ -5,9 +5,9 @@ argument-hint: "[advanced | all]"
 ---
 
 # Settings
-<!-- 0.1.2 onboarding and the settings writer (owner 2026-10-30, "helper writer, safe keys"): the helper writes the plugin's options in the user's settings file for every key but the six consent keys, which it refuses on every path. No disable-model-invocation and no allowed-tools until PR-2 row P-156 is reviewed; the description says "only when the user asks" instead. -->
+<!-- 0.1.2 onboarding and the settings writer: the helper writes the plugin's options in the user's settings file for every key but the six consent keys, which it refuses on every path. No disable-model-invocation and no allowed-tools yet; the description says "only when the user asks" instead. -->
 
-`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..`; use that root. If that has `${` too or no helper is there, say so and stop. <!-- CW-1 (Cowork check 2026-10-26), as in the status skill -->
+`<store>` = `"${CLAUDE_PLUGIN_ROOT}/scripts/{{plugin}}-store"`, the plugin's helper. Type it with the quotes, as the first word of the command, never through a variable. If that path starts `/scripts/` or has `${`, the plugin root is `${CLAUDE_SKILL_DIR}/../..`; use that root. If that has `${` too or no helper is there, say so and stop. <!-- Cowork fallback, as in the status skill -->
 
 The helper is the only way you change these settings. Never edit, write or read the settings file with any other tool, and never write a default yourself: setting a key to its default removes it.
 

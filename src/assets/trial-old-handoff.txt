@@ -1,4 +1,4 @@
-<!-- The old arm's adapter of the local shadow trial (TRIAL-DUAL-HANDOFF §4.2, P-DH-ASSET). Sent
+<!-- The old arm's adapter of the local shadow trial. Sent
 only to a tool-less fork, only while the user's local trial config is on. It holds no text of
 the old skill: the mod fills @old_skill@, @old_template@ and @trial_facts@ from the files the
 local config names, and @trial_tail@ with the last reply and a newly typed prompt. The two
