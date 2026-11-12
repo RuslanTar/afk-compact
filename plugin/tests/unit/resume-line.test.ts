@@ -105,11 +105,11 @@ describe('resume line (A): Step 1 as code reads it', () => {
 
   test('the asset: [resumed] sits before step 1, so it is read first; without the tag no such line', () => {
     if (!RESUMED) return
-    const s = assembleText(assetText('resume-context', 'afk-compact'), ['resumed', 'prod-forbid'], { resume_line: 'Resumed · step 1: `x`' })
+    const s = assembleText(assetText('resume-context', 'demo-plugin'), ['resumed', 'prod-forbid'], { resume_line: 'Resumed · step 1: `x`' })
     const lines = s.split('\n')
     const at = lines.indexOf(lineFor('Resumed · step 1: `x`'))
     expect(at > 0 && at < lines.findIndex(l => l.startsWith('1. Reconcile'))).toBe(true)
-    expect(resumedLine(assembleText(assetText('resume-context', 'afk-compact'), ['prod-forbid'], {}))).toBeUndefined()
+    expect(resumedLine(assembleText(assetText('resume-context', 'demo-plugin'), ['prod-forbid'], {}))).toBeUndefined()
   })
 })
 

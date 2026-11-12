@@ -279,7 +279,7 @@ sub on_SessionStart {
 
 # own_data_name() -> this plugin's data folder name as Claude Code derives it (0.1.3): the plugin
 # id `<name>@<marketplace>` with each character outside A-Z, a-z, 0-9, _ and - read as `-`
-# (afk-compact@afk-compact -> afk-compact-afk-compact). The marketplace comes from where Claude
+# (demo@demo-market -> demo-demo-market). The marketplace comes from where Claude
 # Code loaded the plugin, CLAUDE_PLUGIN_ROOT (else the helper's own root): an installed plugin's
 # .../plugins/cache/<marketplace>/<name>/<version>, a synced one's .../plugins/synced/<x>/<name>
 # (`synced`; Claude Code may add `~g<n>` to that folder's name, e.g. example~g2), a copy read in
