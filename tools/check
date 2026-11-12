@@ -26,6 +26,11 @@ AT-CK-02-03-05-06-08-09-12) is load-sensitive: under such load the evidence swee
 withheld. It failed in 1 of 2 runs alone on that tree and on the one before it; re-run it alone
 on a quiet machine before taking a failure for a regression.
 
+X-gates: tools/gates over plugin, README.md and docs (all gates), then names, user-path,
+attribution and stale-name alone over the community files that exist (CONTRIBUTING.md,
+CODE_OF_CONDUCT.md, SECURITY.md, CHANGELOG.md, .github, bench). X-name: stale-name over plugin,
+README.md and docs.
+
 X-gen: tools/build --check, tools/fixtures-gen --check, tools/helper-replies-gen --check,
 tools/canary-baseline --check (pinned to the Claude Code binary the baseline records, so an
 update does not make it flaky; when that binary is gone, every part but the C8 counts is
@@ -81,14 +86,19 @@ repo and a variant from a tree that differs from HEAD, an X-H runner
 that dies after a KNOWN_RED case, a hooks module that breaks a Claude Code module rule
 (X-validate: `$` passed to a function not declared at the top of register.ts, the rule of
 Claude Code 2.1.312), a `.planning/` note in the index or in a commit
-(the planning gate fails the build) and the pre-rename name outside its
-one FORMER_NAMES line. The copies never hold `.planning/`.
+(the planning gate fails the build), the pre-rename name outside its
+one FORMER_NAMES line, the docs (a no-run phrase in docs/usage.md and in the landing README.md;
+in src/docs a link to a missing anchor and to no page, a heading another shipped page has, a
+relative image in a shipped page and a page in neither ORDER list, all refused by tools/build;
+a renamed pinned heading in docs/ and plugin/README.md, installation.md without cc_min and a
+landing badge with another version, readme-pins). The copies never hold `.planning/`.
 
 BT-02 (a real rename): copy the work tree to tmp/rename, set brand.json there
 to the drill name, run the regenerate steps (tools/build, tools/assemble --goldens,
 tools/fixtures-gen) in the copy, then the copy's own `tools/check PHASE --no-drill`, so every
-check of the phase (X-test and X-H included) runs under the new name. Then the old name must
-be gone from the copy's plugin/, README.md and marketplace file, the old launcher removed
+check of the phase (X-test and X-H included) runs under the new name; brand.json repo becomes
+<owner>/<drill name> as well. Then the old name must be gone from the copy's plugin/, README.md,
+docs/ and marketplace file, the old launcher removed
 from scripts/ and from the old bin/ (which must be gone), the new one in scripts/, and the
 repo's own tree unchanged.
 
@@ -127,6 +137,8 @@ SELFTEST_DIR = os.path.join(REPO, "tmp", "selftest")
 RENAME_STEPS = [["tools", "build"], ["tools", "assemble", "--goldens"], ["tools", "fixtures-gen"]]   # regenerate steps
 COPY_SKIP_TOP = {".git", "node_modules", "tmp", ".planning"}   # .planning: private notes, never copied
 COPY_SKIP = {"__pycache__", ".DS_Store", os.path.join("plugin", ".claude-plugin", "types")}
+# Hand-written files outside the build, scanned by four gates in X-gates (each when present).
+COMMUNITY = ["CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "SECURITY.md", "CHANGELOG.md", ".github", "bench"]
 
 
 class Fail(Exception):
@@ -1007,6 +1019,27 @@ def probes(name):
         edit(d, "plugin/hooks/register.ts", "    const r = await next(e)\n",
              "    const r = await next(e)\n    const locate = (x: unknown) => x\n    locate($)\n")
 
+    def docs_text(d):
+        """The README-class text gates over the docs pages and the landing page."""
+        append(d, "docs/usage.md", "\nA command taken from a handoff is never run either way.\n")
+        append(d, "README.md", "\nA command taken from a handoff is never run either way.\n")
+
+    def docs_links(d):
+        """A link to a missing anchor and to no page, a heading another shipped page has, a
+        relative image in a shipped page and a page in neither ORDER list (tools/build)."""
+        append(d, "src/docs/usage.md", "\nSee [the limits](limitations.md#no-such-anchor) and [a page](missing-page.md).\n"
+                                       "\n## Install\n\n![chart](chart.svg)\n")
+        write_text(os.path.join(d, "src", "docs", "extra.md"), "# Extra page\n")
+
+    def readme_pins(d):
+        """A renamed pinned heading in docs/ and plugin/README.md, installation.md without the
+        brand's cc_min, and a landing badge with another version."""
+        cc = brand(d)["cc_min"]
+        edit(d, "docs/usage-limits.md", "# Near a usage limit\n", "# Near usage limits\n")
+        edit(d, "plugin/README.md", "## Near a usage limit\n", "## Near usage limits\n")
+        edit(d, "docs/installation.md", cc, "9.9.9", count=-1)
+        append(d, "README.md", "\n[![Claude Code](https://img.shields.io/badge/Claude_Code-2.1.200%2B-blue)](docs/installation.md)\n")
+
     readme = r"plugin/README\.md:\d+: "
     v, pinned = pinned_claude()
     canary = ["tools/canary-baseline", "--check"] + (["--claude", pinned] if pinned else [])
@@ -1129,6 +1162,24 @@ def probes(name):
           r"^GATE no-run-text plugin/README\.md:\d+: AT-TX-08 forbidden: 'A command taken from a handoff is never run'$",
           r"^GATE no-run-text plugin/\.claude-plugin/plugin\.json: AT-TX-08 forbidden: userConfig unattended_prod_reads says 'commands from a handoff always ask'$",
           r"^GATE no-run-text plugin/skills/resume/SKILL\.md: AT-CK-08 confirm: a line matching .* lacks \"stop after the R8 report and wait for the user's go\"$"], None),
+        ("docs-text", "README-class text gates over docs/ and README.md",
+         ["tools/gates", "docs", "README.md", "--names", os.devnull, "--brand", name, "--no-git-log", "--only", "no-run-text"],
+         docs_text,
+         [r"^GATE no-run-text docs/usage\.md:\d+: AT-TX-08 forbidden: 'A command taken from a handoff is never run'$",
+          r"^GATE no-run-text README\.md:\d+: AT-TX-08 forbidden: 'A command taken from a handoff is never run'$"], None),
+        ("docs-links", "docs links, headings, images and ORDER", ["tools/build", "--check"], docs_links,
+         [r"^docs: src/docs/usage\.md:\d+: unresolved link limitations\.md#no-such-anchor: ",
+          r"^docs: src/docs/usage\.md:\d+: link missing-page\.md: write page\.md#anchor",
+          r"^docs: heading 'Install' \(usage\.md\) is also in installation\.md ",
+          r"^docs: src/docs/usage\.md:\d+: relative image chart\.svg in a shipped page",
+          r"^docs: src/docs/extra\.md is in neither list of src/docs/ORDER$"], None),
+        ("readme-pins", "pinned headings and cc_min", ["tools/gates", "plugin", "docs", "README.md", "--names", os.devnull,
+                                                       "--brand", name, "--no-git-log", "--only", "readme-pins"],
+         readme_pins,
+         [r"^GATE readme-pins docs: readme-pins: no page has the heading 'Near a usage limit'",
+          r"^GATE readme-pins plugin/README\.md: readme-pins: no heading 'Near a usage limit'",
+          r"^GATE readme-pins docs/installation\.md: readme-pins: installation\.md does not name Claude Code ",
+          r"^GATE readme-pins README\.md:\d+: readme-pins: the Claude Code badge says 2\.1\.200, "], None),
         ("stalled-def", "AT-TX-12", gates_only("stalled-def"), stalled,
          [r"^GATE stalled-def plugin/skills/resume/references/self-heal\.md: AT-TX-12 self-heal: STALLED row lacks"], None),
         ("prod-reads", "AT-PR-06", gates_only("prod-reads"), prod_reads,
@@ -1399,9 +1450,9 @@ def x_launcher(phase, root=REPO):
 # ---------------------------------------------------------------- BT-02 (rename drill)
 
 def old_name_left(root, old):
-    """Lines in the renamed copy's shipped files that still hold the old name (substring)."""
+    """Lines in the renamed copy's shipped files, README.md and docs/ that still hold the old name (substring)."""
     targets = [os.path.join(root, "README.md"), os.path.join(root, ".claude-plugin", "marketplace.json")]
-    for d, dirs, files in os.walk(os.path.join(root, "plugin")):
+    for d, dirs, files in [w for top in ("plugin", "docs") for w in os.walk(os.path.join(root, top))]:
         dirs[:] = sorted(x for x in dirs if x not in ("node_modules", ".git") and
                          not (x == "types" and os.path.basename(d) == ".claude-plugin"))
         targets += [os.path.join(d, f) for f in sorted(files)]
@@ -1429,6 +1480,8 @@ def bt02(phase, names):
     if b["marketplace"] == b["name"]:
         b["marketplace"] = DRILL_NAME
     b["name"] = DRILL_NAME
+    # The repo slug holds the brand (badges, install lines, manifest URLs): the drill renames it.
+    b["repo"] = b["repo"].split("/")[0] + "/" + DRILL_NAME
     write_text(os.path.join(DRILL_DIR, "brand.json"), json.dumps(b, indent=2, ensure_ascii=False) + "\n")
     for step in RENAME_STEPS:
         run([os.path.join(DRILL_DIR, *step[:2])] + step[2:], "BT-02 " + " ".join(step), cwd=DRILL_DIR)
@@ -1595,8 +1648,14 @@ def main(argv):
         steps.append("X-gates")
         gates(["plugin"], names, name)
         gates(["README.md"], names, name)
+        gates(["docs"], names, name)
+        # The hand-written community files and bench/ are not rendered: names, user paths,
+        # attribution and old names only (markers would flag `${{ }}` in a workflow file).
+        community = [f for f in COMMUNITY if os.path.exists(os.path.join(REPO, f))]
+        for g in ("names", "user-path", "attribution", "stale-name") if community else ():
+            gates(community, names, name, only=g)
         steps.append("X-name")
-        gates(["plugin", "README.md"], names, name, only="stale-name")
+        gates(["plugin", "README.md", "docs"], names, name, only="stale-name")
         if phase == "integration":
             steps.append("X-variants")
             x_variants(name)

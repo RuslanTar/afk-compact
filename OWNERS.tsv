@@ -7,6 +7,7 @@
 #
 # glob	wp
 README.md	build
+docs/**	build
 .claude-plugin/marketplace.json	build
 plugin/.claude-plugin/plugin.json	build
 plugin/README.md	build
@@ -91,4 +92,9 @@ tools/helper-replies-gen	core
 plugin/hooks/register.ts	mod
 plugin/hooks/lib/*.ts	mod
 plugin/tests/unit/*.test.ts	mod
-src/README.md	docs
+# The docs sources (tools/build renders README.md, docs/ and plugin/README.md from them).
+src/landing.md	docs
+src/docs/**	docs
+# Hand-written community files (not rendered).
+{CONTRIBUTING,CODE_OF_CONDUCT,SECURITY,CHANGELOG}.md	docs
+.github/**	docs

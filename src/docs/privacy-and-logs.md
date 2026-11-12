@@ -73,7 +73,7 @@ On its first Stop after an update, the watcher re-checks the open alerts that an
 
 Making a report deletes nothing and leaves the existing logs as they are.
 
-**Reporting problems.** Open an issue at https://github.com/RuslanTar/afk-compact/issues with what you saw and the plugin version (`/{{plugin}}:status` shows it); attach a report zip only if you want to share the logs.
+**Reporting problems.** Open an issue at https://github.com/{{repo}}/issues with what you saw and the plugin version (`/{{plugin}}:status` shows it); attach a report zip only if you want to share the logs.
 
 ## A local comparison trial (off by default)
 

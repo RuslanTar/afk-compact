@@ -6,7 +6,10 @@ Usage:
   tools/build --check               render in memory and diff against the committed GEN files
                                     byte for byte (CRLF drift counts), and report any other
                                     file in a folder only GEN tools write as stale
-  tools/build --name N --out DIR    render a full copy under DIR (rename drill; repo untouched)
+  tools/build --headings            print every heading of the docs pages (page, level, text, anchor);
+                                    a heading text must not repeat across the shipped pages
+  tools/build --name N --out DIR    render a full copy under DIR (rename drill; repo untouched;
+                                    the repo slug becomes <owner>/N)
   tools/build --variant V --out DIR render a lab variant under DIR (experiment arms; repo untouched):
                                     skills-only   same name, skills, helper and assets; no hooks/
                                                   (no hooks.json, no mod) and no plugin/tests/
@@ -24,8 +27,27 @@ Usage:
   --out run wrote; anything else is left alone.
 
 Build-time rules: strip
-`[ \\t]*<!--.*?-->` (multi-line) and fill `{{plugin}}`. Manifests also take
-`{{marketplace}}`, `{{version}}` and `{{description}}` from brand.json.
+`[ \\t]*<!--.*?-->` (multi-line) and fill `{{plugin}}`. The docs, the landing page and the
+manifests also take `{{repo}}` (the GitHub owner/name) and `{{cc_min}}` (the oldest Claude Code
+version the plugin runs on) from brand.json; manifests also take `{{marketplace}}`,
+`{{version}}` and `{{description}}`. A `{{word}}` left in a rendered page fails the build.
+
+Docs (one source per page; the rendered files are GEN, edit the sources):
+  src/landing.md        -> README.md (the GitHub landing page)
+  src/docs/<page>.md    -> docs/<page>.md, for every page src/docs/ORDER lists
+  src/docs/_plugin-header.md + Contents + the "shipped" pages of src/docs/ORDER in that order,
+  each heading one level down + src/docs/_plugin-footer.md -> plugin/README.md (the full
+  reference; only plugin/ reaches a user's machine)
+  Every page starts with its one H1. Links in the sources: `page.md#anchor` to another page,
+  `#anchor` within a page, `../<path>` to a repo file (`../LICENSE`, `../plugin/assets/<f>`);
+  the landing page writes `docs/page.md#anchor` and repo paths as they are. Anchors follow
+  GitHub's heading rules (lower case, punctuation dropped, spaces to `-`). The build rewrites
+  the links of plugin/README.md: `page.md#a` -> `#a`, `page.md` -> the page's H1 anchor, a
+  GitHub-only page -> https://github.com/<repo>/blob/main/docs/<page>, `../plugin/<f>` -> `<f>`,
+  `../LICENSE` and `../NOTICE` -> the plugin's own copies, any other `../<path>` -> its GitHub
+  URL. It fails on an unresolved link or anchor, a missing linked file, a heading that repeats
+  among the joined parts (GitHub would suffix it `-1`), a relative image in a shipped page,
+  and a page in neither ORDER list or listed but missing.
 """
 import hashlib, json, os, re, shutil, stat, subprocess, sys
 
@@ -49,7 +71,8 @@ OLD_LAUNCHER_DIRS = ("plugin/bin",)
 # tools/build output or one of OTHER_GEN (a path, or a pattern in OTHER_GEN_PATTERNS), else
 # --check reports it stale: it would ship. A pattern's owner reports its own stale files: since
 # 0.1.2 (goldens-split) tools/assemble --check reports a _gen/goldens*.gen.ts no render writes.
-GEN_TREES = ("plugin/skills", "plugin/" + LAUNCHER_DIR, "plugin/assets", "plugin/tests/unit/_gen") + OLD_LAUNCHER_DIRS
+GEN_TREES = ("plugin/skills", "plugin/" + LAUNCHER_DIR, "plugin/assets", "plugin/tests/unit/_gen",
+             "docs") + OLD_LAUNCHER_DIRS
 GEN_FLAT = (("plugin", ""), ("plugin/.claude-plugin", ""), ("plugin/hooks/lib", ".gen.ts"))
 OTHER_GEN = {
     "plugin/assets/canary-baseline.json": "tools/canary-baseline",
@@ -96,19 +119,305 @@ def strip(text):
     return COMMENT.sub("", text)
 
 
-def render(text, name):
-    return strip(text).replace("{{plugin}}", name)
+def render(text, name, brand=None):
+    """Strip review comments and fill {{plugin}}; with brand also {{repo}} and {{cc_min}}."""
+    out = strip(text).replace("{{plugin}}", name)
+    if brand is not None:
+        out = out.replace("{{repo}}", brand["repo"]).replace("{{cc_min}}", brand["cc_min"])
+    return out
 
 
 def render_manifest(text, brand):
     out = text.replace("{{plugin}}", brand["name"]).replace("{{marketplace}}", brand["marketplace"])
+    out = out.replace("{{repo}}", json.dumps(brand["repo"])[1:-1]).replace("{{cc_min}}", json.dumps(brand["cc_min"])[1:-1])
     out = out.replace("{{version}}", json.dumps(brand["version"])[1:-1])
     out = out.replace("{{description}}", json.dumps(brand["description"], ensure_ascii=False)[1:-1])
     json.loads(out)  # must stay valid JSON
+    left = PLACEHOLDER.search(out)
+    if left:
+        die("a manifest has a placeholder tools/build does not fill: " + left.group(0))
     return out
 
 
 VERSION_RE = re.compile(r"^[0-9A-Za-z.+-]{1,32}$")
+# brand.json repo (GitHub owner/name) and cc_min (digits and dots: it also goes into a badge URL).
+REPO_RE = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
+CC_MIN_RE = re.compile(r"^[0-9]+(?:\.[0-9]+){0,3}$")
+PLACEHOLDER = re.compile(r"\{\{[A-Za-z_]+\}\}")
+
+# ---------------------------------------------------------------- docs
+
+LANDING = "src/landing.md"
+DOCS_SRC = "src/docs"
+DOCS_ORDER = DOCS_SRC + "/ORDER"
+PLUGIN_HEADER = DOCS_SRC + "/_plugin-header.md"
+PLUGIN_FOOTER = DOCS_SRC + "/_plugin-footer.md"
+CONTENTS = "Contents"
+FENCE = re.compile(r"^[ \t]*(```|~~~)")
+HEADING = re.compile(r"^(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$")
+# An inline link or image; the target has no spaces or parentheses.
+MD_LINK = re.compile(r"(!?)\[([^\]\n]*)\]\(([^()\s]+)\)")
+CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
+URL_RE = re.compile(r"^(?:https?://|mailto:)")
+PAGE_LINK = re.compile(r"^([A-Za-z0-9_.-]+\.md)(?:#(.*))?$")
+
+
+class Docs:
+    """Problems found while rendering the docs; reported together."""
+    def __init__(self):
+        self.problems = []
+
+    def bad(self, msg):
+        self.problems.append(msg)
+
+
+def gh_slug(text):
+    """GitHub's heading anchor: link text kept, tags dropped, lower case, every character but
+    letters, digits, `_`, `-` and spaces dropped, spaces to `-`."""
+    t = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    t = re.sub(r"<[^>]+>", "", t).strip().lower()
+    t = re.sub(r"[^\w\- ]", "", t)
+    return t.replace(" ", "-")
+
+
+def md_lines(text):
+    """(index, line, in_fence) for every line; fence lines themselves count as in a fence."""
+    fence = None
+    for i, line in enumerate(text.split("\n")):
+        m = FENCE.match(line)
+        if m and fence is None:
+            fence = m.group(1)
+            yield i, line, True
+        elif m and line.strip().startswith(fence):
+            fence = None
+            yield i, line, True
+        else:
+            yield i, line, fence is not None
+
+
+def md_headings(text):
+    """[(level, text)] outside code fences."""
+    out = []
+    for _i, line, in_fence in md_lines(text):
+        m = None if in_fence else HEADING.match(line)
+        if m:
+            out.append((len(m.group(1)), m.group(2)))
+    return out
+
+
+def anchors_of(text):
+    """The anchors GitHub gives the headings of one file, a repeat suffixed -1, -2, ..."""
+    seen, out = {}, []
+    for _lv, h in md_headings(text):
+        s = gh_slug(h)
+        n = seen.get(s, 0)
+        seen[s] = n + 1
+        out.append(s if n == 0 else "{}-{}".format(s, n))
+    return out
+
+
+def docs_order(dx):
+    """(shipped pages, GitHub-only pages) from src/docs/ORDER; every src/docs/*.md but _*.md in one."""
+    shipped, github, cur = [], [], None
+    for no, line in enumerate(read(DOCS_ORDER).split("\n"), 1):
+        s = line.strip()
+        if not s:
+            continue
+        if s.startswith("#"):
+            word = s.lstrip("#").strip().lower()
+            if word == "shipped":
+                cur = shipped
+            elif word == "github":
+                cur = github
+            continue
+        if cur is None:
+            dx.bad("{}:{}: {} comes before a `# shipped` or `# github` line".format(DOCS_ORDER, no, s))
+        elif s in shipped or s in github:
+            dx.bad("{}:{}: {} is listed twice".format(DOCS_ORDER, no, s))
+        elif not os.path.isfile(os.path.join(REPO, DOCS_SRC, s)):
+            dx.bad("{}:{}: {} is listed but src/docs/{} is missing".format(DOCS_ORDER, no, s, s))
+        else:
+            cur.append(s)
+    listed = set(shipped) | set(github)
+    for f in sorted(os.listdir(os.path.join(REPO, DOCS_SRC))):
+        if f.startswith(".") or f == "ORDER" or (f.startswith("_") and f.endswith(".md")):
+            continue
+        if not f.endswith(".md") or not os.path.isfile(os.path.join(REPO, DOCS_SRC, f)):
+            dx.bad("src/docs/{}: only .md pages, ORDER and _*.md parts belong in src/docs".format(f))
+        elif f not in listed:
+            dx.bad("src/docs/{} is in neither list of {}".format(f, DOCS_ORDER))
+    return shipped, github
+
+
+def map_links(text, fn):
+    """text with every inline link outside code fences and code spans replaced by fn(bang, label, target, line no)."""
+    out = text.split("\n")
+    for i, line, in_fence in md_lines(text):
+        if in_fence or "](" not in line:
+            continue
+        code = [m.span() for m in CODE_SPAN.finditer(line)]
+
+        def sub(m, i=i, code=code):
+            if any(a <= m.start() < b for a, b in code):
+                return m.group(0)
+            return "{}[{}]({})".format(m.group(1), m.group(2), fn(m.group(1), m.group(2), m.group(3), i + 1))
+        out[i] = MD_LINK.sub(sub, line)
+    return "\n".join(out)
+
+
+def shift_headings(text, dx, where):
+    out = text.split("\n")
+    for i, line, in_fence in md_lines(text):
+        if not in_fence and HEADING.match(line):
+            if line.startswith("######"):
+                dx.bad("{}:{}: an H6 cannot move one level down into plugin/README.md".format(where, i + 1))
+            else:
+                out[i] = "#" + line
+    return "\n".join(out)
+
+
+def repo_path_exists(rel, gen):
+    rel = rel.split("#", 1)[0]
+    p = os.path.normpath(rel)
+    return not p.startswith("..") and (p in gen or os.path.exists(os.path.join(REPO, p)) or
+                                       any(g.startswith(p + "/") for g in gen))
+
+
+def docs_plan(brand, gen):
+    """{path: text} for README.md, docs/<page> and plugin/README.md, and the problems found."""
+    dx = Docs()
+    name, repo = brand["name"], brand["repo"]
+    out = {}
+    if not os.path.isfile(os.path.join(REPO, LANDING)):
+        dx.bad(LANDING + " is missing (the source of README.md)")
+        return out, dx
+    if not os.path.isdir(os.path.join(REPO, DOCS_SRC)) or not os.path.isfile(os.path.join(REPO, DOCS_ORDER)):
+        dx.bad(DOCS_ORDER + " is missing")
+        return out, dx
+    shipped, github = docs_order(dx)
+    pages = {p: render(read(DOCS_SRC + "/" + p), name, brand) for p in shipped + github}
+    anchors = {p: anchors_of(t) for p, t in pages.items()}
+    h1 = {}
+    for p, t in pages.items():
+        hs = md_headings(t)
+        first = next((ln for ln in t.split("\n") if ln.strip()), "")
+        if not hs or hs[0][0] != 1 or not HEADING.match(first) or sum(1 for lv, _h in hs if lv == 1) != 1:
+            dx.bad("src/docs/{}: a page starts with its one H1 and has no other".format(p))
+        h1[p] = anchors[p][0] if anchors[p] else ""
+    gh_base = "https://github.com/{}/blob/main/".format(repo)
+
+    def page_target(target, where, line):
+        """(page, anchor or None) for `page.md[#a]` with the anchor checked, else None."""
+        m = PAGE_LINK.match(target)
+        if not m or m.group(1) not in pages:
+            return None
+        page, a = m.group(1), m.group(2)
+        if a is not None and a not in anchors[page]:
+            dx.bad("{}:{}: unresolved link {}: {} has no heading with the anchor #{}".format(where, line, target, page, a))
+        return page, a
+
+    def doc_link(page, mode):
+        where = "src/docs/" + page if page else PLUGIN_HEADER
+
+        def fn(bang, label, target, line):
+            if URL_RE.match(target):
+                return target
+            if bang and page in github and mode == "docs" and target.startswith("../"):
+                if not repo_path_exists(target[3:], gen):
+                    dx.bad("{}:{}: image {} not found".format(where, line, target))
+                return target
+            if bang:
+                dx.bad("{}:{}: relative image {} in a shipped page (images belong in GitHub-only pages)".format(where, line, target))
+                return target
+            if target.startswith("#"):
+                own = anchors.get(page) if page else [a for p in shipped for a in anchors[p]]
+                if target[1:] not in own:
+                    dx.bad("{}:{}: unresolved link {}: no heading here has that anchor".format(where, line, target))
+                return target
+            pt = page_target(target, where, line)
+            if pt is not None:
+                tp, a = pt
+                if mode == "docs":
+                    return target
+                if tp in github:
+                    return gh_base + "docs/" + tp + ("#" + a if a else "")
+                return "#" + (a if a else h1[tp])
+            if target.startswith("../"):
+                rel = target[3:]
+                if not repo_path_exists(rel, gen):
+                    dx.bad("{}:{}: link {}: no file {} in the repository".format(where, line, target, rel.split("#")[0]))
+                if mode == "docs":
+                    return target
+                if rel.startswith("plugin/"):
+                    return rel[len("plugin/"):]
+                if rel.split("#")[0] in ("LICENSE", "NOTICE"):
+                    return rel
+                return gh_base + rel
+            dx.bad("{}:{}: link {}: write page.md#anchor, #anchor, ../<repo path> or a URL".format(where, line, target))
+            return target
+        return fn
+
+    for p, t in pages.items():
+        out["docs/" + p] = map_links(t, doc_link(p, "docs"))
+
+    # The landing page: docs/page.md#a, #a, repo paths as written.
+    land = render(read(LANDING), name, brand)
+    land_anchors = anchors_of(land)
+
+    def land_fn(bang, label, target, line):
+        where = LANDING
+        if URL_RE.match(target):
+            return target
+        if target.startswith("#"):
+            if target[1:] not in land_anchors:
+                dx.bad("{}:{}: unresolved link {}: no heading here has that anchor".format(where, line, target))
+            return target
+        if target.startswith("docs/"):
+            if page_target(target[5:], where, line) is None:
+                dx.bad("{}:{}: link {}: no such page in {}".format(where, line, target, DOCS_ORDER))
+            return target
+        if target.startswith("../") or not repo_path_exists(target, gen):
+            dx.bad("{}:{}: link {}: no file {} in the repository".format(where, line, target, target.split("#")[0]))
+        return target
+    out["README.md"] = map_links(land, land_fn)
+
+    # plugin/README.md: header, Contents, the shipped pages one level down, footer.
+    header = render(read(PLUGIN_HEADER), name, brand)
+    footer = render(read(PLUGIN_FOOTER), name, brand)
+    contents = "## {}\n\n".format(CONTENTS) + "".join(
+        "- [{}](#{})\n".format(next((h for lv, h in md_headings(pages[p]) if lv == 1), p), h1[p]) for p in shipped)
+    parts = [("_plugin-header.md", map_links(header, doc_link(None, "plugin"))), ("Contents", contents)]
+    parts += [(p, shift_headings(map_links(pages[p], doc_link(p, "plugin")), dx, "src/docs/" + p)) for p in shipped]
+    parts.append(("_plugin-footer.md", map_links(footer, doc_link(None, "plugin"))))
+    owner = {}
+    for part, text in parts:
+        for _lv, h in md_headings(text):
+            s = gh_slug(h)
+            if s in owner:
+                dx.bad("heading {!r} ({}) is also in {} (anchor #{}): plugin/README.md joins both, so GitHub would "
+                       "give the second #{}-1; give one a page-specific heading".format(h, part, owner[s], s, s))
+            else:
+                owner[s] = part
+    out["plugin/README.md"] = "\n\n".join(t.strip("\n") for _p, t in parts) + "\n"
+
+    for rel, text in out.items():
+        for no, line in enumerate(text.split("\n"), 1):
+            for m in PLACEHOLDER.finditer(line):
+                dx.bad("{}:{}: placeholder {} is not filled by tools/build ({{{{plugin}}}}, {{{{repo}}}} and "
+                       "{{{{cc_min}}}} are)".format(rel, no, m.group(0)))
+    return out, dx
+
+
+def print_headings(brand):
+    dx = Docs()
+    shipped, github = docs_order(dx)
+    for p in shipped + github:
+        t = render(read(DOCS_SRC + "/" + p), brand["name"], brand)
+        for (lv, h), a in zip(md_headings(t), anchors_of(t)):
+            print("{}\t{}{}\t{}\t#{}".format(p, "H", lv, h, a))
+    for msg in dx.problems:
+        print("docs: " + msg, file=sys.stderr)
+    return 1 if dx.problems else 0
 
 
 def launch_env(name):
@@ -175,7 +484,7 @@ def check_context_note(spec):
 
 
 def plan(brand):
-    """Return {repo-relative path: (text, mode)} for every GEN file of tools/build."""
+    """Return ({repo-relative path: (text, mode)} for every GEN file of tools/build, [docs problems])."""
     name = brand["name"]
     out = {}
     out["plugin/.claude-plugin/plugin.json"] = (render_manifest(read("src/plugin.json"), brand), PLAIN)
@@ -254,18 +563,16 @@ def plan(brand):
     out["plugin/{}/{}-claude".format(LAUNCHER_DIR, name)] = (
         render_claude_launcher(read("src/claude-launcher.tmpl"), brand), EXEC)
 
-    if os.path.exists(os.path.join(REPO, "src/README.md")):
-        readme = render(read("src/README.md"), name)
-    else:
-        readme = "# {}\n\n{}\n".format(name, brand["description"])
     if os.path.exists(os.path.join(REPO, "LICENSE")):
         out["plugin/LICENSE"] = (read("LICENSE"), PLAIN)
     notice = render(read("src/NOTICE"), name)
     out["NOTICE"] = (notice, PLAIN)
     out["plugin/NOTICE"] = (notice, PLAIN)
-    out["README.md"] = (readme, PLAIN)
-    out["plugin/README.md"] = (readme, PLAIN)
-    return out
+    # README.md, docs/ and plugin/README.md from src/landing.md and src/docs/ (module docstring).
+    docs, dx = docs_plan(brand, out)
+    for rel, text in docs.items():
+        out[rel] = (text, PLAIN)
+    return out, dx.problems
 
 
 def state_text(brand, gen):
@@ -402,6 +709,7 @@ def variant_source(old_gen, variant):
 def main(argv):
     check = False
     allow_dirty = False
+    headings = False
     name = None
     out_dir = None
     variant = None
@@ -412,6 +720,8 @@ def main(argv):
             check = True
         elif a == "--allow-dirty":
             allow_dirty = True
+        elif a == "--headings":
+            headings = True
         elif a == "--name" and i + 1 < len(argv):
             name = argv[i + 1]
             i += 1
@@ -425,25 +735,36 @@ def main(argv):
             die("unknown argument " + a + "\n" + __doc__)
         i += 1
     brand = json.loads(read("brand.json"))
-    for k in ("name", "marketplace", "version", "description"):
+    for k in ("name", "marketplace", "version", "description", "repo", "cc_min"):
         if not isinstance(brand.get(k), str) or not brand[k]:
             die("brand.json lacks " + k)
     if name is not None:
         if brand["marketplace"] == brand["name"]:
             brand["marketplace"] = name
         brand["name"] = name
+        # The repo slug holds the brand: the rename drill renames it too (owner kept).
+        brand["repo"] = brand["repo"].split("/")[0] + "/" + name
     if not NAME_RE.match(brand["name"]):
         die("plugin name must be kebab-case: " + brand["name"])
+    if not REPO_RE.match(brand["repo"]):
+        die("brand.json repo must be <owner>/<name> as on GitHub: " + brand["repo"])
+    if not CC_MIN_RE.match(brand["cc_min"]):
+        die("brand.json cc_min must be digits and dots (it goes into a badge URL): " + brand["cc_min"])
     if name is not None and out_dir is None and not check:
         die("--name needs --out (rename the repo by editing brand.json)")
     if variant is not None and (out_dir is None or check):
         die("--variant needs --out (a variant never replaces the repo's build)")
+    if headings:
+        return print_headings(brand)
 
-    gen = plan(brand)
+    gen, doc_problems = plan(brand)
     old = load_state()
 
+    if doc_problems and not check:
+        die("the docs do not render ({} problems):\n  ".format(len(doc_problems)) + "\n  ".join(doc_problems))
+
     if check:
-        problems = []
+        problems = ["docs: " + p for p in doc_problems]
         for rel, (text, mode) in sorted(gen.items()):
             p = os.path.join(REPO, rel)
             if not os.path.exists(p):
@@ -468,6 +789,9 @@ def main(argv):
             problems.append("differs " + STATE)
         for p in problems:
             print(p)
+        if any(re.match(r"^(?:differs|stale|missing) (?:docs/|README\.md$|plugin/README\.md$)", p) for p in problems):
+            print("hint: README.md, docs/ and plugin/README.md are generated: edit src/landing.md or "
+                  "src/docs/<page>.md, then run tools/build")
         print("BUILD CHECK: " + ("FAIL ({} problems)".format(len(problems)) if problems else "PASS"))
         return 1 if problems else 0
 

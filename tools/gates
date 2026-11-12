@@ -2,7 +2,7 @@
 """tools/gates: grep gates over built output (AT-P-05, BT-01, BT-08; tools/check X-gates, X-name).
 
 Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only GATE] [--no-pending]
-  TARGET        a folder (scanned recursively) or a file, e.g. plugin and README.md
+  TARGET        a folder (scanned recursively) or a file, e.g. plugin, README.md and docs
   --names FILE  the competitor-name list, kept outside the repo; missing = FAIL
   --brand NAME  the expected plugin name for the stale-name gate (default: brand.json name)
   --no-git-log  skip the attribution gate over `git log --format=%B`
@@ -12,7 +12,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
                 no-args-inline, readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc,
                 clear-life, nudge-folder, export-classes, settings-sections, no-network, export-schema,
                 report-skill, no-age-rule, perl-utf8, approvals, model-pin, queue-text, risk-corpus,
-                store-flags, planning)
+                store-flags, readme-pins, planning)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -40,8 +40,11 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   skill-desc   BT-09 / AT-S-01: every skills/<name>/SKILL.md inside a folder target starts
                `---\n`, its `description` (quotes removed) is at most 150 characters, and the
                skill's trigger phrase (SKILL_TRIGGERS) sits in its first 50, case-insensitive
-  Text gates over the skills/ and assets/ of a folder target (src or plugin) and over any
-  README.md:
+  Text gates over the skills/ and assets/ of a folder target (src or plugin) and its README.md.
+  A docs target (a Markdown file such as the landing README.md, or a folder that is no plugin
+  or source tree, such as docs/, .github/ or bench/) gets the per-line parts of wait-text,
+  no-run-text, clear-life, approvals and store-flags (against the plugin/ folder beside it)
+  over each of its .md files, and readme-pins:
   wait-text    AT-W-01: no `blocking read`, no "wait for a/the ... notification", no
                bare `sleep N`; a foreground or bounded wait not negated in its own clause names
                `<x>-store wait` or `<store> wait` on its line; skills/resume/SKILL.md has the
@@ -152,6 +155,11 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   store-flags  TG-01: every `<store> <command> --flag` in the skills, assets
                and README is a command in helper/main.pl and a flag its parser takes (cmd/<command>.pl
                and the module functions it calls, read statically)
+  readme-pins  the headings shipped text names ("README: <heading>"): "Near a usage limit", "The
+               cache state in your status line" and "Connect your own question queue", verbatim,
+               in a plugin folder's README.md and among the pages of a docs/ target; a docs/
+               target also names the Edit(~/.local/state/…) allow rule and its installation.md
+               the brand.json cc_min; a Claude Code badge in any Markdown target carries cc_min
   planning     private notes: no path with a `.planning` component in the git
                index of the repository the tool sits in, and (unless --no-git-log) none added by a
                commit reachable from HEAD; skipped when the tree is not the top of its own work tree
@@ -383,20 +391,27 @@ def not_negated(line, m):
     return not NEGATION.search(pre[-40:])
 
 
+def wait_line_hits(path, brand):
+    """AT-W-01, the per-line rules over one text (also a docs page)."""
+    out = []
+    for no, line in enumerate(shipped_lines(path, brand), 1):
+        for rule, rx in (("blocking-read", BLOCKING_READ), ("notification-wait", NOTIFICATION_WAIT),
+                         ("bare-sleep", BARE_SLEEP)):
+            m = rx.search(line)
+            if m:
+                out.append((path, no, "AT-W-01 " + rule, "AT-W-01 {}: {!r}".format(rule, m.group(0)), line))
+        m = FOREGROUND_WAIT.search(line)
+        if m and not_negated(line, m) and not STORE_WAIT.search(line):
+            out.append((path, no, "AT-W-01 foreground-wait",
+                        "AT-W-01 foreground-wait: {!r} without `<store> wait` on the line".format(m.group(0)), line))
+    return out
+
+
 def wait_text_hits(target, brand):
     """AT-W-01: (path, line no or None, rule, text, line)."""
     out = []
     for path in text_docs(target):
-        for no, line in enumerate(shipped_lines(path, brand), 1):
-            for rule, rx in (("blocking-read", BLOCKING_READ), ("notification-wait", NOTIFICATION_WAIT),
-                             ("bare-sleep", BARE_SLEEP)):
-                m = rx.search(line)
-                if m:
-                    out.append((path, no, "AT-W-01 " + rule, "AT-W-01 {}: {!r}".format(rule, m.group(0)), line))
-            m = FOREGROUND_WAIT.search(line)
-            if m and not_negated(line, m) and not STORE_WAIT.search(line):
-                out.append((path, no, "AT-W-01 foreground-wait",
-                            "AT-W-01 foreground-wait: {!r} without `<store> wait` on the line".format(m.group(0)), line))
+        out += wait_line_hits(path, brand)
     resume = os.path.join(target, "skills", "resume", "SKILL.md") if os.path.isdir(target) else None
     if resume and os.path.isfile(resume):
         rules = [ln for ln in shipped_lines(resume, brand) if MAIN_RULE.search(ln)]
@@ -1056,6 +1071,16 @@ COMMAND_TEXT_NEEDS = [
 ]
 
 
+def no_run_line_hits(path, brand):
+    """AT-TX-08, the forbidden phrases over one text (also a docs page)."""
+    out = []
+    for no, ln in enumerate(shipped_lines(path, brand), 1):
+        for s in NO_RUN_FORBIDDEN + NO_RUN_PROMISES:
+            if s.lower() in ln.lower():
+                out.append((path, no, "AT-TX-08 forbidden", "AT-TX-08 forbidden: {!r}".format(s), ln))
+    return out
+
+
 def no_run_text_hits(target, brand):
     """AT-TX-08 / AT-SR-10: no shipped skill or asset text says NO_RUN_FORBIDDEN (the old
     never-run wording); the resume SKILL says each NO_RUN_RESUME phrase;
@@ -1070,10 +1095,7 @@ def no_run_text_hits(target, brand):
     if out:
         return out
     for p in text_docs(target):
-        for no, ln in enumerate(shipped_lines(p, brand), 1):
-            for s in NO_RUN_FORBIDDEN + NO_RUN_PROMISES:
-                if s.lower() in ln.lower():
-                    out.append((p, no, "AT-TX-08 forbidden", "AT-TX-08 forbidden: {!r}".format(s), ln))
+        out += no_run_line_hits(p, brand)
     mpath = os.path.join(target, ".claude-plugin", "plugin.json")
     if os.path.isfile(mpath):
         try:
@@ -1285,6 +1307,17 @@ CLEAR_NEEDS = ((HANDOFF_REL, "CL-01", "stay in this Claude Code process: <ids> s
                (RESUME_REL, "CL-02", "passes only shells, agents and workflows"))
 
 
+def clear_line_hits(path, brand):
+    """CL-01 and CL-02, the forbidden wording over one text (also a docs page)."""
+    out = []
+    for no, ln in enumerate(shipped_lines(path, brand), 1):
+        for rule, rx in (("CL-01", CLEAR_FORBIDDEN), ("CL-02", CLEAR_EXIT_FORBIDDEN)):
+            m = rx.search(ln)
+            if m:
+                out.append((path, no, rule + " forbidden", "{} forbidden: {!r}".format(rule, m.group(0)), ln))
+    return out
+
+
 def clear_life_hits(target, brand):
     """CL-01: no skill, asset or README line says background work dies or is lost on `/clear`
     (CLEAR_FORBIDDEN); the spec's `dies_on` literal names no `/clear`. CL-02: none says
@@ -1292,11 +1325,7 @@ def clear_life_hits(target, brand):
     report item, spec and the resume R5 rule hold CLEAR_NEEDS."""
     out = []
     for p in text_docs(target):
-        for no, ln in enumerate(shipped_lines(p, brand), 1):
-            for rule, rx in (("CL-01", CLEAR_FORBIDDEN), ("CL-02", CLEAR_EXIT_FORBIDDEN)):
-                m = rx.search(ln)
-                if m:
-                    out.append((p, no, rule + " forbidden", "{} forbidden: {!r}".format(rule, m.group(0)), ln))
+        out += clear_line_hits(p, brand)
     spath, lit = spec_literals(target)
     if lit is not None and any("/clear" in str(v) for v in lit.get("dies_on") or []):
         out.append((spath, None, "CL-01 dies_on", "CL-01 dies_on: names /clear: {}".format(lit["dies_on"]), ""))
@@ -1880,6 +1909,15 @@ APPROVALS_BANNED = re.compile(r"approvals never carry|Approvals \(verified\)", r
 APPROVALS_NEEDS = ((RESUME_REL, "explicit gate"), (SPEC_REL, "explicit gates"))
 
 
+def approvals_line_hits(path, brand):
+    """AP-11, the banned approval wording over one text (also a docs page)."""
+    out = []
+    for no, ln in enumerate(shipped_lines(path, brand), 1):
+        for m in APPROVALS_BANNED.finditer(ln):
+            out.append((path, no, "AP-11 banned", "AP-11 banned: {!r}".format(m.group(0)), ln))
+    return out
+
+
 def approvals_hits(target, brand):
     """AP-11 / AT-AP-01 / AT-AP-06 / AT-AP-09: the template's §4 skeleton has `## Approvals` right
     after `## User constraints` and §4.2 its Approvals block; resume Rule 3 says "explicit gate";
@@ -1917,9 +1955,7 @@ def approvals_hits(target, brand):
     if isinstance(spec, dict) and "## Approvals" not in (spec.get("sections_main") or []):
         out.append((spath, None, "AP-11 headings", "AP-11 headings: sections_main lacks '## Approvals'", ""))
     for path in text_docs(target):
-        for no, ln in enumerate(shipped_lines(path, brand), 1):
-            for m in APPROVALS_BANNED.finditer(ln):
-                out.append((path, no, "AP-11 banned", "AP-11 banned: {!r}".format(m.group(0)), ln))
+        out += approvals_line_hits(path, brand)
     out += gate_list_hits(target, brand)
     return out
 
@@ -2030,6 +2066,16 @@ AT_TEXT_BANNED_SEL = [
 ]
 
 
+def gate_list_line_hits(path, brand):
+    """Part of AP-11: GATE_LIST_BANNED over one text (also a docs page)."""
+    out = []
+    for no, ln in enumerate(shipped_lines(path, brand), 1):
+        for s in GATE_LIST_BANNED:
+            if s in ln:
+                out.append((path, no, "AP-11 gate-list", "AP-11 gate-list banned: {!r}".format(s), ln))
+    return out
+
+
 def gate_list_hits(target, brand):
     """Part of the approvals gate: every GATE_LIST_NEEDS line exists and
     holds its phrase; no shipped skill or asset says GATE_LIST_BANNED."""
@@ -2043,10 +2089,7 @@ def gate_list_hits(target, brand):
         if not hits or not all(phrase in ln for ln in hits):
             out.append((path, None, "AP-11 gate-list", "AP-11 gate-list: a line matching {!r} lacks {!r}".format(sel, phrase), ""))
     for path in text_docs(target):
-        for no, ln in enumerate(shipped_lines(path, brand), 1):
-            for s in GATE_LIST_BANNED:
-                if s in ln:
-                    out.append((path, no, "AP-11 gate-list", "AP-11 gate-list banned: {!r}".format(s), ln))
+        out += gate_list_line_hits(path, brand)
     out += gate_carry_hits(target, brand)
     for at, rel, sel, phrase in AT_TEXT_NEEDS:
         path, lines = _shipped(target, rel, brand)
@@ -2410,19 +2453,141 @@ def store_flags_hits(target, brand):
         return []
     out = []
     for p in text_docs(target):
-        for no, ln in enumerate(shipped_lines(p, brand), 1):
-            for m in STORE_CALL.finditer(ln):
-                cmd, rest = m.group(1), m.group(2)
-                flags = STORE_FLAG.findall(rest)
-                if not flags:
-                    continue
-                if cmd not in known:
-                    out.append((p, no, "TG-01 command", "TG-01 command: `<store> {}` is no helper command".format(cmd), ln))
-                    continue
-                for fl in sorted(set(flags)):
-                    if fl not in known[cmd]:
-                        out.append((p, no, "TG-01 flag", "TG-01 flag: `<store> {} --{}`: the helper's {} takes no --{}".format(cmd, fl, cmd, fl), ln))
+        out += store_flag_line_hits(p, brand, known)
     return out
+
+
+def store_flag_line_hits(p, brand, known):
+    """TG-01 over one text (also a docs page), against helper_flags."""
+    out = []
+    for no, ln in enumerate(shipped_lines(p, brand), 1):
+        for m in STORE_CALL.finditer(ln):
+            cmd, rest = m.group(1), m.group(2)
+            flags = STORE_FLAG.findall(rest)
+            if not flags:
+                continue
+            if cmd not in known:
+                out.append((p, no, "TG-01 command", "TG-01 command: `<store> {}` is no helper command".format(cmd), ln))
+                continue
+            for fl in sorted(set(flags)):
+                if fl not in known[cmd]:
+                    out.append((p, no, "TG-01 flag", "TG-01 flag: `<store> {} --{}`: the helper's {} takes no --{}".format(cmd, fl, cmd, fl), ln))
+    return out
+
+
+# ---------------------------------------------------------------- docs targets
+
+# Headings that shipped text names as "README: <heading>" (the status-line shim, queue.pl, the
+# setting descriptions, cache-contract.md): they stay verbatim in plugin/README.md and docs/.
+README_PINS = ("Near a usage limit", "The cache state in your status line", "Connect your own question queue")
+STATE_RULE = re.compile(r"Edit\(~/\.local/state/")
+DOC_HEADING = re.compile(r"^#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$")
+CC_BADGE = re.compile(r"img\.shields\.io/badge/Claude_Code-([^-/)?\s]+)")
+
+
+def is_docs_target(target):
+    """A Markdown file, or a folder that is not a plugin or source tree (docs/, .github/, bench/)."""
+    if os.path.isfile(target):
+        return target.endswith(".md")
+    return (os.path.isdir(target) and not _is_plugin(target) and
+            not any(os.path.isdir(os.path.join(target, s)) for s in ("skills", "assets")))
+
+
+def doc_files(target):
+    if os.path.isfile(target):
+        return [target] if target.endswith(".md") else []
+    out = []
+    for d, dirs, files in os.walk(target):
+        dirs[:] = sorted(x for x in dirs if x not in SKIP_DIRS)
+        out += [os.path.join(d, f) for f in sorted(files) if f.endswith(".md")]
+    return out
+
+
+def doc_headings(path):
+    out, fence = [], False
+    for ln in _read(path).split("\n"):
+        if ln.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            continue
+        m = None if fence else DOC_HEADING.match(ln)
+        if m:
+            out.append(m.group(1))
+    return out
+
+
+def brand_field(key):
+    try:
+        with open(os.path.join(REPO, "brand.json"), encoding="utf-8") as f:
+            v = json.load(f).get(key)
+    except (OSError, ValueError):
+        return None
+    return v if isinstance(v, str) else None
+
+
+def readme_pins_hits(target, brand):
+    """readme-pins: the README_PINS headings, verbatim, in a plugin folder's README.md and in a
+    `docs` folder; a docs folder also holds an Edit(~/.local/state/…) allow rule, and its
+    installation.md names brand.json cc_min; a Claude Code badge in a Markdown file carries cc_min."""
+    out = []
+    cc_min = brand_field("cc_min")
+    if os.path.isdir(target) and _is_plugin(target):
+        readme = os.path.join(target, "README.md")
+        if os.path.isfile(readme):
+            heads = set(doc_headings(readme))
+            for pin in README_PINS:
+                if pin not in heads:
+                    out.append((readme, None, "pin", "readme-pins: no heading {!r} (shipped text points at it by name)".format(pin), ""))
+        return out
+    if not is_docs_target(target):
+        return out
+    files = doc_files(target)
+    if os.path.isdir(target) and os.path.basename(os.path.abspath(target)) == "docs":
+        heads = set(h for p in files for h in doc_headings(p))
+        for pin in README_PINS:
+            if pin not in heads:
+                out.append((target, None, "pin", "readme-pins: no page has the heading {!r} (shipped text points at it by name)".format(pin), ""))
+        if not any(STATE_RULE.search(_read(p)) for p in files):
+            out.append((target, None, "state-rule", "readme-pins: no page names the Edit(~/.local/state/…) allow rule", ""))
+        inst = os.path.join(target, "installation.md")
+        if cc_min and os.path.isfile(inst) and not re.search(r"(?<![\d.])" + re.escape(cc_min) + r"(?![\d.])", _read(inst)):
+            out.append((inst, None, "cc-min", "readme-pins: installation.md does not name Claude Code {} (brand.json cc_min)".format(cc_min), ""))
+    for p in files:
+        for no, ln in enumerate(_read(p).split("\n"), 1):
+            for m in CC_BADGE.finditer(ln):
+                got = m.group(1).replace("%2B", "").replace("%2b", "").replace("--", "-").rstrip("+")
+                if cc_min and got != cc_min:
+                    out.append((p, no, "cc-min", "readme-pins: the Claude Code badge says {}, brand.json cc_min is {}".format(got, cc_min), ln))
+    return out
+
+
+def docs_store_known(target):
+    """helper_flags of the plugin folder beside a docs target (README.md or docs/ at the repo root)."""
+    base = os.path.dirname(os.path.abspath(target))
+    plugin = os.path.join(base, "plugin")
+    return helper_flags(plugin) if _is_plugin(plugin) else None
+
+
+def docs_gate_hits(gate, target, brand):
+    """The per-line text gates and readme-pins over a docs target's Markdown files."""
+    if gate == "readme-pins":
+        return readme_pins_hits(target, brand)
+    out = []
+    known = docs_store_known(target) if gate == "store-flags" else None
+    for p in doc_files(target):
+        if gate == "wait-text":
+            out += wait_line_hits(p, brand)
+        elif gate == "no-run-text":
+            out += no_run_line_hits(p, brand)
+        elif gate == "clear-life":
+            out += clear_line_hits(p, brand)
+        elif gate == "approvals":
+            out += approvals_line_hits(p, brand) + gate_list_line_hits(p, brand)
+        elif gate == "store-flags" and known is not None:
+            out += store_flag_line_hits(p, brand, known)
+    return out
+
+
+DOC_GATES = ("wait-text", "no-run-text", "clear-life", "approvals", "store-flags", "readme-pins")
 
 
 TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
@@ -2454,7 +2619,8 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("model-pin", model_pin_hits),
               ("queue-text", queue_text_hits),
               ("risk-corpus", risk_corpus_hits),
-              ("store-flags", store_flags_hits)]
+              ("store-flags", store_flags_hits),
+              ("readme-pins", readme_pins_hits)]
 
 
 def pending_row(gate, rule, rel, line):
@@ -2659,14 +2825,17 @@ def main(argv):
         if not os.path.exists(target):
             continue
         base = os.path.abspath(target if os.path.isdir(target) else os.path.dirname(os.path.abspath(target)))
-        for gate, fn in TEXT_GATES:
+        docs_target = is_docs_target(target)
+        gate_list = [(g, None) for g in DOC_GATES] if docs_target else TEXT_GATES
+        for gate, fn in gate_list:
             if only and only != gate:
                 continue
             if os.path.isdir(target):
                 applicable |= {row for row in PENDING if row[0] == gate and os.path.exists(os.path.join(target, row[2]))}
-            if gate != "wait-text" and not os.path.isdir(target):
+            if not docs_target and not os.path.isdir(target):
                 continue
-            for path, no, rule, text, line in fn(target, brand):
+            found = docs_gate_hits(gate, target, brand) if docs_target else fn(target, brand)
+            for path, no, rule, text, line in found:
                 where = os.path.relpath(path) + (":{}".format(no) if no else "")
                 row = pending_row(gate, rule, os.path.relpath(os.path.abspath(path), base), line) if use_pending else None
                 if row:

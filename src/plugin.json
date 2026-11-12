@@ -3,9 +3,10 @@
   "version": "{{version}}",
   "description": "{{description}}",
   "author": { "name": "Ruslan Taranenko" },
-  "homepage": "https://github.com/RuslanTar/afk-compact",
-  "repository": "https://github.com/RuslanTar/afk-compact",
+  "homepage": "https://github.com/{{repo}}",
+  "repository": "https://github.com/{{repo}}",
   "license": "Apache-2.0",
+  "keywords": ["claude-code", "compaction", "auto-compact", "handoff", "context", "long-running", "unattended"],
   "userConfig": {
     "handoff_root": {
       "type": "directory",

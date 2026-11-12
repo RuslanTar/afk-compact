@@ -8,8 +8,11 @@
       "source": "./plugin",
       "description": "{{description}}",
       "version": "{{version}}",
-      "homepage": "https://github.com/RuslanTar/afk-compact",
-      "repository": "https://github.com/RuslanTar/afk-compact"
+      "homepage": "https://github.com/{{repo}}",
+      "repository": "https://github.com/{{repo}}",
+      "license": "Apache-2.0",
+      "keywords": ["claude-code", "compaction", "handoff"],
+      "category": "productivity"
     }
   ]
 }

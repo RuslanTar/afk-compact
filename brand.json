@@ -2,5 +2,7 @@
   "name": "afk-compact",
   "marketplace": "afk-compact",
   "version": "0.1.9",
-  "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going."
+  "repo": "RuslanTar/afk-compact",
+  "cc_min": "2.1.287",
+  "description": "Compaction that writes a handoff, for long unattended Claude Code sessions: it keeps a read-only copy of every summary, checks it, resumes the work, and on large context windows compacts at a clean turn end."
 }

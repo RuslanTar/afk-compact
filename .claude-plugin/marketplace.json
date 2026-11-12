@@ -1,15 +1,18 @@
 {
   "name": "afk-compact",
   "owner": { "name": "Ruslan Taranenko" },
-  "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going.",
+  "description": "Compaction that writes a handoff, for long unattended Claude Code sessions: it keeps a read-only copy of every summary, checks it, resumes the work, and on large context windows compacts at a clean turn end.",
   "plugins": [
     {
       "name": "afk-compact",
       "source": "./plugin",
-      "description": "Smart auto-compaction for long unattended Claude Code sessions: compacts at a clean turn boundary, saves the summary as a handoff, and keeps the work going.",
+      "description": "Compaction that writes a handoff, for long unattended Claude Code sessions: it keeps a read-only copy of every summary, checks it, resumes the work, and on large context windows compacts at a clean turn end.",
       "version": "0.1.9",
       "homepage": "https://github.com/RuslanTar/afk-compact",
-      "repository": "https://github.com/RuslanTar/afk-compact"
+      "repository": "https://github.com/RuslanTar/afk-compact",
+      "license": "Apache-2.0",
+      "keywords": ["claude-code", "compaction", "handoff"],
+      "category": "productivity"
     }
   ]
 }
