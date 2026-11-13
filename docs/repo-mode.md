@@ -13,7 +13,7 @@ Repo mode needs two things, and neither works alone:
    ```
 
    `root` is a relative folder of up to four plain names. It cannot leave the repository or sit in `.git` or `.planning`.
-2. **You accept the repository.** Add its main checkout to `repo_roots` in `/config`, or edit your settings file by hand. Listing the main checkout covers every worktree of that clone. A worktree counts only when git created it for that clone (`git worktree add`); a folder whose `.git` file merely points at the clone's git folder needs its own entry. Another clone needs its own entry. There is no command that does this for you.
+2. **You accept the repository.** Add its main checkout to `repo_roots` in `/config`, or edit your settings file by hand. Under Git Bash on Windows the folder may be written as Git Bash shows it (`/c/work/app`) or with its drive letter (`C:/work/app` or `C:\work\app`). Listing the main checkout covers every worktree of that clone. A worktree counts only when git created it for that clone (`git worktree add`); a folder whose `.git` file merely points at the clone's git folder needs its own entry. Another clone needs its own entry. There is no command that does this for you.
 
 ## Setting up a repository
 
