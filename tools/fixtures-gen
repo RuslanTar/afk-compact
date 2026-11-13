@@ -567,8 +567,11 @@ def spec_rules_full():
 
 
 PATH_LOOKBACK = 1024
-PATH_WORD = re.compile(r"[^\s\"'`<>()\[\]{},;:=|]*\Z")
+PATH_PREFIX = re.compile(r"[^\s\"'`<>()\[\]{},;:=|]*\Z")
 PATH_ANCHOR = re.compile(r"(?:/|~/|\.\.?/)")
+PATH_EXT = re.compile(r"\.[A-Za-z0-9]{1,8}(?![A-Za-z0-9])")
+PATH_PART = re.compile(r"(?:[A-Za-z]+[0-9]{0,3}|[0-9]{1,4})\Z")
+PATH_PART_MAX_H = 4.1
 
 
 def path_anchored(text, a):
@@ -576,7 +579,7 @@ def path_anchored(text, a):
         return True
     lo = max(0, a - PATH_LOOKBACK)
     pre = text[lo:a]
-    tok = PATH_WORD.search(pre).group(0)
+    tok = PATH_PREFIX.search(pre).group(0)
     if lo > 0 and len(tok) == len(pre):
         return False
     return PATH_ANCHOR.match(tok) is not None
@@ -587,10 +590,14 @@ def path_shaped(text, a, z, rule):
     if "/" not in value:
         return False
     segs = [s for s in value.split("/") if s]
-    if len(segs) < 3 or not path_anchored(text, a):
+    if len(segs) < 3:
         return False
     one = [rule[:4] + (False,)]
-    return not any(hit_spans(s, one) for s in segs)
+    if any(hit_spans(s, one) for s in segs):
+        return False
+    if path_anchored(text, a) or PATH_EXT.match(text[z:z + 10]):
+        return True
+    return all(PATH_PART.match(s) and entropy(s) < PATH_PART_MAX_H for s in segs)
 
 
 def hit_spans(text, rules):

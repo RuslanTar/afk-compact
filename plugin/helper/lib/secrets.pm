@@ -42,7 +42,7 @@ sub _matches {
         next if $e <= $s;
         my $m = substr($text, $s, $e - $s);
         next if defined $r->{min_entropy} && _entropy($m) < $r->{min_entropy};
-        next if $r->{skip_paths} && _path_shaped($text, $s, $m, $r);
+        next if $r->{skip_paths} && _path_shaped($text, $s, $e, $m, $r);
         push @spans, [$s, $e];
     }
     return @spans;
@@ -51,18 +51,24 @@ sub _matches {
 # 0.1.12 path-shaped runs (a rule with `skip_paths`: cloud-key-bare, high-entropy). Their run
 # class holds `/`, so a file path read as one long mixed-case run: a macOS temp folder
 # (/var/folders/<2>/<30>/T/...), a Windows temp folder with forward slashes
-# (C:/.../AppData/Local/Temp/...) or in its Git Bash form (/c/...), a long project path. A hit
-# is skipped when its value
-#   - is anchored as a path: it starts with `/` (also after `~`, `X:`, `.` or `..`, which end
-#     the run before it), or the text before it back to the last whitespace, quote, bracket or
-#     one of = , ; : | starts with `/`, `~/`, `./` or `../` (the rest of a path that a `-`, `.`
-#     or `_` cut into runs; looked for within $PATH_LOOKBACK characters, else not anchored), and
-#   - splits on `/` into 3 or more non-empty segments, none of which the same rule hits alone,
-#     so a secret kept as one path segment is still a hit.
-# A value without such an anchor is never skipped, whatever its `/` count. The one secret
-# shape this lets through is itself a path: a value that starts with `/` and holds two more
-# `/` with no piece the rule hits alone (spec §10).
+# (C:/.../AppData/Local/Temp/...) or in its Git Bash form (/c/...), a long project path, and
+# the in-repo paths a repo-mode export rewrites to relative ones. A hit is skipped when its
+# value splits on `/` into 3 or more non-empty parts, none of which the same rule hits alone
+# (so a secret kept as one path part is still a hit), and
+#   - it is anchored as a path: it starts with `/` (also after `~`, `X:`, `.` or `..`, which
+#     end the run before it), or the text before it back to the last whitespace, quote,
+#     bracket or one of = , ; : | starts with `/`, `~/`, `./` or `../` (the rest of a path that
+#     a `-`, `.` or `_` cut into runs; looked for within $PATH_LOOKBACK characters); or
+#   - it is file-shaped (a relative path): `.` and a 1-8 character letter-or-digit extension
+#     follow it directly, or every part is word-like ($WORD_RE: letters with at most 3 trailing
+#     digits, or 1-4 digits alone) with entropy under $WORD_MAX_H bits per character (4.1:
+#     above the 99th percentile, 4.06, of such parts in project paths the 0.1.11 rule hit;
+#     measured against 20,000 random base64 values, it costs none of them).
+# What this lets through is itself path-shaped: a value that starts with `/`, or one whose
+# parts all read as words, with two or more `/` and no part the rule hits alone (spec §10).
 our $PATH_LOOKBACK = 1024;
+our $WORD_RE = qr/\A(?:[A-Za-z]+[0-9]{0,3}|[0-9]{1,4})\z/;
+our $WORD_MAX_H = 4.1;
 sub _path_anchored {
     my ($text, $s) = @_;
     return 1 if substr($text, $s, 1) eq '/';
@@ -73,12 +79,15 @@ sub _path_anchored {
     return $tok =~ m{\A(?:/|~/|\.\.?/)} ? 1 : 0;
 }
 sub _path_shaped {
-    my ($text, $s, $m, $r) = @_;
+    my ($text, $s, $e, $m, $r) = @_;
     return 0 if index($m, '/') < 0;
     my @seg = grep { length } split m{/}, $m;
-    return 0 if @seg < 3 || !_path_anchored($text, $s);
+    return 0 if @seg < 3;
     my $one = { %$r, skip_paths => 0 };
     for my $g (@seg) { return 0 if _matches($g, $one) }
+    return 1 if _path_anchored($text, $s);
+    return 1 if substr($text, $e, 10) =~ /\A\.[A-Za-z0-9]{1,8}(?![A-Za-z0-9])/;
+    for my $g (@seg) { return 0 unless $g =~ $WORD_RE && _entropy($g) < $WORD_MAX_H }
     return 1;
 }
 
