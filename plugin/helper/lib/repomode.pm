@@ -103,7 +103,9 @@ sub same_dir {
 # `gitdir: <admin>`, <admin> sits in <common_dir>/worktrees/, and <admin>/gitdir names
 # <toplevel>/.git back. A folder whose own .git file merely points at an accepted clone's
 # git dir fails this, so it cannot borrow that clone's acceptance (nothing is
-# written into a repository on the repository's word alone).
+# written into a repository on the repository's word alone). Git for Windows writes both gitdir
+# lines in drive form (C:/x): each is read in this platform's form (util::posix_form) before it is
+# joined to its folder (sitting 4, P1).
 sub linked_worktree {
     my ($top, $cd) = @_;
     return 0 unless defined $top && defined $cd;
@@ -111,13 +113,13 @@ sub linked_worktree {
     return 0 if -l $dotgit || !-f $dotgit;
     my $txt = util::read_file($dotgit, 4096) // return 0;
     return 0 unless $txt =~ /\Agitdir:[ \t]*([^\r\n]+?)[ \t]*\r?(?:\n|\z)/;
-    my $adm = util::real_path(util::clean_path($1, $top)) // return 0;
+    my $adm = util::real_path(util::clean_path(util::posix_form($1), $top)) // return 0;
     return 0 unless -d $adm;
     return 0 unless same_dir(util::dirname($adm), util::clean_path("$cd/worktrees"));
     my $back = util::read_file("$adm/gitdir", 4096) // return 0;
     $back =~ s/\s+\z//;
     return 0 if $back eq '';
-    my $rb = util::real_path(util::clean_path($back, $adm)) // return 0;
+    my $rb = util::real_path(util::clean_path(util::posix_form($back), $adm)) // return 0;
     my $rd = util::real_path($dotgit) // return 0;
     return 1 if $rb eq $rd;
     # one file under two spellings (case-insensitive file system), not a hard link

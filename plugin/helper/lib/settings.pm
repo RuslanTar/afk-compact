@@ -906,8 +906,9 @@ sub limits {
 }
 
 # repo_roots(resolved) -> {roots => [real paths], stale => [entries], invalid => [entries]}:
-# each entry is absolute after `~` expansion; at most 64 entries; a missing
-# or non-directory entry is stale; entries are compared by real path.
+# each entry is absolute after `~` expansion, or a drive form (C:/x, C:\x) under MSYS or Cygwin
+# perl, read in its /c/x form (util::root_form, as git's toplevel is read: sitting 4, P1); at most
+# 64 entries; a missing or non-directory entry is stale; entries are compared by real path.
 our $REPO_ROOTS_MAX = 64;
 sub repo_roots {
     my ($r) = @_;
@@ -915,8 +916,8 @@ sub repo_roots {
     my @e = list($r->{values}{repo_roots});
     push @invalid, splice(@e, $REPO_ROOTS_MAX) if @e > $REPO_ROOTS_MAX;
     for my $x (@e) {
-        my $p = util::expand_tilde(util::to_bytes($x));
-        if ($p !~ m{^/}) { push @invalid, $x; next }
+        my $p = util::root_form(util::to_bytes($x));
+        if (!defined $p) { push @invalid, $x; next }
         if (!-d $p) { push @stale, $x; next }
         my $real = util::real_path($p) // $p;
         push @roots, $real unless $seen{$real}++;

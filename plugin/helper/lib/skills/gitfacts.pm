@@ -31,17 +31,19 @@ sub git {
 
 sub line { my ($r) = @_; return undef if $r->{rc} != 0; my $v = $r->{out}; $v =~ s/\s+\z//; return $v eq '' ? undef : $v }
 
-# Repo identity for a directory. {in_git, repo, worktree, common_dir}
+# Repo identity for a directory. {in_git, repo, worktree, common_dir}. Git for Windows prints
+# the toplevel and the common dir in drive form (C:/x): read in this platform's form here, where
+# they enter (util::posix_form), as git::where reads them (sitting 4, P1 and P3).
 sub where {
     my ($cwd) = @_;
-    my $top = line(git($cwd, 'rev-parse', '--show-toplevel'));
+    my $top = util::posix_form(line(git($cwd, 'rev-parse', '--show-toplevel')));
     if (!defined $top) {
         my $b = File::Basename::basename(skills::util::abs_path($cwd) // $cwd);
         return { in_git => 0, repo => $b, worktree => undef };
     }
-    my $common = line(git($cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir'));
+    my $common = util::posix_form(line(git($cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir')));
     if (!defined $common) {
-        $common = line(git($cwd, 'rev-parse', '--git-common-dir')) // '.git';
+        $common = util::posix_form(line(git($cwd, 'rev-parse', '--git-common-dir'))) // '.git';
         $common = "$top/$common" unless $common =~ m{\A/};
     }
     $common = skills::util::abs_path($common) // $common;
@@ -66,7 +68,7 @@ sub facts {
     my $ab = line(git($top, 'rev-list', '--left-right', '--count', '@{upstream}...HEAD'));
     if (defined $ab && $ab =~ /\A(\d+)\s+(\d+)\z/) { @$w{qw(behind ahead)} = (0 + $1, 0 + $2) }
     else { @$w{qw(behind ahead)} = (undef, undef) }
-    my $gd = line(git($top, 'rev-parse', '--path-format=absolute', '--git-dir')) // "$top/.git";
+    my $gd = util::posix_form(line(git($top, 'rev-parse', '--path-format=absolute', '--git-dir'))) // "$top/.git";
     my @prog;
     push @prog, 'merge' if -e "$gd/MERGE_HEAD";
     push @prog, 'rebase' if -d "$gd/rebase-merge" || -d "$gd/rebase-apply";
@@ -131,7 +133,7 @@ sub worktrees {
     my ($top) = @_;
     my $r = git($top, 'worktree', 'list', '--porcelain');
     return [] if $r->{rc} != 0;
-    return [ map { /\Aworktree (.+)\z/ ? $1 : () } split /\n/, $r->{out} ];
+    return [ map { /\Aworktree (.+)\z/ ? util::posix_form($1) : () } split /\n/, $r->{out} ];
 }
 
 # The ticket id of a branch or name under the ticket_pattern setting.

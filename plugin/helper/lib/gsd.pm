@@ -1701,9 +1701,13 @@ sub scan {
     return ($st, $status);
 }
 
-# The folder holding .planning/ at or above dir, or undef.
+# The folder holding .planning/ at or above dir, or undef. A drive-form dir (git's toplevel under
+# Git for Windows, a transcript cwd of Claude Code on Windows) is read in this platform's form
+# first (util::posix_form), so it meets the session's /c/x roots and adds no stray --cwd (sitting
+# 4, P2).
 sub _gsd_root {
     my ($dir) = @_;
+    $dir = util::posix_form($dir);
     return undef unless defined $dir && $dir =~ m{\A/};
     my $home = util::home() // '';
     $home =~ s{/+\z}{};

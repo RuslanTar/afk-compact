@@ -81,9 +81,9 @@ sub run {
     # The resume reconcile rewrites only this worktree's STATE.md, so one in another checkout (GSD
     # work run with --cwd) is marked to be reported.
     if (defined $fm->{gsd} && $fm->{gsd} ne '') {
-        my $gp = _drive_form($fm->{gsd});
+        my $gp = util::posix_form($fm->{gsd});
         $gp = "$g->{worktree}/$gp" if $gp !~ m{\A/} && $g->{in_git};
-        $gp = _drive_form($gp);
+        $gp = util::posix_form($gp);
         my ($own) = eval { skills::approvals::own_relation($d, $ctx, $id->{sid}) };
         my $why = _gsd_path_bad($gp, $own ? undef : ($g->{in_git} ? $g->{worktree} : ''));
         my $l = defined $why ? undef : skills::core::gsd_state($gp);
@@ -167,17 +167,17 @@ sub _commits {
 # (the folder holding .planning) up to the worktree, the root included, holds a `.git` folder or
 # file (a nested worktree, such as <repo>/.claude/worktrees/<name>, is another checkout).
 # Under MSYS or Cygwin perl, git prints the toplevel in drive form (C:/x): the worktree and a
-# drive-form path are read in their /c/ form (util::root_form) first, as abs_path would join a
+# drive-form path are read in their /c/ form (util::posix_form) first, as abs_path would join a
 # drive path to the cwd and every STATE.md would read as outside this worktree.
 sub _gsd_path_bad {
     my ($p, $wt) = @_;
-    $p = _drive_form($p);
+    $p = util::posix_form($p);
     return 'not a GSD STATE.md path'
         unless $p =~ m{\A/} && $p !~ m{(?:\A|/)\.\.?(?:/|\z)}
             && $p =~ m{/\.planning/(?:workstreams/[A-Za-z0-9][A-Za-z0-9._-]*/)?STATE\.md\z};
     return undef unless defined $wt;
     return 'outside this worktree' if $wt eq '';
-    $wt = util::root_form($wt) // $wt;
+    $wt = util::posix_form($wt);
     # skills::util::abs_path hands Cwd bytes: a character path given to the pure-Perl Cwd (MSYS,
     # Cygwin) came back encoded twice, so `-e "$d/.git"` missed a nested checkout's .git
     my ($rp, $rw) = map { skills::util::text($_) } (-e $p ? skills::util::abs_path($p) : $p), (-d $wt ? skills::util::abs_path($wt) : $wt);
@@ -189,14 +189,6 @@ sub _gsd_path_bad {
         $d =~ s{/[^/]*\z}{};
     }
     return undef;
-}
-
-# _drive_form(path) -> a drive path (C:/x or C:\x) in its /c/ form under MSYS or Cygwin perl;
-# anything else, and a drive path on macOS or Linux, as it is.
-sub _drive_form {
-    my ($p) = @_;
-    return $p unless defined $p && $p =~ m{\A[A-Za-z]:[/\\]};
-    return util::root_form($p) // $p;
 }
 
 # The handoff and its predecessors by previous_handoff, newest first (≤10), across

@@ -77,7 +77,9 @@ sub check_ignore_forms {
 
 # where(cwd) -> {in_git, toplevel, common_dir, repo, branch, head} with one or two calls. repo is
 # bytes on every branch, as git's output is: a character cwd's name joined to the byte root
-# (bucket.pm) encoded the root twice.
+# (bucket.pm) encoded the root twice. Git for Windows prints the toplevel and the common dir in
+# drive form (C:/x): they are read in this platform's form here, where they enter
+# (util::posix_form), so repo mode, GSD and the buckets see /c/x under MSYS (sitting 4, P1).
 sub where {
     my ($cwd, $timeout_ms) = @_;
     my $res = { in_git => 0, repo => (defined $cwd ? util::basename(util::fsb($cwd)) : undef) };
@@ -90,14 +92,14 @@ sub where {
         my $r2 = cmd($cwd, ['rev-parse', '--git-common-dir', '--show-toplevel'], $timeout_ms // 2000);
         return $res unless $r2->{exit} == 0;
         @l = split /\n/, $r2->{out};
-        $l[0] = util::clean_path($l[0], $cwd) if @l;
+        $l[0] = util::clean_path(util::posix_form($l[0]), $cwd) if @l;
     }
     return $res unless @l >= 2;
     $res->{in_git} = 1;
-    $res->{common_dir} = $l[0];
-    $res->{toplevel} = $l[1];
+    $res->{common_dir} = util::posix_form($l[0]);
+    $res->{toplevel} = util::posix_form($l[1]);
     $res->{head} = (defined $l[2] && $l[2] =~ /^[0-9a-f]{7,64}$/) ? $l[2] : undef;
-    my $cd = $l[0];
+    my $cd = $res->{common_dir};
     $cd =~ s{/+$}{};
     $res->{repo} = util::basename(util::dirname($cd));
     my $b = cmd($cwd, ['symbolic-ref', '--short', '-q', 'HEAD'], $timeout_ms // 2000);
@@ -141,7 +143,8 @@ sub measure {
     my $gd = cmd($cwd, ['rev-parse', '--absolute-git-dir', '--show-toplevel'], $left->());
     my ($op, $top);
     if ($gd->{exit} == 0) {
-        my ($d, $t) = split /\n/, $gd->{out};
+        # in this platform's form, as git::where reads them (Git for Windows: C:/x)
+        my ($d, $t) = map { util::posix_form($_) } split /\n/, $gd->{out};
         if (defined $d && $d =~ /\S/) {
             $op = 'merge' if -e "$d/MERGE_HEAD";
             $op = 'rebase' if -d "$d/rebase-merge" || -d "$d/rebase-apply";

@@ -260,7 +260,8 @@ sub _entry_bad {
         return (settings::pattern_ok($src, $LIST_LEN) && eval { qr/$src/i }) ? undef : 'not a pattern the plugin runs (at most 200 characters, compiling, no code or verb groups)';
     }
     if ($key eq 'relaunch_allow') { return ($e =~ /\A\^/ && settings::pattern_ok($e, $LIST_LEN)) ? undef : 'not a pattern starting ^ that the plugin runs' }
-    if ($key eq 'repo_roots') { return util::expand_tilde($e) =~ m{\A/} ? undef : 'not an absolute path' }
+    # as settings::repo_roots reads an entry: a drive form is absolute under MSYS or Cygwin perl
+    if ($key eq 'repo_roots') { return defined util::root_form($e) ? undef : 'not an absolute path' }
     return undef;    # driver_skills: names, any text
 }
 
