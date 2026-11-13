@@ -10,8 +10,9 @@
 #                tokens (e.g. unix-pid1,ps-lstart) count as missing whatever this machine has,
 #                and the token exact-modes makes expected file modes compare the owner write
 #                bit only, as on Git for Windows' noacl mounts. With unix-pid1 the runner reads
-#                no start time for pid 1 ($LSTART1). Only the runner's view changes; the helper
-#                still sees this machine.
+#                no start time for pid 1 ($LSTART1); with symlinks a symlink setup action refuses,
+#                as on Git for Windows. Only the runner's view changes; the helper still sees
+#                this machine.
 #
 # Case file (JSON): {"id", "sid"?, "tz"?, "env"?, "path_prepend"?, "needs"?: ["baseline","spec"],
 #   "steps": [step...]}  or the one-step form (argv, stdin, setup, expect, then).
@@ -97,6 +98,15 @@
 #     "repo-tmp-off-temp" while the repo tmp folder (--repo-tmp, else <repo>/tmp), as given or
 #     real, lies under a temp root the helper's sweep treats as temp (/tmp, /var/folders, with or
 #     without /private): a case that needs a "repo" $TMP outside every temp root (RRP-07).
+#   Git for Windows (sitting 4, T1-T6): "symlinks" skips unless symlink() makes a real link, to an
+#     existing file and to a missing one (MSYS perl copies the first and fails on the second);
+#     "exact-modes" skips where chmod does not set the mode stat reads back (noacl_modes: a mode
+#     0000 file stays readable, a 0500 folder writable); "long-paths" skips unless git can init a
+#     repository in a folder about 300 characters long (Git for Windows stops at MAX_PATH without
+#     core.longpaths); "unix-os" (restart on update: macOS and Linux only) and "posix-names" (file
+#     names NTFS and Git for Windows refuse, such as `*` or a newline) skip under a Windows Perl.
+#     "symlinks" and "long-paths" are probed under a Windows Perl only; elsewhere they count as met.
+#     A symlink setup action that makes no link (a copy) ends the case with that reason.
 # Step "needs": the skip tokens above for one step: a step whose needs this machine lacks is not
 #   run (no options, setup or call; `#   not run here: <step> (needs ...)` under the case line,
 #   and a `# steps not run here` count), and the steps after it run as they are
@@ -986,11 +996,19 @@ sub git_env {
              GIT_COMMITTER_NAME => 'Test', GIT_COMMITTER_EMAIL => 'test@example.invalid' };
 }
 
+# git_run(dir, V, args...) -> git's stdout; a failed call dies with git's exit code and the start of
+# its stderr (read by running the call again with stderr kept: util::run drops it), so a setup
+# that git refuses says why (sitting 4, T4: an init past MAX_PATH said nothing)
 sub git_run {
     my ($dir, $V, @a) = @_;
     my $git = util::which('git') // '/usr/bin/git';
     my $r = run_cmd([$git, '-C', $dir, @a], timeout_ms => 20000, env => git_env($V));
-    die "git @a failed in $dir\n" unless $r->{exit} == 0;
+    if ($r->{exit} != 0) {
+        my $e = run_cmd(['/bin/sh', '-c', '"$@" 2>&1 >/dev/null', 'sh', $git, '-C', $dir, @a], timeout_ms => 20000, env => git_env($V));
+        (my $msg = substr($e->{out} // '', 0, 400)) =~ s/\s+/ /g;
+        $msg =~ s/\s+\z//;
+        die "git @a failed in $dir (exit $r->{exit})" . ($msg ne '' ? ": $msg" : '') . "\n";
+    }
     return $r->{out};
 }
 
@@ -1323,8 +1341,13 @@ sub setup {
     if (exists $s->{paths}) { record_paths($V, $s->{sid}, @{ $s->{paths} }); return }
     if (exists $s->{mkdir}) { util::mkdir_p($s->{mkdir}); chmod(oct($s->{mode}), $s->{mkdir}) if $s->{mode}; return }
     if (exists $s->{symlink}) {
+        # a host without real links (Git for Windows' MSYS perl: a copy, or ENOENT for a missing
+        # target; --assume-missing symlinks) ends the case with that reason, never with a copy the
+        # case then reads as a link (sitting 4, T1)
+        die "symlink $s->{symlink}: no real symlinks here (give the case or step \"needs\": [\"symlinks\"])\n" unless symlinks_ok();
         util::mkdir_p(util::dirname($s->{symlink}));
         symlink($s->{to}, $s->{symlink}) or die "symlink $s->{symlink}: $!\n";
+        die "symlink $s->{symlink}: made a copy, not a link\n" unless -l $s->{symlink};
         return;
     }
     if (exists $s->{hardlink}) {
@@ -1671,6 +1694,8 @@ sub missing_needs {
                   || ($_ eq 'docker' && !util::which('docker')) || ($_ eq 'darwin' && $^O ne 'darwin') || ($_ eq 'corpus' && !-f "$FIXTURES_DIR/summaries/expected.tsv")
                   || ($_ eq 'types' && !-f types_file()) || ($_ eq 'nocase-fs' && !nocase_fs()) || ($_ eq 'posix-paths' && windows_perl())
                   || ($_ eq 'unix-pid1' && !unix_pid1()) || ($_ eq 'ps-lstart' && !ps_lstart())
+                  || ($_ eq 'symlinks' && !symlinks_ok()) || ($_ eq 'exact-modes' && noacl_modes())
+                  || ($_ eq 'long-paths' && !long_paths_ok()) || (($_ eq 'unix-os' || $_ eq 'posix-names') && windows_perl())
                   || (/^docker-image:(.+)$/ && !docker_image($1)) || ($_ eq 'nonroot' && $> == 0)
                   || (/^docker-image-any:(.+)$/ && !grep { docker_image($_) } split /\|/, $1)
                   || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ ref $needs eq 'ARRAY' ? $needs : [] };
@@ -1716,6 +1741,49 @@ sub noacl_modes {
     my $m = (stat $f)[2];
     unlink $f;
     return $NOACL = (defined $m && ($m & 07777) != 0600) ? 1 : 0;
+}
+
+# symlinks_ok() -> 1 when symlink() makes a real link here: one to an existing file and one to a
+# missing target both read back with -l and readlink ("needs": ["symlinks"]). Git for Windows'
+# MSYS perl (no winsymlinks) copies an existing target and fails with ENOENT on a missing one, so
+# a case that plants a link tests a copy or dies in its setup (sitting 4, T1). Probed under a
+# Windows Perl only, as unix_pid1: on a Unix host the need counts as met.
+my $SYMLINKS;
+sub symlinks_ok {
+    return $SYMLINKS if defined $SYMLINKS;
+    return $SYMLINKS = 0 if $ASSUME_MISSING{symlinks};
+    return $SYMLINKS = 1 unless windows_perl();
+    my $d = "$RUN_TMP/symlink-probe";
+    util::mkdir_p($d);
+    write_text("$d/target", "x\n");
+    my $ok = 1;
+    for my $p (['target', "$d/l1"], ['gone', "$d/l2"]) {
+        my ($to, $l) = @$p;
+        $ok = 0 unless symlink($to, $l) && -l $l && (readlink($l) // '') eq $to;
+    }
+    remove_in($RUN_TMP, 'symlink-probe');
+    return $SYMLINKS = $ok;
+}
+
+# long_paths_ok() -> 1 when git inits a repository in a folder about 300 characters long under the
+# run's temp folder ("needs": ["long-paths"]): Git for Windows without core.longpaths stops at
+# MAX_PATH (260 characters as a Windows path), so the long-path twins' setup failed there (sitting
+# 4, T4). Probed under a Windows Perl only; elsewhere met.
+my $LONG_PATHS;
+sub long_paths_ok {
+    return $LONG_PATHS if defined $LONG_PATHS;
+    return $LONG_PATHS = 1 unless windows_perl();
+    my $d = "$RUN_TMP/long-paths-probe";
+    $d .= '/' . ('l' x 40) while length($d) < 300;
+    my $ok = eval { util::mkdir_p($d); 1 } ? 1 : 0;
+    if ($ok) {
+        my $git = util::which('git') // '/usr/bin/git';
+        my $r = run_cmd([$git, '-C', $d, 'init', '-q'], timeout_ms => 20000,
+                        env => { HOME => "$RUN_TMP/home", GIT_CONFIG_NOSYSTEM => '1' });
+        $ok = $r->{exit} == 0 ? 1 : 0;
+    }
+    remove_in($RUN_TMP, 'long-paths-probe');
+    return $LONG_PATHS = $ok;
 }
 
 # repo_tmp_off_temp() -> 1 when the repo tmp folder (--repo-tmp, else <repo>/tmp), as given and as
@@ -3592,6 +3660,8 @@ sub builtin {
         push @e, "the guard does not hold the account's home $acct as a real home" unless homeguard::real_home($acct);
         push @e, "the guard does not hold $acct/.claude as a real config folder" unless homeguard::real_config("$acct/.claude");
         push @e, "the guard does not hold $acct/.local/state as a real state folder" unless homeguard::real_state("$acct/.local/state");
+        # env_only: no more (the table below plants real and dangling links: "needs": ["symlinks"])
+        return @e if $a->{env_only};
         my $th = $V->{HOME};
         my $true = -x '/usr/bin/true' ? '/usr/bin/true' : '/bin/true';
         my $t = homeguard::self_rows($tmp, $th);

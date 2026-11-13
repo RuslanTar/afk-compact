@@ -1,0 +1,8 @@
+{
+ "id": "AT-RN-11-inner-symlink",
+ "note": "run by AT-RN-11 only: a symlink setup action in a step that does not say it needs symlinks; where links are missing the case ends with the reason, never with a copy",
+ "steps": [
+  {"name": "plants a link", "setup": [{"write": "$TMP/target.txt", "content": "x\n"}, {"symlink": "$TMP/link.txt", "to": "$TMP/target.txt"}],
+   "exec": ["/bin/sh", "-c", "exit 0"], "expect": {"exit": 0}}
+ ]
+}

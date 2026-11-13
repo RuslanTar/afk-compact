@@ -1,0 +1,12 @@
+{
+ "id": "AT-RN-11-inner-tokens",
+ "note": "run by AT-RN-11 only: each of steps 1-5 needs one of the sitting-4 tokens and would fail; with them missing they are not run, and step 6 still runs",
+ "steps": [
+  {"name": "plants a link", "needs": ["symlinks"], "exec": ["/bin/sh", "-c", "exit 1"], "expect": {"exit": 0}},
+  {"name": "reads a mode chmod set", "needs": ["exact-modes"], "exec": ["/bin/sh", "-c", "exit 1"], "expect": {"exit": 0}},
+  {"name": "inits a repository past MAX_PATH", "needs": ["long-paths"], "exec": ["/bin/sh", "-c", "exit 1"], "expect": {"exit": 0}},
+  {"name": "restarts on update", "needs": ["unix-os"], "exec": ["/bin/sh", "-c", "exit 1"], "expect": {"exit": 0}},
+  {"name": "names a file x*[y]", "needs": ["posix-names"], "exec": ["/bin/sh", "-c", "exit 1"], "expect": {"exit": 0}},
+  {"name": "needs nothing", "exec": ["/bin/sh", "-c", "exit 0"], "expect": {"exit": 0}}
+ ]
+}
