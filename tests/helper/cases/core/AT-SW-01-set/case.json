@@ -371,6 +371,9 @@
    }
   },
   {
+   "needs": [
+    "symlinks"
+   ],
    "setup": [
     {
      "write": "$TMP/real/settings.json",
@@ -389,6 +392,9 @@
   },
   {
    "name": "a symlinked settings.json: the link's target gets the change and keeps its mode; the backup sits next to the link",
+   "needs": [
+    "symlinks"
+   ],
    "argv": [
     "settings",
     "set",

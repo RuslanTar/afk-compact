@@ -37,17 +37,13 @@
      "mkdir": "$TMP/hreal/.claude"
     },
     {
-     "symlink": "$TMP/hlink",
-     "to": "$TMP/hreal"
-    },
-    {
      "write": "$TMP/hreal/.local/state/$BRAND/handoffs/repo/X/f.md",
      "content": "copied\n"
     }
    ]
   },
   {
-   "name": "paths::for and watch::ctx: the root under each value and XDG_STATE_HOME; the old and new roots paths::follow reads (none for a root set explicitly), also through a home reached by a symlink",
+   "name": "paths::for and watch::ctx: the root under each value and XDG_STATE_HOME; the old and new roots paths::follow reads (none for a root set explicitly)",
    "lib": "state_root",
    "args": {
     "roots": [
@@ -175,6 +171,47 @@
       ]
      }
     ],
+    "follow": [
+     {
+      "id": "a copy under the new root: the path follows it",
+      "home": "$TMP/hreal",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "path": "$TMP/hreal/.claude/handoffs/repo/X/f.md",
+      "want": "$TMP/hreal/.local/state/$BRAND/handoffs/repo/X/f.md"
+     },
+     {
+      "id": "no copy under the new root: the path as it is",
+      "home": "$TMP/hreal",
+      "value": "~/.local/state/$BRAND/handoffs",
+      "source": "default",
+      "path": "$TMP/hreal/.claude/handoffs/repo/Y/g.md",
+      "want": "$TMP/hreal/.claude/handoffs/repo/Y/g.md"
+     },
+     {
+      "id": "handoff_root set explicitly: the path as it is",
+      "home": "$TMP/hreal",
+      "value": "$TMP/elsewhere",
+      "source": "settings",
+      "path": "$TMP/hreal/.claude/handoffs/repo/X/f.md",
+      "want": "$TMP/hreal/.claude/handoffs/repo/X/f.md"
+     }
+    ]
+   }
+  },
+  {
+   "name": "paths::follow through a home reached by a symlink",
+   "needs": [
+    "symlinks"
+   ],
+   "setup": [
+    {
+     "symlink": "$TMP/hlink",
+     "to": "$TMP/hreal"
+    }
+   ],
+   "lib": "state_root",
+   "args": {
     "follow": [
      {
       "id": "a home reached through a symlink, the path as written",

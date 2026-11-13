@@ -1,7 +1,7 @@
 {
  "id": "RRP-07-sweep-scope-real",
  "tmp_base": "repo",
- "needs": ["repo-tmp-off-temp"],
+ "needs": ["repo-tmp-off-temp", "symlinks"],
  "note": "RRP-07: a recorded path is in scope only when its cleaned form and its real form both sit under a temp root (/tmp, /private/tmp, /var/folders, /private/var/folders, $TMPDIR) or it is a tasks/*.output. $TMP is under the repo's tmp/ here, outside every temp root except the child's TMPDIR ($TMP/tmpdir); with --repo-tmp under a temp root the case is not run (needs repo-tmp-off-temp). Not swept: a path that leaves /tmp through '..', a path through a link inside TMPDIR that points out of it, a scratchpad/ folder outside the temp roots. Swept: a plain file in TMPDIR",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",

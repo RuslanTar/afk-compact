@@ -1,5 +1,8 @@
 {
  "id": "AT-STATE-ROOT-03 (state-root: an old root in .planning is skipped)",
+ "needs": [
+  "symlinks"
+ ],
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",

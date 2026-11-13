@@ -2,7 +2,7 @@
  "id": "AT-STATE-ROOT-05 (state-root: the disposable root moved too; migrate copies, never deletes; recorded paths follow the copy)",
  "layer": "H",
  "owner": "core",
- "note": "State root (0.1.2; both roots moved out of ~/.claude): while disposable_root is the default (unset, or a value equal to it) the evidence root is $XDG_STATE_HOME/<plugin>/disposable when that is absolute, else ~/.local/state/<plugin>/disposable; the old default ~/.claude/trash-staging is read (status line; verify and restore-evidence follow MANIFEST's full paths) and never written; a value set, the old default included, is kept as it is. `migrate` (user-run) is a dry run by default, copies with --apply, never deletes, moves or overwrites, skips links, leaves a root set explicitly alone, leaves out drafts (.staging), .watch, .sessions/by-pid and pin locks, keeps mtimes, and exits 3 on a failed copy, which a rerun copies. Once the old folders are gone, a MANIFEST.tsv copy or a pin's bucket_path recorded under them is read by the same relative path under the new root while the setting is the default.",
+ "note": "State root (0.1.2; both roots moved out of ~/.claude): while disposable_root is the default (unset, or a value equal to it) the evidence root is $XDG_STATE_HOME/<plugin>/disposable when that is absolute, else ~/.local/state/<plugin>/disposable; the old default ~/.claude/trash-staging is read (status line; verify and restore-evidence follow MANIFEST's full paths) and never written; a value set, the old default included, is kept as it is. `migrate` (user-run) is a dry run by default, copies with --apply, never deletes, moves or overwrites, skips links, leaves a root set explicitly alone, leaves out drafts (.staging), .watch, .sessions/by-pid and pin locks, keeps mtimes, and exits 3 on a failed copy, which a rerun copies. Once the old folders are gone, a MANIFEST.tsv copy or a pin's bucket_path recorded under them is read by the same relative path under the new root while the setting is the default. The link migrate skips is planted only where symlink() makes real links (needs symlinks: Git for Windows' MSYS perl copies the target, sitting 4, T1); a dry run there counts it as skipped, and the main dry run and apply lines read 1 skipped with it, 0 without.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -53,10 +53,6 @@
      "content": ""
     },
     {
-     "symlink": "$LEGACY/repo/LAB-5/link.md",
-     "to": "$TMP/outside.txt"
-    },
-    {
      "write": "$ROOT/repo/LAB-5/2026-10-20_13-00-00_22222222_b.md",
      "content": "new b\n"
     },
@@ -90,6 +86,17 @@
     },
     {
      "mkdir": "$TMP/h2"
+    }
+   ]
+  },
+  {
+   "needs": [
+    "symlinks"
+   ],
+   "setup": [
+    {
+     "symlink": "$LEGACY/repo/LAB-5/link.md",
+     "to": "$TMP/outside.txt"
     }
    ]
   },
@@ -253,6 +260,21 @@
    }
   },
   {
+   "name": "migrate: a link in the old root counts as skipped, never as a file to copy",
+   "needs": [
+    "symlinks"
+   ],
+   "argv": [
+    "migrate"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^  to copy: 4 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1 · drafts, watcher files, live records and locks left out: 4$"
+    ]
+   }
+  },
+  {
    "name": "migrate: a dry run lists what it would copy and writes nothing",
    "argv": [
     "migrate"
@@ -262,7 +284,7 @@
     "stdout_has": [
      "\\Amigrate: dry run, nothing written",
      "^handoff_root: ~/\\.claude/handoffs -> ~/\\.local/state/$BRAND/handoffs$",
-     "^  to copy: 4 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1 · drafts, watcher files, live records and locks left out: 4$",
+     "^  to copy: 4 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: [01] · drafts, watcher files, live records and locks left out: 4$",
      "^    differs: repo/LAB-5/2026-10-20_13-00-00_22222222_b\\.md$",
      "^disposable_root: ~/\\.claude/trash-staging -> ~/\\.local/state/$BRAND/disposable$",
      "^  to copy: 2 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0 · drafts, watcher files, live records and locks left out: 0$"
@@ -309,7 +331,7 @@
     "exit": 3,
     "stdout_has": [
      "\\Amigrate: copying \\(nothing is deleted, moved or overwritten\\)",
-     "^  copied: 4 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: 1 · drafts, watcher files, live records and locks left out: 4 · failed: 0$",
+     "^  copied: 4 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 1 · links and special files skipped: [01] · drafts, watcher files, live records and locks left out: 4 · failed: 0$",
      "^  copied: 1 files, [0-9.]+ MB · already there: 0 · differ, left as they are: 0 · links and special files skipped: 0 · drafts, watcher files, live records and locks left out: 0 · failed: 1$",
      "^    failed: 2026-10-02/x-evidence/fail\\.log \\(",
      "^the old folders stay where they are"

@@ -50,6 +50,9 @@
   },
   {
    "name": "a config dir whose settings.json is the account's own file: the same file, not config-dir",
+   "needs": [
+    "symlinks"
+   ],
    "setup": [
     {
      "write": "$HOME/.claude/settings.json",

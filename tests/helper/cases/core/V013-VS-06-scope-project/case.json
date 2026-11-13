@@ -243,6 +243,9 @@
   },
   {
    "name": "V-6: the project folder named through a symbolic link: the entry matches by its real path",
+   "needs": [
+    "symlinks"
+   ],
    "argv": [
     "status",
     "--sid",

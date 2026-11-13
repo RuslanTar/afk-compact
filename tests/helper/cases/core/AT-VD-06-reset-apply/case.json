@@ -208,62 +208,6 @@
   {
    "setup": [
     {
-     "mkdir": "$TMP/real"
-    },
-    {
-     "write": "$TMP/real/settings.json",
-     "mode": "0640",
-     "text": "{\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"watcher\": \"off\", \"cooldown_ms\": 20000}}}\n}\n"
-    },
-    {
-     "write": "$TMP/expect/link.json",
-     "text": "{\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"cooldown_ms\": 20000}}}\n}\n"
-    }
-   ]
-  },
-  {
-   "name": "symlink setup",
-   "setup": [
-    {
-     "symlink": "$HOME/.claude/settings.link",
-     "to": "$TMP/real/settings.json"
-    },
-    {
-     "rename": "$HOME/.claude/settings.link",
-     "to": "$HOME/.claude/settings.json"
-    }
-   ]
-  },
-  {
-   "name": "a symlinked settings.json: written through the link, its mode kept",
-   "argv": [
-    "settings",
-    "reset",
-    "watcher",
-    "--apply"
-   ],
-   "expect": {
-    "exit": 0,
-    "files": [
-     {
-      "path": "$TMP/expect/link.json",
-      "snapshot": "link"
-     },
-     {
-      "path": "$TMP/real/settings.json",
-      "same_bytes_as": "link",
-      "mode": "0640"
-     },
-     {
-      "path": "$HOME/.claude/settings.json",
-      "same_bytes_as": "link"
-     }
-    ]
-   }
-  },
-  {
-   "setup": [
-    {
      "write": "$HOME/.claude/settings.json",
      "mode": "0600",
      "text": "{\n  \"model\": \"opus\",\n  \"permissions\": {\"allow\": [\"Bash(ls)\"]},\n  \"pluginConfigs\": {\n    \"other@m\": {\"options\": {\"compact_target_tokens\": 1}},\n    \"$BRAND@m\": {\n      \"options\": {\n        \"zeta_unknown\": 1,\n        \"compact_target_tokens\": 350000,\n        \"cooldown_ms\": 20000,\n        \"relaunch_auto\": \"off\"\n      }\n    }\n  },\n  \"alpha\": [1, 2]\n}\n"
@@ -326,7 +270,7 @@
      },
      {
       "path": "$HOME/.claude/settings.json.$BRAND-*.bak",
-      "count": 4
+      "count": 3
      }
     ]
    }
@@ -436,7 +380,65 @@
      },
      {
       "path": "$HOME/.claude/settings.json.$BRAND-*.bak",
-      "count": 5
+      "count": 4
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/real"
+    },
+    {
+     "write": "$TMP/real/settings.json",
+     "mode": "0640",
+     "text": "{\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"watcher\": \"off\", \"cooldown_ms\": 20000}}}\n}\n"
+    },
+    {
+     "write": "$TMP/expect/link.json",
+     "text": "{\n  \"pluginConfigs\": {\"$BRAND@m\": {\"options\": {\"cooldown_ms\": 20000}}}\n}\n"
+    }
+   ]
+  },
+  {
+   "name": "symlink setup",
+   "needs": ["symlinks"],
+   "setup": [
+    {
+     "symlink": "$HOME/.claude/settings.link",
+     "to": "$TMP/real/settings.json"
+    },
+    {
+     "rename": "$HOME/.claude/settings.link",
+     "to": "$HOME/.claude/settings.json"
+    }
+   ]
+  },
+  {
+   "name": "a symlinked settings.json: written through the link, its mode kept",
+   "needs": ["symlinks"],
+   "argv": [
+    "settings",
+    "reset",
+    "watcher",
+    "--apply"
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$TMP/expect/link.json",
+      "snapshot": "link"
+     },
+     {
+      "path": "$TMP/real/settings.json",
+      "same_bytes_as": "link",
+      "mode": "0640"
+     },
+     {
+      "path": "$HOME/.claude/settings.json",
+      "same_bytes_as": "link"
      }
     ]
    }

@@ -15,40 +15,6 @@
  },
  "steps": [
   {
-   "name": "config folder through a symlink: the scope tag of the real config folder's cache folder",
-   "env": {
-    "CLAUDE_PLUGIN_ROOT": "$PLUGIN",
-    "CLAUDE_CONFIG_DIR": "$HOME/cfglink",
-    "CLAUDE_PLUGIN_DATA": "$HOME/.claude/plugins/data/$BRAND-m",
-    "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.322"
-   },
-   "argv": [
-    "hook",
-    "SessionStart"
-   ],
-   "stdin_json": {
-    "session_id": "$SID",
-    "transcript_path": "$TMP/proj/$SID.jsonl",
-    "cwd": "$TMP/work",
-    "hook_event_name": "SessionStart",
-    "source": "startup"
-   },
-   "expect": {
-    "exit": 0,
-    "trace_has": [
-     "cache-shim written"
-    ],
-    "files": [
-     {
-      "path": "$ROOT/.sessions/loads/*_9.0.0_$UTAG.json",
-      "count": 1
-     },
-     {
-      "path": "$ROOT/.sessions/loads/*_9.0.0_$LTAG.json",
-      "count": 0
-     }
-    ]
-   },
    "setup": [
     {
      "mkdir": "$TMP/work"
@@ -84,16 +50,57 @@
      }
     },
     {
-     "symlink": "$HOME/cfglink",
-     "to": "$HOME/.claude"
-    },
-    {
      "sha_tag": "user\n$HOME/.claude/plugins/cache/m/$BRAND",
      "var": "UTAG"
     },
     {
      "sha_tag": "user\n$HOME/cfglink/plugins/cache/m/$BRAND",
      "var": "LTAG"
+    }
+   ]
+  },
+  {
+   "name": "config folder through a symlink: the scope tag of the real config folder's cache folder",
+   "needs": [
+    "symlinks"
+   ],
+   "env": {
+    "CLAUDE_PLUGIN_ROOT": "$PLUGIN",
+    "CLAUDE_CONFIG_DIR": "$HOME/cfglink",
+    "CLAUDE_PLUGIN_DATA": "$HOME/.claude/plugins/data/$BRAND-m",
+    "CLAUDE_CODE_EXECPATH": "$TMP/versions/2.1.322"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim written"
+    ],
+    "files": [
+     {
+      "path": "$ROOT/.sessions/loads/*_9.0.0_$UTAG.json",
+      "count": 1
+     },
+     {
+      "path": "$ROOT/.sessions/loads/*_9.0.0_$LTAG.json",
+      "count": 0
+     }
+    ]
+   },
+   "setup": [
+    {
+     "symlink": "$HOME/cfglink",
+     "to": "$HOME/.claude"
     }
    ]
   },

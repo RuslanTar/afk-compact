@@ -13,12 +13,10 @@
     {"write": "$TMP/outside/creds.txt", "content": "PROBE-OUTSIDE-CONTENT\n"},
     {"write": "$TMP/outside/prev.txt", "content": "LINKED-PREV-TEXT\n"},
     {"mkdir": "$TMP/My Project/src"},
-    {"symlink": "$TMP/My Project/.remember/now.md", "to": "$TMP/outside/creds.txt"},
     {"write": "$TMP/plain/.remember/now.md", "content": "NOW-INSIDE\n"},
     {"write": "$ROOT/My Project/general/2026-10-27_08-00-00_real.md", "content": "REAL-BUCKET-TEXT\n"},
     {"write": "$HOME/.cache/$BRAND-trial/old/My-Project-51e38ecc/general/2026-10-26_09-00-00_${SID8}_own.old-handoff.txt", "content": "OWN-SHADOW-TEXT\n"},
-    {"write": "$HOME/.cache/$BRAND-trial/old/My-Project-51e38ecc/general/2026-10-26_12-00-00_bbbbbbbb_other.old-handoff.txt", "content": "OTHER-SHADOW-TEXT\n"},
-    {"symlink": "$HOME/.cache/$BRAND-trial/old/My-Project-51e38ecc/general/2026-10-27_09-00-00_aaaaaaaa_link.old-handoff.txt", "to": "$TMP/outside/prev.txt"}
+    {"write": "$HOME/.cache/$BRAND-trial/old/My-Project-51e38ecc/general/2026-10-26_12-00-00_bbbbbbbb_other.old-handoff.txt", "content": "OTHER-SHADOW-TEXT\n"}
    ]
   },
   {
@@ -31,7 +29,7 @@
    }
   },
   {
-   "name": "a folder name with a space: the bucket name, the real bucket by the name, no linked text, own shadow in full",
+   "name": "a folder name with a space: the bucket name, the real bucket by the name, own shadow in full",
    "setup": [
     {"write": "$HOME/.cache/$BRAND-trial/trial.json", "json": {"v": 1, "on": true, "trial_until": "2026-11-24", "handoff_root": "$ROOT", "log_dir": "$WATCH", "cc_versions": ["2.1.311"]}}
    ],
@@ -49,6 +47,24 @@
     "stdout_lacks": ["PROBE-OUTSIDE-CONTENT", "LINKED-PREV-TEXT", "OTHER-SHADOW-TEXT"],
     "files": [{"path": "$TMP/queue-called", "count": 1}],
     "absent": ["$WATCH/*/queue-state.json", "$WATCH/queue-caps.json"]
+   }
+  },
+  {
+   "name": "a now.md link out of the folder and a linked old shadow are not read: no linked text",
+   "needs": ["symlinks"],
+   "setup": [
+    {"symlink": "$TMP/My Project/.remember/now.md", "to": "$TMP/outside/creds.txt"},
+    {"symlink": "$HOME/.cache/$BRAND-trial/old/My-Project-51e38ecc/general/2026-10-27_09-00-00_aaaaaaaa_link.old-handoff.txt", "to": "$TMP/outside/prev.txt"}
+   ],
+   "argv": ["trial-measure", "--sid", "$SID", "--cwd", "$TMP/My Project", "--cc-version", "2.1.311"],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "REAL-BUCKET-TEXT",
+     "Step 0\\): .*_own\\.old-handoff\\.txt\\\\nOWN-SHADOW-TEXT",
+     "\\.remember/now\\.md:\\\\nabsent"
+    ],
+    "stdout_lacks": ["PROBE-OUTSIDE-CONTENT", "LINKED-PREV-TEXT", "OTHER-SHADOW-TEXT"]
    }
   },
   {
