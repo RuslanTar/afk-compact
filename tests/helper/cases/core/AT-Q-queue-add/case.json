@@ -40,7 +40,7 @@
     },
     {
      "write": "$TMP/bin/not-exec",
-     "text": "#!/bin/sh\nexit 0\n",
+     "text": "exit 0\n",
      "mode": "0644"
     },
     {

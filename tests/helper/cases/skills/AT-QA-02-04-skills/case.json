@@ -99,7 +99,7 @@
    "setup": [
     {
      "write": "$TMP/bin/notexec",
-     "content": "#!/bin/sh\nexit 0\n",
+     "content": "exit 0\n",
      "mode": "0600"
     },
     {

@@ -20,7 +20,7 @@
     },
     {
      "write": "$TMP/bin/not-exec",
-     "text": "#!/bin/sh\nexit 0\n",
+     "text": "exit 0\n",
      "mode": "0644"
     },
     {
@@ -48,12 +48,12 @@
     },
     {
      "write": "$HOME/bin/my-queue",
-     "text": "#!/bin/sh\nexit 0\n",
+     "text": "exit 0\n",
      "mode": "0644"
     },
     {
      "write": "$TMP/bin/it's q",
-     "text": "#!/bin/sh\nexit 0\n",
+     "text": "exit 0\n",
      "mode": "0644"
     },
     {

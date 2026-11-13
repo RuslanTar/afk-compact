@@ -6,7 +6,7 @@
  "steps": [
   {"name": "unset: off, no call",
    "setup": [{"repo_fixture": "main-branch.json", "at": "$TMP/example-repo"},
-             {"write": "$TMP/not-exec", "text": "#!/bin/sh\necho no\n", "mode": "0644"}],
+             {"write": "$TMP/not-exec", "text": "echo no\n", "mode": "0644"}],
    "argv": ["status", "--sid", "$SID"],
    "expect": {"exit": 0, "stdout_has": ["^queue: off$"], "trace_absent": ["queue_cmd"]}},
   {"name": "not an executable file: degraded (not-executable), no exec",
