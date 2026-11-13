@@ -133,6 +133,7 @@
               "settings.relaunch_auto.value": "off", "settings.relaunch_auto.source": "safe",
               "settings.watcher.value": "false", "settings.watcher.source": "settings"}}},
   {"name": "a settings file that cannot be read (mode 0000): unreadable, writes refused, never absent",
+   "needs": ["exact-modes"],
    "setup": [{"write": "$HOME/.claude/settings.json", "content": "{\"pluginConfigs\": {}}", "mode": "0000"}],
    "argv": ["settings", "show", "--json"],
    "expect": {"exit": 0,

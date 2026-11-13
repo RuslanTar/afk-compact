@@ -183,6 +183,9 @@
    }
   },
   {
+   "needs": [
+    "exact-modes"
+   ],
    "setup": [
     {
      "write": "$HOME/.claude/settings.json",
@@ -197,6 +200,9 @@
   },
   {
    "name": "no backup can be written: refused before any write",
+   "needs": [
+    "exact-modes"
+   ],
    "argv": [
     "settings",
     "set",
