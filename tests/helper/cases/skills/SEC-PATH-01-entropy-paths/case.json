@@ -1,0 +1,209 @@
+{
+ "id": "SEC-PATH-01-entropy-paths",
+ "layer": "H",
+ "note": "0.1.12: the cloud-key-bare and high-entropy rules skip a path-shaped run (spec §10, §19 skip_paths): a macOS temp folder path on a Volatile: line, a C:/Users temp path, its Git Bash form /c/Users, a long mixed-case project path, one whose `-` starts a 40-char run and a ~/ path give no secret-warn at publish; in repo mode the export is written. A 40-char base64 value that starts with `/`, one with two `/` inside and one kept as a single segment of a path are still WARN hits, and the export is refused",
+ "now": "2026-10-21T14:05:12+03:00",
+ "owner": "skills",
+ "steps": [
+  {
+   "setup": [
+    {
+     "at": "$TMP/repo",
+     "repo": {
+      "branch": "feature/LAB-7-retry",
+      "commits": [
+       {
+        "files": {
+         ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\", \"root\": \".claude/handoffs\"}\n",
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "capture": {
+    "NONCE": "json:nonce",
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "cwd": "$TMP/repo",
+   "expect": {
+    "exit": 0
+   },
+   "name": "private (declared, not accepted)"
+  },
+  {
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- Volatile: /var/folders/k7/m2xq9vbn4w1c8rt5yz3hp0d6s0000gn/T/x4-build.Q7RkP2/out.log\n- the Windows run wrote C:/Users/Name/AppData/Local/Temp/tmpab12cd/out.log\n- Git Bash shows it as /c/Users/Name/AppData/Local/Temp/tmp1a2b3c/out.log\n- the client tree: /Volumes/Work2/ClientProjects/AcmePayments/src/Ledger/Reconcile4/Batch.kt\n- the plugin file: /Users/Name/Projects/afk-compact/plugin/helper/lib/Skills3/Export.pm\n- the job: ~/Projects/AcmeCorp9/Payments-Gateway/src/main/Kotlin/Reconcile7/Job.kt\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+   "write": "$STAGE/body.md"
+  },
+  {
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$"
+    ],
+    "stdout_lacks": [
+     "secret-warn"
+    ]
+   },
+   "name": "private: temp, Windows, Git Bash, project and home paths are not secret-shaped"
+  },
+  {
+   "setup": [
+    {
+     "json": {
+      "pluginConfigs": {
+       "$BRAND@m": {
+        "options": {
+         "repo_roots": "$TMP/repo"
+        }
+       }
+      }
+     },
+     "write": "$HOME/.claude/settings.json"
+    }
+   ]
+  },
+  {
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "capture": {
+    "NONCE": "json:nonce",
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "cwd": "$TMP/repo",
+   "expect": {
+    "exit": 0
+   },
+   "name": "repo mode",
+   "now": "2026-10-21T14:05:20+03:00"
+  },
+  {
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- Volatile: /var/folders/k7/m2xq9vbn4w1c8rt5yz3hp0d6s0000gn/T/x4-build.Q7RkP2/out.log\n- the client tree: /Volumes/Work2/ClientProjects/AcmePayments/src/Ledger/Reconcile4/Batch.kt\n- the job: ~/Projects/AcmeCorp9/Payments-Gateway/src/main/Kotlin/Reconcile7/Job.kt\n- the CI copy: D:/BuildAgent7/AppData/Local/Temp/tmpQ8rT2v/out.log\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+   "write": "$STAGE/body.md"
+  },
+  {
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "has": [
+       "^- Volatile: /var/folders/k7/m2xq9vbn4w1c8rt5yz3hp0d6s0000gn/T/x4-build\\.Q7RkP2/out\\.log$",
+       "^- the CI copy: D:/BuildAgent7/"
+      ],
+      "path": "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md"
+     }
+    ],
+    "rows": [
+     {
+      "ev": "handoff_export",
+      "fields": {
+       "result": "exported"
+      },
+      "file": "$WATCH/$SID.classic.jsonl"
+     }
+    ],
+    "stdout_has": [
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$",
+     "^Exported to repository: \\.claude/handoffs/LAB-7/$STEM\\.md \\(untracked; review and commit it yourself\\)$"
+    ],
+    "stdout_lacks": [
+     "secret-warn"
+    ]
+   },
+   "name": "repo mode: the paths do not refuse the export"
+  },
+  {
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "retry"
+   ],
+   "capture": {
+    "NONCE": "json:nonce",
+    "STAGE": "json:stage",
+    "STEM": "json:stem"
+   },
+   "cwd": "$TMP/repo",
+   "expect": {
+    "exit": 0
+   },
+   "name": "third stage",
+   "now": "2026-10-21T14:05:30+03:00"
+  },
+  {
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- the old fixture value was $SECRET{high-entropy-slash-lead}\n- the other fixture value was $SECRET{high-entropy-two-slashes}\n- the cache entry: $SECRET{high-entropy-path-segment}\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+   "write": "$STAGE/body.md"
+  },
+  {
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "retry",
+    "--status",
+    "in-progress"
+   ],
+   "cwd": "$TMP/repo",
+   "expect": {
+    "absent": [
+     "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md"
+    ],
+    "exit": 0,
+    "stdout_has": [
+     "^ADVISORY secret-warn rules=cloud-key-bare,high-entropy lines=23,24,25$",
+     "^Wrote handoff to: $ROOT/repo/LAB-7/$STEM\\.md$",
+     "^Export refused: secret-warn cloud-key-bare,high-entropy$"
+    ],
+    "stdout_lacks": [
+     "Hnkmd5KeYxJ9",
+     "WbsBlcGb",
+     "hVnYiKY6ILC"
+    ]
+   },
+   "name": "secrets that start with /, hold two /, or sit as one path segment are still hits (lines 23,24,25)"
+  }
+ ],
+ "tmp_base": "repo",
+ "tz": "Etc/GMT-3"
+}
