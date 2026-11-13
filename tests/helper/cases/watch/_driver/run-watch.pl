@@ -13,7 +13,9 @@
 # A case that returns `skip => <reason>` (its input, e.g. a fixture, is not on this
 # branch yet) prints `ok - <id> # SKIP <reason>` and runs nothing. A case that needs a tool
 # not on PATH (`needs => ["cmd:<name>"]`) prints `not ok - <id> # TODO not run: needs <name>
-# ...`, counted as not run, neither passed nor skipped; the run does not fail on it.
+# ...`, counted as not run, neither passed nor skipped; the run does not fail on it. A case that
+# needs "symlinks" (as in the core runner) is skipped, with that reason, under a Windows Perl whose
+# symlink() makes no real link (Git for Windows' MSYS perl: a copy, or ENOENT for a missing target).
 # Each case runs in a fresh temp HOME with STORE_TEST_MODE=1.
 # HOME-GUARD (0.1.2; the guard is tests/helper/homeguard.pm, shared with the core case runner):
 # the driver itself runs in a fresh environment (none of the caller's Claude Code, XDG, helper or
@@ -107,6 +109,24 @@ for my $dir (@dirs) {
 }
 print "# watch cases: $pass passed, $fail failed" . ($skipped ? ", $skipped skipped" : '') . ($notrun ? ", $notrun not run" : '') . "\n";
 exit($fail ? 1 : 0);
+
+# symlinks_ok() -> 1 when symlink() makes a real link, to an existing file and to a missing one (a
+# case's `needs => ["symlinks"]`; sitting 4, T1). Probed under a Windows Perl only, as the core
+# runner does; elsewhere met.
+my $SYMLINKS;
+sub symlinks_ok {
+    return $SYMLINKS if defined $SYMLINKS;
+    return $SYMLINKS = 1 unless $^O =~ /\A(?:msys|cygwin|MSWin32)\z/;
+    my $d = File::Temp::tempdir('symlink-probe-XXXXXX', TMPDIR => 1, CLEANUP => 1);
+    open(my $fh, '>', "$d/target") or return $SYMLINKS = 0;
+    print $fh "x\n";
+    close $fh;
+    my $ok = 1;
+    for my $p (['target', "$d/l1"], ['gone', "$d/l2"]) {
+        $ok = 0 unless symlink($p->[0], $p->[1]) && -l $p->[1] && (readlink($p->[1]) // '') eq $p->[0];
+    }
+    return $SYMLINKS = $ok;
+}
 
 sub spec_for_tests {
     my $o = "\xe2\x9f\xaa";
@@ -262,6 +282,7 @@ sub run_case {
     my $note = defined $case->{needs_note} ? ": $case->{needs_note}" : '';
     if (@cmd) { $NOTRUN = join(', ', map { "needs $_ (not on PATH)" } @cmd) . $note; return () }
     if ($> == 0 && grep { $_ eq 'nonroot' } @{ $case->{needs} || [] }) { $SKIP = "needs nonroot (running as root)$note"; return () }
+    if (grep({ $_ eq 'symlinks' } @{ $case->{needs} || [] }) && !symlinks_ok()) { $SKIP = "needs symlinks (symlink() makes no real link here)$note"; return () }
     my $tmp = File::Temp::tempdir('watchcase-XXXXXX', TMPDIR => 1, CLEANUP => 1);
     my %v = (TMP => $tmp, HOME => "$tmp/home", SID => $T::SID, BRAND => $T::BRAND, PLUGIN => "$tmp/plugin");
     # State root (0.1.2): the default handoff root is the manifest's (~/.local/state/<name>/handoffs)

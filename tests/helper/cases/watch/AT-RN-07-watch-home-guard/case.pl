@@ -40,6 +40,10 @@ my $DRIVER = sub { return "$T::REPO/tests/helper/cases/watch/_driver/run-watch.p
 # real home
 my $INNER_TMP = sub { my $d = "$_[0]{TMP}/inner-tmp"; watch::io::mkdir_p($d); return $d };
 {
+    # the guard's table plants links (homeguard::self_rows), dangling ones too: Git for Windows'
+    # MSYS perl makes none (sitting 4, T1)
+    needs => ['symlinks'],
+    needs_note => 'the guard table plants real and dangling links (homeguard::self_rows)',
     steps => [
         { call => 'code', code => sub {
             my $v = shift;
