@@ -6,6 +6,11 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+### Fixed
+
+- **File paths no longer read as secrets.** The checks for long base64-style values (`high-entropy`) and bare 40-character cloud keys (`cloud-key-bare`) treated `/` as part of a key, so an ordinary file path could look like one: a macOS temp folder (`/var/folders/…/T/…`), a Windows temp folder written with forward slashes or in its Git Bash form, a long project path, or an in-repo path that a repo-mode export writes as a relative one. Publishing then showed a false `ADVISORY secret-warn`, a repo-mode export was refused with `secret-warn`, a resume asked about a secret, and an evidence copy could come out redacted. A value made of 3 or more `/`-separated parts, none of which looks like a key on its own, is now skipped when it is a path: it starts with `/`, `~/`, `./` or `../` (or its word does), a file extension follows it, or every part reads as a word. A key with `/` inside, one that starts with `/`, and one kept as a single part of a path are still caught. The report's own secret scan applies the same rule.
+- **RRP-07 needs a repo temp folder outside the temp folders.** The case is reported as not run, with the reason, when the runner's `--repo-tmp` folder lies under `/tmp` or `/var/folders` (the runner need `repo-tmp-off-temp`), instead of failing.
+
 ## [0.1.11] - 2026-11-12
 
 afk-compact 0.1.11 makes keep-warm easier to follow. It now says why it stays off for an idle gap, shows a request while it is out, and its results appear in reports. It also reads usage near a limit more strictly, and fixes several problems under Git Bash on Windows.
