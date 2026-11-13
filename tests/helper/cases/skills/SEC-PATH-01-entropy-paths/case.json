@@ -1,7 +1,7 @@
 {
  "id": "SEC-PATH-01-entropy-paths",
  "layer": "H",
- "note": "0.1.12: the cloud-key-bare and high-entropy rules skip a path-shaped run (spec §10, §19 skip_paths): a macOS temp folder path on a Volatile: line, a C:/Users temp path, its Git Bash form /c/Users, a long mixed-case project path, one whose `-` starts a 40-char run and a ~/ path give no secret-warn at publish; in repo mode the export is written. A 40-char base64 value that starts with `/`, one with two `/` inside and one kept as a single segment of a path are still WARN hits, and the export is refused",
+ "note": "0.1.12: the cloud-key-bare and high-entropy rules skip a path-shaped run (spec §10, §19 skip_paths): a macOS temp folder path on a Volatile: line, a C:/Users temp path, its Git Bash form /c/Users, a long mixed-case project path, one whose `-` starts a 40-char run and a ~/ path give no secret-warn at publish; in repo mode the export is written, and so is one whose body cites long in-repo paths that the export rewrites to relative ones (file-shaped: an extension, or every part word-like). A 40-char base64 value that starts with `/`, one with two `/` inside and one kept as a single segment of a path are still WARN hits, and the export is refused",
  "now": "2026-10-21T14:05:12+03:00",
  "owner": "skills",
  "steps": [
@@ -106,7 +106,7 @@
    "now": "2026-10-21T14:05:20+03:00"
   },
   {
-   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- Volatile: /var/folders/k7/m2xq9vbn4w1c8rt5yz3hp0d6s0000gn/T/x4-build.Q7RkP2/out.log\n- the client tree: /Volumes/Work2/ClientProjects/AcmePayments/src/Ledger/Reconcile4/Batch.kt\n- the job: ~/Projects/AcmeCorp9/Payments-Gateway/src/main/Kotlin/Reconcile7/Job.kt\n- the CI copy: D:/BuildAgent7/AppData/Local/Temp/tmpQ8rT2v/out.log\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+   "content": "# LAB-7 — retry fix drafted, suite pending\n## Resume here\nStatus: active · Acuity: stable · State: retry window fix drafted for LAB-7 (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feature/LAB-7-retry, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feature/LAB-7-retry · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n- Volatile: /var/folders/k7/m2xq9vbn4w1c8rt5yz3hp0d6s0000gn/T/x4-build.Q7RkP2/out.log\n- the client tree: /Volumes/Work2/ClientProjects/AcmePayments/src/Ledger/Reconcile4/Batch.kt\n- the job: ~/Projects/AcmeCorp9/Payments-Gateway/src/main/Kotlin/Reconcile7/Job.kt\n- the CI copy: D:/BuildAgent7/AppData/Local/Temp/tmpQ8rT2v/out.log\n- the export job: `$TMP/repo/src/main/Kotlin/LedgerReconciliation7/ExportJob.kt`\n- templates: app/Services/Billing2/InvoiceRenderer/Templates\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
    "write": "$STAGE/body.md"
   },
   {
@@ -126,7 +126,9 @@
      {
       "has": [
        "^- Volatile: /var/folders/k7/m2xq9vbn4w1c8rt5yz3hp0d6s0000gn/T/x4-build\\.Q7RkP2/out\\.log$",
-       "^- the CI copy: D:/BuildAgent7/"
+       "^- the CI copy: D:/BuildAgent7/",
+       "^- the export job: `src/main/Kotlin/LedgerReconciliation7/ExportJob\\.kt`$",
+       "^- templates: app/Services/Billing2/InvoiceRenderer/Templates$"
       ],
       "path": "$TMP/repo/.claude/handoffs/LAB-7/$STEM.md"
      }
@@ -148,7 +150,7 @@
      "secret-warn"
     ]
    },
-   "name": "repo mode: the paths do not refuse the export"
+   "name": "repo mode: the paths, and in-repo paths made relative, do not refuse the export"
   },
   {
    "argv": [
