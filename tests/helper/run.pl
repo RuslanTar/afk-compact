@@ -93,7 +93,10 @@
 #     summary, never as passed or skipped): "cmd:<name>" while <name> is not on PATH; a case
 #     in a zone (case or step "tz", an env TZ, a builtin's args "tz") whose tz database file
 #     the host lacks, "needs tzdata", with no "needs" entry, unless the zone has an exact
-#     POSIX form (Etc/GMT-3 is "<+03>-3"), which its helper calls then get (host_zone).
+#     POSIX form (Etc/GMT-3 is "<+03>-3"), which its helper calls then get (host_zone);
+#     "repo-tmp-off-temp" while the repo tmp folder (--repo-tmp, else <repo>/tmp), as given or
+#     real, lies under a temp root the helper's sweep treats as temp (/tmp, /var/folders, with or
+#     without /private): a case that needs a "repo" $TMP outside every temp root (RRP-07).
 # Step "needs": the skip tokens above for one step: a step whose needs this machine lacks is not
 #   run (no options, setup or call; `#   not run here: <step> (needs ...)` under the case line,
 #   and a `# steps not run here` count), and the steps after it run as they are
@@ -550,6 +553,8 @@ for my $cf (@CASES) {
     # the helper alike, so its time checks would fail, or pass without testing the zone. A
     # fixed-offset zone the host lacks (Etc/GMT-3) runs in its exact POSIX form (host_zone).
     my @nr = map { my ($c) = /\Acmd:(.+)\z/; defined $c && !util::which($c) ? ([$c, 'not on PATH']) : () } @{ $case->{needs} || [] };
+    push @nr, ['repo-tmp-off-temp', "the repo tmp folder $REPO_TMP_BASE is under a temp root"]
+        if grep({ $_ eq 'repo-tmp-off-temp' } @{ $case->{needs} || [] }) && !repo_tmp_off_temp();
     if (my @nz = grep { zone_needs_tzdata($_) } case_zones($case)) {
         push @nr, ['tzdata', "zone @nz is not installed; libc would use UTC"];
     }
@@ -1711,6 +1716,19 @@ sub noacl_modes {
     my $m = (stat $f)[2];
     unlink $f;
     return $NOACL = (defined $m && ($m & 07777) != 0600) ? 1 : 0;
+}
+
+# repo_tmp_off_temp() -> 1 when the repo tmp folder (--repo-tmp, else <repo>/tmp), as given and as
+# real (its nearest existing folder resolved), lies outside /tmp, /private/tmp, /var/folders and
+# /private/var/folders: the roots the helper's sweep reads as temp whatever TMPDIR is (sweep.pm
+# _temp_root). A "repo" case whose $TMP must sit outside every temp root needs it
+# ("repo-tmp-off-temp", not run otherwise).
+sub repo_tmp_off_temp {
+    for my $p ($REPO_TMP_BASE, util::real_path($REPO_TMP_BASE)) {
+        next unless defined $p;
+        return 0 if "$p/" =~ m{\A(?:/private)?/(?:tmp|var/folders)/};
+    }
+    return 1;
 }
 
 # nocase_fs() -> 1 when the system temp folder (where the cases run) ignores letter case
