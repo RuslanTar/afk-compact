@@ -1,0 +1,51 @@
+{
+ "id": "GB-03 GSD re-entry with Git for Windows' drive-form toplevel",
+ "note": "Sitting 4, P2. Under Git Bash git prints the worktree in drive form (C:/...); the GSD root finder refused any path not starting with /, so this checkout had no GSD root and the GSD re-entry, Was driving and Active driver commands got a stray ' --cwd <this checkout>'. The worktree, and a transcript cwd in drive form as Claude Code on Windows writes it (C:\\...), are now read in their /c/ form (util::posix_form) before the compare. GSD work in another checkout still gets its --cwd. Seams: STORE_TEST_OS=msys, STORE_TEST_CYGDRIVE (C: reads as $TMP/cyg/c), and a git first on PATH that prints $TMP/cyg/c/... as C:/....",
+ "path_prepend": ["$TMP/drive-git"],
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {"STORE_TEST_OS": "msys", "STORE_TEST_CYGDRIVE": "$TMP/cyg"},
+ "steps": [
+  {"setup": [
+    {"stub": "git", "dir": "$TMP/drive-git", "script": "out=$(PATH=${PATH#*:} git \"$@\"); rc=$?\n[ -n \"$out\" ] && printf '%s\\n' \"$out\" | sed 's#/[^ ]*/cyg/c/#C:/#g'\nexit $rc"},
+    {"repo_fixture": "planning-state.json", "at": "$TMP/cyg/c/w/repo"},
+    {"repo": "$TMP/cyg/c/w/other", "planning_state": "---\nstatus: executing\ncurrent_phase: 5\nlast_activity: 2026-10-20\n---\n"}
+  ]},
+  {"name": "the git first on PATH prints the toplevel in drive form",
+   "cwd": "$TMP/cyg/c/w/repo",
+   "exec": ["git", "rev-parse", "--show-toplevel"],
+   "expect": {"exit": 0, "stdout": "C:/w/repo\n"}},
+  {"name": "GSD work in this checkout (transcript cwd in /c/ form): the re-entry has no --cwd",
+   "setup": [
+    {"write": "$HOME/.claude/projects/-x/$SID.jsonl", "jsonl": [
+      {"cwd": "$TMP/cyg/c/w/repo", "isSidechain": false, "message": {"role": "user", "content": "<command-message>gsd-progress</command-message>\n<command-name>/gsd-progress</command-name>\n<command-args></command-args>"},
+       "origin": {"kind": "human"}, "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "user", "uuid": "u1"}]}
+   ],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {
+     "gsd": {"len": 2},
+     "gsd.0": {"re": "^GSD \\(this session\\): no workstream named · \\S+/cyg/c/w/repo/\\.planning/STATE\\.md: status in progress"},
+     "gsd.1": {"re": "^GSD re-entry \\(new session only\\): /gsd-resume-work$"}}}},
+  {"name": "GSD work in this checkout (transcript cwd in drive form, as Claude Code on Windows writes it): read, no --cwd",
+   "setup": [
+    {"write": "$HOME/.claude/projects/-x/$SID.jsonl", "jsonl": [
+      {"cwd": "C:\\w\\repo", "isSidechain": false, "message": {"role": "user", "content": "<command-message>gsd-progress</command-message>\n<command-name>/gsd-progress</command-name>\n<command-args></command-args>"},
+       "origin": {"kind": "human"}, "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "user", "uuid": "u1"}]}
+   ],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "2a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {
+     "gsd": {"len": 2},
+     "gsd.0": {"re": "^GSD \\(this session\\): no workstream named · \\S+/cyg/c/w/repo/\\.planning/STATE\\.md: status in progress"},
+     "gsd.1": {"re": "^GSD re-entry \\(new session only\\): /gsd-resume-work$"}}}},
+  {"name": "GSD work in another checkout: its --cwd stays",
+   "setup": [
+    {"write": "$HOME/.claude/projects/-x/$SID.jsonl", "jsonl": [
+      {"cwd": "$TMP/cyg/c/w/other", "isSidechain": false, "message": {"role": "user", "content": "<command-message>gsd-progress</command-message>\n<command-name>/gsd-progress</command-name>\n<command-args></command-args>"},
+       "origin": {"kind": "human"}, "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "user", "uuid": "u1"}]}
+   ],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "3a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {
+     "gsd": {"len": 2},
+     "gsd.1": {"re": "^GSD re-entry \\(new session only\\): /gsd-resume-work --cwd \\S+/cyg/c/w/other$"}}}}
+ ]
+}
