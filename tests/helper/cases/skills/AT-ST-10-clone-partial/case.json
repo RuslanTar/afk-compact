@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "BD-1 (replaces HT-EV-02's withhold-whole expectation): a commit touching src/a.rb and .netrc gives 0001-<sha8>.partial.patch with src/a.rb only plus one withheld row <clone>#<sha8>:.netrc (rules deny-name, no bytes, no hash); the same for the uncommitted diff (uncommitted.partial.patch, <clone>#uncommitted:.netrc); a commit with only blocked paths (add db.sqlite) and the rename db.sqlite -> notes.txt (both sides withheld, notes.txt rename-from-denied) give withheld rows and no patch file; renames into the names \"a b.txt\", \"x*[y].env\" and one holding a newline are excluded literally: xay.env (which the glob x*[y].env would match) stays in 0005-<sha8>.partial.patch. The MANIFEST meaning and the row label say partial. No blocked text is written anywhere under the root.",
+ "note": "BD-1 (replaces HT-EV-02's withhold-whole expectation): a commit touching src/a.rb and .netrc gives 0001-<sha8>.partial.patch with src/a.rb only plus one withheld row <clone>#<sha8>:.netrc (rules deny-name, no bytes, no hash); the same for the uncommitted diff (uncommitted.partial.patch, <clone>#uncommitted:.netrc); a commit with only blocked paths (add db.sqlite) and the rename db.sqlite -> notes.txt (both sides withheld, notes.txt rename-from-denied) give withheld rows and no patch file; a rename into the name \"a b.txt\" is excluded literally, xay.env and src/b.rb stay in 0005-<sha8>.partial.patch. AT-ST-10b holds the names Git for Windows refuses (sitting 4, T6). The MANIFEST meaning and the row label say partial. No blocked text is written anywhere under the root.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -101,22 +101,6 @@
      "cwd": "$TMP/clone"
     },
     {
-     "git": [
-      "mv",
-      ".npmrc",
-      "x*[y].env"
-     ],
-     "cwd": "$TMP/clone"
-    },
-    {
-     "git": [
-      "mv",
-      "k.pem",
-      "nl\nname.txt"
-     ],
-     "cwd": "$TMP/clone"
-    },
-    {
      "write": "$TMP/clone/xay.env",
      "content": "glob victim = 1\n"
     },
@@ -185,13 +169,11 @@
      "^Volatile: \\S+/clone#[0-9a-f]{8}:notes\\.txt — withheld by the secret gate \\(rename-from-denied\\)$",
      "^Volatile: \\S+/clone#[0-9a-f]{8}:db\\.sqlite — withheld by the secret gate \\(deny-name\\)$",
      "^copied $ROOT/repo/LAB-7/evidence/$STEM/0004-[0-9a-f]{8}\\.partial\\.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8} partial \\(3 withheld\\)$",
-     "^copied $ROOT/repo/LAB-7/evidence/$STEM/0005-[0-9a-f]{8}\\.partial\\.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8} partial \\(6 withheld\\)$",
+     "^copied $ROOT/repo/LAB-7/evidence/$STEM/0005-[0-9a-f]{8}\\.partial\\.patch \\d+ [0-9a-f]{8} \\S+/clone#[0-9a-f]{8} partial \\(2 withheld\\)$",
      "^withheld - - - \\S+/clone#[0-9a-f]{8}:id_rsa$",
      "^withheld - - - \\S+/clone#[0-9a-f]{8}:\\.npmrc$",
      "^withheld - - - \\S+/clone#[0-9a-f]{8}:k\\.pem$",
      "^withheld - - - \\S+/clone#[0-9a-f]{8}:a b\\.txt$",
-     "^withheld - - - \\S+/clone#[0-9a-f]{8}:x\\*\\[y\\]\\.env$",
-     "^withheld - - - \\S+/clone#[0-9a-f]{8}:nl\\?name\\.txt$",
      "^Volatile: \\S+/clone#[0-9a-f]{8}:a b\\.txt — withheld by the secret gate \\(rename-from-denied\\)$",
      "^Volatile: \\S+/clone#[0-9a-f]{8}:id_rsa — withheld by the secret gate \\(deny-name\\)$",
      "^copied $ROOT/repo/LAB-7/evidence/$STEM/uncommitted\\.partial\\.patch \\d+ [0-9a-f]{8} \\S+/clone#uncommitted partial \\(1 withheld\\)$",
@@ -266,9 +248,8 @@
      {
       "path": "$STAGE/evidence.jsonl",
       "has": [
-       "\"meaning\":\"partial patch: 6 path\\(s\\) left out\"",
-       "\"label\":\"partial \\(6 withheld\\)\"",
-       "\"origin\":\"[^\"]+/clone#[0-9a-f]{8}:nl\\\\nname\\.txt\"",
+       "\"meaning\":\"partial patch: 2 path\\(s\\) left out\"",
+       "\"label\":\"partial \\(2 withheld\\)\"",
        "\"rules\":\\[\"rename-from-denied\"\\]",
        "^(?=.*\"status\":\"withheld\")(?=.*\"origin\":\"[^\"]+#[0-9a-f]{8}:\\.netrc\").*$"
       ]
