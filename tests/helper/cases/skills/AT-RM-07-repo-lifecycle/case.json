@@ -176,7 +176,7 @@
    "name": "git sees only the declaration, README, .gitignore and the export",
    "cwd": "$TMP/repo",
    "exec": [
-    "/usr/bin/git",
+    "git",
     "status",
     "--porcelain",
     "--ignored",
