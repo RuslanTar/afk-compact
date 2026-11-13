@@ -9,14 +9,14 @@
   ]},
   {"name": "the settings file turns it on; ident reports it", "argv": ["ident", "--sid", "$SID"],
    "expect": {"exit": 0, "json": {"restart": "on", "restart_reports": {"len": 0}}}},
-  {"name": "a flag or env value is ignored, with the note", "argv": ["status", "--sid", "$SID", "--restart-on-update", "off"],
+  {"name": "a flag or env value is ignored, with the note", "needs": ["unix-os"], "argv": ["status", "--sid", "$SID", "--restart-on-update", "off"],
    "env": {"CLAUDE_PLUGIN_OPTION_RESTART_ON_UPDATE": "off"},
    "expect": {"exit": 0, "stdout_has": ["^note: restart_on_update: settings file only$", "^restart on update: on · "],
               "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "config_note", "count": 1, "fields": {"key": "restart_on_update", "note": "settings-file-only"}}]}},
   {"setup": [
     {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"restart_on_update": "sometimes"}}}}}
   ]},
-  {"name": "an invalid value is off, with a note and one config_invalid row", "argv": ["status", "--sid", "$SID"],
+  {"name": "an invalid value is off, with a note and one config_invalid row", "needs": ["unix-os"], "argv": ["status", "--sid", "$SID"],
    "expect": {"exit": 0, "stdout_has": ["^restart on update: off$", "^note: restart_on_update: not off, shadow or on, off used$"],
               "stdout_lacks": ["sometimes"],
               "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "config_invalid", "count": 1, "fields": {"key": "restart_on_update"}}]}},
@@ -24,27 +24,29 @@
   {"setup": [
     {"write": "$HOME/.claude/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"restart_on_update": "on", "relaunch_auto": "shadow"}}}}},
     {"write": "$TMP/cc1/settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"restart_on_update": "on", "relaunch_auto": "shadow"}}}}},
-    {"mkdir": "$TMP/cc2"},
+    {"mkdir": "$TMP/cc2"}
+  ]},
+  {"needs": ["symlinks"], "setup": [
     {"symlink": "$TMP/cc2/settings.json", "to": "$HOME/.claude/settings.json"}
   ]},
   {"name": "a CLAUDE_CONFIG_DIR with its own settings.json: safe values", "argv": ["ident", "--sid", "$SID"],
    "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc1"}, "expect": {"exit": 0, "json": {"restart": "off"}}},
-  {"name": "the same folder in status: both consent keys safe, with the note", "argv": ["status", "--sid", "$SID"],
+  {"name": "the same folder in status: both consent keys safe, with the note", "needs": ["unix-os"], "argv": ["status", "--sid", "$SID"],
    "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc1"},
    "expect": {"exit": 0, "stdout_has": ["^restart on update: off$", "^automatic relaunch: off · relaunch_auto off$",
                                         "^note: restart_on_update: CLAUDE_CONFIG_DIR is not ~/\\.claude, safe value used$",
                                         "^note: relaunch_auto: CLAUDE_CONFIG_DIR is not ~/\\.claude, safe value used$"]}},
-  {"name": "a CLAUDE_CONFIG_DIR whose settings.json is a link to the consent file: the same file, every consent key from it", "argv": ["status", "--sid", "$SID"],
+  {"name": "a CLAUDE_CONFIG_DIR whose settings.json is a link to the consent file: the same file, every consent key from it", "needs": ["symlinks", "unix-os"], "argv": ["status", "--sid", "$SID"],
    "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc2"},
    "expect": {"exit": 0, "stdout_has": ["^restart on update: on · ", "^automatic relaunch: shadow \\(reports would-relaunch, runs nothing\\) · relaunch_auto shadow$"],
               "stdout_lacks": ["CLAUDE_CONFIG_DIR is not ~/\\.claude"]}},
-  {"name": "ident there reports on", "argv": ["ident", "--sid", "$SID"], "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc2"},
+  {"name": "ident there reports on", "needs": ["symlinks"], "argv": ["ident", "--sid", "$SID"], "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc2"},
    "expect": {"exit": 0, "json": {"restart": "on"}}},
   {"setup": [
     {"mkdir": "$TMP/cc3"},
     {"hardlink": "$TMP/cc3/settings.json", "to": "$HOME/.claude/settings.json"}
   ]},
-  {"name": "a hard link to the consent file: the same file (device and inode), every consent key from it", "argv": ["status", "--sid", "$SID"],
+  {"name": "a hard link to the consent file: the same file (device and inode), every consent key from it", "needs": ["unix-os"], "argv": ["status", "--sid", "$SID"],
    "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc3"},
    "expect": {"exit": 0, "stdout_has": ["^restart on update: on · ", "^automatic relaunch: shadow \\(reports would-relaunch, runs nothing\\) · relaunch_auto shadow$"],
               "stdout_lacks": ["CLAUDE_CONFIG_DIR is not ~/\\.claude"]}},
@@ -52,11 +54,11 @@
     {"write": "$TMP/new-settings.json", "json": {"pluginConfigs": {"$BRAND@m": {"options": {"restart_on_update": "on", "relaunch_auto": "shadow"}}}}},
     {"rename": "$TMP/new-settings.json", "to": "$HOME/.claude/settings.json"}
   ]},
-  {"name": "the consent file replaced by a rename: the old hard link is another file now, safe values", "argv": ["status", "--sid", "$SID"],
+  {"name": "the consent file replaced by a rename: the old hard link is another file now, safe values", "needs": ["unix-os"], "argv": ["status", "--sid", "$SID"],
    "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc3"},
    "expect": {"exit": 0, "stdout_has": ["^restart on update: off$", "^automatic relaunch: off · relaunch_auto off$",
                                         "^note: restart_on_update: CLAUDE_CONFIG_DIR is not ~/\\.claude, safe value used$"]}},
-  {"name": "the symlink follows the new file", "argv": ["ident", "--sid", "$SID"], "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc2"},
+  {"name": "the symlink follows the new file", "needs": ["symlinks"], "argv": ["ident", "--sid", "$SID"], "env": {"CLAUDE_CONFIG_DIR": "$TMP/cc2"},
    "expect": {"exit": 0, "json": {"restart": "on"}}}
  ]
 }
