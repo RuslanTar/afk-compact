@@ -180,6 +180,7 @@ sub basename {
 # path, a rooted \x, a drive-relative C:x, a drive form on macOS or Linux) is undef and is never
 # joined to the cwd: clean_path made <cwd>/C:/x of a drive path, found no work tree there and let
 # a sweep write into a root inside a git work tree. The caller refuses it as root-invalid.
+# The answer is characters only for a character (UTF8-flagged) input, else bytes (_drive_posix).
 sub root_form {
     my ($p) = @_;
     return undef unless defined $p && !ref $p && $p ne '';
@@ -188,8 +189,44 @@ sub root_form {
     my $os = os();
     return undef unless ($os eq 'msys' || $os eq 'cygwin') && $p =~ m{\A[A-Za-z]:[/\\]};
     my $f = _win_to_posix() // return undef;
-    my $q = eval { $f->($p, 1) };
+    my $q = _drive_posix($f, $p);
     return defined $q && $q =~ m{\A/} ? $q : undef;
+}
+
+# posix_form(path) -> a path another program printed (git's toplevel, git dir and worktree list, a
+# .git file's gitdir line, a transcript's cwd) in this platform's form, read where it enters: under
+# MSYS or Cygwin perl a drive form (C:/x or C:\x, as Git for Windows and Claude Code on Windows
+# print paths) through root_form (/c/x); anything else, a drive form on macOS or Linux and one
+# root_form cannot read come back as they are (no ~ expansion, never joined to the cwd).
+sub posix_form {
+    my ($p) = @_;
+    return $p unless defined $p && !ref $p && $p =~ m{\A[A-Za-z]:[/\\]};
+    return root_form($p) // $p;
+}
+
+# _drive_posix(sub, drive path) -> the path through Cygwin::win_to_posix_path (or its stand-in), or
+# undef. The sub gets bytes, never a UTF8-flagged string, and ASCII only: Git for Windows' perl
+# ended with "Out of memory!" (no eval catches it) when given a non-ASCII checkout path as
+# characters (sitting 4, P4). A path holding a non-ASCII byte converts its leading ASCII folders
+# through the sub (the drive's own form, /c or /cygdrive/c, and a mount point among them) and
+# keeps the rest as it is, backslashes read as /. Decoded only when the input was characters.
+sub _drive_posix {
+    my ($f, $p) = @_;
+    my $chars = utf8::is_utf8($p);
+    my $b = $chars ? _bytes($p) : $p;
+    my $q;
+    if ($b !~ /[\x80-\xff]/) {
+        $q = eval { $f->($b, 1) };
+    } else {
+        my @part = split m{[/\\]+}, $b, -1;
+        my $i = 1;
+        $i++ while $i < @part && $part[$i] !~ /[\x80-\xff]/;
+        my $head = eval { $f->(join('/', @part[0 .. $i - 1]) . '/', 1) };
+        return undef unless defined $head && $head =~ m{\A/};
+        $head =~ s{/+\z}{};
+        $q = join('/', $head, @part[$i .. $#part]);
+    }
+    return $chars ? text($q) : $q;
 }
 
 # Cygwin::win_to_posix_path (MSYS and Cygwin perl), or undef. In test mode STORE_TEST_CYGDRIVE=<dir>
