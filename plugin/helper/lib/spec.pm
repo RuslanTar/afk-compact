@@ -48,7 +48,7 @@ sub list {
     return ref $v eq 'ARRAY' ? @$v : ();
 }
 
-# Secret rules: [{id, class: HARD|WARN, re, min_entropy?}]; compiled once.
+# Secret rules: [{id, class: HARD|WARN, re, min_entropy?, skip_paths?}]; compiled once.
 my $RULES;
 sub secret_rules {
     return $RULES if $RULES;
@@ -63,7 +63,7 @@ sub secret_rules {
         # the character beside the value too; `lead`/`trail` say so, and a hit covers only the
         # value, so redaction keeps the quote, space or newline beside it.
         push @out, { id => $r->{id}, class => uc($r->{class} // 'WARN'), re => $re,
-                     min_entropy => $r->{min_entropy},
+                     min_entropy => $r->{min_entropy}, skip_paths => ($r->{skip_paths} ? 1 : 0),
                      lead => ($src =~ /\A\(\^\|\[\^/ ? 1 : 0),
                      trail => ($src =~ /\(\$\|\[\^(?:\\.|[^\]\\])*\]\)\z/ ? 1 : 0) };
     }

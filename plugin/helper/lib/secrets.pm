@@ -1,6 +1,6 @@
 package secrets;
 # lib/secrets.pm: the shared secret rule set, read from
-# the spec literals (`secret_rules`: [{id, class HARD|WARN, re, min_entropy?}] and
+# the spec literals (`secret_rules`: [{id, class HARD|WARN, re, min_entropy?, skip_paths?}] and
 # `deny_names`). Rule ids are reported, values never.
 use strict;
 use warnings;
@@ -42,9 +42,44 @@ sub _matches {
         next if $e <= $s;
         my $m = substr($text, $s, $e - $s);
         next if defined $r->{min_entropy} && _entropy($m) < $r->{min_entropy};
+        next if $r->{skip_paths} && _path_shaped($text, $s, $m, $r);
         push @spans, [$s, $e];
     }
     return @spans;
+}
+
+# 0.1.12 path-shaped runs (a rule with `skip_paths`: cloud-key-bare, high-entropy). Their run
+# class holds `/`, so a file path read as one long mixed-case run: a macOS temp folder
+# (/var/folders/<2>/<30>/T/...), a Windows temp folder with forward slashes
+# (C:/.../AppData/Local/Temp/...) or in its Git Bash form (/c/...), a long project path. A hit
+# is skipped when its value
+#   - is anchored as a path: it starts with `/` (also after `~`, `X:`, `.` or `..`, which end
+#     the run before it), or the text before it back to the last whitespace, quote, bracket or
+#     one of = , ; : | starts with `/`, `~/`, `./` or `../` (the rest of a path that a `-`, `.`
+#     or `_` cut into runs; looked for within $PATH_LOOKBACK characters, else not anchored), and
+#   - splits on `/` into 3 or more non-empty segments, none of which the same rule hits alone,
+#     so a secret kept as one path segment is still a hit.
+# A value without such an anchor is never skipped, whatever its `/` count. The one secret
+# shape this lets through is itself a path: a value that starts with `/` and holds two more
+# `/` with no piece the rule hits alone (spec §10).
+our $PATH_LOOKBACK = 1024;
+sub _path_anchored {
+    my ($text, $s) = @_;
+    return 1 if substr($text, $s, 1) eq '/';
+    my $from = $s > $PATH_LOOKBACK ? $s - $PATH_LOOKBACK : 0;
+    my $pre = substr($text, $from, $s - $from);
+    my ($tok) = $pre =~ m{([^\s"'`<>()\[\]{},;:=|]*)\z};
+    return 0 if $from > 0 && length($tok) == length($pre);
+    return $tok =~ m{\A(?:/|~/|\.\.?/)} ? 1 : 0;
+}
+sub _path_shaped {
+    my ($text, $s, $m, $r) = @_;
+    return 0 if index($m, '/') < 0;
+    my @seg = grep { length } split m{/}, $m;
+    return 0 if @seg < 3 || !_path_anchored($text, $s);
+    my $one = { %$r, skip_paths => 0 };
+    for my $g (@seg) { return 0 if _matches($g, $one) }
+    return 1;
 }
 
 # The shipped rules, then the user's secret_extra_rules

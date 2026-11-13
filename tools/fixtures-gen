@@ -23,7 +23,8 @@ Checks run by --check (the WP-fix exit list):
             detector (with the sentinel-after-close rule) on every file
   secrets   no file under tests/fixtures, tools/fixtures-gen or the generated output holds a
             secret-shaped string; every secrets/corpus.json entry hits its declared class once
-            its fragments are joined, and no single fragment hits anything
+            its fragments are joined (the spec rules as the helper applies them: min_entropy,
+            skip_paths), and no single fragment hits anything
   bd2       AT-ST-12: each corpus entry, redacted by the reference redaction rule with the spec
             secret_rules, has no two markers that touch, and matches its `redacted` / `markers` pins
   drift     the generated files are current
@@ -527,6 +528,16 @@ def scan(text, rules):
     return hits
 
 
+def corpus_hits(text, rules, source):
+    """What a joined corpus entry hits: with the spec rule set, the reference rule as the helper
+    applies it (min_entropy, skip_paths: a path control hits nothing); the built-in set as scan.
+    Files and single fragments keep the plain scan, which reads every run as a hit."""
+    if source == "built-in":
+        return scan(text, rules)
+    cls = {i: c for i, c, _ in rules}
+    return sorted({(rid, cls.get(rid, "WARN")) for _, _, _, rid in hit_spans(text, spec_rules_full())})
+
+
 def deny_name(name):
     if re.search(DENY_EXCEPT, name):
         return False
@@ -542,21 +553,50 @@ def load_corpus():
 # or touching hits merge into one span, replaced once by `[redacted:<rule>]`, labelled by the first
 # rule of the spec list among the merged hits. A rule's leading `(^|[^…])` or trailing `($|[^…])`
 # guard group is not part of the hit. Corpus entries may pin the result: `redacted` (exact text) and
-# `markers` (marker count).
+# `markers` (marker count). A rule with `skip_paths` skips a path-shaped hit (spec §19; the
+# helper's secrets::_path_shaped, 0.1.12).
 def spec_rules_full():
     rules = literals().get("secret_rules") or []
     out = []
     for r in rules:
         try:
-            out.append((r["id"], re.compile(r["re"]), r.get("min_entropy"), r["re"]))
+            out.append((r["id"], re.compile(r["re"]), r.get("min_entropy"), r["re"], bool(r.get("skip_paths"))))
         except (KeyError, re.error):
             pass
     return out
 
 
+PATH_LOOKBACK = 1024
+PATH_WORD = re.compile(r"[^\s\"'`<>()\[\]{},;:=|]*\Z")
+PATH_ANCHOR = re.compile(r"(?:/|~/|\.\.?/)")
+
+
+def path_anchored(text, a):
+    if text[a:a + 1] == "/":
+        return True
+    lo = max(0, a - PATH_LOOKBACK)
+    pre = text[lo:a]
+    tok = PATH_WORD.search(pre).group(0)
+    if lo > 0 and len(tok) == len(pre):
+        return False
+    return PATH_ANCHOR.match(tok) is not None
+
+
+def path_shaped(text, a, z, rule):
+    value = text[a:z]
+    if "/" not in value:
+        return False
+    segs = [s for s in value.split("/") if s]
+    if len(segs) < 3 or not path_anchored(text, a):
+        return False
+    one = [rule[:4] + (False,)]
+    return not any(hit_spans(s, one) for s in segs)
+
+
 def hit_spans(text, rules):
     spans = []
-    for order, (rid, rx, min_ent, src) in enumerate(rules):
+    for order, rule in enumerate(rules):
+        rid, rx, min_ent, src, skip_paths = rule
         lead = src.startswith("(^|[^")
         trail = src.endswith(")") and re.search(r"\(\$\|\[\^[^\]]*\]\)$", src) is not None
         for m in rx.finditer(text):
@@ -568,6 +608,8 @@ def hit_spans(text, rules):
             if z <= a:
                 continue
             if min_ent is not None and entropy(text[a:z]) < min_ent:
+                continue
+            if skip_paths and path_shaped(text, a, z, rule):
                 continue
             spans.append((a, z, order, rid))
     return spans
@@ -2591,7 +2633,7 @@ def check(b):
     joined_by_id = {e["id"]: "".join(e["fragments"]) for e in corpus["entries"]}
     for e in corpus["entries"]:
         joined = "".join(e["fragments"])
-        hit = scan(joined, rules)
+        hit = corpus_hits(joined, rules, source)
         classes = {c for _, c in hit}
         if e["class"] == "none":
             if hit:
