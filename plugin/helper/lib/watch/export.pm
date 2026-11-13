@@ -597,7 +597,9 @@ sub secret_hits {
         return [ map { $_->{rule} } @$h ] if ref $h eq 'ARRAY';
         return ['scan-error'];
     }
-    # No core rule set loaded: the spec's rules, compiled here (same list, plain match).
+    # No core rule set loaded (secrets.pm reads the shared spec, not this one): the spec's rules,
+    # compiled here and applied as secrets::_matches applies them (keep the two in step): the
+    # value without its guard characters, min_entropy, and skip_paths (0.1.12, spec §19).
     my @ids;
     my $rules = $ctx->{spec}{secret_rules};
     $rules = $rules->{rules} if ref $rules eq 'HASH';
@@ -605,9 +607,43 @@ sub secret_hits {
         next unless ref $r eq 'HASH' && defined $r->{re} && defined $r->{id};
         my $src = $r->{re};
         my $re = eval { qr/$src/ } or next;
-        push @ids, $r->{id} if $data =~ $re;
+        push @ids, $r->{id} if _fb_hit($data, { re => $re, min => $r->{min_entropy}, paths => $r->{skip_paths},
+            lead => ($src =~ /\A\(\^\|\[\^/ ? 1 : 0), trail => ($src =~ /\(\$\|\[\^(?:\\.|[^\]\\])*\]\)\z/ ? 1 : 0) });
     }
     return \@ids;
+}
+sub _fb_hit {
+    my ($t, $r) = @_;
+    while ($t =~ /$r->{re}/g) {
+        my ($s, $e) = ($-[0], $+[0]);
+        if ($e == $s) { last unless defined pos($t); pos($t) = $e + 1; next }
+        $s = $+[1] if $r->{lead} && defined $+[1];
+        if ($r->{trail} && defined $-[$#+] && $-[$#+] > $s) { $e = $-[$#+]; pos($t) = $e }
+        next if $e <= $s;
+        my $m = substr($t, $s, $e - $s);
+        next if defined $r->{min} && _fb_entropy($m) < $r->{min};
+        next if $r->{paths} && _fb_path($t, $s, $e, $m, $r);
+        return 1;
+    }
+    return 0;
+}
+sub _fb_path {
+    my ($t, $s, $e, $m, $r) = @_;
+    my @g = grep { length } split m{/}, $m;
+    return 0 if @g < 3 || grep { _fb_hit($_, { %$r, paths => 0 }) } @g;
+    my $from = $s > 1024 ? $s - 1024 : 0;
+    my ($w) = substr($t, $from, $s - $from) =~ m{([^\s"'`<>()\[\]{},;:=|]*)\z};
+    return 1 if substr($m, 0, 1) eq '/' || (($from == 0 || length($w) < $s - $from) && $w =~ m{\A(?:/|~/|\.\.?/)});
+    return 1 if substr($t, $e, 10) =~ /\A\.[A-Za-z0-9]{1,8}(?![A-Za-z0-9])/;
+    return !grep { !/\A(?:[A-Za-z]+[0-9]{0,3}|[0-9]{1,4})\z/ || _fb_entropy($_) >= 4.1 } @g;
+}
+sub _fb_entropy {
+    my ($v) = @_;
+    my ($n, $h, %c) = (length $v, 0);
+    return 0 unless $n;
+    $c{$_}++ for split //, $v;
+    $h -= $_ / $n * log($_ / $n) / log(2) for values %c;
+    return $h;
 }
 
 # --- the staged files -------------------------------------------------------
