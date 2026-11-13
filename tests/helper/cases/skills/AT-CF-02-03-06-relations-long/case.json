@@ -1,5 +1,8 @@
 {
  "id": "AT-CF-02, AT-CF-03, AT-CF-06 long-path",
+ "needs": [
+  "long-paths"
+ ],
  "layer": "H",
  "owner": "skills",
  "tmp_norm": false,

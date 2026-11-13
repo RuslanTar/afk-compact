@@ -22391,6 +22391,9 @@
   },
   {
    "name": "setup: session 114, a GSD checkout under a long path",
+   "needs": [
+    "long-paths"
+   ],
    "setup": [
     {
      "repo": {
@@ -22463,6 +22466,9 @@
   },
   {
    "name": "session 114 (R6): its GSD line under a long path is at most 400 characters and shortens the stopped-at text first, so the last-activity stamp stays whole",
+   "needs": [
+    "long-paths"
+   ],
    "cwd": "$TMP/long/d0-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/d1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/d2-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/repo",
    "argv": [
     "measure",

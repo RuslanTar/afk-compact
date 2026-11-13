@@ -1,5 +1,6 @@
 {
  "id": "AT-CF-02, AT-CF-03, AT-CF-06 long-path twins under a short TMPDIR (U-04)",
+ "needs": ["long-paths"],
  "layer": "H",
  "owner": "skills",
  "note": "The two U-04 long-path twins run in a child of this runner with TMPDIR=/tmp, so their case folders are as short as a host gives (about 27 bytes on the Linux rows, 36 on macOS, where /tmp is /private/tmp), on every host, also where the suite's own TMPDIR is long. begin trims each reply to its real 3,072 B, and the twins set tmp_norm false, so their size bound measures stdout as it is. With each $TMP counted at 82 B, as for other cases outside the repo's tmp/, the fit-counted twin's replies counted 3,198 B and more under the Linux rows' /tmp and failed",
