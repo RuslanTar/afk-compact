@@ -6,6 +6,16 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-11-14
+
+afk-compact 0.1.12 stops ordinary file paths from reading as secrets, and fixes repo mode, GSD re-entry and non-ASCII checkout paths under Git Bash on Windows.
+
+### Windows (Git Bash)
+
+Windows (Git Bash) support in this release was checked by emulating Git for Windows on macOS and by two test runs on a Windows PC. Those runs found no failure in the plugin itself. Some test cases do not run on Windows yet: the cases that use a stand-in for git's drive-letter output, and the watch cases that rely on file modes or symbolic links. They are tracked for the next release.
+
+One fix is not yet confirmed on a real Windows machine: repo mode with a repository path written with its drive letter (such as `C:/w/repo`). It was checked only by emulation on macOS, because the Windows test run did not reach it: the tests' stand-in git had a defect. It is the part of this release most likely to misbehave on Windows; the other Windows fixes were confirmed with real Git for Windows.
+
 ### Fixed
 
 - **File paths no longer read as secrets.** The checks for long base64-style values (`high-entropy`) and bare 40-character cloud keys (`cloud-key-bare`) treated `/` as part of a key, so an ordinary file path could look like one: a macOS temp folder (`/var/folders/…/T/…`), a Windows temp folder written with forward slashes or in its Git Bash form, a long project path, or an in-repo path that a repo-mode export writes as a relative one. Publishing then showed a false `ADVISORY secret-warn`, a repo-mode export was refused with `secret-warn`, a resume asked about a secret, and an evidence copy could come out redacted. A value made of 3 or more `/`-separated parts, none of which looks like a key on its own, is now skipped when it is a path: it starts with `/`, `~/`, `./` or `../` (or its word does), a file extension follows it, or every part reads as a word. A key with `/` inside, one that starts with `/`, and one kept as a single part of a path are still caught. The report's own secret scan applies the same rule.
@@ -14,6 +24,16 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 - **GSD re-entry under Git Bash.** The GSD re-entry, Was driving and Active driver commands for work in the session's own checkout got a stray `--cwd <this checkout>`, because the checkout's folder with a drive letter matched no GSD folder. A session folder that Claude Code wrote with a drive letter is read the same way. `measure` and `locate` now print the checkout's folder in the form they print the current folder.
 - **A checkout path with a letter outside ASCII under Git Bash.** `measure <handoff>` with a GSD line ended with `Out of memory!` before any output when the checkout's path held a letter such as `ë`: Git Bash's perl failed when its path conversion got such a path as text. The conversion now gets only the path's leading ASCII folders, as bytes, and keeps the rest as it is.
 - **Helper cases under Git Bash.** A case or step now names what it needs from the machine, and under Git Bash it is reported as not run, with the reason, instead of failing: real symbolic links (`symlinks`), file modes that chmod sets (`exact-modes`), git in folders past 260 characters (`long-paths`), restart on update (`unix-os`) and file names that Windows refuses (`posix-names`). A symlink setup where links cannot be made ends its case with that reason instead of planting a copy. The not-executable queue programs hold no `#!` line, which Git Bash reads as executable, and AT-ST-10's names that Windows refuses moved to AT-ST-10b.
+- **U-06 under a reaping init.** The helper case that checks a killed helper takes its pattern child along could read a child that its new parent had just reaped as still alive, and failed about 2 times in 100 in a Linux container. A child seen gone now stays gone; the case still fails when the helper leaves its child behind.
+
+### Upgrade notes
+
+- No action is required.
+
+### Compatibility
+
+- Requires Claude Code 2.1.287 or newer. The one-line install needs 2.1.292 or newer.
+- Tested against Claude Code 2.1.325.
 
 ## [0.1.11] - 2026-11-12
 
@@ -440,7 +460,8 @@ This is an early (0.x) version. Some parts that need a live session or a managed
 - `git` for the git measurements.
 - Supported: macOS 13 or newer, and Linux with glibc. Expected to work but not yet tested in a session: Alpine/musl and WSL 2. Native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.12
 [0.1.11]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.11
 [0.1.10]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.10
 [0.1.9]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.9
