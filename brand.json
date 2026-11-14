@@ -1,7 +1,7 @@
 {
   "name": "afk-compact",
   "marketplace": "afk-compact",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "repo": "RuslanTar/afk-compact",
   "cc_min": "2.1.287",
   "description": "Compaction that writes a handoff, for long unattended Claude Code sessions: it keeps a read-only copy of every summary, checks it, resumes the work, and on large context windows compacts at a clean turn end."
