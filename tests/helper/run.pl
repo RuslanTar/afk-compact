@@ -2325,8 +2325,20 @@ sub u06_check {
             waitpid($pid, 0);
             return ("$sig: no pattern child under the helper") unless @g;
             my $t0 = util::clock_ms();
-            # a child that ended stays a zombie until its new parent reaps it
-            my $gone = sub { my $p = $_[0]; return 1 unless kill 0, $p; my $st = util::read_file("/proc/$p/stat"); return defined $st && $st =~ /\)\s+Z/ ? 1 : 0 };
+            # a child that ended stays a zombie until its new parent reaps it. Its new parent (init
+            # on a CI runner) may reap it between `kill 0` and the read of /proc/<pid>/stat: then
+            # the read fails and `kill 0` fails too, so it is gone; while being reaped it reads `X`.
+            # Read "alive" there, this flipped a gone child back to alive in about 2 rounds in 100
+            # under a reaping init (U-06 on the ubuntu runner). Once seen gone it stays gone
+            my %seen_gone;
+            my $gone = sub {
+                my $p = $_[0];
+                return 1 if $seen_gone{$p};
+                my $st = kill(0, $p) ? util::read_file("/proc/$p/stat") : undef;
+                my $g = !kill(0, $p) || (defined $st && $st =~ /\)\s+[ZX]/) ? 1 : 0;
+                $seen_gone{$p} = 1 if $g;
+                return $g;
+            };
             util::sleep_ms(20) while util::clock_ms() - $t0 < 4000 && grep { !$gone->($_) } @g;
             my $ms = util::clock_ms() - $t0;
             my @left = grep { !$gone->($_) } @g;
