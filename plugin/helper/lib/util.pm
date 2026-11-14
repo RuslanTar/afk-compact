@@ -243,6 +243,54 @@ sub _win_to_posix {
     return defined &{'Cygwin::win_to_posix_path'} ? \&{'Cygwin::win_to_posix_path'} : undef;
 }
 
+# win_form(path) -> under MSYS or Cygwin perl, an absolute POSIX path in its Windows form, as
+# Claude Code on Windows sees its cwd (/c/x is C:\x), through Cygwin::posix_to_win_path (or its
+# stand-in); undef anywhere else (macOS and Linux paths have no other form), for a path not
+# starting with /, or when perl has no such sub. As in _drive_posix the sub gets ASCII bytes
+# only: a path holding a non-ASCII byte converts its leading ASCII folders and keeps the rest,
+# joined with \. Characters for a character input, else bytes.
+sub win_form {
+    my ($p) = @_;
+    return undef unless defined $p && !ref $p && $p =~ m{\A/};
+    my $os = os();
+    return undef unless $os eq 'msys' || $os eq 'cygwin';
+    my $f = _posix_to_win() // return undef;
+    my $chars = utf8::is_utf8($p);
+    my $b = $chars ? _bytes($p) : $p;
+    my $q;
+    if ($b !~ /[\x80-\xff]/) {
+        $q = eval { $f->($b, 1) };
+    } else {
+        my @part = split m{/+}, $b, -1;
+        my $i = 1;
+        $i++ while $i < @part && $part[$i] !~ /[\x80-\xff]/;
+        my $head = eval { $f->(join('/', @part[0 .. $i - 1]) . '/', 1) };
+        return undef unless defined $head && $head ne '';
+        $head =~ s{\\+\z}{};
+        $q = join('\\', $head, @part[$i .. $#part]);
+    }
+    return undef unless defined $q && $q =~ m{\A(?:[A-Za-z]:\\|\\\\)};
+    return $chars ? text($q) : $q;
+}
+
+# Cygwin::posix_to_win_path (MSYS and Cygwin perl), or undef. In test mode STORE_TEST_CYGDRIVE=<dir>
+# stands in for it, the other way from _win_to_posix: <dir>/c/a/b reads as C:\a\b (a path outside
+# <dir>/<letter> has no Windows form there); STORE_TEST_NO_CYGWIN=1 hides the real sub.
+sub _posix_to_win {
+    if (test_mode() && defined $ENV{STORE_TEST_CYGDRIVE} && $ENV{STORE_TEST_CYGDRIVE} =~ m{\A/}) {
+        my $top = $ENV{STORE_TEST_CYGDRIVE};
+        return sub {
+            my ($x) = @_;
+            return undef unless $x =~ m{\A\Q$top\E/([A-Za-z])(/.*)?\z}s;
+            (my $rest = $2 // '') =~ tr{/}{\\};
+            return uc($1) . ':' . ($rest eq '' ? '\\' : $rest);
+        };
+    }
+    return undef if test_mode() && ($ENV{STORE_TEST_NO_CYGWIN} // '') eq '1';
+    no strict 'refs';
+    return defined &{'Cygwin::posix_to_win_path'} ? \&{'Cygwin::posix_to_win_path'} : undef;
+}
+
 # Absolute, with . and .. folded (no symlink resolution: the path may not exist).
 sub clean_path {
     my ($p, $base) = @_;

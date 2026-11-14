@@ -168,7 +168,7 @@ our $ARGS_MAX = 100;                  # longer arguments are not shown
 our $LINE_MAX = 400;                  # characters of the GSD line (the driver line is never cut: its
                                       # parts are bounded, and a cut would break a re-enter command)
 our $CACHE = 'gsd-scan.json';         # <watch>/<sid>/: read offset and facts so far
-our $CACHE_V = 17;
+our $CACHE_V = 18;
 our $BG_KEEP = 32;                    # newest background tasks kept while no notification names them
 our %DRIVERS = map { $_ => 1 } qw(gsd-autonomous gsd-execute-phase gsd-manager
                                   superpowers:executing-plans superpowers:subagent-driven-development);
@@ -215,7 +215,10 @@ my %EDIT = map { $_ => 1 } qw(Edit Write MultiEdit NotebookEdit);
 
 # transcript_path(sid, given, dir…) -> this session's main transcript, or undef: the given path,
 # else the hook payload's (rc), else <config dir>/projects/<slug of a dir>/<sid>.jsonl, else the
-# one project folder that holds <sid>.jsonl.
+# one project folder that holds <sid>.jsonl. Claude Code names the folder from the cwd it sees,
+# every character outside [A-Za-z0-9] made '-': under MSYS or Cygwin perl that is the Windows
+# form (C:\winkit-x6 is C--winkit-x6, not the /c/ form's -c-winkit-x6), so a dir's Windows form
+# (util::win_form) is tried before the dir as it is.
 sub transcript_path {
     my ($sid, $given, @dirs) = @_;
     return $given if defined $given && !ref $given && $given ne '' && -f $given;
@@ -226,9 +229,11 @@ sub transcript_path {
     my %seen;
     for my $d (grep { defined && $_ ne '' } map { ($_, util::real_path($_)) } grep { defined && $_ ne '' } @dirs) {
         next if $seen{$d}++;
-        (my $slug = $d) =~ s/[^A-Za-z0-9]/-/g;
-        my $p = "$cfg/projects/$slug/$sid.jsonl";
-        return $p if -f $p;
+        for my $f (grep { defined } util::win_form($d), $d) {
+            (my $slug = $f) =~ s/[^A-Za-z0-9]/-/g;
+            my $p = "$cfg/projects/$slug/$sid.jsonl";
+            return $p if -f $p;
+        }
     }
     my @hit = grep { -f "$cfg/projects/$_/$sid.jsonl" } util::list_dir("$cfg/projects");
     return @hit == 1 ? "$cfg/projects/$hit[0]/$sid.jsonl" : undef;
@@ -1100,8 +1105,14 @@ sub _row {
             _pc_text($st, $in->{command}, $ts);
         } elsif ($EDIT{$n}) {
             my $p = $in->{file_path} // $in->{notebook_path};
-            next unless defined $p && !ref $p && index($p, '.planning/') >= 0;
-            $p = "$cwd/$p" if $p !~ m{\A/} && defined $cwd;
+            next unless defined $p && !ref $p;
+            # Claude Code on Windows records the path, and the row's cwd, in drive form with
+            # backslashes (C:\x\.planning\STATE.md): both are read in this platform's form first
+            # (util::posix_form: /c/x under MSYS or Cygwin perl; as they are anywhere else).
+            $p = util::posix_form($p);
+            next unless index($p, '.planning/') >= 0;
+            my $base = util::posix_form($cwd);
+            $p = "$base/$p" if $p !~ m{\A/} && defined $base;
             next unless $p =~ m{\A(/.*?)/\.planning/(.+)\z};
             my ($root, $rel) = ($1, $2);
             next unless $rel =~ $STATE_FILE;
@@ -1600,6 +1611,10 @@ sub scan {
     my ($n, $status) = (0, 'ok');
     # Tests stop a scan after this many rows, as if its time ran out there.
     my $rows_max = (util::test_mode() && ($ENV{STORE_TEST_GSD_SCAN_ROWS} // '') =~ /\A[1-9][0-9]{0,8}\z/) ? 0 + $ENV{STORE_TEST_GSD_SCAN_ROWS} : 0;
+    # Under MSYS or Cygwin perl a row may name a state file in drive form with backslashes, as
+    # Claude Code on Windows writes it (.planning\\STATE.md in the row's JSON).
+    my $os = util::os();
+    my $winp = ($os eq 'msys' || $os eq 'cygwin') ? 1 : 0;
     while (my $l = <$fh>) {
         last unless substr($l, -1) eq "\n";    # a row still being written: next time
         # Checked before the row counts as read, so a scan that stops here reads it next time.
@@ -1681,6 +1696,7 @@ sub scan {
             next unless ($open && $l =~ /"stop_reason":"(?:end_turn|stop_sequence|max_tokens|refusal)"/)
                 || (index($l, '"tool_use"') >= 0
                     && (index($l, '"Skill"') >= 0 || index($l, 'gsd') >= 0 || index($l, '.planning/') >= 0
+                        || ($winp && index($l, '.planning\\\\') >= 0)
                         || (($open || $bgo) && $l =~ /"name":"(?:Agent|Task|Workflow|SendMessage|TaskStop|KillShell|CronDelete|ScheduleWakeup)"/)
                         || ($open && index($l, '"name":"AskUserQuestion"') >= 0)
                         || index($l, '"name":"CronCreate"') >= 0 || index($l, '"name":"ScheduleWakeup"') >= 0

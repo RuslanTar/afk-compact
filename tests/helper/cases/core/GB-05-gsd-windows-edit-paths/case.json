@@ -1,0 +1,92 @@
+{
+ "id": "GB-05 GSD work through Edit and Write, and the transcript folder, as Claude Code on Windows records them",
+ "note": "Sitting 6, log 21. Claude Code on Windows records an Edit or Write file_path in drive form with backslashes (C:\\x\\.planning\\STATE.md); the GSD walk matched only '.planning/' after a leading '/', so GSD work done through Edit and Write was never seen there. Such a path, in drive form with backslashes or slashes, is now read in its /c/ form (util::posix_form) before the match. Claude Code names a session's project folder from the cwd it sees, every character outside [A-Za-z0-9] made '-' (C:\\winkit-x6 is C--winkit-x6); the folder was looked up from the /c/ form only (-c-winkit-x6). Under MSYS or Cygwin perl the Windows form of each folder (util::win_form) is tried first, then the old slug and the one-folder fallback. Seams: STORE_TEST_OS=msys, STORE_TEST_CYGDRIVE (C: reads as $TMP/cyg/c, and $TMP/cyg/c back as C:). Two project folders hold the session's transcript in the folder steps, so the one-folder fallback cannot pick one. The last steps drop STORE_TEST_CYGDRIVE and run under a perl first on PATH that defines Cygwin::win_to_posix_path and Cygwin::posix_to_win_path as Git Bash's perl has them (as RF-9 does), so the sub production calls is the one read. On macOS and Linux (STORE_TEST_OS=linux) a drive path is still no GSD path and the folder is looked up as before.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "env": {"STORE_TEST_OS": "msys", "STORE_TEST_CYGDRIVE": "$TMP/cyg"},
+ "steps": [
+  {"setup": [
+    {"repo_fixture": "planning-state.json", "at": "$TMP/cyg/c/w/repo"}
+  ]},
+  {"name": "an Edit of C:\\w\\repo\\.planning\\STATE.md (backslashes, as Claude Code on Windows records it): GSD work in this checkout",
+   "setup": [
+    {"write": "$HOME/.claude/projects/-x/$SID.jsonl", "jsonl": [
+      {"cwd": "C:\\w\\repo", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_1", "name": "Edit", "input": {"file_path": "C:\\w\\repo\\.planning\\STATE.md", "old_string": "a", "new_string": "b"}}]},
+       "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "assistant", "uuid": "a1"}]}
+   ],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "1a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {
+     "gsd": {"len": 2},
+     "gsd.0": {"re": "^GSD \\(this session\\): no workstream named · \\S+/cyg/c/w/repo/\\.planning/STATE\\.md: status in progress"},
+     "gsd.1": {"re": "^GSD re-entry \\(new session only\\): /gsd-resume-work$"}}}},
+  {"name": "a Write of C:/w/repo/.planning/STATE.md (drive form with slashes), the row's cwd and the helper's outside the checkout, so only the path's own reading finds it: the same",
+   "setup": [
+    {"mkdir": "$TMP/cyg/c/elsewhere"},
+    {"write": "$HOME/.claude/projects/-x/$SID.jsonl", "jsonl": [
+      {"cwd": "C:\\elsewhere", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_1", "name": "Write", "input": {"file_path": "C:/w/repo/.planning/STATE.md", "content": "x"}}]},
+       "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "assistant", "uuid": "a1"}]}
+   ],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "2a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/elsewhere"],
+   "expect": {"exit": 0, "json": {
+     "gsd": {"len": 2},
+     "gsd.0": {"re": "^GSD \\(this session\\): no workstream named · \\S+/cyg/c/w/repo/\\.planning/STATE\\.md: status in progress"},
+     "gsd.1": {"re": "^GSD re-entry \\(new session only\\): /gsd-resume-work --cwd \\S+/cyg/c/w/repo$"}}}},
+  {"name": "macOS or Linux: an Edit of a drive-form path is still no GSD work",
+   "env": {"STORE_TEST_OS": "linux"},
+   "setup": [
+    {"write": "$HOME/.claude/projects/-x/$SID.jsonl", "jsonl": [
+      {"cwd": "$TMP/cyg/c/w/repo", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_1", "name": "Edit", "input": {"file_path": "C:\\w\\repo\\.planning\\STATE.md", "old_string": "a", "new_string": "b"}}]},
+       "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "assistant", "uuid": "a1"}]}
+   ],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "3a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {"gsd": {"len": 0}}}},
+  {"name": "macOS or Linux: an Edit of a POSIX path still is GSD work",
+   "env": {"STORE_TEST_OS": "linux"},
+   "setup": [
+    {"write": "$HOME/.claude/projects/-x/$SID.jsonl", "jsonl": [
+      {"cwd": "$TMP/cyg/c/w/repo", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_1", "name": "Edit", "input": {"file_path": "$TMP/cyg/c/w/repo/.planning/STATE.md", "old_string": "a", "new_string": "b"}}]},
+       "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "assistant", "uuid": "a1"}]}
+   ],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "4a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {
+     "gsd": {"len": 2},
+     "gsd.0": {"re": "^GSD \\(this session\\): no workstream named · \\S+/cyg/c/w/repo/\\.planning/STATE\\.md: status in progress"}}}},
+  {"name": "the session's transcript in Claude Code's folder for C:\\w\\repo (C--w-repo), beside another folder that holds it: read from C--w-repo (its Edit in /c/ form, so this step needs only the folder lookup)",
+   "setup": [
+    {"write": "$HOME/.claude/projects/-x/$SID.jsonl", "jsonl": [
+      {"cwd": "C:\\w\\other", "isSidechain": false, "message": {"role": "user", "content": "hello"},
+       "origin": {"kind": "human"}, "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "user", "uuid": "u1"}]},
+    {"write": "$HOME/.claude/projects/C--w-repo/$SID.jsonl", "jsonl": [
+      {"cwd": "$TMP/cyg/c/w/repo", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_1", "name": "Edit", "input": {"file_path": "$TMP/cyg/c/w/repo/.planning/STATE.md", "old_string": "a", "new_string": "b"}}]},
+       "sessionId": "$SID", "timestamp": "2026-10-21T10:00:00.000Z", "type": "assistant", "uuid": "a1"}]}
+   ],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "5a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {
+     "gsd": {"len": 2},
+     "gsd.0": {"re": "^GSD \\(this session\\): no workstream named · \\S+/cyg/c/w/repo/\\.planning/STATE\\.md: status in progress"}}}},
+  {"name": "macOS or Linux: the same two folders, no Windows form tried: the transcript is not found, as before",
+   "env": {"STORE_TEST_OS": "linux"},
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "6a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {"gsd": {"len": 0}}}},
+  {"name": "a perl first on PATH with Cygwin's two path subs, as Git Bash's perl has them (no STORE_TEST_CYGDRIVE from here on)",
+   "setup": [
+    {"write": "$TMP/cyg-lib/FakeCygwin.pm", "content": "package FakeCygwin;\nuse strict;\nuse warnings;\nno warnings 'redefine';\n# Cygwin's two path subs as MSYS perl has them: C:\\x reads as <top>/c/x, and <top>/c/x as C:\\x (a trailing / kept as \\)\nmy $top = '$TMP/cyg';\nsub Cygwin::win_to_posix_path { (my $x = $_[0]) =~ tr{\\\\}{/}; $x =~ s{\\A([A-Za-z]):}{$top . '/' . lc $1}e; return $x }\nsub Cygwin::posix_to_win_path { my $x = $_[0]; return $x unless $x =~ s{\\A\\Q$top\\E/([A-Za-z])(?=/|\\z)}{uc($1) . ':'}e; $x .= '/' if $x =~ m{\\A[A-Z]:\\z}; $x =~ tr{/}{\\\\}; return $x }\n1;\n"},
+    {"stub": "perl", "dir": "$TMP/cyg-bin", "script": "exec /usr/bin/perl -I'$TMP/cyg-lib' -MFakeCygwin \"$@\""}
+   ],
+   "path_prepend": ["$TMP/cyg-bin"],
+   "exec": ["perl", "-e", "print Cygwin::posix_to_win_path(qq($TMP/cyg/c/w/repo), 1), qq(\\n)"],
+   "expect": {"exit": 0, "stdout": "C:\\w\\repo\n"}},
+  {"name": "MSYS perl with Cygwin::posix_to_win_path itself (the sub production calls, not the stand-in): the transcript is read from C--w-repo",
+   "env": {"STORE_TEST_CYGDRIVE": null},
+   "path_prepend": ["$TMP/cyg-bin"],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "7a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {
+     "gsd": {"len": 2},
+     "gsd.0": {"re": "^GSD \\(this session\\): no workstream named · \\S+/cyg/c/w/repo/\\.planning/STATE\\.md: status in progress"}}}},
+  {"name": "the same perl with that sub hidden (STORE_TEST_NO_CYGWIN=1): no Windows form, so the transcript is not found (the step above used the sub)",
+   "env": {"STORE_TEST_CYGDRIVE": null, "STORE_TEST_NO_CYGWIN": "1"},
+   "path_prepend": ["$TMP/cyg-bin"],
+   "argv": ["checkpoint", "--sid", "$SID", "--nonce", "8a2b3c4d", "--budget-ms", "10000", "--measured", "--cwd", "$TMP/cyg/c/w/repo"],
+   "expect": {"exit": 0, "json": {"gsd": {"len": 0}}}}
+ ]
+}
