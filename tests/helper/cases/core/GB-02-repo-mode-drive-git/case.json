@@ -1,6 +1,6 @@
 {
  "id": "GB-02 repo mode with Git for Windows' drive-form paths",
- "note": "Sitting 4, P1. Git for Windows prints the toplevel and the git dirs in drive form (C:/...). git::where kept them as printed, repomode joined C:/... to the cwd, no repo_roots entry matched and repo mode was never accepted; the hint then named a C:/... folder that the settings refused. The paths are now read in this platform's form where they enter (util::posix_form: git::where, git::measure, skills gitfacts, a .git file's gitdir lines), and a repo_roots entry in drive form is read the same way. Seams: STORE_TEST_OS=msys, STORE_TEST_CYGDRIVE (C: reads as $TMP/cyg/c), and a git first on PATH that prints $TMP/cyg/c/... as C:/....",
+ "note": "Sitting 4, P1. Git for Windows prints the toplevel and the git dirs in drive form (C:/...). git::where kept them as printed, repomode joined C:/... to the cwd, no repo_roots entry matched and repo mode was never accepted; the hint then named a C:/... folder that the settings refused. The paths are now read in this platform's form where they enter (util::posix_form: git::where, git::measure, skills gitfacts, a .git file's gitdir lines), and a repo_roots entry in drive form is read the same way. Seams: STORE_TEST_OS=msys, STORE_TEST_CYGDRIVE (C: reads as $TMP/cyg/c), and a git first on PATH that prints $TMP/cyg/c/... as C:/..., also when Git for Windows prints that path in drive form itself (C:/<tmp>/cyg/c/...; sitting 5, x5: the stand-in made C:C:/...). Git makes the linked worktree with relative gitdir lines (worktree.useRelativePaths, git 2.48 and later; older git writes absolute POSIX lines, read as they are): Git for Windows' own drive-form lines name a C: folder that STORE_TEST_CYGDRIVE reads as $TMP/cyg/c, so that step tested the seam, not repo mode. The drive-form gitdir step writes its lines by hand.",
  "path_prepend": ["$TMP/drive-git"],
  "now": "2026-11-13T14:05:12+03:00",
  "tz": "Etc/GMT-3",
@@ -8,9 +8,9 @@
  "options": {"repo_roots": "$TMP/cyg/c/w/repo;C:\\w\\repo2"},
  "steps": [
   {"setup": [
-    {"stub": "git", "dir": "$TMP/drive-git", "script": "out=$(PATH=${PATH#*:} git \"$@\"); rc=$?\n[ -n \"$out\" ] && printf '%s\\n' \"$out\" | sed 's#/[^ ]*/cyg/c/#C:/#g'\nexit $rc"},
+    {"stub": "git", "dir": "$TMP/drive-git", "script": "out=$(PATH=${PATH#*:} git \"$@\"); rc=$?\n[ -n \"$out\" ] && printf '%s\\n' \"$out\" | sed 's#\\([A-Za-z]:\\)\\{0,1\\}/[^ ]*/cyg/c/#C:/#g'\nexit $rc"},
     {"repo": "$TMP/cyg/c/w/repo", "files": {"README.md": "r\n", ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\"}\n"}},
-    {"git": ["worktree", "add", "-q", "-b", "feat", "$TMP/cyg/c/w/repo-feat"], "cwd": "$TMP/cyg/c/w/repo"},
+    {"git": ["-c", "worktree.useRelativePaths=true", "worktree", "add","-q", "-b", "feat", "$TMP/cyg/c/w/repo-feat"], "cwd": "$TMP/cyg/c/w/repo"},
     {"repo": "$TMP/cyg/c/w/repo2", "files": {"README.md": "r\n", ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\"}\n"}},
     {"repo": "$TMP/cyg/c/w/repo3", "files": {"README.md": "r\n", ".claude/handoffs.json": "{\"version\": 1, \"mode\": \"repo\"}\n"}}
   ]},
