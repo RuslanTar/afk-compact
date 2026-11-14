@@ -70,7 +70,6 @@
   {"name": "a relative folder", "argv": ["restart", "gate", "--sid", "$SID", "--route", "fg", "--launch", "rt/L-0123456789abcdef", "--from", "2.1.311", "--to", "2.1.312"],
    "expect": {"exit": 0, "json": {"why": "launcher-invalid:relative"}}},
   {"setup": [
-    {"symlink": "$TMP/rt/L-1111111111111111", "to": "$TMP/rt/L-0123456789abcdef"},
     {"mkdir": "$TMP/rt/L-2222222222222222", "mode": "0755"},
     {"mkdir": "$TMP/rt/L-3333333333333333", "mode": "0700"},
     {"write": "$TMP/rt/L-3333333333333333/launcher.json", "content": "{\"proto\":1,\"pid\":1,\"token\":\"0123456789abcdef\",\"bypass_ok\":false,\"file_flags\":[]}\n"},
@@ -79,7 +78,8 @@
     {"mkdir": "$TMP/rt/L-5555555555555555", "mode": "0700"},
     {"mkdir": "$TMP/rt/x", "mode": "0700"}
   ]},
-  {"name": "a symlinked folder", "argv": ["restart", "gate", "--sid", "$SID", "--route", "fg", "--launch", "$TMP/rt/L-1111111111111111", "--from", "2.1.311", "--to", "2.1.312"],
+  {"name": "a symlinked folder", "needs": ["symlinks"], "setup": [{"symlink": "$TMP/rt/L-1111111111111111", "to": "$TMP/rt/L-0123456789abcdef"}],
+   "argv": ["restart", "gate", "--sid", "$SID", "--route", "fg", "--launch", "$TMP/rt/L-1111111111111111", "--from", "2.1.311", "--to", "2.1.312"],
    "expect": {"exit": 0, "json": {"why": "launcher-invalid:symlink"}}},
   {"name": "a folder not 0700", "argv": ["restart", "gate", "--sid", "$SID", "--route", "fg", "--launch", "$TMP/rt/L-2222222222222222", "--from", "2.1.311", "--to", "2.1.312"],
    "expect": {"exit": 0, "json": {"why": "launcher-invalid:mode"}}},

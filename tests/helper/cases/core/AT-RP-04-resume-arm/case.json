@@ -209,6 +209,7 @@
   },
   {
    "name": "a symlinked record is not armed",
+   "needs": ["symlinks"],
    "setup": [
     {
      "write": "$TMP/elsewhere.json",

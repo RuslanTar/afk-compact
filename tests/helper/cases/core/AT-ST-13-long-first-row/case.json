@@ -1,6 +1,6 @@
 {
  "id": "AT-ST-13 (BD-4 detector c on a first row longer than the 64 KB head block)",
- "needs": ["fixture:setups/st-13-agent-output.json"],
+ "needs": ["fixture:setups/st-13-agent-output.json", "symlinks"],
  "note": "regression: detector (c) reads the whole first non-empty line, not only the first 64 KB block. On setup st-13-agent-output, t1.output (typed shell, a regular file, so detectors a and b miss it) is rewritten with a transcript row whose prompt is 70,000 bytes; sorted keys put message before parentUuid, sessionId and type, so a 64 KB head cuts the row before any of them and its decode fails. It must still be withheld (agent-output), with no prompt text in the evidence. m1.output (monitor) gets a 70,000-byte first line that is a JSON object but no transcript row: read whole, it parses, it is no transcript row, so it is still copied (redacted), not withheld.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "now": "2026-10-21T14:05:12+03:00",

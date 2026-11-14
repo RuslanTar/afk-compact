@@ -74,10 +74,6 @@
      "content": "private\n"
     },
     {
-     "symlink": "$TMP/repo/docs-link",
-     "to": "$TMP/outside"
-    },
-    {
      "git": [
       "rev-parse",
       "HEAD"
@@ -341,6 +337,18 @@
    ]
   },
   {
+   "name": "the link out of the work tree",
+   "needs": [
+    "symlinks"
+   ],
+   "setup": [
+    {
+     "symlink": "$TMP/repo/docs-link",
+     "to": "$TMP/outside"
+    }
+   ]
+  },
+  {
    "name": "AT-SR-09 corpus (H half)",
    "risk_corpus": {
     "tsv": "risk/corpus.tsv",
@@ -433,6 +441,9 @@
   },
   {
    "name": "read-outside: a symlink out of the work tree",
+   "needs": [
+    "symlinks"
+   ],
    "argv": [
     "risk",
     "--cmd-file",
@@ -851,6 +862,9 @@
   },
   {
    "name": "a short option's attached path through a link out of the tree (-f<path>)",
+   "needs": [
+    "symlinks"
+   ],
    "argv": [
     "risk",
     "--cmd-file",

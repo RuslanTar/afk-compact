@@ -1,6 +1,6 @@
 {
  "id": "AT-ST-13 (BD-4 agent output always withheld, sweep)",
- "needs": ["fixture:setups/st-13-agent-output.json"],
+ "needs": ["fixture:setups/st-13-agent-output.json", "symlinks"],
  "note": "BD-4 on the setup st-13-agent-output, the sweep path: (a) a tasks/a1.output symlink to an agent JSONL, (c) a regular file whose first line is a transcript row, (b) outputs the sidecar types subagent and workflow: all four withheld (rules agent-output); a monitor output and the AT-E-05 5,000-line shell output are not (the shell one is an excerpt of at most 80 lines). The evidence --keep path runs the same evidence::copy. Skipped until the fixtures are merged.",
  "sid": "5e55a001-0c0f-4f1e-9a00-00000000a001",
  "now": "2026-10-21T14:05:12+03:00",

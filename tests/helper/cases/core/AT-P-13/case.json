@@ -390,6 +390,7 @@
   },
   {
    "name": "a log_dir reached through a symlink into a git work tree: no row (read through cd -P)",
+   "needs": ["symlinks"],
    "setup": [
     {
      "mkdir": "$TMP/lrepo/.git"
@@ -429,6 +430,7 @@
   },
   {
    "name": "a log_dir under a git work tree whose folder links out of it: no row (the path as given is walked too)",
+   "needs": ["symlinks"],
    "setup": [
     {
      "mkdir": "$TMP/orepo/.git"
