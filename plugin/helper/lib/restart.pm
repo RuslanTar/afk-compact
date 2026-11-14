@@ -947,6 +947,8 @@ sub respawn {
     return { ok => 0, why => 'no-note' } unless $sent;
     unlink result_path($d), out_path($d), pid_path($d);
     pipe(my $r, my $w) or return { ok => 0, why => 'pipe' };
+    require File::Spec;    # loaded here, so the grandchild has nothing to load
+    my $devnull = File::Spec->devnull;
     my $kid = fork();
     return { ok => 0, why => 'fork' } unless defined $kid;
     if ($kid == 0) {
@@ -954,9 +956,9 @@ sub respawn {
         my $g = fork();
         POSIX::_exit(defined $g ? 0 : 1) if !defined $g || $g;
         POSIX::setsid();
-        open(STDIN, '<', '/dev/null');
-        open(STDOUT, '>', '/dev/null');
-        open(STDERR, '>', '/dev/null');
+        open(STDIN, '<', $devnull);
+        open(STDOUT, '>', $devnull);
+        open(STDERR, '>', $devnull);
         # the pid record first, so a cancel from here on finds this process group
         # (the helper above may be stopped by its time bound at any moment)
         my $rec = eval {

@@ -228,12 +228,13 @@ sub _record {
     return;
 }
 
-# _detach(keep): in the child, stdin, stdout and stderr on /dev/null and every other descriptor
-# closed but keep's, so a child the helper's killer missed holds no pipe or lock of the helper's
+# _detach(keep, devnull): in the child, stdin, stdout and stderr on devnull (the null device's
+# name, read before the fork) and every other descriptor closed but keep's, so a child the
+# helper's killer missed holds no pipe or lock of the helper's
 sub _detach {
-    my ($keep) = @_;
+    my ($keep, $devnull) = @_;
     my $kf = fileno($keep);
-    my $null = POSIX::open('/dev/null', POSIX::O_RDWR());
+    my $null = POSIX::open($devnull, POSIX::O_RDWR());
     if (defined $null) { POSIX::dup2($null, $_) for 0 .. 2; POSIX::close($null) if $null > 2 }
     my @fd;
     for my $dir ('/proc/self/fd', '/dev/fd') {
@@ -259,6 +260,9 @@ sub _detach {
 # then sends its numbers: the limit counts the matching only.
 sub _child {
     my ($entries, $from, $to, $job, $until, $limit, $cap) = @_;
+    # loaded here, once a process and before the clock starts, so the child has nothing to load
+    require File::Spec;
+    my $devnull = File::Spec->devnull;
     my $sw = _watch();
     my $free = sub { my $t = defined $_[0] ? $_[0] : $sw->{el}->(); return $t < $FREE_S ? $t : $FREE_S };
     my $fail = sub { return { got => {}, miss => $from, why => 'error', ended => 0, cost => $sw->{el}->() - $free->() } };
@@ -269,7 +273,7 @@ sub _child {
         close $r;
         $SIG{$_} = 'DEFAULT' for qw(ALRM PIPE TERM INT HUP);
         _arm($START_S + $limit + 0.5);
-        _detach($w);
+        _detach($w, $devnull);
         my $cpu = sub { my @t = times; return int(($t[0] + $t[1]) * 1000) };
         my $ok = eval {
             _write_all($w, 'R ' . $cpu->() . "\n") or POSIX::_exit(1);

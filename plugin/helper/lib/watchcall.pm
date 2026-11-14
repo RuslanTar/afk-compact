@@ -37,7 +37,8 @@ sub call {
     my ($stage, $fn) = @_;
     return if (rc::val('watcher') // 'shadow') eq 'off';
     open(my $saved, '>&', \*STDOUT) or return;
-    open(STDOUT, '>', '/dev/null');
+    require File::Spec;
+    open(STDOUT, '>', File::Spec->devnull);
     my $ok = eval { require "watch.pm"; $fn->(); 1 };
     my $err = $@;
     open(STDOUT, '>&', $saved);

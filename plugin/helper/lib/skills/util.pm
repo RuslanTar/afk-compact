@@ -532,15 +532,17 @@ sub run {
     my ($ir, $iw);
     if (defined $o{stdin}) { pipe($ir, $iw) or return { rc => -1, out => '', timed_out => 0 } }
     local $SIG{PIPE} = 'IGNORE' if defined $o{stdin};
+    require File::Spec;    # loaded here, once a process, so the child has nothing to load
+    my $devnull = File::Spec->devnull;
     my $pid = fork;
     if (!defined $pid) { return { rc => -1, out => '', timed_out => 0 } }
     if ($pid == 0) {
         close $r;
         open(STDOUT, '>&', $w) or POSIX::_exit(127);
-        open(STDERR, '>', '/dev/null');
+        open(STDERR, '>', $devnull);
         $SIG{PIPE} = q(DEFAULT);
         if ($ir) { close $iw; open(STDIN, '<&', $ir) or POSIX::_exit(127) }
-        else { open(STDIN, '<', '/dev/null') }
+        else { open(STDIN, '<', $devnull) }
         if (defined $o{cwd}) { chdir $o{cwd} or POSIX::_exit(127) }
         { no warnings 'exec'; exec { $argv->[0] } @$argv; }
         POSIX::_exit(127);

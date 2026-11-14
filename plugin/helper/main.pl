@@ -70,7 +70,8 @@ my $IS_HOOK = $sub eq 'hook';
 my $QUIET = $sub eq 'cache' && grep { $_ eq '--bar' } @ARGV;
 if ($IS_HOOK || $QUIET) {
     # Hooks and the meter never write stderr, and nothing but our text reaches stdout.
-    open(STDERR, '>', '/dev/null');
+    require File::Spec;
+    open(STDERR, '>', File::Spec->devnull);
     $SIG{__WARN__} = sub { };
     $SIG{PIPE} = 'IGNORE';
 }

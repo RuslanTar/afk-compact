@@ -336,11 +336,13 @@ sub _git_remotes {
 # Run argv (no shell) with a time limit; stdout, or undef on failure or timeout.
 sub _run_capture {
     my ($argv, $secs) = @_;
+    require File::Spec;    # loaded here, once a process, so the child has nothing to load
+    my $devnull = File::Spec->devnull;
     my $pid = open(my $fh, '-|');
     return undef unless defined $pid;
     if (!$pid) {
-        open(STDERR, '>', '/dev/null');
-        open(STDIN, '<', '/dev/null');
+        open(STDERR, '>', $devnull);
+        open(STDIN, '<', $devnull);
         exec { $argv->[0] } @$argv or POSIX::_exit(127);
     }
     my $out = '';

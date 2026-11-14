@@ -588,6 +588,8 @@ sub run {
     pipe($out_r, $out_w) or return { exit => -1, out => '', timed_out => 0, ms => 0, started => 0 };
     my $stdin = $o{stdin};
     if (defined $stdin) { pipe($in_r, $in_w) or return { exit => -1, out => '', timed_out => 0, ms => 0, started => 0 } }
+    require File::Spec;    # loaded here, once a process, so the child has nothing to load
+    my $devnull = File::Spec->devnull;
     my $pid = fork();
     if (!defined $pid) {
         return { exit => -1, out => '', timed_out => 0, ms => 0, started => 0 };
@@ -597,9 +599,9 @@ sub run {
             setpgrp(0, 0);
             close $out_r;
             open(STDOUT, '>&', $out_w) or POSIX::_exit(126);
-            open(STDERR, '>', '/dev/null');
+            open(STDERR, '>', $devnull);
             if (defined $stdin) { close $in_w; open(STDIN, '<&', $in_r) or POSIX::_exit(126) }
-            else { open(STDIN, '<', '/dev/null') }
+            else { open(STDIN, '<', $devnull) }
             if ($o{env}) {
                 for my $k (keys %{ $o{env} }) {
                     if (defined $o{env}{$k}) { $ENV{$k} = $o{env}{$k} } else { delete $ENV{$k} }
