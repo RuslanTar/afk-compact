@@ -584,18 +584,36 @@ sub _standing_spans {
 # is no grant: "feel free to deploy build 78, never to production").
 sub _granting_clauses {
     my ($q) = @_;
-    my $w = _fold_words($q);
+    eval { require transcript; 1 } unless defined $transcript::ITEM_NO;
+    my $no = $transcript::ITEM_NO;
+    my $t = $q // '';
+    # Full-width and other-script marks first (fourth review: "？" was no question).
+    $t =~ tr/\x{FF1F}\x{061F}\x{203D}\x{3002}\x{FF0E}\x{FF01}\x{FF1B}\x{FF0C}\x{3001}/???..!;,,/;
+    # the same marks when the words arrive as UTF-8 bytes
+    my %b = ("\xef\xbc\x9f" => '?', "\xd8\x9f" => '?', "\xe2\x80\xbd" => '?', "\xe3\x80\x82" => '.', "\xef\xbc\x8e" => '.',
+             "\xef\xbc\x81" => '!', "\xef\xbc\x9b" => ';', "\xef\xbc\x8c" => ',', "\xe3\x80\x81" => ',');
+    $t =~ s/(\xef\xbc[\x9f\x8e\x81\x9b\x8c]|\xd8\x9f|\xe2\x80\xbd|\xe3\x80[\x82\x81])/$b{$1}/g;
     my @keep;
-    while ($w =~ /([^.;!?]+)([.;!?]?)/g) {
-        my ($sent, $end) = ($1, $2);
-        next if $end eq '?';
-        for my $cl (split /\b(?:but|except|unless|however)\b/, $sent) {
-            my $sp = _standing_spans($cl);
-            next unless @$sp;
-            my $m = $cl;
-            substr($m, $_->[0], $_->[1] - $_->[0]) = ' ' x ($_->[1] - $_->[0]) for reverse @$sp;
-            if ($m =~ /(?:^|[^a-z'])(?:not|don'?t|never|no)(?![a-z'])/) { $cl = substr($cl, 0, $-[0] + 1) }
-            push @keep, $cl;
+    # Line breaks and list markers (at a line start, or ` - ` / ` 2. ` inside a line, where a
+    # summary joined the bullets) end a clause; a dash (—, –) does not.
+    for my $piece (split /\n|(?:^|\s)(?:[-*+]|[0-9]+[.)])\s/, $t) {
+        my $w = _fold_words($piece);
+        while ($w =~ /([^.;!?]+)([.;!?]?)/g) {
+            my ($sent, $end) = ($1, $2);
+            next if $end eq '?';
+            for my $cl (split /,|\b(?:but|except|unless|however)\b/, $sent) {
+                my $sp = _standing_spans($cl);
+                next unless @$sp;
+                my $m = $cl;
+                substr($m, $_->[0], $_->[1] - $_->[0]) = ' ' x ($_->[1] - $_->[0]) for reverse @$sp;
+                # Cut at the first refusal word outside the standing phrases (transcript.pm
+                # $ITEM_NO, the reply-line list) or avoid / instead of / rather than / before.
+                my @at = grep { defined } (
+                    (defined $no && $m =~ $no ? $-[0] : undef),
+                    ($m =~ /\b(?:avoid\w*|instead of|rather than|before)\b/ ? $-[0] : undef));
+                if (@at) { my ($c) = sort { $a <=> $b } @at; $cl = substr($cl, 0, $c) }
+                push @keep, $cl if $cl =~ /\S/;
+            }
         }
     }
     return @keep;
@@ -1845,6 +1863,8 @@ sub summary_lines {
 # names (0.1.16 second review: a summary attached a production deploy to "feel free to push"):
 # the words read as an action and a target (classes) hold each gate of the line, and each protected
 # branch the line names appears in the words as a whole word (an unnamed push never qualifies).
+# Outward kinds a granting clause must name itself (_words_name_gates, fourth review).
+our %DESTRUCTIVE = map { $_ => 1 } qw(force-push history-rewrite recursive-delete);
 # The words that may stand between push / merge and the branch it names (_words_name_gates).
 my $PUSH_LINK = qr/(?:it|this|that|them|everything|changes|commits|my|our|the|up|directly|straight|to|into|onto|branch|origin|upstream|remote|[a-z0-9_.-]+\/[a-z0-9_.\/-]+)/;
 sub _words_name_gates {
@@ -1856,6 +1876,10 @@ sub _words_name_gates {
     my $wc = classes({ action => $g, targets_text => $g, targets => [] }, $cwd);
     my %w = map { $_ => 1 } @{ $wc->{gates} || [] };
     return 0 if grep { !$w{$_} } @{ $c->{gates} || [] };
+    # A destructive kind the line names (a force push, a history rewrite, a recursive delete)
+    # must be named in the granting words too: "push to main" never covers `push --force`.
+    my %wo = map { $_ => 1 } @{ $wc->{outward} || [] };
+    return 0 if grep { $DESTRUCTIVE{$_} && !$wo{$_} } @{ $c->{outward} || [] };
     if (grep { $_ eq 'protected-push' } @{ $c->{gates} || [] }) {
         # The protected branches the push goes to: names in the action itself or in a `branch`
         # target (an `env staging` target names an environment, which the deploy gate covers).

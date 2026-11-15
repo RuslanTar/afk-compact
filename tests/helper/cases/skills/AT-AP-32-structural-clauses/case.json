@@ -1,0 +1,71 @@
+{
+ "id": "AT-AP-32 (fourth review: structural granting clauses, a destructive push needs its word)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.16 fourth review (probes A-Q of cases5): full-width marks map to . ? ! ; , first; clauses end at line breaks, list markers (also ` - ` and ` 2. ` inside a line, where a summary joined bullets), . ; ! ?, commas and but / except / unless / however, never at a dash; a kept clause holds a non-negated standing phrase and is cut at the first word of transcript.pm's $ITEM_NO refusal list (any n't word, hold, wait, ...) or avoid / instead of / rather than / before. A destructive kind the line names (force-push, history-rewrite, recursive-delete) must be named in the granting words. E (dash) and O (deploy and push to main) stay allowed; a refusal earlier in the sentence (no problem, ...) and a comma list (push, merge and deploy) re-ask (fail closed).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"p0\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"you shouldn't deploy build 78 to staging, feel free to push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"p1\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"hold off on deploying build 78 to staging, feel free to push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"p2\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"- feel free to push feat/x to origin\\n- deploy build 78 to staging\"}}\n{\"type\": \"user\", \"uuid\": \"p3\", \"timestamp\": \"2026-10-21T13:13:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"should we deploy build 78 to staging\\uff1f feel free to push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"p4\", \"timestamp\": \"2026-10-21T13:14:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 78 to staging \\u2014 no need to ask\"}}\n{\"type\": \"user\", \"uuid\": \"p5\", \"timestamp\": \"2026-10-21T13:15:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"don't hesitate to deploy build 78 to staging\"}}\n{\"type\": \"user\", \"uuid\": \"p6\", \"timestamp\": \"2026-10-21T13:16:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to push to main from now on\"}}\n{\"type\": \"user\", \"uuid\": \"p7\", \"timestamp\": \"2026-10-21T13:17:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"do not deploy build 78, feel free to push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"p8\", \"timestamp\": \"2026-10-21T13:18:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to push feat/x to origin and never deploy build 78 to staging\"}}\n{\"type\": \"user\", \"uuid\": \"p9\", \"timestamp\": \"2026-10-21T13:19:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to deploy build 78 to staging and push to main from now on\"}}\n{\"type\": \"user\", \"uuid\": \"p10\", \"timestamp\": \"2026-10-21T13:20:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"wait for QA before you deploy build 78 to staging, feel free to push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"p11\", \"timestamp\": \"2026-10-21T13:21:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"no problem, feel free to push to main\"}}\n{\"type\": \"user\", \"uuid\": \"p12\", \"timestamp\": \"2026-10-21T13:22:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to push, merge and deploy build 78 to staging\"}}\n{\"type\": \"user\", \"uuid\": \"p13\", \"timestamp\": \"2026-10-21T13:23:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to force push to main from now on\"}}\n"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals\n- U-71: approval \"you shouldn't deploy build 78 to staging, feel free to push feat/x to origin\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-72: approval \"hold off on deploying build 78 to staging, feel free to push feat/x to origin\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-73: approval \"- feel free to push feat/x to origin - deploy build 78 to staging\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-74: approval \"should we deploy build 78 to staging？ feel free to push feat/x to origin\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-75: approval \"deploy build 78 to staging — no need to ask\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-76: approval \"don't hesitate to deploy build 78 to staging\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-77: approval \"feel free to push to main from now on\" — action git push --force origin main · targets branch main @ 1a2b3c4 · standing · used 2026-10-21 13:20\n- U-78: approval \"feel free to push to main from now on\" — action git push origin HEAD:refs/heads/main · targets branch feat/x @ 1a2b3c4 · standing · used 2026-10-21 13:20\n- U-79: approval \"feel free to push to main from now on\" — action git push --all origin · targets branch feat/x @ 1a2b3c4 · standing · used 2026-10-21 13:20\n- U-80: approval \"feel free to push to main from now on\" — action git push --mirror origin · targets repo origin @ 1a2b3c4 · standing · used 2026-10-21 13:20\n- U-81: approval \"do not deploy build 78, feel free to push feat/x to origin\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-82: approval \"feel free to push feat/x to origin and never deploy build 78 to staging\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-83: approval \"feel free to push to main from now on\" — action git push · targets branch feat/x @ 1a2b3c4, upstream main @ 1a2b3c4 · standing · used 2026-10-21 13:20\n- U-84: approval \"feel free to deploy build 78 to staging and push to main from now on\" — action deploy build 78 and git push origin main · targets env staging @ build 78, branch main @ 1a2b3c4 · standing · used 2026-10-21 13:20\n- U-85: approval \"wait for QA before you deploy build 78 to staging, feel free to push feat/x to origin\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-86: approval \"no problem, feel free to push to main\" — action git push origin main · targets branch main @ 1a2b3c4 · standing · used 2026-10-21 13:20\n- U-87: approval \"feel free to push, merge and deploy build 78 to staging\" — action deploy build 78 · targets env staging @ build 78 · standing · used 2026-10-21 13:20\n- U-88: approval \"feel free to force push to main from now on\" — action git push --force origin main · targets branch main @ 1a2b3c4 · standing · used 2026-10-21 13:20\n"
+    }
+   ]
+  },
+  {
+   "name": "granting clauses end at commas, line breaks, list markers and full-width marks, and stop at a refusal word; a destructive push needs its own word",
+   "options": {
+    "standing_approval_gates": "deploy;protected-push"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(gate allowed by setting\\): U-75 deploy build 78 → env staging @ build 78; U-84 deploy build 78 and git push origin main → env staging @ build 78, branch main @ 1a2b3c4; U-88 git push --force origin main → branch main @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-71 deploy build 78 → env staging @ build 78; U-72 deploy build 78 → env staging @ build 78; U-73 deploy build 78 → env staging @ build 78; U-74 deploy build 78 → env staging @ build 78; U-76 deploy build 78 → env staging @ build 78; U-77 git push --force origin main → branch main @ 1a2b3c4; U-78 git push origin HEAD:refs/heads/main → branch feat/x @ 1a2b3c4; U-80 git push --mirror origin → repo origin @ 1a2b3c4; U-81 deploy build 78 → env staging @ build 78; U-82 deploy build 78 → env staging @ build 78; U-83 git push → branch feat/x @ 1a2b3c4, upstream main @ 1a2b3c4; U-85 deploy build 78 → env staging @ build 78; U-86 git push origin main → branch main @ 1a2b3c4; U-87 deploy build 78 → env staging @ build 78$"
+    ],
+    "stdout_lacks": [
+     "Approvals \\(unchecked\\)",
+     "gate allowed by setting\\):.*U-79"
+    ]
+   }
+  }
+ ]
+}
