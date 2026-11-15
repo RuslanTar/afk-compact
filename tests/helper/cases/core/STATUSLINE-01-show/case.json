@@ -57,7 +57,7 @@
      "^  ░░░░░░░░░░░░ compacted +\\| ------------ compacted +\\| compacted$",
      "^snippet \\(none\\):$",
      "^add at the top level of ~/\\.claude/settings\\.json",
-     "^\"statusLine\": \\{\"type\": \"command\", \"command\": \"sh \\'/\\S+/bin/\\S+-store\\' cache --stdin --bar --note-usage\", \"refreshInterval\": 30\\}$"
+     "^\"statusLine\": \\{\"type\": \"command\", \"command\": \"\\[ ! -f \\'/\\S+/bin/\\S+-store\\' \\] \\|\\| sh \\'/\\S+/bin/\\S+-store\\' cache --stdin --bar --note-usage\", \"refreshInterval\": 30\\}$"
     ],
     "absent": [
      "$HOME/.local/state/$BRAND"
@@ -97,7 +97,7 @@
      "scopes.1.scope": "project",
      "scopes.2.scope": "local",
      "shim.exists": false,
-     "command": "sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin --bar --note-usage",
+     "command": "[ ! -f '$HOME/.local/state/$BRAND/bin/$BRAND-store' ] || sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin --bar --note-usage",
      "snippet.case": "none",
      "live": {
       "null": true
@@ -328,7 +328,7 @@
      "^status line in use: ccstatusline, from the local settings$",
      "^snippet \\(ccstatusline\\):$",
      "^add a Custom Command widget in ccstatusline's own settings screen",
-     "^  command: sh '/\\S+-store' cache --stdin --bar --note-usage$",
+     "^  command: \\[ ! -f '/\\S+-store' \\] \\|\\| sh '/\\S+-store' cache --stdin --bar --note-usage$",
      "^  timeout: 1000$",
      "^  preserve colors: on"
     ],
@@ -487,7 +487,7 @@
      "json": {
       "statusLine": {
        "type": "command",
-       "command": "sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin --bar --note-usage"
+       "command": "[ ! -f '$HOME/.local/state/$BRAND/bin/$BRAND-store' ] || sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin --bar --note-usage"
       }
      }
     },
@@ -566,6 +566,237 @@
      "winner": "user",
      "snippet.case": "plain"
     }
+   }
+  },
+  {
+   "name": "a shell's -c script holding a secret: the basename of its first word only, in both forms",
+   "argv": [
+    "settings",
+    "statusline",
+    "show"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "bash -c \"TOKEN=hunter4-value /opt/private-dir/mytool --key sk-live-hunter5\""
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^status line, user: plain \\(mytool\\) · "
+    ],
+    "stdout_lacks": [
+     "hunter",
+     "sk-live",
+     "--key",
+     "private-dir",
+     "TOKEN"
+    ]
+   }
+  },
+  {
+   "name": "the same, --json",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "name": "mytool",
+     "class": "plain"
+    },
+    "stdout_lacks": [
+     "hunter",
+     "sk-live",
+     "--key",
+     "private-dir",
+     "TOKEN"
+    ]
+   }
+  },
+  {
+   "name": "an interpreter's flag value is never the name: node -r ./preload script.js",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "node -r ./hunter6-preload.js ./bin/line.js --token hunter7"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "name": "line.js"
+    },
+    "stdout_lacks": [
+     "hunter"
+    ]
+   }
+  },
+  {
+   "name": "inline code of an interpreter names nothing",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "perl -e 'print qq{hunter8}'"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "name": {
+      "null": true
+     },
+     "class": "plain"
+    },
+    "stdout_lacks": [
+     "hunter"
+    ]
+   }
+  },
+  {
+   "name": "ours with a flag that only starts with --bar: not the meter",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin --barx"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "class": "ours",
+     "has_bar": false,
+     "snippet.case": "ours"
+    }
+   }
+  },
+  {
+   "name": "ours with --bar glued to another word: not the meter",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin--bar"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "class": "ours",
+     "has_bar": false
+    }
+   }
+  },
+  {
+   "name": "ours with the meter: has_bar",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "[ ! -f '$HOME/.local/state/$BRAND/bin/$BRAND-store' ] || sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin --bar --note-usage"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "class": "ours",
+     "has_bar": true
+    }
+   }
+  },
+  {
+   "name": "no user settings file: create it, holding the entry",
+   "argv": [
+    "settings",
+    "statusline",
+    "show"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "rename": "$HOME/.claude/settings.json",
+     "to": "$HOME/.claude/settings.gone"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^status line, user: no file · ",
+     "^~/\\.claude/settings\\.json does not exist yet: create it holding$",
+     "^\\{ \"statusLine\": \\{\"type\": \"command\", \"command\": \"\\[ ! -f .*\"refreshInterval\": 30\\} \\}$"
+    ],
+    "absent": [
+     "$HOME/.claude/settings.json"
+    ]
    }
   },
   {

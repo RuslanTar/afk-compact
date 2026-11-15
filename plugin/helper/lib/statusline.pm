@@ -76,21 +76,50 @@ sub _words {
     return @w;
 }
 
-# name(command) -> the basename of what it runs (env assignments and flags skipped; through one
-# interpreter or package runner), printable characters only, at most 40; or undef
+# name(command) -> the basename of what it runs, or undef: env assignments skipped; through an
+# interpreter or package runner (one level), its first word that is no flag and no flag's value;
+# a shell's `-c` script is split again and read the same way (at most 4 levels); inline code of
+# another interpreter (`-e`, `-c`, `-p`) names nothing. Never a flag's value or any later word:
+# those can hold a secret. Printable characters only, at most 40.
+our %SHELL = map { $_ => 1 } qw(sh bash zsh dash ksh);
+# flags whose value is the next word (never taken as the name)
+our %VALUE_FLAG = map { $_ => 1 } qw(-r -I -M -W -X -o -O -u -C -S --require --import --loader --env-file --cwd --config --unset --chdir);
+our %SKIP_WORD = map { $_ => 1 } qw(run dlx exec x);
+
 sub name {
     my ($c) = @_;
     return undef unless defined $c && !ref $c;
-    my @w = grep { !/\A[A-Za-z_][A-Za-z0-9_]*=/ } _words($c);
-    my $first = shift @w // return undef;
-    my $n = util::basename($first);
-    if ($INTERP{$n}) {
-        my ($next) = grep { !/\A-/ && $_ ne 'run' && $_ ne 'dlx' && $_ ne 'exec' } @w;
-        $n = util::basename($next) if defined $next && $next ne '';
+    my @w = _words($c);
+    for my $level (1 .. 4) {
+        shift @w while @w && $w[0] =~ /\A[A-Za-z_][A-Za-z0-9_]*=/;
+        my $first = shift @w // return undef;
+        my $n = util::basename($first);
+        # `exec` and `env` run the words after them
+        if (($n eq 'exec' || $n eq 'env') && $level < 4) {
+            while (@w && $w[0] =~ /\A-/) { my $f = shift @w; shift @w if $VALUE_FLAG{$f} && @w }
+            next;
+        }
+        if ($INTERP{$n}) {
+            my ($next, $resplit);
+            while (@w) {
+                my $x = shift @w;
+                if ($SHELL{$n} && $x =~ /\A-[A-Za-z]*c\z/) { $resplit = shift @w; last }
+                return undef if !$SHELL{$n} && $x =~ /\A-(?:e|E|c|p|-eval|-print)\z/;
+                if ($x eq '-m' && @w) { $next = shift @w; last }
+                if ($x =~ /\A-/) { shift @w if $VALUE_FLAG{$x} && @w; next }
+                next if $SKIP_WORD{$x} || $x =~ /\A[A-Za-z_][A-Za-z0-9_]*=/;
+                $next = $x;
+                last;
+            }
+            if (defined $resplit) { @w = _words($resplit); next }
+            return undef unless defined $next && $next ne '';
+            $n = util::basename($next);
+        }
+        $n =~ s/[^A-Za-z0-9._@+-]//g;
+        $n = substr($n, 0, 40);
+        return $n eq '' ? undef : $n;
     }
-    $n =~ s/[^A-Za-z0-9._@+-]//g;
-    $n = substr($n, 0, 40);
-    return $n eq '' ? undef : $n;
+    return undef;
 }
 
 # classify(statusLine value) -> none, ours, ccstatusline, other or plain
@@ -108,7 +137,12 @@ sub classify {
 }
 
 # the meter's command, the shim as one quoted sh word
-sub command { return 'sh ' . cachestate::_sh_word(cachestate::shim_path() // '~/.local/state/' . ctx::brand() . '/bin/' . ctx::brand() . '-store') . ' cache --stdin --bar --note-usage' }
+# the meter's command: the shim as one quoted sh word, run only when it exists (before the plugin's
+# first session start there is none), so the command prints nothing and exits 0 either way
+sub command {
+    my $w = cachestate::_sh_word(cachestate::shim_path() // '~/.local/state/' . ctx::brand() . '/bin/' . ctx::brand() . '-store');
+    return "[ ! -f $w ] || sh $w cache --stdin --bar --note-usage";
+}
 
 # samples() -> [[name, report]...]: fixed reports for the preview (now 0, the one-hour tier)
 sub samples {
@@ -163,15 +197,15 @@ sub view {
         command => command(),
         live => $live,
         samples => \@samples,
-        snippet => snippet($cls, $scope, $win),
+        snippet => snippet($cls, $scope, $win, $scopes[0]{exists}),
     };
 }
 
 sub _target { my ($scope) = @_; return $scope eq 'user' ? util::abbrev(settings::config_dir() . '/settings.json') : $FILE_TEXT{$scope} . ' in the project folder' }
 
-# snippet(class, scope, winner row) -> {case, target, lines}
+# snippet(class, scope, winner row, whether the user settings file exists) -> {case, target, lines}
 sub snippet {
-    my ($cls, $scope, $win) = @_;
+    my ($cls, $scope, $win, $user_file) = @_;
     my $cmd = command();
     my $t = _target($scope);
     my $json = '"statusLine": {"type": "command", "command": ' . jsonc::encode_bytes($cmd) . ', "refreshInterval": 30}';
@@ -183,6 +217,7 @@ sub snippet {
             : 'already set, as the plain line: add --bar to the command in ' . $t . ' for the meter'] };
     }
     if ($cls eq 'none') {
+        return { case => 'none', target => $t, lines => ["$t does not exist yet: create it holding", "{ $json }"] } unless $user_file;
         return { case => 'none', target => $t, lines => ["add at the top level of $t (inside its outer { }, with a comma after the entry before it):", $json] };
     }
     if ($cls eq 'ccstatusline') {
