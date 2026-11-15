@@ -27,12 +27,16 @@
 #       an on/off key's old word, an option in another case), which Claude Code reads as unset,
 #       set to their new form through the same writer; a consent key among them is listed with
 #       the user-run ways, never written.
+#   settings statusline show [--json] [--sid <id>]
+#       read-only (0.1.13, lib/statusline.pm): the status line Claude Code runs (user, project or local
+#       scope), its class and basename, the meter's previews and the snippet for the case.
 # Exit codes: 0, 3 (refused: nothing written), 64 (usage), 70.
 use strict;
 use warnings;
 use utf8;
 require "settings_write.pm";
 require "settings_reset.pm";
+require "statusline.pm";
 
 package cmd_settings;
 
@@ -42,7 +46,8 @@ my $USAGE_MIGRATE = 'usage: settings migrate [--apply]';
 
 sub run {
     my $sub = shift @_;
-    die "usage: settings show | settings set <key>=<value>... [--apply] | settings reset <key>...|--all [--apply] | settings migrate [--apply]\n"
+    return statusline_cmd(@_) if defined $sub && $sub eq 'statusline';
+    die "usage: settings show | settings set <key>=<value>... [--apply] | settings reset <key>...|--all [--apply] | settings migrate [--apply] | settings statusline show [--json] [--sid <id>]\n"
         unless defined $sub && ($sub eq 'show' || $sub eq 'reset' || $sub eq 'set' || $sub eq 'migrate');
     my ($opt, $rest) = args::parse(\@_, bools => [qw(apply all json)], known => [qw(plan root log-dir tier)]);
     if ($sub eq 'show') {
@@ -74,6 +79,19 @@ sub run {
         die "usage: settings reset: $k given twice\n" if $seen{$k}++;
     }
     return write_cmd('reset', $opt->{all} ? 'all' : $rest, $opt->{plan}, $opt->{apply});
+}
+
+# 0.1.13: `settings statusline show [--json] [--sid <id>]`, read-only (lib/statusline.pm): the
+# status line in use, its class, the meter's previews and the snippet for the case. P1 writes no file.
+sub statusline_cmd {
+    my $what = shift @_;
+    die "usage: settings statusline show [--json] [--sid <id>]\n" unless defined $what && $what eq 'show';
+    my ($opt, $rest) = args::parse(\@_, bools => [qw(json)], known => [qw(sid)]);
+    die "usage: settings statusline show takes no argument ($rest->[0])\n" if @$rest;
+    my $v = statusline::view($opt->{sid});
+    if ($opt->{json}) { print STDOUT jsonc::encode_bytes($v), "\n"; return 0 }
+    args::out(statusline::show_lines($v));
+    return 0;
 }
 
 sub _file_text { return util::text(util::abbrev(settings::config_dir() . '/settings.json')) }

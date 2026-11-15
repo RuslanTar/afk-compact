@@ -54,7 +54,7 @@
   {"name": "usage: keys and --all", "argv": ["settings", "reset", "watcher", "--all"],
    "expect": {"exit": 64, "stderr_has": ["^usage: settings reset <key>\\.\\.\\.\\|--all \\[--apply\\]$"]}},
   {"name": "usage: no subcommand", "argv": ["settings"],
-   "expect": {"exit": 64, "stderr_has": ["^usage: settings show \\| settings set <key>=<value>\\.\\.\\. \\[--apply\\] \\| settings reset <key>\\.\\.\\.\\|--all \\[--apply\\] \\| settings migrate \\[--apply\\]$"]}},
+   "expect": {"exit": 64, "stderr_has": ["^usage: settings show \\| settings set <key>=<value>\\.\\.\\. \\[--apply\\] \\| settings reset <key>\\.\\.\\.\\|--all \\[--apply\\] \\| settings migrate \\[--apply\\] \\| settings statusline show \\[--json\\] \\[--sid <id>\\]$"]}},
   {"name": "nothing saved for the plugin: nothing to remove",
    "setup": [{"write": "$HOME/.claude/settings.json", "json": {"model": "opus"}}],
    "argv": ["settings", "reset", "--all"],

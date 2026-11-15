@@ -1,0 +1,596 @@
+{
+ "id": "STATUSLINE-01-show",
+ "note": "0.1.13: `settings statusline show [--json] [--sid <id>]` is read-only: it reads statusLine from the user (${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json), project and local (<project>/.claude/settings.json, settings.local.json; the project folder CLAUDE_PROJECT_DIR, else the working folder) scopes, local over project over user, notes that managed settings are not read, classifies the winner (none, plain, ccstatusline, other: a package runner or no command, ours) and names it by one basename: never the command, an env value or an argument. Then the live meter for --sid, fixed samples in UTF-8 and ASCII, and the snippet for the case (none: the settings entry; plain: replace or a second-line script; ccstatusline: Custom Command widget values, its config never touched; other: the bare command; ours: nothing, or add --bar). Snapshots of HOME and the project folder before and after prove it writes nothing.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "none anywhere: the files laid out, a snapshot",
+   "exec": [
+    "/usr/bin/true"
+   ],
+   "setup": [
+    {
+     "mkdir": "$TMP/proj/.claude"
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "theme": "dark"
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME",
+      "tree_snapshot": "ah"
+     },
+     {
+      "path": "$TMP/proj",
+      "tree_snapshot": "ap"
+     }
+    ]
+   }
+  },
+  {
+   "name": "none: the case, every scope, the samples and the user settings snippet; nothing written",
+   "argv": [
+    "settings",
+    "statusline",
+    "show"
+   ],
+   "cwd": "$TMP/proj",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^status line, user: no statusLine · ~/\\.claude/settings\\.json$",
+     "^status line, project: no file · ",
+     "^status line, local: no file · ",
+     "^status line in use: none$",
+     "^note: managed settings .* are not read here",
+     "^note: the meter's path ~/\\.local/state/\\S+/bin/\\S+-store does not exist yet",
+     "^  ██░░░░░░░░░░ 10m +\\| ##---------- 10m +\\| warm$",
+     "^  █████░░░░░░░ ↻3/7… +\\| #####------- kw3/7\\.\\.\\. +\\| keep-warm, a ping pending$",
+     "^  ████████████ cold 1h02m +\\| ############ cold 1h02m +\\| cold$",
+     "^  ░░░░░░░░░░░░ compacted +\\| ------------ compacted +\\| compacted$",
+     "^snippet \\(none\\):$",
+     "^add at the top level of ~/\\.claude/settings\\.json",
+     "^\"statusLine\": \\{\"type\": \"command\", \"command\": \"sh \\'/\\S+/bin/\\S+-store\\' cache --stdin --bar --note-usage\", \"refreshInterval\": 30\\}$"
+    ],
+    "absent": [
+     "$HOME/.local/state/$BRAND"
+    ],
+    "files": [
+     {
+      "path": "$HOME",
+      "same_tree_as": "ah"
+     },
+     {
+      "path": "$TMP/proj",
+      "same_tree_as": "ap"
+     }
+    ]
+   }
+  },
+  {
+   "name": "none, --json: the machine form",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "schema": "$BRAND-statusline/v1",
+     "class": "none",
+     "winner": {
+      "null": true
+     },
+     "managed": "not-read",
+     "scopes.0.scope": "user",
+     "scopes.0.set": false,
+     "scopes.1.scope": "project",
+     "scopes.2.scope": "local",
+     "shim.exists": false,
+     "command": "sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin --bar --note-usage",
+     "snippet.case": "none",
+     "live": {
+      "null": true
+     },
+     "samples": {
+      "len": 10
+     },
+     "samples.0.utf8": "██░░░░░░░░░░ 10m",
+     "samples.0.ascii": "##---------- 10m"
+    },
+    "files": [
+     {
+      "path": "$HOME",
+      "same_tree_as": "ah"
+     },
+     {
+      "path": "$TMP/proj",
+      "same_tree_as": "ap"
+     }
+    ]
+   }
+  },
+  {
+   "name": "plain in the user scope, a value that looks like a secret; a live session",
+   "exec": [
+    "/usr/bin/true"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "API_KEY=hunter2-value /opt/private-dir/my-line.sh --token hunter3-value"
+      }
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1",
+       "timestamp": "2026-11-09T11:50:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "transcript": "$TMP/proj/$SID.jsonl"
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME",
+      "tree_snapshot": "bh"
+     },
+     {
+      "path": "$TMP/proj",
+      "tree_snapshot": "bp"
+     }
+    ]
+   }
+  },
+  {
+   "name": "plain: the basename only, never the command, its env value or its arguments; the live meter; nothing written",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--sid",
+    "$SID"
+   ],
+   "cwd": "$TMP/proj",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^status line, user: plain \\(my-line\\.sh\\) · ~/\\.claude/settings\\.json <- Claude Code runs this one$",
+     "^status line in use: plain, from the user settings$",
+     "^this session now: ██░░░░░░░░░░ ~10m   \\(ASCII: ##---------- ~10m\\)$",
+     "^snippet \\(plain\\):$",
+     "^or keep your line and add the meter as a second line",
+     "^printf '%s' \\\"\\$in\\\" \\| <your current command>$",
+     "^t='/\\S+-store'; \\[ -x \\\"\\$t\\\" \\] && printf '%s' \\\"\\$in\\\" \\| \\\"\\$t\\\" cache --stdin --bar --note-usage 2>/dev/null$",
+     "^exit 0$"
+    ],
+    "stdout_lacks": [
+     "hunter",
+     "API_KEY",
+     "private-dir",
+     "--token"
+    ],
+    "files": [
+     {
+      "path": "$HOME",
+      "same_tree_as": "bh"
+     },
+     {
+      "path": "$TMP/proj",
+      "same_tree_as": "bp"
+     }
+    ]
+   }
+  },
+  {
+   "name": "plain, --json: class and name, no command text",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json",
+    "--sid",
+    "$SID"
+   ],
+   "cwd": "$TMP/proj",
+   "expect": {
+    "exit": 0,
+    "json": {
+     "class": "plain",
+     "name": "my-line.sh",
+     "winner": "user",
+     "scopes.0.class": "plain",
+     "live.utf8": "██░░░░░░░░░░ ~10m",
+     "live.state": "warm",
+     "snippet.case": "plain"
+    },
+    "stdout_lacks": [
+     "hunter",
+     "API_KEY",
+     "private-dir"
+    ],
+    "files": [
+     {
+      "path": "$HOME",
+      "same_tree_as": "bh"
+     },
+     {
+      "path": "$TMP/proj",
+      "same_tree_as": "bp"
+     }
+    ]
+   }
+  },
+  {
+   "name": "a session with nothing to show yet",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--sid",
+    "other-session"
+   ],
+   "cwd": "$TMP/proj",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^this session now: nothing to show \\(unknown, no-data, no TTL\\)$"
+    ]
+   }
+  },
+  {
+   "name": "ccstatusline in the local scope over a plain user line",
+   "exec": [
+    "/usr/bin/true"
+   ],
+   "setup": [
+    {
+     "write": "$TMP/proj/.claude/settings.local.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "npx -y ccstatusline@latest"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "files": [
+     {
+      "path": "$HOME",
+      "tree_snapshot": "ch"
+     },
+     {
+      "path": "$TMP/proj",
+      "tree_snapshot": "cp"
+     }
+    ]
+   }
+  },
+  {
+   "name": "ccstatusline wins from the local scope: the widget values, the wrap second; its config untouched",
+   "argv": [
+    "settings",
+    "statusline",
+    "show"
+   ],
+   "cwd": "$TMP/proj",
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^status line, user: plain \\(my-line\\.sh\\) · ~/\\.claude/settings\\.json$",
+     "^status line, local: ccstatusline \\(ccstatusline@latest\\) · \\S+/proj/\\.claude/settings\\.local\\.json <- Claude Code runs this one$",
+     "^status line in use: ccstatusline, from the local settings$",
+     "^snippet \\(ccstatusline\\):$",
+     "^add a Custom Command widget in ccstatusline's own settings screen",
+     "^  command: sh '/\\S+-store' cache --stdin --bar --note-usage$",
+     "^  timeout: 1000$",
+     "^  preserve colors: on"
+    ],
+    "absent": [
+     "$HOME/.config/ccstatusline"
+    ],
+    "files": [
+     {
+      "path": "$HOME",
+      "same_tree_as": "ch"
+     },
+     {
+      "path": "$TMP/proj",
+      "same_tree_as": "cp"
+     }
+    ]
+   }
+  },
+  {
+   "name": "another tool in the project scope (a package runner), the local file without one",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$TMP/proj/.claude/settings.local.json",
+     "json": {
+      "permissions": {}
+     }
+    },
+    {
+     "write": "$TMP/proj/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "bunx some-status-tool --compact"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "class": "other",
+     "name": "some-status-tool",
+     "winner": "project",
+     "scopes.2.set": false,
+     "snippet.case": "other",
+     "snippet.target": ".claude/settings.json in the project folder"
+    }
+   }
+  },
+  {
+   "name": "a statusLine that is no command: other",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$TMP/proj/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "static",
+       "text": "x"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "class": "other",
+     "name": {
+      "null": true
+     },
+     "winner": "project"
+    }
+   }
+  },
+  {
+   "name": "a project file that is not JSON: not read, the user scope wins",
+   "argv": [
+    "settings",
+    "statusline",
+    "show"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$TMP/proj/.claude/settings.json",
+     "content": "{not json"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^status line, project: not a JSON object, not read · ",
+     "^status line in use: plain, from the user settings$"
+    ]
+   }
+  },
+  {
+   "name": "CLAUDE_PROJECT_DIR names the project folder from another working folder",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP",
+   "env": {
+    "CLAUDE_PROJECT_DIR": "$TMP/proj"
+   },
+   "setup": [
+    {
+     "write": "$TMP/proj/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "bunx some-status-tool"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "class": "other",
+     "winner": "project"
+    }
+   }
+  },
+  {
+   "name": "ours, the meter already: nothing to change; the shim there, no note",
+   "argv": [
+    "settings",
+    "statusline",
+    "show"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$TMP/proj/.claude/settings.json",
+     "json": {}
+    },
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "sh '$HOME/.local/state/$BRAND/bin/$BRAND-store' cache --stdin --bar --note-usage"
+      }
+     }
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+     "content": "#!/bin/sh\nexit 0\n",
+     "mode": "0755"
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^status line in use: ours, from the user settings$",
+     "^snippet \\(ours\\):$",
+     "^already set: nothing to change$"
+    ],
+    "stdout_lacks": [
+     "does not exist yet"
+    ]
+   }
+  },
+  {
+   "name": "ours, the plain line (the earlier recipe): add --bar",
+   "argv": [
+    "settings",
+    "statusline",
+    "show"
+   ],
+   "cwd": "$TMP/proj",
+   "setup": [
+    {
+     "write": "$HOME/.claude/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "~/.local/state/$BRAND/bin/$BRAND-store cache --stdin --note-usage"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^already set, as the plain line: add --bar to the command in ~/\\.claude/settings\\.json for the meter$"
+    ]
+   }
+  },
+  {
+   "name": "under CLAUDE_CONFIG_DIR: the user scope is that folder's settings.json",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "--json"
+   ],
+   "cwd": "$TMP/proj",
+   "env": {
+    "CLAUDE_CONFIG_DIR": "$TMP/cfg"
+   },
+   "setup": [
+    {
+     "write": "$TMP/cfg/settings.json",
+     "json": {
+      "statusLine": {
+       "type": "command",
+       "command": "/usr/local/bin/other-line"
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "class": "plain",
+     "name": "other-line",
+     "winner": "user",
+     "snippet.case": "plain"
+    }
+   }
+  },
+  {
+   "name": "no subcommand: usage",
+   "argv": [
+    "settings",
+    "statusline"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "an extra word: usage",
+   "argv": [
+    "settings",
+    "statusline",
+    "show",
+    "now"
+   ],
+   "expect": {
+    "exit": 64,
+    "stdout": ""
+   }
+  }
+ ]
+}
