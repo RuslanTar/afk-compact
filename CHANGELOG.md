@@ -6,6 +6,10 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+### Changed
+
+- **Keep-warm no longer sends a request Claude Code's own idle compaction makes useless.** Claude Code still compacts a conversation at its idle minimum (200,000 tokens by default) or more on the one-hour cache about 54 minutes after its last request, and keep-warm's request at 50 minutes does not stop that. In such a gap the first request now comes at about 55 minutes, and only when Claude Code did not compact (the gap then stops `compacted` with no request); a failed one is still tried again a minute later, at 56 and 57. The `keep_warm_start` row and a refused `keep_warm_stop` row say which timing applied (`first_due_s`, `first_why: native-window` or `default`). With `"idleCompaction": false` nothing changes: the first request comes at 50 minutes.
+
 ## [0.1.13] - 2026-11-15
 
 afk-compact 0.1.13 adds a prompt cache meter for your status line, with a `/afk-compact:settings` step that prints its snippet, keeps a status line quiet once the plugin's folder is gone, and stops a false `copy-mismatch` warning for Claude Code's trailer.
