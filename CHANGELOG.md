@@ -6,6 +6,10 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+### Fixed
+
+- The status line meter no longer shows `compacted` for hours: it turns cold once the cache expires. A prompt sent to a cold or compacted cache shows `…` while its request is in flight instead of a brief `cold`.
+
 ## [0.1.14] - 2026-11-15
 
 afk-compact 0.1.14 times keep-warm's first request after Claude Code's own idle compaction in the gaps where that compaction can run, so the request is no longer wasted.
