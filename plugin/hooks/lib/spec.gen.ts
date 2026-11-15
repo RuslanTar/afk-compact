@@ -935,6 +935,7 @@ export const SPEC = {
   "protected_branch_re": "^(main|master|trunk|develop|development|stable|staging|gh-pages|prod|production|(prod|production)[/_-].+|releases?([/_-].+)?|hotfix/.+)$",
   "approval_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+?)\"(?: \\(answer to \".+\"\\))? — action (.+?) · targets (.+?) · (once|standing( \\([^)]*\\))?) · (not yet used|used [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4})( · given .+)?$",
   "approval_context_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+?)\"( \\(answer to \".+\"\\))? — action (.+?) · targets (.+?) ; context only, not valid here; re-ask( · denied [^·]+?)?( · given .+)?$",
+  "standing_words_re": "(?:^|[^a-z'])(?:don'?t ask(?: me)? again|do not ask(?: me)? again|no need to ask|(?:don'?t|do not) need to ask|without asking|standing|always(?! (?:ask|check|confirm))|whenever|every ?time|each time|from now on|until|feel free to|any ?time)(?:$|[^a-z])",
   "risk_classes": [
     {
       "id": "gate",

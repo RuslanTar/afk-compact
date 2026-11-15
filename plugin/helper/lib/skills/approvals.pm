@@ -233,7 +233,7 @@ my $STATE_WORDS = qr/·[ \t]*(?:once|standing)\b|\bnot yet used\b|\bused[ \t]+[0
 # targets or a state is not read, and measure lists it (`Approvals (not read, re-ask)`), never
 # drops it silently: a real 0.1.13 summary carried two approvals in the handoff's shape and the
 # block printed only `Approvals (checked): none`.
-my $LOOSE_RE = qr/U-([0-9]+):?[ \t]+approval[ \t]+"([^"]+)"(?:[ \t]+\([^()"]*"[^"]*"\))?[ \t]+—[ \t]+action[ \t]+(.+?)[ \t]+·[ \t]+targets[ \t]+(.+?)[ \t]+·[ \t]+(?:(once|standing(?:[ \t]*\([^)]*\))?)[ \t]+·[ \t]+)?(not yet used|used\b)/;
+my $LOOSE_RE = qr/U-([0-9]+):?[ \t]+approval[ \t]+"([^"]+)"(?:[ \t]+\([^()"]*"[^"]*"\))?[ \t]+—[ \t]+action[ \t]+((?:(?!\bU-[0-9]+:?[ \t]+approval\b).)+?)[ \t]+·[ \t]+targets[ \t]+((?:(?!\bU-[0-9]+:?[ \t]+approval\b).)+?)[ \t]+·[ \t]+(?:(once|standing(?:[ \t]*\([^)]*\))?)[ \t]+·[ \t]+)?(not yet used|used\b)/;
 my $LOOSE_ANY_RE = qr/\bU-([0-9]+):?[ \t]+approval[ \t]+"/;
 
 # The spec knows the section (a spec older than the approvals section has none: nothing is checked).
@@ -526,8 +526,25 @@ sub _finish {
     my ($e) = @_;
     $e->{targets} = [ grep { /\S/ } map { s/\A\s+|\s+\z//gr } split /,\s+/, $e->{targets_text} ];
     $e->{used} = $e->{state} =~ /\Aused\b/ ? 1 : 0;
-    $e->{standing} = $e->{scope} =~ /\Astanding\b/ ? 1 : 0;
+    # 0.1.16 (review): the scope is the model's label, so an approval is standing only when the
+    # line says so AND the user's own (quote-checked) words say so (standing_words); otherwise it
+    # reads as once whatever the line says, and a used once never carries (fail closed).
+    $e->{standing} = ($e->{scope} =~ /\Astanding\b/ && standing_words($e->{quote})) ? 1 : 0;
     return $e;
+}
+
+# standing_words(words) -> 1 when the user's words themselves make an approval standing: the spec's
+# standing_words_re ("don't ask again", "no need to ask", "standing", "always", "whenever",
+# "every time", "from now on", "until …", "feel free to", "any time"; not "always ask"), read on
+# the lower-cased words with typographic apostrophes folded. No spec pattern: never (fail closed).
+sub standing_words {
+    my ($q) = @_;
+    return 0 unless defined $q && !ref $q;
+    my $re = skills::spec::regex_at('standing_words_re') or return 0;
+    (my $w = lc $q) =~ s/\xe2\x80[\x98\x99]/'/g;
+    $w =~ s/[\x{2018}\x{2019}`]/'/g;
+    $w =~ s/\s+/ /g;
+    return $w =~ $re ? 1 : 0;
 }
 
 # section_lines(\@lines) -> {index => 1} for the body lines of `## Approvals`.
@@ -1264,12 +1281,11 @@ sub _carried {
     my ($e, $chain) = @_;
     for my $d (@{ $chain || [] }) {
         next unless $d->{checked}{ $e->{id} };
-        for my $l (split /\n/, $d->{text} // '') {
-            my $p = parse_line($l) or next;
-            next unless $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote} && $p->{action} eq $e->{action}
-                && $p->{targets_text} eq $e->{targets_text} && $p->{scope} eq $e->{scope};
-            return $d if $p->{state} eq 'not yet used' || $p->{state} eq $e->{state};
-        }
+        my $l = ($d->{lines} || {})->{ $e->{id} } or next;
+        my $p = parse_line($l) or next;
+        next unless $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote} && $p->{action} eq $e->{action}
+            && $p->{targets_text} eq $e->{targets_text} && $p->{scope} eq $e->{scope};
+        return $d if $p->{state} eq 'not yet used' || $p->{state} eq $e->{state};
     }
     return undef;
 }
@@ -1303,6 +1319,7 @@ sub _carried_context {
 sub restore_standing {
     my ($body, $chain, $transcript, $sid) = @_;
     my @deny;
+    eval { require transcript; 1 } unless defined &transcript::denied_calls;
     if (denied_enabled() && defined $transcript && defined &transcript::denied_calls) {
         @deny = map { _deny_keys($_) } @{ transcript::denied_calls($transcript, $sid) || [] };
     }
@@ -1316,19 +1333,18 @@ sub restore_standing {
         next unless $e && !$e->{question} && !$e->{denied} && !$done{ $e->{id} };
         D: for my $d (@{ $chain || [] }) {
             next unless $d->{checked}{ $e->{id} };
-            for my $l (split /\n/, $d->{text} // '') {
-                next if $tag_re && $l =~ $tag_re;
-                my $p = parse_line($l) or next;
-                next unless $p->{standing} && $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote}
-                    && $p->{action} eq $e->{action} && $p->{targets_text} eq $e->{targets_text};
-                last D if @deny && _denied($p, \@deny);
-                $lines[$i] = $l;
-                $done{ $e->{id} } = 1;
-                push @ids, $e->{id};
-                push @ents, $p;
-                $org{ $e->{id} } = _origin_word($d->{origins}{ $e->{id} });
-                last D;
-            }
+            # Only the verified section line of that id (0.1.16 review: an appended twin was read).
+            my $l = ($d->{lines} || {})->{ $e->{id} } or next;
+            my $p = parse_line($l) or next;
+            next unless $p->{standing} && $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote}
+                && $p->{action} eq $e->{action} && $p->{targets_text} eq $e->{targets_text};
+            last D if @deny && _denied($p, \@deny);
+            $lines[$i] = $l;
+            $done{ $e->{id} } = 1;
+            push @ids, $e->{id};
+            push @ents, $p;
+            $org{ $e->{id} } = _origin_word($d->{origins}{ $e->{id} });
+            last D;
         }
     }
     # An id restored here that has another line in the section stays context only (one line
@@ -1357,7 +1373,11 @@ sub chain_doc {
     my ($own) = own_relation($d, $ctx, $sid);
     return undef unless $own;
     my ($good) = verify_checked($ctx, $d, checked_ids($d->{fm}{approvals_checked}));
-    return { text => $d->{body} // '', checked => $good, origins => origins_of($ctx, $d) };
+    # 0.1.16 (review): the one `## Approvals` line of each verified id (its hash matched the
+    # publish record); a carry or a restore reads only these, never a twin elsewhere in the file.
+    my %vl;
+    for my $x (@{ _section_entries($d->{body}) }) { $vl{ $x->{id} } = $x->{line} if $good->{ $x->{id} } }
+    return { text => $d->{body} // '', checked => $good, lines => \%vl, origins => origins_of($ctx, $d) };
 }
 
 # ---- line hashes
@@ -1678,7 +1698,20 @@ sub handoff_lines {
     my $org = origins_of($ctx, $d);
     $_->{origin} = $org->{ $_->{id} } for @e;
     # An id that also has a context-only line is no one's check either.
-    my ($out, $row) = _report([ grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 && !$cx{ $_->{id} } } @e ], [], 'handoff');
+    # 0.1.16 (review): a carried approval whose action a call was refused for since, in the writing
+    # session or in the reading one, is re-ask (approval-denied, read from their transcripts).
+    my @cand = grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 && !$cx{ $_->{id} } } @e;
+    my @tx;
+    if (@cand) {
+        my %seen_sid;
+        for my $s (grep { defined && !ref && $_ ne '' } ($d->{fm}{session_id}, $sid)) {
+            next if $seen_sid{$s}++;
+            my $tp = transcript_path($ctx, $s, $d->{fm}{worktree}, eval { require Cwd; Cwd::getcwd() });
+            push @tx, [ $tp, $s ] if defined $tp;
+        }
+    }
+    my ($keep, $den) = _split_denied(\@cand, \@tx);
+    my ($out, $row) = _report($keep, [], 'handoff', undef, $den);
     my %ctx_only = (%cx, map { $_ => $HASH_WHY{ $unver->{$_} } } keys %$unver);
     my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %ctx_only;
     if (@bad) {
@@ -1697,11 +1730,16 @@ sub summary_lines {
     my (@e, %seen, @unread);
     for my $l (split /\n/, $text // '') {
         next if $tag_re && $l =~ $tag_re;
-        # A context-only line grants nothing and is no shape fault.
-        next if $l =~ /;[ \t]*context only\b/;
-        my %got;
+        # A context-only approval grants nothing and is no shape fault; only its own segment (up to
+        # the next `U-n approval`) is skipped, so a real approval on the same line is still read.
+        my (%got, %cxid);
+        while ($l =~ /\bU-([0-9]+):?[ \t]+approval[ \t]+"[^"]*"((?:(?!\bU-[0-9]+:?[ \t]+approval\b).)*)/g) {
+            my ($cn, $seg) = ($1, $2);
+            $cxid{"U-$cn"} = 1 if $seg =~ /;[ \t]*context only\b/;
+        }
         while ($l =~ /$LOOSE_RE/g) {
             my %x = (n => $1, quote => $2, action => $3, targets_text => $4, scope => $5 // 'once', state => $6);
+            next if $cxid{"U-$x{n}"};
             $x{id} = "U-$x{n}";
             $got{ $x{id} } = 1;
             next if $seen{ $x{id} }++;
@@ -1709,7 +1747,7 @@ sub summary_lines {
         }
         while ($l =~ /$LOOSE_ANY_RE/g) {
             my $id = "U-$1";
-            push @unread, $id unless $got{$id} || $seen{$id}++;
+            push @unread, $id unless $got{$id} || $cxid{$id} || $seen{$id}++;
         }
     }
     my @nr = @unread ? ('Approvals (not read, re-ask): ' . join(', ', @unread)) : ();
@@ -1727,13 +1765,35 @@ sub summary_lines {
     for my $k (0 .. $#e) {
         if ($res && $res->[$k]) { $e[$k]{origin} = $org[$k]; push @ok, $e[$k] } else { push @no, $e[$k] }
     }
-    my ($out, $row) = _report(\@ok, \@no, 'summary', $cwd);
+    # 0.1.16 (review): an approval whose action a call of this session was refused for is re-ask
+    # on this path too, as approval-denied reads it at publish.
+    my ($keep, $den) = _split_denied(\@ok, [ [ $transcript, $sid ] ]);
+    my ($out, $row) = _report($keep, \@no, 'summary', $cwd, $den);
     if (@unread) { push @$out, @nr; $row->{unread} = scalar @unread }
     return ($out, $row);
 }
 
+# _split_denied(\@entries, [[transcript, sid]…]) -> (\@kept, \@denied): the entries whose action a
+# refused call of one of those sessions covers (_denied over transcript::denied_calls) are denied.
+sub _split_denied {
+    my ($es, $txs) = @_;
+    eval { require transcript; 1 } unless defined &transcript::denied_calls;
+    return ($es, []) unless @{ $es || [] } && denied_enabled() && defined &transcript::denied_calls;
+    my @keys;
+    for my $t (@{ $txs || [] }) {
+        my ($tp, $s) = @$t;
+        next unless defined $tp && defined $s;
+        push @keys, map { _deny_keys($_) } @{ transcript::denied_calls($tp, $s) || [] };
+    }
+    return ($es, []) unless @keys;
+    my (@k, @d);
+    for my $e (@$es) { if (_denied($e, \@keys)) { push @d, $e } else { push @k, $e } }
+    return (\@k, \@d);
+}
+
 sub _report {
-    my ($ok, $no, $source, $cwd) = @_;
+    my ($ok, $no, $source, $cwd, $denied) = @_;
+    $denied ||= [];
     my (@carry, @gate, @allowed, %cls);
     # 0.1.15: the gate kinds the user's standing_approval_gates setting lets a standing approval
     # cover (a consent key: settings file only; empty by default, so every gate re-asks).
@@ -1758,12 +1818,13 @@ sub _report {
     my @out = ('Approvals (checked): ' . (@carry ? join('; ', map { _entry($_) } @carry) : 'none'));
     push @out, 'Approvals (gate allowed by setting): ' . join('; ', map { _entry($_) } @allowed) if @allowed;
     push @out, 'Approvals (gate, re-ask): ' . join('; ', map { _entry($_) } @gate) if @gate;
+    push @out, 'Approvals (denied, re-ask): ' . join(', ', map { $_->{id} } @$denied) if @$denied;
     push @out, 'Approvals (unchecked): ' . join(', ', map { $_->{id} } @$no) if @$no;
     # The carried approvals by the origin of the row their
     # quote was found in (class words only, never text).
     my @c = (@carry, @allowed);
     return (\@out, { source => $source, checked => scalar(@carry), gate => scalar(@gate), unchecked => scalar(@$no),
-                     (@allowed ? (allowed => scalar @allowed) : ()),
+                     (@allowed ? (allowed => scalar @allowed) : ()), (@$denied ? (denied => scalar @$denied) : ()),
                      classes => [ sort keys %cls ], (@c ? (origins => _origin_counts(\@c)) : ()) });
 }
 
