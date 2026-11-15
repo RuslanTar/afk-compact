@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 - A standing approval now stays valid after a handoff the plugin asked for itself (idle, before a compaction, at a stop). The plugin puts back each standing approval your previous handoff held as checked. One-time approvals in such a handoff are still asked again.
 - After a compaction or a resume, a standing approval you already used still counts. Before, the resume rule said to act only on an unused one.
 - An approval counts as standing only when your own words say so, such as "don't ask again", "no need to ask", "feel free to" or "from now on". Other words read as one-time, and saving a handoff notes a line that calls them standing.
-- A standing approval covers a gate only when your own words allow that gate in the same sentence, so "feel free to push" never covers a deploy or a push to `main`, but "feel free to push to main from now on" does.
+- A standing approval covers a gate only when your own words allow that gate in the same sentence, so "feel free to push" never covers a deploy or a push to `main`, but "feel free to push to main from now on" does. A force push needs the word "force".
 - After a compaction or a resume, an approval whose action was refused in the session, or in an earlier session of your chain, is listed as denied and asked again.
 
 ### Fixed
