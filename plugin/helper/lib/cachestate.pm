@@ -552,13 +552,88 @@ sub _span {
     return int($s / 60) . 'm';
 }
 
+# ---------------------------------------------------------------- the human renderer
+# 0.1.13: one renderer over report()'s object, pure (no file, no clock, no subprocess): the plain
+# line (`plain`) or the status-line meter (`cache --bar`). Its text may change between versions;
+# --json is the machine contract.
+
+our $CELLS = 12;
+our %SGR = (blue => 34, yellow => 33, red => 31, cyan => 36, magenta => 35);
+
+# _dur(s) -> `14m`, `1h02m`, `3d` (whole minutes, rounded down)
+sub _dur {
+    my ($s) = @_;
+    $s = 0 if $s < 0;
+    return int($s / 86400) . 'd' if $s >= 86400;
+    return sprintf('%dh%02dm', int($s / 3600), int(($s % 3600) / 60)) if $s >= 3600;
+    return int($s / 60) . 'm';
+}
+
+# bar(report, %opt) -> the segment (no newline), or '' when there is nothing to show.
+#   plain => 1: the one plain line (line() below).
+#   Else the meter: 12 cells and a suffix, from the expiry only (a fork's read moves expires_at but
+#   not last.at): fill = (ttl - seconds_left) / ttl, age = now - (expires_at - ttl). Nothing when
+#   the state is unknown or the TTL is null. Warm: blue, yellow from 50%, red from 90%; the suffix
+#   is the age (`left` => 1: the time left), `~` before it when the TTL was read from the
+#   transcript. Keep-warm warming: cyan, n/max filled, `↻n/max`, `…` while a ping is out; ` off`
+#   when keep-warm refused the gap near a usage limit. Cold: magenta, full, `cold <age>` or
+#   `cold miss`. Compacted: empty cells, `compacted`. ascii => 1: `#`/`-`, `kw`, `...`;
+#   short => 1: `c <suffix>` (`c cold`, `c cmp`) without cells; color => 1: one SGR colour, reset
+#   after the segment.
+sub bar {
+    my ($r, %o) = @_;
+    return '' unless ref $r eq 'HASH';
+    return _plain($r) if $o{plain};
+    my $state = $r->{state} // 'unknown';
+    return '' if $state eq 'unknown';
+    my $ttl_s = defined $r->{ttl} && !ref $r->{ttl} ? $TTL_S{ $r->{ttl} } : undef;
+    return '' unless $ttl_s;
+    my $u = $o{ascii} ? 0 : 1;
+    my $kw = ref $r->{keep_warm} eq 'HASH' ? $r->{keep_warm} : undef;
+    my $tilde = ($r->{source} // '') eq 'transcript' ? '~' : '';
+    my $now = _num($r->{now}) // return '';
+    my $exp = _num($r->{expires_at});
+    my ($fill, $colour, $text, $short);
+    if (_label($r) eq 'compacted') {
+        ($fill, $colour, $text, $short) = (0, undef, 'compacted', 'cmp');
+    } elsif ($state eq 'cold') {
+        ($fill, $colour, $short) = ($CELLS, 'magenta', 'cold');
+        $text = ($r->{why} // '') eq 'fork-miss' ? 'cold miss'
+              : defined $exp ? 'cold ' . $tilde . _dur($now - ($exp - $ttl_s))
+              : 'cold';
+    } else {
+        return '' unless defined $exp;
+        my $left = $exp > $now ? $exp - $now : 0;
+        my $frac = ($ttl_s - $left) / $ttl_s;
+        $frac = 0 if $frac < 0;
+        $frac = 1 if $frac > 1;
+        $fill = int($CELLS * $frac);
+        $colour = $frac >= 0.9 ? 'red' : $frac >= 0.5 ? 'yellow' : 'blue';
+        my $m = int(($left + 59) / 60);
+        $text = $tilde . ($o{left} ? ($m >= 60 ? sprintf('%dh%02dm', int($m / 60), $m % 60) : "${m}m") . ' left' : _dur($now - ($exp - $ttl_s)));
+        if ($kw && $kw->{active}) {
+            my ($n, $max) = (_num($kw->{n}) // 0, _num($kw->{max}));
+            $colour = 'cyan';
+            $fill = int($CELLS * ($n < $max ? $n : $max) / $max) if defined $max && $max > 0;
+            $text = ($u ? '↻' : 'kw') . $n . (defined $max ? "/$max" : '');
+            $text .= $u ? '…' : '...' if $kw->{pending};
+        }
+        $text .= ' off' if $kw && !$kw->{active} && ($kw->{off} // '') eq 'near-limit';
+        $short = $text;
+    }
+    my $seg = $o{short} ? "c $short" : ($u ? '█' x $fill . '░' x ($CELLS - $fill) : '#' x $fill . '-' x ($CELLS - $fill)) . " $text";
+    return $o{color} && $colour ? "\e[$SGR{$colour}m$seg\e[0m" : $seg;
+}
+
 # line(report) -> the one plain line (no newline), or '' when the state is unknown:
 # `cache 1h warm 42m left ↻3/7`, `cache 1h cold (expired 12m ago)`, `cache compacted`; then
 # (0.1.11) ` · ping pending` while a keep-warm ping is out and ` · keep-warm off (<why>)` when
 # keep-warm refused the current idle gap, for every reason but no-jobs: no background job is the
 # normal idle case, not a refusal to notice (the JSON's keep_warm.off, the log row and /status
-# still name it).
-sub line {
+# still name it). 0.1.13: bar()'s plain mode.
+sub line { return bar($_[0], plain => 1) }
+
+sub _plain {
     my ($r) = @_;
     return '' if $r->{state} eq 'unknown';
     my $t = defined $r->{ttl} ? " $r->{ttl}" : '';

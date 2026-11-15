@@ -1,0 +1,567 @@
+{
+ "id": "CACHE-14-bar-states",
+ "note": "0.1.13: `cache --bar` is the status-line meter, one golden per state: 12 cells and a suffix, fill and age from the expiry only (fill = (ttl - seconds_left) / ttl, age = now - (expires_at - ttl)), so a fork's read that moves expires_at but not the last main request reads by the expiry. Unknown and a null TTL print nothing; `~` marks a TTL read from the transcript; keep-warm warming shows n/max and ↻, `…` while a ping is out, ` off` only when keep-warm refused the gap near a usage limit; cold is full with its age or `cold miss`; compacted is empty cells. --color never here; colours are CACHE-15.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "unknown (no stdin, no state): nothing, exit 0",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "unknown, a session's first refresh (no prompt_cache, no transcript): nothing",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "warm, the TTL null (prompt_cache without ttl): nothing, though the state is warm",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794227400
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "warm below 50%: 10 minutes into the hour, 2 of 12 cells, the age",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "██░░░░░░░░░░ 10m\n"
+   }
+  },
+  {
+   "name": "warm from 50%: 35 minutes in, 7 cells",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794227100,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "███████░░░░░ 35m\n"
+   }
+  },
+  {
+   "name": "warm from 90%: 56 minutes in, 11 cells",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794225800,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "███████████░ 56m\n"
+   }
+  },
+  {
+   "name": "cold, expired 2 minutes ago: full, `cold` and the age since the cache was written",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794225480,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "████████████ cold 1h02m\n"
+   }
+  },
+  {
+   "name": "transcript-only TTL: `~` before the age",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "setup": [
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1",
+       "timestamp": "2026-11-09T11:45:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "███░░░░░░░░░ ~15m\n"
+   }
+  },
+  {
+   "name": "a fork's read moved expires_at, not the last main request (55 min ago): the bar follows the expiry",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "setup": [
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1",
+       "timestamp": "2026-11-09T11:05:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228600
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "██░░░░░░░░░░ 10m\n"
+   }
+  },
+  {
+   "name": "the same input: --json keeps age_s from last.at (55 min), the plain line the time left",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794228600
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "age_s": 3300,
+     "seconds_left": 3000,
+     "source": "claude-code"
+    }
+   }
+  },
+  {
+   "name": "keep-warm warming: cyan in colour, ping 3 of 7 filled over the 12 cells, `↻3/7`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": 1794225000,
+       "gap_start": 1794224700,
+       "hours": 6,
+       "n": 3,
+       "warm_at": 1794225300,
+       "last_at": 1794225300,
+       "result": "warm",
+       "warm_ping": [
+        1794225300,
+        1794225310
+       ]
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "█████░░░░░░░ ↻3/7\n"
+   }
+  },
+  {
+   "name": "a keep-warm ping pending: `…`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": 1794225000,
+       "gap_start": 1794224700,
+       "hours": 6,
+       "n": 3,
+       "warm_at": 1794225300,
+       "last_at": 1794225570,
+       "result": "warm",
+       "warm_ping": [
+        1794225300,
+        1794225310
+       ],
+       "sent_at": 1794225570
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "█████░░░░░░░ ↻3/7…\n"
+   }
+  },
+  {
+   "name": "keep-warm off near a usage limit: ` off`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794227400,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": null,
+       "gap_start": 1794225000,
+       "hours": null,
+       "n": 0,
+       "warm_at": 1794225000,
+       "stop": {
+        "why": "near-limit",
+        "pings": 0,
+        "at": 1794225540,
+        "refused": true
+       },
+       "last_at": 1794225540
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "██████░░░░░░ 30m off\n"
+   }
+  },
+  {
+   "name": "keep-warm refused for no-jobs, the normal idle case: no ` off`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794227400,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": null,
+       "gap_start": 1794225000,
+       "hours": null,
+       "n": 0,
+       "warm_at": 1794225000,
+       "stop": {
+        "why": "no-jobs",
+        "pings": 0,
+        "at": 1794225540,
+        "refused": true
+       },
+       "last_at": 1794225540
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "██████░░░░░░ 30m\n"
+   }
+  },
+  {
+   "name": "a keep-warm ping missed: cold, `cold miss`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794226200,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": 1794224400,
+       "gap_start": 1794224100,
+       "hours": 6,
+       "n": 1,
+       "warm_at": 1794224100,
+       "last_at": 1794225010,
+       "result": "fork-miss",
+       "miss_ping": [
+        1794225000,
+        1794225010
+       ],
+       "stop": {
+        "why": "fork-miss",
+        "pings": 1,
+        "at": 1794225010
+       }
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "████████████ cold miss\n"
+   }
+  },
+  {
+   "name": "compacted: empty cells, `compacted`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "compacted_at": 1794225540
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "░░░░░░░░░░░░ compacted\n"
+   }
+  },
+  {
+   "name": "the plain line is unchanged by --bar's flags being known",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache compacted\n"
+   }
+  }
+ ]
+}

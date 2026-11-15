@@ -1,0 +1,667 @@
+{
+ "id": "CACHE-15-bar-forms",
+ "note": "0.1.13: the meter's forms: --ascii (# and -, kw, ...), also under a locale that names another charset (LC_ALL, else LC_CTYPE, else LANG); --short (`c <suffix>`, `c cold`, `c cmp`), also when COLUMNS is below 60; --left (the time left instead of the age); colour: 16 ANSI colours (blue, yellow from 50%, red from 90%, cyan for keep-warm, magenta cold, none for compacted), reset after the segment, `auto` on unless NO_COLOR is set and not empty or TERM is dumb, `always` over NO_COLOR, `never` off. An unknown --color word is a usage error: stderr, exit 0. --json is unchanged and wins.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "--ascii: # and -",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--ascii",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "##---------- 10m\n"
+   }
+  },
+  {
+   "name": "--ascii keep-warm with a ping pending: kw and ...",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--ascii",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": 1794225000,
+       "gap_start": 1794224700,
+       "hours": 6,
+       "n": 3,
+       "warm_at": 1794225300,
+       "last_at": 1794225570,
+       "result": "warm",
+       "warm_ping": [
+        1794225300,
+        1794225310
+       ],
+       "sent_at": 1794225570
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "#####------- kw3/7...\n"
+   }
+  },
+  {
+   "name": "--short keep-warm: no cells",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--short",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "c ↻3/7…\n"
+   }
+  },
+  {
+   "name": "a LANG of another charset: ASCII",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "LANG": "C"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "#####------- kw3/7...\n"
+   }
+  },
+  {
+   "name": "LC_ALL UTF-8 over a LANG of C: UTF-8",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "LANG": "C",
+    "LC_ALL": "en_US.UTF-8"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "█████░░░░░░░ ↻3/7…\n"
+   }
+  },
+  {
+   "name": "compacted, --short: `c cmp`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--short",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "compacted_at": 1794225540
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "c cmp\n"
+   }
+  },
+  {
+   "name": "cold, --short: `c cold`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--short",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794225480,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "schema_only": 1
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "c cold\n"
+   }
+  },
+  {
+   "name": "warm, --short: `c 10m`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--short",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "c 10m\n"
+   }
+  },
+  {
+   "name": "warm, --left: the time left",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--left",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "██░░░░░░░░░░ 50m left\n"
+   }
+  },
+  {
+   "name": "warm, --left at a full hour",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--left",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794229200,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "░░░░░░░░░░░░ 1h00m left\n"
+   }
+  },
+  {
+   "name": "warm, --short --left",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--short",
+    "--left",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794225800,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "c 4m left\n"
+   }
+  },
+  {
+   "name": "COLUMNS below 60: short",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "COLUMNS": "40"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "c 10m\n"
+   }
+  },
+  {
+   "name": "COLUMNS 80: the cells",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "COLUMNS": "80"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "██░░░░░░░░░░ 10m\n"
+   }
+  },
+  {
+   "name": "--color always, warm below 50%: blue, reset after the segment",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[34m██░░░░░░░░░░ 10m\u001b[0m\n"
+   }
+  },
+  {
+   "name": "--color always, from 50%: yellow",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794227100,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[33m███████░░░░░ 35m\u001b[0m\n"
+   }
+  },
+  {
+   "name": "--color always, from 90%: red",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794225800,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[31m███████████░ 56m\u001b[0m\n"
+   }
+  },
+  {
+   "name": "--color always, cold: magenta",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794225480,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[35m████████████ cold 1h02m\u001b[0m\n"
+   }
+  },
+  {
+   "name": "--color always, compacted: no colour",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "compacted_at": 1794225540
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "░░░░░░░░░░░░ compacted\n"
+   }
+  },
+  {
+   "name": "--color always, keep-warm: cyan",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": 1794225000,
+       "gap_start": 1794224700,
+       "hours": 6,
+       "n": 3,
+       "warm_at": 1794225300,
+       "last_at": 1794225300,
+       "result": "warm",
+       "warm_ping": [
+        1794225300,
+        1794225310
+       ]
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[36m█████░░░░░░░ ↻3/7\u001b[0m\n"
+   }
+  },
+  {
+   "name": "colour auto (no flag), TERM set: on",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "TERM": "xterm-256color"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[36m█████░░░░░░░ ↻3/7\u001b[0m\n"
+   }
+  },
+  {
+   "name": "colour auto under NO_COLOR: off",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "TERM": "xterm-256color",
+    "NO_COLOR": "1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "█████░░░░░░░ ↻3/7\n"
+   }
+  },
+  {
+   "name": "colour auto, NO_COLOR empty: on",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "auto"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "NO_COLOR": ""
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[36m█████░░░░░░░ ↻3/7\u001b[0m\n"
+   }
+  },
+  {
+   "name": "colour auto, TERM dumb: off",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "TERM": "dumb"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "█████░░░░░░░ ↻3/7\n"
+   }
+  },
+  {
+   "name": "--color always wins over NO_COLOR",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "NO_COLOR": "1"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[36m█████░░░░░░░ ↻3/7\u001b[0m\n"
+   }
+  },
+  {
+   "name": "--color with another word: the usage on stderr, nothing on stdout, exit 0",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "sometimes"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_has": [
+     "usage: cache .*--bar"
+    ]
+   }
+  },
+  {
+   "name": "--json wins over --bar",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--json"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "keep_warm.n": 3
+    }
+   }
+  }
+ ]
+}
