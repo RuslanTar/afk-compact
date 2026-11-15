@@ -19,7 +19,7 @@ package skills::publish;
 # `approval_classes` (counts and class ids only).
 # 0.1.2: in a stage bound to a plugin handoff turn every own approval is context only
 # (skills/approvals.pm): no approvals_checked and no line-hash record, so nothing carries; the
-# frontmatter says `requested_by: plugin`. 0.1.15: except the standing approvals publish puts back
+# frontmatter says `requested_by: plugin`. 0.1.16: except the standing approvals publish puts back
 # from the own chain's previous file (skills::approvals::restore_standing), checked and hashed.
 # 0.1.3: an own approval line of `## Approvals` failing approval-quote or
 # approval-plugin-turn moves to `## Open questions` as a re-ask instead of refusing (one ADVISORY
@@ -203,7 +203,7 @@ sub run {
     $keep = _draft_lines($keep, $map);
     my @fixed = @{ $fx->{fixes} };
     $rules{ $_->{rule} } = 1 for @fixed;
-    # 0.1.15: a plugin handoff turn puts back, byte for byte, each standing approval the own
+    # 0.1.16: a plugin handoff turn puts back, byte for byte, each standing approval the own
     # chain's previous file holds as checked and hashed (skills::approvals::restore_standing); the
     # model's Write held only the context-only shape. Only these lines are listed as checked.
     my ($rids, $rorg, $rents) = ([], {}, []);
@@ -225,7 +225,7 @@ sub run {
     # counts and outward class ids only, never a quote, action or target.
     my $ap = $res->{approvals} || {};
     # A plugin handoff turn (0.1.2): nothing in this file is listed as checked or hashed, except
-    # (0.1.15) the standing approvals put back from the own chain above.
+    # (0.1.16) the standing approvals put back from the own chain above.
     if (defined $ht) {
         my %cl;
         for my $e (@$rents) { $cl{$_} = 1 for @{ skills::approvals::classes($e)->{outward} } }

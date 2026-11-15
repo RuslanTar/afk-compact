@@ -84,7 +84,7 @@ package skills::approvals;
 # in the file can carry. The same context-only line is accepted in any stage (never checked,
 # never carried), and `measure` lists such lines as context only: `(plugin handoff)` in a file
 # marked requested_by: plugin, else `(written as context)`.
-# 0.1.15 (approvals survive the plugin's own handoffs): after the lint, publish puts back byte for
+# 0.1.16 (approvals survive the plugin's own handoffs): after the lint, publish puts back byte for
 # byte each context-only line that the own chain's previous file holds as a checked, hashed
 # `standing` approval (restore_standing) and lists and hashes only those; in a requested_by:
 # plugin file only such a line carries. A `once` approval stays context only there.
@@ -224,7 +224,7 @@ my $LINE_RE = qr/\bU-[0-9]+:\s*approval\b/;
 # A scope or state field of approval_re, which a context-only line never holds.
 my $STATE_WORDS = qr/·[ \t]*(?:once|standing)\b|\bnot yet used\b|\bused[ \t]+[0-9]{4}-[0-9]{2}-[0-9]{2}\b/;
 # Loose form for compaction summaries (the summary writes several on one line or a list).
-# 0.1.15: the summary copies the handoff's shape, so the question a short answer replies to may
+# 0.1.16: the summary copies the handoff's shape, so the question a short answer replies to may
 # follow the words (`(answer to "<question>")`, or another parenthesis holding one quoted text,
 # such as `(quoting "<line>")`); the check still reads the words only. A missing once/standing
 # reads as once (spec §4: the words did not say standing), and the state is `not yet used` or
@@ -1351,7 +1351,7 @@ sub _carried_context {
 }
 
 # restore_standing(body, \@chain [, transcript, sid]) -> (body, [ids], {id => origin}, [entries]): a plugin handoff
-# turn (0.1.15). The model writes every own approval in the context-only shape (the auto-mode
+# turn (0.1.16). The model writes every own approval in the context-only shape (the auto-mode
 # classifier blocked a usable approval in a Write the user did not ask for, 0.1.2); code then
 # puts back, byte for byte, each line the own chain's previous file holds as a checked,
 # hash-verified `standing` approval with the same id, words, action and targets. Nothing the
@@ -1722,7 +1722,7 @@ sub handoff_lines {
         my $plugin = ($d->{fm}{requested_by} // '') eq 'plugin';
         my $label = $plugin ? 'plugin handoff' : 'written as context';
         for my $c (grep { defined } map { parse_context_line($lines[$_]) } @own_idx) { $cx{ $c->{id} } //= $label }
-        # 0.1.15: in such a file only a line publish put back from the own chain (a standing
+        # 0.1.16: in such a file only a line publish put back from the own chain (a standing
         # approval, restore_standing: listed in approvals_checked and hashed) carries; any other
         # usable line there is the plugin handoff's, context only.
         if ($plugin) {
