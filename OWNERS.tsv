@@ -33,6 +33,7 @@ OWNERS.tsv	build
 .gitattributes	build
 package.json	build
 package-lock.json	build
+.npmrc	build
 tsconfig.json	build
 src/plugin.json	build
 src/marketplace.json	build
