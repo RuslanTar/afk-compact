@@ -539,17 +539,30 @@ sub _finish {
 # the like, "whenever you want" / "any time you need" and the like), read on the lower-cased words
 # with typographic apostrophes folded, and not after "not", "don't", "never" or "no" within the
 # three words before it. No spec pattern: never (fail closed).
-sub standing_words {
+sub standing_words { return @{ _standing_spans($_[0]) } ? 1 : 0 }
+
+# _fold_words(text) -> the lower-cased text with typographic apostrophes folded and white space
+# runs made one space (the form standing_words_re and the clause rules read).
+sub _fold_words {
     my ($q) = @_;
-    return 0 unless defined $q && !ref $q;
-    my $re = skills::spec::regex_at('standing_words_re') or return 0;
-    (my $w = lc $q) =~ s/\xe2\x80[\x98\x99]/'/g;
+    (my $w = lc($q // '')) =~ s/\xe2\x80[\x98\x99]/'/g;
     $w =~ s/[\x{2018}\x{2019}`]/'/g;
     $w =~ s/\s+/ /g;
+    return $w;
+}
+
+# _standing_spans(words) -> [[start, end]…] of the non-negated standing phrases in the folded
+# words (see standing_words).
+sub _standing_spans {
+    my ($q) = @_;
+    return [] unless defined $q && !ref $q;
+    my $re = skills::spec::regex_at('standing_words_re') or return [];
+    my $w = _fold_words($q);
+    my @out;
     # A negation within the three words before the phrase ("do not deploy without asking me")
     # makes that match no standing phrase (0.1.16 second review).
     while ($w =~ /$re/g) {
-        my $at = $-[0];    # saved: every later match resets @-
+        my ($at, $end) = ($-[0], $+[0]);    # saved: every later match resets @- and @+
         my @before = split / /, substr($w, 0, $at + 1);
         @before = @before[-3 .. -1] if @before > 3;
         next if grep { /\A(?:not|don'?t|never|no)[.,;:!?)]*\z/ } @before;
@@ -559,9 +572,33 @@ sub standing_words {
             my ($clause) = substr($w, 0, $at + 1) =~ /([^.;!?]*)\z/;
             next if defined $clause && $clause =~ /(?:^|[^a-z'])(?:not|don'?t|never|no)(?![a-z'])/;
         }
-        return 1;
+        push @out, [ $at, $end ];
     }
-    return 0;
+    return \@out;
+}
+
+# _granting_clauses(words) -> the clauses of the user's words that grant (0.1.16 third review):
+# the words split at `.`, `;`, `!`, `?` and at but / except / unless / however; a clause is kept
+# only when it holds a non-negated standing phrase and its sentence does not end in `?`, and it is
+# cut at the first not / don't / never / no outside its standing phrases (a gate word after it
+# is no grant: "feel free to deploy build 78, never to production").
+sub _granting_clauses {
+    my ($q) = @_;
+    my $w = _fold_words($q);
+    my @keep;
+    while ($w =~ /([^.;!?]+)([.;!?]?)/g) {
+        my ($sent, $end) = ($1, $2);
+        next if $end eq '?';
+        for my $cl (split /\b(?:but|except|unless|however)\b/, $sent) {
+            my $sp = _standing_spans($cl);
+            next unless @$sp;
+            my $m = $cl;
+            substr($m, $_->[0], $_->[1] - $_->[0]) = ' ' x ($_->[1] - $_->[0]) for reverse @$sp;
+            if ($m =~ /(?:^|[^a-z'])(?:not|don'?t|never|no)(?![a-z'])/) { $cl = substr($cl, 0, $-[0] + 1) }
+            push @keep, $cl;
+        }
+    }
+    return @keep;
 }
 
 # section_lines(\@lines) -> {index => 1} for the body lines of `## Approvals`.
@@ -1808,17 +1845,33 @@ sub summary_lines {
 # names (0.1.16 second review: a summary attached a production deploy to "feel free to push"):
 # the words read as an action and a target (classes) hold each gate of the line, and each protected
 # branch the line names appears in the words as a whole word (an unnamed push never qualifies).
+# The words that may stand between push / merge and the branch it names (_words_name_gates).
+my $PUSH_LINK = qr/(?:it|this|that|them|everything|changes|commits|my|our|the|up|directly|straight|to|into|onto|branch|origin|upstream|remote|[a-z0-9_.-]+\/[a-z0-9_.\/-]+)/;
 sub _words_name_gates {
     my ($e, $c, $cwd) = @_;
-    my $q = $e->{quote} // '';
-    my $wc = classes({ action => $q, targets_text => $q, targets => [] }, $cwd);
+    # Only the clauses that grant (third review: a gate the user negated or asked about counted).
+    my @cl = _granting_clauses($e->{quote} // '');
+    return 0 unless @cl;
+    my $g = join('. ', @cl);
+    my $wc = classes({ action => $g, targets_text => $g, targets => [] }, $cwd);
     my %w = map { $_ => 1 } @{ $wc->{gates} || [] };
     return 0 if grep { !$w{$_} } @{ $c->{gates} || [] };
     if (grep { $_ eq 'protected-push' } @{ $c->{gates} || [] }) {
-        my @n = @{ $c->{protected_names} || [] };
+        # The protected branches the push goes to: names in the action itself or in a `branch`
+        # target (an `env staging` target names an environment, which the deploy gate covers).
+        my %seen_n;
+        my @n = grep { my $x = $_; !$seen_n{ lc $x }++
+                       && ($e->{action} =~ /(?<![\w\/-])\Q$x\E(?![\w\/-])/
+                           || grep { /\Abranch\s+(?:[^\s\/]+\/)?\Q$x\E(?![\w\/-])/ } @{ $e->{targets} || [] }) }
+                @{ $c->{protected_names} || [] };
         return 0 unless @n;
-        my $lq = lc $q;
-        for my $n (@n) { return 0 unless $lq =~ /(?<![\w\/-])\Q${\ lc $n}\E(?![\w\/-])/ }
+        # The name right after push / merge in one granting clause, with only spaces and at most
+        # four link words between ("push to main", "merge feat/x into main", "push it straight to
+        # origin main"); a comma or any other word breaks it ("push, the main thing is speed").
+        for my $n (@n) {
+            my $ln = lc $n;
+            return 0 unless grep { /\b(?:push|merg)\w*(?: +$PUSH_LINK){0,4} +\Q$ln\E(?![\w\/-])/ } @cl;
+        }
     }
     return 1;
 }
