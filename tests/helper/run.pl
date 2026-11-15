@@ -98,6 +98,8 @@
 #     "repo-tmp-off-temp" while the repo tmp folder (--repo-tmp, else <repo>/tmp), as given or
 #     real, lies under a temp root the helper's sweep treats as temp (/tmp, /var/folders, with or
 #     without /private): a case that needs a "repo" $TMP outside every temp root (RRP-07).
+#   "perl-module:<Name>" skips unless this perl loads the module <Name> (Unicode::Normalize is not on
+#     the perl-base floor).
 #   Git for Windows (sitting 4, T1-T6): "symlinks" skips unless symlink() makes a real link, to an
 #     existing file and to a missing one (MSYS perl copies the first and fails on the second);
 #     "exact-modes" skips where chmod does not set the mode stat reads back (noacl_modes: a mode
@@ -1707,8 +1709,13 @@ sub missing_needs {
                   || ($_ eq 'long-paths' && !long_paths_ok()) || (($_ eq 'unix-os' || $_ eq 'posix-names') && windows_perl())
                   || (/^docker-image:(.+)$/ && !docker_image($1)) || ($_ eq 'nonroot' && $> == 0)
                   || (/^docker-image-any:(.+)$/ && !grep { docker_image($_) } split /\|/, $1)
+                  || (/^perl-module:([A-Za-z0-9_:]+)$/ && !perl_module($1))
                   || (/^fixture:(.+)$/ && !-e "$FIXTURES_DIR/$1") } @{ ref $needs eq 'ARRAY' ? $needs : [] };
 }
+
+# perl_module(name) -> 1 when this perl loads the module ("needs": ["perl-module:Unicode::Normalize"]
+# skips a step on a perl without it, such as the perl-base floor).
+sub perl_module { my ($m) = @_; return eval "require $m; 1" ? 1 : 0 }
 
 # windows_perl() -> 1 under a Perl for Windows (Git for Windows' MSYS, Cygwin, a native build):
 # the machines whose missing pid 1 and `ps -o` are limits of the platform, not of the host.
