@@ -476,13 +476,14 @@ sub report {
     }
     my $cat = $st ? _num($st->{compacted_at}) : undef;
     # 0.1.15: a main request in flight: the transcript's last main request started after the one
-    # prompt_cache has the response of, for $INFLIGHT_S at most, after any compaction, while
-    # prompt_cache alone would read cold (expired) or the compaction (one after the request it
-    # has). It reads as pending, not as that cold or compacted flash: its response writes the
+    # prompt_cache has the response of, for $INFLIGHT_S at most (and not in the future: a skewed
+    # clock reads as before), after any compaction, while the reading would otherwise be cold
+    # (expired) or the compaction (one after the request it has). It reads as pending, not as that cold or compacted flash: its response writes the
     # cache within seconds. While prompt_cache still reads warm, the request reads that warm cache
     # and the reading stays warm.
     my $flight = !defined $why && defined $main_at && defined $pc_start && defined $exp
                  && $main_at > $pc_start + $TOUCH_SLACK_S && $now - $main_at <= $INFLIGHT_S
+                 && $main_at <= $now + $TOUCH_SLACK_S
                  && (!defined $cat || $main_at > $cat)
                  && ($exp <= $now || (defined $cat && $cat > $pc_start)) ? 1 : 0;
     # a compaction after the last request: the next one writes the cache anew. 0.1.15: only while

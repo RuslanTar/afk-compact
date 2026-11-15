@@ -2206,6 +2206,375 @@
     "exit": 0,
     "stdout": "░░░░░░░░░░░░ ~0m\n"
    }
+  },
+  {
+   "name": "a compaction before the request prompt_cache has the response of, a later request sent: warm, not pending",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "compacted_at": 1794223100
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225590",
+       "timestamp": "2026-11-09T11:59:50.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794227200,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "██████░░░░░░ 33m\n"
+   }
+  },
+  {
+   "name": "the same: --json warm",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "compacted_at": 1794223100
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225590",
+       "timestamp": "2026-11-09T11:59:50.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794227200,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "why": null,
+     "label": "warm"
+    }
+   }
+  },
+  {
+   "name": "the transcript's request 3 s after prompt_cache's start (inside the 5 s margin): the same request, cold",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "schema_only": 1
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225200",
+       "timestamp": "2026-11-09T11:53:20.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794225497,
+     "ttl": "5m"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "████████████ cold 6m\n"
+   }
+  },
+  {
+   "name": "the transcript's request 6 s after prompt_cache's start (past the 5 s margin): a later request, pending",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "schema_only": 1
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225200",
+       "timestamp": "2026-11-09T11:53:20.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794225494,
+     "ttl": "5m"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "░░░░░░░░░░░░ …\n"
+   }
+  },
+  {
+   "name": "a transcript request an hour in the future (a skewed clock): not pending, cold",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "schema_only": 1
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794229200",
+       "timestamp": "2026-11-09T13:00:00.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794225480,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "cold",
+     "why": "expired",
+     "label": "cold"
+    }
+   }
   }
  ]
 }
