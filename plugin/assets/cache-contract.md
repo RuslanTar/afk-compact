@@ -5,14 +5,16 @@
 
 ```
 <store> cache [--sid <session id>] [--stdin] [--json] [--note-usage]
+              [--bar [--ascii] [--color auto|always|never] [--short] [--left]]
 ```
 
 - `--stdin` reads the JSON object Claude Code sends a status line command on stdin (`session_id`, `prompt_cache`, `transcript_path`; at most 1 MiB).
 - `--sid` names the session; without `--stdin` the command reads only the plugin's own record of it and the transcript that record names. With both, the two ids must be the same, else the state is `unknown` (`bad-sid`).
-- `--json` prints the object below; without it, one plain line.
+- `--json` prints the object below; without it, one plain line, or with `--bar` the meter ([below](#the-meter)). `--json` wins over `--bar`.
+- `--bar` (0.1.13) and its four flags: `--ascii`, `--color auto|always|never`, `--short` and `--left`, described under [the meter](#the-meter).
 - `--note-usage` (with `--stdin`) also records the input's `rate_limits` in the plugin's shared usage record ([below](#the-usage-record)). It changes nothing in the output.
 
-It exits 0 whatever it reads (a usage error says so on stderr), writes nothing but the usage record when `--note-usage` asks for it, and reads at most the plugin's small state file and the last 2 MiB of the transcript. Only where the helper cannot run at all does it fail like every other command: without perl 5.28 or later it prints `REFUSED: helper-runtime` and exits 3, and a damaged plugin copy exits 70 with the reason on stderr. It loads none of the plugin's settings, so no option changes what it reads.
+It exits 0 whatever it reads (a usage error says so on stderr), writes nothing but the usage record when `--note-usage` asks for it, and reads at most the plugin's small state file and the last 2 MiB of the transcript. Only where the helper cannot run at all does it fail like every other command: without perl 5.28 or later it prints `REFUSED: helper-runtime` and exits 3, and a damaged plugin copy exits 70 with the reason on stderr. With `--bar` it never does: it prints nothing on stdout or stderr and exits 0 then too. A plugin copy older than 0.1.13 does not know `--bar`: it prints its usage on stderr, nothing on stdout, and exits 0, so a status line shows no meter rather than an error. It loads none of the plugin's settings, so no option changes what it reads.
 
 ## The plain line
 
@@ -27,6 +29,24 @@ It exits 0 whatever it reads (a usage error says so on stderr), writes nothing b
 After any of these but unknown, ` · ping pending` while a keep-warm ping is out, and ` · keep-warm off (<why>)` when keep-warm did not start in the current idle gap, for every reason but `no-jobs`: `cache 1h warm 8m left ↻2/7 · ping pending`, `cache 1h warm 6m left · keep-warm off (near-limit)`. No background job is the normal idle case, not a refusal to notice, so the line leaves `no-jobs` out; `keep_warm.off` in the JSON, the log row and `/afk-compact:status` still name it.
 
 The text may change between versions; read `--json` in anything that parses it.
+
+## The meter
+
+`--bar` prints one segment for a status line: 12 cells and a suffix, `██████░░░░░░ 30m`. The cells fill as the cache nears its expiry, `(ttl − seconds_left) / ttl`; the suffix is the cache's age, the time since the request that set its expiry, `now − (expires_at − ttl)` (so a fork of the conversation that read the cache counts, as `expires_at` does).
+
+| State | Meter |
+|---|---|
+| warm | `██░░░░░░░░░░ 10m`: blue, yellow from half the TTL, red from 90% |
+| warm, keep-warm warming | `█████░░░░░░░ ↻3/7`: cyan, ping 3 of at most 7 filled over the cells; `↻3/7…` while a ping is out |
+| warm, keep-warm refused near a usage limit | `██████░░░░░░ 30m off` |
+| cold, expired | `████████████ cold 1h02m`: magenta, the age |
+| cold, a keep-warm ping that did not read the conversation | `████████████ cold miss` |
+| compacted | `░░░░░░░░░░░░ compacted` |
+| unknown, or the TTL unknown | nothing at all |
+
+A `~` before the age marks a TTL read from the transcript rather than from Claude Code's `prompt_cache`. `--left` shows the time left instead of the age (`50m left`). `--short` drops the cells: `c 10m`, `c ↻3/7`, `c cold`, `c cmp`; a `COLUMNS` below 60 does the same. `--ascii` draws `#` and `-`, `kw` for `↻` and `...` for `…`; a locale whose `LC_ALL`, `LC_CTYPE` or `LANG` names another charset than UTF-8 does the same. `--color` picks the 16 standard terminal colours: `auto` (the default) is on unless `NO_COLOR` is set and not empty or `TERM` is `dumb`; `always` is on, `never` off. A coloured segment ends with a colour reset.
+
+The flags are a stable promise: a later version keeps them. The meter's text, its glyphs, colours and thresholds may change between versions; read `--json` in anything that parses it.
 
 ## The JSON object
 

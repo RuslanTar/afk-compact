@@ -6,6 +6,11 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+### Added
+
+- **A cache meter for your status line.** `cache --stdin --bar` prints `██████░░░░░░ 30m`: 12 cells that fill as the prompt cache nears its expiry (blue, yellow from half its lifetime, red from 90%) and the cache's age; while keep-warm runs it reads `↻3/7` in cyan, a cold cache `cold 1h02m` or `cold miss`, and after a compaction `compacted`. Before the first response, or when the cache's lifetime is not known, it prints nothing. `--left` shows the time left instead of the age, `--short` drops the cells, `--ascii` draws `#` and `-`, and `--color auto|always|never` follows `NO_COLOR` and `TERM=dumb`. Where the helper cannot run, `--bar` prints nothing and exits 0 instead of `REFUSED: helper-runtime`. The flags are stable; the meter's text may change, and `--json` stays the format to parse. An older plugin copy given `--bar` shows nothing until you update.
+- **`/afk-compact:settings` shows the meter for your setup.** A "Status line meter" step reads which status line your user, project and local settings run (by the name of what it runs only, never the full command), previews the meter and prints the snippet for your case: a settings entry, a script that adds the meter as a second line under your own, or the values for a ccstatusline Custom Command widget. It changes no file; you paste the snippet. The helper call is `settings statusline show [--json]`.
+
 ### Fixed
 
 - **A status line no longer shows sh errors once the plugin's folder is gone.** The fixed path a status line calls, `~/.local/state/afk-compact/bin/afk-compact-store`, ran the installed copy's helper without checking for it, so after an uninstall, a prune or a failed update every refresh printed `sh` errors into the status line. It now checks first and, with that copy gone, prints nothing and exits 0; with the copy there it is still one `exec`. A shim written by an earlier version is rewritten at the next session start. A plugin folder path that holds a `'` now gets the shim too. After a downgrade to 0.1.12 or earlier the segment stays blank until the next upgrade or until you delete the shim file: those versions do not recognise the new shim and leave it alone.
