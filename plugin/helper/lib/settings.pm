@@ -189,7 +189,8 @@ our %SWITCH = (handoff_turn => [qw(halt off)], precompact_turn => [qw(model code
 our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unattended_prod_reads queue_cmd restart_on_update);
 # Protective keys: they can only make the plugin ask or withhold
 # more. Flags and env are ignored with the same note; the value comes from the config dir's
-# settings file, and a foreign config dir does not reset it (that would weaken protection).
+# settings file only (CLAUDE_CONFIG_DIR when set): a config dir whose file lacks the list runs
+# without the ~/.claude list's entries, and is not reset to a safe value as %FILE_ONLY keys are.
 # protected_branches is one: a flag or env value that replaced the file's
 # list would drop the user's own entries; so is prune_protected_roots (0.1.17), for the same reason.
 our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules protected_branches prune_protected_roots);

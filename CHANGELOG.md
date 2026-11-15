@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Added
 
-- A `prune_protected_roots` setting, and `prune --protect DIR`, name folders `/afk-compact:prune` never works in. When a folder it would read or delete in is one, lies inside one or holds one, prune refuses and deletes nothing.
+- A `prune_protected_roots` setting, and `prune --protect DIR`, name folders `/afk-compact:prune` never works in. When a folder it would read or delete in is one (also through a link or another spelling), lies inside one or holds one, prune refuses and deletes nothing.
 
 ### Changed
 

@@ -291,7 +291,7 @@
     "prune_protected_roots": {
       "type": "string",
       "title": "Folders prune never works in [default: empty = none]",
-      "description": "Absolute folders, separated by ';', that /afk-compact:prune must never touch: when the handoff folder, the evidence folder, a --root folder or the cache state folder is one of them, lies inside one or holds one, prune refuses the whole run and deletes nothing. Paths are compared after links are resolved, by whole folder names, and a folder that does not exist yet is protected too. Empty (the default) protects no folder; only your settings file counts for this option, flags and environment variables are ignored.",
+      "description": "Absolute folders, separated by ';', that /afk-compact:prune must never touch: when the handoff folder, the evidence folder, a --root folder or the cache state folder is one of them, lies inside one or holds one, prune refuses the whole run and deletes nothing. The same folder is recognised under another spelling too (a link, another Unicode form or letter case, a second mount of it), whole folder names are compared, and a folder that does not exist yet is protected too. Empty (the default) protects no folder; only your settings file counts for this option (the one in the CLAUDE_CONFIG_DIR folder when that is set), flags and plugin option values are ignored.",
       "default": ""
     },
     "restart_on_update": {
