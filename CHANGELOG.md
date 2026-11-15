@@ -8,7 +8,7 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ### Fixed
 
-- **A status line no longer shows sh errors once the plugin's folder is gone.** The fixed path a status line calls, `~/.local/state/afk-compact/bin/afk-compact-store`, ran the installed copy's helper without checking for it, so after an uninstall, a prune or a failed update every refresh printed `sh` errors into the status line. It now checks first and, with that copy gone, prints nothing and exits 0; with the copy there it is still one `exec`. A shim written by an earlier version is rewritten at the next session start. A plugin folder path that holds a `'` now gets the shim too.
+- **A status line no longer shows sh errors once the plugin's folder is gone.** The fixed path a status line calls, `~/.local/state/afk-compact/bin/afk-compact-store`, ran the installed copy's helper without checking for it, so after an uninstall, a prune or a failed update every refresh printed `sh` errors into the status line. It now checks first and, with that copy gone, prints nothing and exits 0; with the copy there it is still one `exec`. A shim written by an earlier version is rewritten at the next session start. A plugin folder path that holds a `'` now gets the shim too. After a downgrade to 0.1.12 or earlier the segment stays blank until the next upgrade or until you delete the shim file: those versions do not recognise the new shim and leave it alone.
 
 ## [0.1.12] - 2026-11-14
 
