@@ -41,7 +41,13 @@ use utf8;
 use File::Basename ();
 use Cwd ();
 my $HELPER_DIR;
-BEGIN { $HELPER_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__)) }
+# The modules this abs_path call loads itself, for STORE_TEST_PERL_INC_OUT's seam (below) only
+my %ABS_LOADS;
+BEGIN {
+    my %pre = ($ENV{STORE_TEST_MODE} || '') eq '1' && $ENV{STORE_TEST_PERL_INC_OUT} ? %INC : ();
+    $HELPER_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
+    %ABS_LOADS = map { ($_ => 1) } grep { !exists $pre{$_} } keys %INC if %pre;
+}
 use lib "$HELPER_DIR/lib";
 
 umask 077;
@@ -95,7 +101,13 @@ our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock
 # other subcommand, and an unknown event, loads @CORE. Test seams (STORE_TEST_MODE only):
 # STORE_TEST_LAZY=full loads @CORE for a hook too; STORE_TEST_INC_OUT=<file> gets one line, the
 # helper's own libraries loaded by the end, from helper/lib only (`skills/prune` for one in a
-# subfolder; perl's own modules are left out), sorted (HOOK-LAZY-01, CACHE-04).
+# subfolder; perl's own modules are left out), sorted (HOOK-LAZY-01, CACHE-04);
+# STORE_TEST_PERL_INC_OUT=<file> gets one line, the other half: every module loaded by the end
+# that is not the helper's own (not from helper/: perl's modules, as %INC names them, such as
+# File/Spec.pm), sorted, less those the Cwd::abs_path call above loaded itself (HOOK-LAZY-02).
+# That call loads none where Cwd's abs_path is XS (macOS, Linux); under MSYS and Cygwin perl it is
+# the pure-Perl fast_abs_path, which requires File::Spec (and File::Spec::Unix or ::Cygwin,
+# constant) in every process, a load no later line of the helper can avoid or add to.
 our @HOOK_BASE = qw(util jsonc sha ctx spec settings paths roots log rc identity git detect secrets transcript args repomode userre);
 our %HOOK_EVENT = (
     PreCompact       => [qw(lock nonce bucket frontmatter assemble dispatch sessions ledger copies keyset)],
@@ -151,6 +163,11 @@ END {
     my $f = $TEST ? $ENV{STORE_TEST_INC_OUT} : undef;
     if (defined $f && $f =~ m{\A/} && open(my $fh, '>>', $f)) {
         print $fh join(' ', sort map { m{\A([a-z_]+(?:/[a-z_]+)*)\.pm\z} && index($INC{$_} // '', "$HELPER_DIR/lib/") == 0 ? $1 : () } keys %INC), "\n";
+        close $fh;
+    }
+    my $g = $TEST ? $ENV{STORE_TEST_PERL_INC_OUT} : undef;
+    if (defined $g && $g =~ m{\A/} && open(my $fh, '>>', $g)) {
+        print $fh join(' ', sort grep { index($INC{$_} // '', "$HELPER_DIR/") != 0 && !$ABS_LOADS{$_} } keys %INC), "\n";
         close $fh;
     }
 }

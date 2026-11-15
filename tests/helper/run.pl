@@ -118,6 +118,9 @@
 #     cmd/hook.pl refers to (T-12)
 #   builtin hook_load_parity {steps, tz, inc_lacks, lazy_loads}: hook calls run with main.pl's per-event
 #     sets and with every core library (STORE_TEST_LAZY=full) leave the same stdout and rows (T-12)
+#   builtin perl_loads {dir, calls, allow {module: why}, refuse}: the perl modules each named call's
+#     process loaded (main.pl's STORE_TEST_PERL_INC_OUT files, <dir>/<call>.txt) are all on the
+#     allowlist, and no refused module is on it (HOOK-LAZY-02)
 #   builtin junk_paths {table}: begin's cut_prefix and junk_path (the staged copy) over each row of the
 #     junk-path table (tests/fixtures/paths/junk-paths.json: path, as, junk), as the mod's units.test.ts reads it
 #   builtin begin_fit {reply, found, all, unread, pad {key, to}, json, min_bytes, max_bytes}: begin's _fit
@@ -3156,6 +3159,28 @@ sub hook_load_parity {
     return @e;
 }
 
+# perl_loads {dir, calls [names], allow {module: why}, refuse [modules]}: each named call left
+# <dir>/<name>.txt (main.pl's STORE_TEST_PERL_INC_OUT: one line a process, the modules it loaded
+# that are not the helper's own); every module on every line is on the allowlist, no refused
+# module is on it, and no file is missing or empty (a seam that wrote nothing proves nothing).
+sub perl_loads {
+    my ($args) = @_;
+    my @e;
+    my %allow = %{ $args->{allow} || {} };
+    push @e, 'no allowlist' unless %allow;
+    push @e, "the allowlist holds $_, which must be refused" for grep { exists $allow{$_} } @{ $args->{refuse} || [] };
+    push @e, 'no calls' unless @{ $args->{calls} || [] };
+    for my $n (@{ $args->{calls} || [] }) {
+        my $txt = util::read_file("$args->{dir}/$n.txt");
+        my @lines = grep { /\S/ } split /\n/, $txt // '';
+        if (!@lines) { push @e, "$n: no reading (the seam wrote nothing)"; next }
+        my %bad;
+        for my $l (@lines) { $bad{$_} = 1 for grep { !exists $allow{$_} } split ' ', $l }
+        push @e, "$n: loaded " . join(' ', sort keys %bad) . ', not on the allowlist' if %bad;
+    }
+    return @e;
+}
+
 sub builtin {
     my ($name, $a, $cdir, $V) = @_;
     _libs();
@@ -4224,6 +4249,7 @@ sub builtin {
     }
     if ($name eq 'hook_lazy_audit') { return hook_lazy_audit() }
     if ($name eq 'hook_load_parity') { return hook_load_parity($a, $cdir, $V) }
+    if ($name eq 'perl_loads') { return perl_loads($a) }
     if ($name eq 'claude_pid_walk') {
         # BG-PID: the walk from the helper's parent to the Claude Code process, over a process
         # table given in the case ({pid: {ppid, comm, exe}}; exe is what /proc/<pid>/exe or lsof

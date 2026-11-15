@@ -1,0 +1,897 @@
+{
+ "id": "HOOK-LAZY-02-perl-modules",
+ "note": "0.1.17: a hook process and the status-line meter load no perl module beyond this allowlist (the 22 modules the hooks and meter of v0.1.15 and v0.1.16 load, each with why; the same 22 with perl 5.34 on macOS and 5.38 and 5.40 on Linux), so a module load added to a path a hook runs fails here; File::Spec, File::Spec::Unix and constant are refused (the null device is named in place, as File::Spec->devnull gives it, in main.pl's redirect, util::run, watchcall::call and userre's pattern child). main.pl's STORE_TEST_PERL_INC_OUT lists every module a process loaded that is not the helper's own, less those main.pl's own Cwd::abs_path call (the BEGIN that finds the helper's folder) loaded itself. That call loads none on macOS and Linux, where Cwd's abs_path is XS. Under MSYS and Cygwin perl, Cwd's abs_path is the pure-Perl fast_abs_path, which requires File::Spec (with File::Spec::Unix or File::Spec::Cygwin, and constant) in every hook and meter process, in v0.1.15 and v0.1.16 too: no later line of the helper can avoid that load, so there the case pins what the rest of the process adds, and the refusal holds only that no later line needs those modules. So the case needs no host token. Every event hooks.json registers and cmd/hook.pl's %EVENTS handles runs: SessionStart with each source its matcher names (startup, resume, clear, compact, fork), Stop, PreCompact, PostCompact, SubagentStop, StopFailure, PermissionDenied and SessionEnd, and `cache --stdin --bar`, which shares main.pl's redirect, in two fixtures: A, a bare cwd; B, a git repo cwd with deny_class_patterns (PermissionDenied's pattern child), prod_patterns and secret_extra_rules set. run.pl gives every call Claude Code's pid (STORE_TEST_CLAUDE_PID), so StopFailure and PermissionDenied also run once without it: identity::claude_pid then walks from the helper's parent and reads a start time, as a hook does when no classic-alive.json names its pid (on macOS through util::run's ps; Linux reads /proc). UserPromptSubmit is no helper hook (not in hooks.json or %EVENTS; the mod handles it): `hook UserPromptSubmit` takes main.pl's unknown-event path, which loads all of the helper's @CORE libraries and returns at once in cmd/hook.pl, so its step pins the widest set of the helper's own libraries a hook process loads; in perl modules it loads 19, as StopFailure and PermissionDenied do (the meter 18, the other events 22). The allowlist is one list for every call; a module allowed for one event passes in all of them. Before the change (with util::run, watchcall and userre still requiring File::Spec, as at the identity commit), on macOS, every SessionStart source, Stop, SessionEnd, PreCompact, PostCompact and SubagentStop loaded the three in both fixtures, PermissionDenied in B, and StopFailure and PermissionDenied in both once they walk.",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "A (bare cwd): SessionStart startup",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "mkdir": "$TMP/perl-inc"
+    },
+    {
+     "transcript": "$TMP/proj/$SID.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "ts": "2026-10-21T14:00:00+03:00"
+       }
+      },
+      {
+       "text": "working"
+      }
+     ]
+    }
+   ],
+   "now": "2026-10-21T14:01:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-SessionStart-startup.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): Stop",
+   "now": "2026-10-21T14:02:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-Stop.txt"
+   },
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): PreCompact",
+   "now": "2026-10-21T14:03:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-PreCompact.txt"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): PostCompact",
+   "now": "2026-10-21T14:04:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-PostCompact.txt"
+   },
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n# LAB-42 LOADBODY\n## Resume here\nStatus: active\n</summary>"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): SessionStart compact",
+   "now": "2026-10-21T14:05:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-SessionStart-compact.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): SessionStart resume",
+   "now": "2026-10-21T14:06:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-SessionStart-resume.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): SessionStart clear",
+   "now": "2026-10-21T14:07:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-SessionStart-clear.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "clear"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): SessionStart fork",
+   "now": "2026-10-21T14:08:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-SessionStart-fork.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "fork"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): SubagentStop",
+   "now": "2026-10-21T14:09:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-SubagentStop.txt"
+   },
+   "argv": [
+    "hook",
+    "SubagentStop"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SubagentStop",
+    "agent_id": "a1b2c3d4e5f6a7b8c",
+    "agent_type": "general-purpose",
+    "stop_hook_active": false
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): StopFailure",
+   "now": "2026-10-21T14:10:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-StopFailure.txt"
+   },
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "StopFailure",
+    "error": "rate_limit"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): StopFailure, Claude Code's pid not given (the walk and its start-time read)",
+   "now": "2026-10-21T14:11:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-StopFailure-walk.txt",
+    "STORE_TEST_CLAUDE_PID": null
+   },
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "StopFailure",
+    "error": "rate_limit"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): PermissionDenied",
+   "now": "2026-10-21T14:12:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-PermissionDenied.txt"
+   },
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 60"
+    },
+    "reason": "denied by a rule in settings"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): PermissionDenied, Claude Code's pid not given (the walk and its start-time read)",
+   "now": "2026-10-21T14:13:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-PermissionDenied-walk.txt",
+    "STORE_TEST_CLAUDE_PID": null
+   },
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 60"
+    },
+    "reason": "denied by a rule in settings"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): UserPromptSubmit",
+   "now": "2026-10-21T14:14:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-UserPromptSubmit.txt"
+   },
+   "argv": [
+    "hook",
+    "UserPromptSubmit"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "go on"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): SessionEnd",
+   "now": "2026-10-21T14:15:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-SessionEnd.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionEnd",
+    "reason": "prompt_input_exit"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "A (bare cwd): meter",
+   "now": "2026-10-21T14:16:00+03:00",
+   "cwd": "$TMP/work",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/A-meter.txt"
+   },
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1761051600
+    }
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): SessionStart startup",
+   "options": {
+    "deny_class_patterns": "scope=\\bsleep\\b;routing=zzz",
+    "prod_patterns": "--context=acme-eu1;db\\.acme\\.internal",
+    "secret_extra_rules": "HARD:ACME-[0-9]{12};WARN:FOO-SECRET-[A-Z]+;NAME:*.tfstate"
+   },
+   "setup": [
+    {
+     "repo": "$TMP/repo",
+     "files": {
+      "README.md": "readme\n",
+      "src/app.txt": "ACME-000000000001\n"
+     }
+    },
+    {
+     "transcript": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+     "rows": [
+      {
+       "prompt": {
+        "ts": "2026-10-21T15:00:00+03:00"
+       }
+      },
+      {
+       "text": "working"
+      }
+     ]
+    }
+   ],
+   "now": "2026-10-21T15:01:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-SessionStart-startup.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): Stop",
+   "now": "2026-10-21T15:02:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-Stop.txt"
+   },
+   "argv": [
+    "hook",
+    "Stop"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "background_tasks": [],
+    "session_crons": []
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): PreCompact",
+   "now": "2026-10-21T15:03:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-PreCompact.txt"
+   },
+   "argv": [
+    "hook",
+    "PreCompact"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "PreCompact",
+    "trigger": "auto",
+    "custom_instructions": null
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): PostCompact",
+   "now": "2026-10-21T15:04:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-PostCompact.txt"
+   },
+   "argv": [
+    "hook",
+    "PostCompact"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "PostCompact",
+    "trigger": "auto",
+    "compact_summary": "<summary>\n# LAB-42 LOADBODY\n## Resume here\nStatus: active\n</summary>"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): SessionStart compact",
+   "now": "2026-10-21T15:05:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-SessionStart-compact.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "SessionStart",
+    "source": "compact"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): SessionStart resume",
+   "now": "2026-10-21T15:06:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-SessionStart-resume.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): SessionStart clear",
+   "now": "2026-10-21T15:07:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-SessionStart-clear.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "SessionStart",
+    "source": "clear"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): SessionStart fork",
+   "now": "2026-10-21T15:08:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-SessionStart-fork.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "SessionStart",
+    "source": "fork"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): SubagentStop",
+   "now": "2026-10-21T15:09:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-SubagentStop.txt"
+   },
+   "argv": [
+    "hook",
+    "SubagentStop"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "SubagentStop",
+    "agent_id": "a1b2c3d4e5f6a7b8c",
+    "agent_type": "general-purpose",
+    "stop_hook_active": false
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): StopFailure",
+   "now": "2026-10-21T15:10:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-StopFailure.txt"
+   },
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "StopFailure",
+    "error": "rate_limit"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): StopFailure, Claude Code's pid not given (the walk and its start-time read)",
+   "now": "2026-10-21T15:11:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-StopFailure-walk.txt",
+    "STORE_TEST_CLAUDE_PID": null
+   },
+   "argv": [
+    "hook",
+    "StopFailure"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "StopFailure",
+    "error": "rate_limit"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): PermissionDenied",
+   "now": "2026-10-21T15:12:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-PermissionDenied.txt"
+   },
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 60"
+    },
+    "reason": "denied by a rule in settings"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): PermissionDenied, Claude Code's pid not given (the walk and its start-time read)",
+   "now": "2026-10-21T15:13:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-PermissionDenied-walk.txt",
+    "STORE_TEST_CLAUDE_PID": null
+   },
+   "argv": [
+    "hook",
+    "PermissionDenied"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "PermissionDenied",
+    "tool_name": "Bash",
+    "tool_input": {
+     "command": "sleep 60"
+    },
+    "reason": "denied by a rule in settings"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): UserPromptSubmit",
+   "now": "2026-10-21T15:14:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-UserPromptSubmit.txt"
+   },
+   "argv": [
+    "hook",
+    "UserPromptSubmit"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "go on"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): SessionEnd",
+   "now": "2026-10-21T15:15:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-SessionEnd.txt"
+   },
+   "argv": [
+    "hook",
+    "SessionEnd"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "cwd": "$TMP/repo",
+    "hook_event_name": "SessionEnd",
+    "reason": "prompt_input_exit"
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "B (git repo with user patterns): meter",
+   "now": "2026-10-21T15:16:00+03:00",
+   "cwd": "$TMP/repo",
+   "env": {
+    "STORE_TEST_STOP_BUDGET_MS": "60000",
+    "STORE_TEST_PERL_INC_OUT": "$TMP/perl-inc/B-meter.txt"
+   },
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "b0b0b0b0-1111-4222-8333-444444444444",
+    "transcript_path": "$TMP/proj/b0b0b0b0-1111-4222-8333-444444444444.jsonl",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1761051600
+    }
+   },
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "name": "every call loaded only allowlisted perl modules",
+   "lib": "perl_loads",
+   "args": {
+    "dir": "$TMP/perl-inc",
+    "calls": [
+     "A-SessionStart-startup",
+     "A-Stop",
+     "A-PreCompact",
+     "A-PostCompact",
+     "A-SessionStart-compact",
+     "A-SessionStart-resume",
+     "A-SessionStart-clear",
+     "A-SessionStart-fork",
+     "A-SubagentStop",
+     "A-StopFailure",
+     "A-StopFailure-walk",
+     "A-PermissionDenied",
+     "A-PermissionDenied-walk",
+     "A-UserPromptSubmit",
+     "A-SessionEnd",
+     "A-meter",
+     "B-SessionStart-startup",
+     "B-Stop",
+     "B-PreCompact",
+     "B-PostCompact",
+     "B-SessionStart-compact",
+     "B-SessionStart-resume",
+     "B-SessionStart-clear",
+     "B-SessionStart-fork",
+     "B-SubagentStop",
+     "B-StopFailure",
+     "B-StopFailure-walk",
+     "B-PermissionDenied",
+     "B-PermissionDenied-walk",
+     "B-UserPromptSubmit",
+     "B-SessionEnd",
+     "B-meter"
+    ],
+    "allow": {
+     "strict.pm": "main.pl's and every library's use strict",
+     "warnings.pm": "main.pl's and every library's use warnings",
+     "utf8.pm": "main.pl's and the libraries' use utf8",
+     "lib.pm": "main.pl's use lib (helper/lib on @INC)",
+     "File/Basename.pm": "main.pl names its own folder (File::Basename::dirname) before any library loads; the libraries' use File::Basename",
+     "Cwd.pm": "main.pl's Cwd::abs_path of its own file; the libraries' use Cwd",
+     "Time/HiRes.pm": "main.pl's start clock ($T_START_MS) and util::clock_ms",
+     "POSIX.pm": "util's and other libraries' use POSIX (WNOHANG, _exit in a child, strftime)",
+     "Fcntl.pm": "the libraries' use Fcntl (flock and open flags); POSIX loads it too",
+     "Errno.pm": "the libraries' use Errno (errno names)",
+     "Config.pm": "main.pl's use lib loads it first (lib.pm uses Config); Errno uses it too",
+     "Exporter.pm": "the import of POSIX, Fcntl, Errno, Cwd, File::Basename and Time::HiRes",
+     "XSLoader.pm": "loads the compiled part of POSIX, Fcntl, Cwd, Time::HiRes and Digest::SHA",
+     "Carp.pm": "loaded by POSIX (and Tie::Hash)",
+     "Tie/Hash.pm": "loaded by POSIX",
+     "overloading.pm": "loaded by Carp and overload",
+     "warnings/register.pm": "loaded by POSIX, overload and Digest::SHA",
+     "overload.pm": "jsonc's use overload (its true and false values)",
+     "integer.pm": "sha's pure-perl SHA-256 (use integer, compiled with the library); Digest::SHA too",
+     "Digest/SHA.pm": "sha's fast path (require Digest::SHA) in an event that hashes (copies, keys, evidence)",
+     "Digest/base.pm": "loaded by Digest::SHA",
+     "vars.pm": "loaded by Digest::SHA"
+    },
+    "refuse": [
+     "File/Spec.pm",
+     "File/Spec/Unix.pm",
+     "constant.pm"
+    ]
+   }
+  }
+ ]
+}
