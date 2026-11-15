@@ -88,8 +88,9 @@ jobs:
           fi
           tools/gates plugin README.md docs --names "$names" --no-git-log
           # The community files, .github and bench get the gates that apply to hand-written text
-          # (names, user-path, attribution, stale-name).
-          for gate in $text_gates; do
+          # (names, user-path, attribution, stale-name), and CHANGELOG.md the changelog gate (its
+          # shape: tools/changelog-lint).
+          for gate in $text_gates changelog; do
             tools/gates CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md CHANGELOG.md .github bench \
               --names "$names" --no-git-log --only "$gate"
           done
