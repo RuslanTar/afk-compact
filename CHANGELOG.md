@@ -6,9 +6,26 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-11-15
+
+afk-compact 0.1.14 times keep-warm's first request after Claude Code's own idle compaction in the gaps where that compaction can run, so the request is no longer wasted.
+
 ### Changed
 
-- **Keep-warm no longer sends a request Claude Code's own idle compaction makes useless.** Claude Code still compacts a conversation at its idle minimum (200,000 tokens by default) or more on the one-hour cache about 54 minutes after its last request, and keep-warm's request at 50 minutes does not stop that. In such a gap the first request now comes at about 55 minutes, and only when Claude Code did not compact (the gap then stops `compacted` with no request); a failed one is still tried again a minute later, at 56 and 57. The `keep_warm_start` row and a refused `keep_warm_stop` row say which timing applied (`first_due_s`, `first_why: native-window` or `default`). With `"idleCompaction": false` nothing changes: the first request comes at 50 minutes.
+- **Keep-warm no longer sends a request Claude Code's own idle compaction makes useless.** Claude Code still compacts a conversation at its idle minimum (200,000 tokens by default) or more on the one-hour cache about 54 minutes after its last request, and keep-warm's request at 50 minutes does not stop that. In such a gap the first request now comes at about 55 minutes (when the plugin saw the gap's last request; after a reload during the turn it stays at 50), and only when Claude Code did not compact (the gap then stops `compacted` with no request); a failed one is still tried again a minute later, at 56 and 57. The `keep_warm_start` row and a refused `keep_warm_stop` row say which timing applied (`first_due_s`, `first_why: native-window` or `default`). With `"idleCompaction": false` nothing changes: the first request comes at 50 minutes.
+
+### Upgrade notes
+
+- No action is required. What you will notice in an idle gap at 200,000 tokens or more on the one-hour cache, with Claude Code's idle compaction not turned off:
+  - keep-warm's first request comes at about minute 55 instead of 50;
+  - a machine put to sleep between minute 50 and minute 55 of such a gap loses the cache;
+  - the status line meter shows no keep-warm mark until that first request.
+- To have keep-warm carry those gaps from minute 50 instead, set `"idleCompaction": false` in Claude Code's settings.
+
+### Compatibility
+
+- Requires Claude Code 2.1.287 or newer. The one-line install needs 2.1.292 or newer.
+- Tested against Claude Code 2.1.325.
 
 ## [0.1.13] - 2026-11-15
 
@@ -487,7 +504,8 @@ This is an early (0.x) version. Some parts that need a live session or a managed
 - `git` for the git measurements.
 - Supported: macOS 13 or newer, and Linux with glibc. Expected to work but not yet tested in a session: Alpine/musl and WSL 2. Native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.13...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.14...HEAD
+[0.1.14]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.14
 [0.1.13]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.13
 [0.1.12]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.12
 [0.1.11]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.11
