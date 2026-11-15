@@ -360,22 +360,115 @@ sub _mark {
 #
 # prune_protected_roots (a protective key: the settings file only) and each --protect DIR name
 # folders prune must never work in. A root that equals one, lies inside one or holds one refuses
-# the whole run. Both sides are compared as real paths (~ expanded, links resolved; a path that
-# does not exist resolves through its longest existing folder, util::real_path), by whole
-# `/`-separated parts, never as text prefixes (/a/bc is not inside /a/b). Letter case is ignored
-# where the file system usually ignores it (macOS, Windows), as roots.pm reads `.planning`.
+# the whole run. Two tests, and either one refuses:
+#   - Identity (the main test; review of 0.1.17: two different strings can name one folder, an NFD
+#     and an NFC spelling on APFS, a macOS firmlink alias /System/Volumes/Data/..., a bind mount, a
+#     case-insensitive mount, a Windows short name or junction). Each path's existing part is
+#     resolved by the kernel (Cwd::abs_path: links and `..` behind a link as the kernel reads them)
+#     and every existing ancestor on it gets its device and inode; a root lies in (or is) a protected
+#     path when the protected path's deepest existing folder is one of the root's ancestors (or the
+#     root) by that identity and the parts after it start with the protected path's missing parts.
+#     The parts that do not exist yet compare as text, NFC-normalised and case-folded (folding on
+#     every platform only ever refuses more). Where stat gives no usable identity (a native Windows
+#     perl reports inode 0; MSYS and Cygwin perl report the NTFS file id, as the rest of the store
+#     relies on in reconcile.pm and repomode.pm), the identity test is skipped and only the text
+#     test below decides. Unicode::Normalize is not on the perl-base floor (roots.pm): without it
+#     the text forms are not normalised, and only the identity test covers spellings.
+#   - Text (an extra refusal, never the only test): both sides as real paths (~ expanded, links
+#     resolved, a path that does not exist read through its longest existing folder), by whole
+#     `/`-separated parts, never as text prefixes (/a/bc is not inside /a/b), NFC-normalised, with
+#     letter case ignored where the file system usually ignores it (macOS, Windows), as roots.pm
+#     reads `.planning`. An entry is read both with `..` folded as text and as the kernel resolves it.
 
-# _resolve(path) -> its real path as `/`-separated parts (letter case folded where the file system
-# folds it), or undef when it is not an absolute path (after ~).
+my $NFC;
+sub _nfc {
+    my ($s) = @_;
+    $NFC //= (eval { require Unicode::Normalize; 1 } ? \&Unicode::Normalize::NFC : 0);
+    return $NFC ? $NFC->($s) : $s;
+}
+
+sub _fold_os { my $os = util::os(); return ($os eq 'darwin' || $os eq 'msys' || $os eq 'cygwin' || $os eq 'MSWin32') ? 1 : 0 }
+
+# _resolve(path) -> its real path as `/`-separated parts (NFC; letter case folded where the file
+# system folds it), or undef when it is not an absolute path (after ~). `..` is folded as text.
 sub _resolve {
     my ($p) = @_;
     return undef unless defined $p && $p ne '';
     my $rf = util::root_form(skills::util::bytes($p)) // return undef;
     my $r = util::real_path($rf) // return undef;
-    $r = skills::util::text($r);
-    my $os = util::os();
-    $r = lc $r if $os eq 'darwin' || $os eq 'msys' || $os eq 'cygwin' || $os eq 'MSWin32';
+    return _text_parts(skills::util::text($r));
+}
+
+sub _text_parts {
+    my ($r) = @_;
+    $r = _nfc($r);
+    $r = lc $r if _fold_os();
     return [ grep { $_ ne '' } split m{/+}, $r ];
+}
+
+# _id(path) -> "dev:ino" of the folder, or undef: missing, or no usable identity (inode 0, as a
+# native Windows perl reports it; STORE_TEST_NO_INO=1 in test mode stands in for that).
+sub _id {
+    my ($p) = @_;
+    return undef if util::test_mode() && ($ENV{STORE_TEST_NO_INO} // '') eq '1';
+    my @s = stat $p;
+    return (@s && $s[1]) ? "$s[0]:$s[1]" : undef;
+}
+
+# _info(path, physical) -> {ids, names, tail, text} or undef (not an absolute path after ~).
+# ids[i]: the identity of the existing real path's first i parts (ids[0] is /); names: those
+# parts; tail: the parts that do not exist; names and tail NFC and case-folded. physical: `..` in
+# the existing part is left to the kernel (an entry: `a/..` behind a link a -> x/y is x); else the
+# path is cleaned as text first (a root, as prune reads and deletes in it).
+sub _info {
+    my ($p, $physical) = @_;
+    return undef unless defined $p && $p ne '';
+    my $rf = util::root_form(skills::util::bytes($p)) // return undef;
+    $rf = util::clean_path($rf) unless $physical;
+    my @parts = grep { $_ ne '' && $_ ne '.' } split m{/+}, $rf;
+    my @tail;
+    while (@parts && !-e ('/' . join('/', @parts))) { unshift @tail, pop @parts }
+    require Cwd;
+    my $head = '/' . join('/', @parts);
+    my $real = Cwd::abs_path(util::fsb($head)) // util::fsb($head);
+    my @rp = grep { $_ ne '' } split m{/+}, $real;
+    my @t;
+    # `..` under a missing folder reads as text, as cd does
+    for my $x (@tail) { if ($x eq '..') { @t ? pop @t : pop @rp } else { push @t, $x } }
+    my $key = sub { lc _nfc(skills::util::text($_[0])) };
+    my @ids = map { _id('/' . join('/', @rp[0 .. $_ - 1])) } 0 .. scalar @rp;
+    return { ids => \@ids, names => [ map { $key->($_) } @rp ], tail => [ map { $key->($_) } @t ],
+             text => _text_parts(skills::util::text(join('/', '', @rp, @t))) };
+}
+
+# _within(info a, info b) -> undef, or how many parts a has beyond b (0: the same folder) when a
+# is b or lies inside it, told by the identity of b's deepest existing folder.
+sub _within {
+    my ($x, $y) = @_;
+    my $hid = $y->{ids}[-1] // return undef;
+    my $yt = $y->{tail};
+    for my $j (0 .. $#{ $x->{ids} }) {
+        next unless defined $x->{ids}[$j] && $x->{ids}[$j] eq $hid;
+        my @rest = (@{ $x->{names} }[$j .. $#{ $x->{names} }], @{ $x->{tail} });
+        next if @rest < @$yt || grep { $rest[$_] ne $yt->[$_] } 0 .. $#$yt;
+        return @rest - @$yt;
+    }
+    return undef;
+}
+
+# _hit(root info, protected entry) -> 'equals', 'inside', 'contains' or undef: identity first,
+# then each text form.
+sub _hit {
+    my ($r, $p) = @_;
+    my $in = _within($r, $p->{info});
+    return $in ? 'inside' : 'equals' if defined $in;
+    my $out = _within($p->{info}, $r);
+    return $out ? 'contains' : 'equals' if defined $out;
+    for my $t (@{ $p->{texts} }) {
+        my $how = _overlap($r->{text}, $t);
+        return $how if $how;
+    }
+    return undef;
 }
 
 # _overlap(parts a, parts b) -> 'equals', 'inside' (a lies in b), 'contains' (a holds b) or undef.
@@ -390,29 +483,47 @@ sub _overlap {
 # lines: each root that touches a protected path, and each protected entry prune cannot read
 # (not an absolute path), which refuses too rather than protect nothing.
 sub _protected_refusal {
-    my ($ctx, $flags, $roots) = @_;
+    my ($ctx, $flags, $roots, $resolved) = @_;
     my @prot;
     push @prot, map { ['prune_protected_roots', $_] } settings::list($ctx->{settings}{prune_protected_roots});
     push @prot, map { ['--protect', $_] } @$flags;
     return undef unless @prot;
     my (@lines, @res);
     for my $p (@prot) {
-        my $parts = _resolve($p->[1]);
-        if (!$parts) { push @lines, "$p->[0] entry " . _show($p->[1]) . ': not an absolute path (nothing deleted; fix the entry)'; next }
-        push @res, [ @$p, $parts ];
+        my ($parts, $info) = (_resolve($p->[1]), _info($p->[1], 1));
+        if (!$parts || !$info) { push @lines, "$p->[0] entry " . _show($p->[1]) . ': not an absolute path (nothing deleted; fix the entry)'; next }
+        push @res, { from => $p->[0], path => $p->[1], info => $info, texts => [ $parts, $info->{text} ] };
     }
+    @$resolved = @res if $resolved;
     for my $r (@$roots) {
         my ($label, $path) = @$r;
         next unless defined $path;
-        my $rp = _resolve($path) // next;
+        my $ri = _info($path, 0) // next;
         for my $p (@res) {
-            my $how = _overlap($rp, $p->[2]) // next;
+            my $how = _hit($ri, $p) // next;
             my $rel = $how eq 'equals' ? 'is' : $how eq 'inside' ? 'lies inside' : 'holds';
-            push @lines, "$label " . _show($path) . " $rel the protected path " . _show($p->[1]) . " ($p->[0])";
+            push @lines, "$label " . _show($path) . " $rel the protected path " . _show($p->{path}) . " ($p->{from})";
         }
     }
     return undef unless @lines;
     return [ @lines, 'nothing listed, nothing deleted: change the root or the protected list' ];
+}
+
+# _unlink_guard(file path, resolved entries) -> undef, or the protected entry the file's folder
+# is now (or lies inside), read again by identity just before its unlink: a unit folder swapped for
+# a link into a protected folder after the check above is not deleted from. One abs_path and a
+# stat per folder level for each file. Known limit: the kernel still follows the path's links at
+# the unlink itself, so a swap in the moment between this check and that unlink is not seen.
+sub _unlink_guard {
+    my ($path, $res) = @_;
+    return undef unless @$res;
+    my ($d) = $path =~ m{\A(.*)/[^/]+\z} or return undef;
+    my $fi = _info($d eq '' ? '/' : $d, 1) // return undef;
+    for my $p (@$res) {
+        my $how = _hit($fi, $p) // next;
+        return $p if $how ne 'contains';
+    }
+    return undef;
 }
 
 # ---------------------------------------------------------------- run
@@ -463,7 +574,8 @@ sub run {
     # 0.1.17: no root may touch a protected path (prune_protected_roots, --protect). The check runs
     # before anything is listed, over every root prune would read or write and the cache state
     # folder, so a refusal deletes nothing and lists nothing as deletable.
-    my $pr = _protected_refusal($ctx, $o->{protect} || [], [ @roots, ['cache state folder', cachestate::dir()] ]);
+    my @prot;
+    my $pr = _protected_refusal($ctx, $o->{protect} || [], [ @roots, ['cache state folder', cachestate::dir()] ], \@prot);
     die skills::cli::refuse('protected-root', @$pr) if $pr;
     @roots = grep { defined $_->[1] && -d $_->[1] } @roots;
 
@@ -533,7 +645,7 @@ sub run {
                . ($tot{ro_units} ? sprintf(' · %s more in read-only folders, not deleted', _size($tot{ro_free})) : '');
     push @out, "handoffs and summary copies newer than $days days: $young";
     if (!$apply) {
-        push @out, @drop ? "plan: $plan (apply: prune --apply --plan $plan, with the same --days, --min-mb and --root)" : 'nothing to prune';
+        push @out, @drop ? "plan: $plan (apply: prune --apply --plan $plan, with the same --days, --min-mb, --root and --protect)" : 'nothing to prune';
         skills::cli::say($_) for @out;
         return 0;
     }
@@ -545,9 +657,12 @@ sub run {
     my %undo;
     my $marked = _mark($ctx, \@mans, \%set, 'pruned', \%undo);
     my ($gone, $gone_b, @failed) = (0, 0);
+    # test seam: a unit folder swapped for a link (to) after the check, as a concurrent writer could
+    if (util::test_mode() && ($ENV{STORE_TEST_PRUNE_SWAP} // '') =~ /\A([^\t]+)\t([^\t]+)\z/) { rename $1, "$1.moved"; symlink $2, $1 }
     for my $f (@drop) {
         my @st = lstat $f->{path};
         if (!@st) { $gone++; next }
+        if (my $p = _unlink_guard($f->{path}, \@prot)) { push @failed, [ $f, 'inside the protected path ' . _show($p->{path}) ]; next }
         if (-l _ || !-f _ || $st[7] != $f->{bytes} || $st[9] != $f->{mtime}) { push @failed, [ $f, 'changed' ]; next }
         if (unlink $f->{path}) { $gone++; $gone_b += $f->{bytes}; next }
         (my $e = "$!") =~ s/\s+\z//;

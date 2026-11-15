@@ -1,11 +1,11 @@
 {
- "id": "HT-PR-04 (prune: a root that is, lies inside or holds a protected path refuses the whole run and deletes nothing; real paths by whole parts; a missing protected path still protects)",
+ "id": "HT-PR-04 (prune: a root that is, lies inside or holds a protected path refuses the whole run and deletes nothing; identity by device and inode, NFC text for missing parts; a missing protected path still protects)",
  "needs": [
   "symlinks"
  ],
  "layer": "H",
  "owner": "skills",
- "note": "0.1.17 prune_protected_roots (settings file only) and --protect DIR: before anything is listed, every root prune reads or writes (handoff_root, disposable_root, the old default folders, each --root, the cache state folder) is compared with each protected path as real paths (~ expanded, links resolved, a missing path through its longest existing folder) by whole /-separated parts. equals, inside or contains refuses (exit 3, REFUSED: protected-root, each root and protected path named, no plan, nothing deleted, in the dry run and with --apply); a sibling with a shared text prefix does not; an entry that is not an absolute path refuses too; an empty list changes nothing; a plugin option in the environment cannot replace the file value.",
+ "note": "0.1.17 prune_protected_roots (settings file only) and --protect DIR: before anything is listed, every root prune reads or writes (handoff_root, disposable_root, the old default folders, each --root, the cache state folder) is compared with each protected path as real paths (~ expanded, links resolved, a missing path through its longest existing folder) by whole /-separated parts. equals, inside or contains refuses (exit 3, REFUSED: protected-root, each root and protected path named, no plan, nothing deleted, in the dry run and with --apply); a sibling with a shared text prefix does not; an entry that is not an absolute path refuses too; an empty list changes nothing; a plugin option in the environment cannot replace the file value. Identity (0.1.17 review): existing ancestors compare by device and inode, so an NFD spelling of an NFC folder and a macOS firmlink alias (/System/Volumes/Data...) refuse, also with --apply and a real plan from an unguarded dry run (the file stays); a missing tail compares as NFC, case-folded text, and with no usable inode (STORE_TEST_NO_INO, as a native Windows perl) the NFC text compare alone still refuses; an entry's .. behind a link resolves as the kernel reads it; a folder swapped for a link into a protected folder after the check is not deleted from (STORE_TEST_PRUNE_SWAP).",
  "now": "2026-11-08T12:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -539,6 +539,439 @@
       "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
       "contains": [
        "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a real plan from a dry run with no list (the apply below would delete with it)",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": ""
+   },
+   "capture": {
+    "PLANA": "re:^plan: ([0-9a-f]{12}) "
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root ~/\\.local/state/$BRAND/disposable: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ]
+   }
+  },
+  {
+   "name": "--apply with that real plan and a protected folder the writable root holds: refused, the file is still there",
+   "argv": [
+    "prune",
+    "--apply",
+    "--plan",
+    "$PLANA"
+   ],
+   "options": {
+    "prune_protected_roots": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable holds the protected path "
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run",
+     "^deleted: "
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "--apply with that real plan and the root itself protected: refused, the file is still there",
+   "argv": [
+    "prune",
+    "--apply",
+    "--plan",
+    "$PLANA"
+   ],
+   "options": {
+    "prune_protected_roots": "$DISP"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run",
+     "^deleted: "
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/café/2026-09-01/x-evidence/a.log",
+     "content": "nfc\n",
+     "mtime_ago_s": 3456000
+    }
+   ]
+  },
+  {
+   "name": "NFD spelling of an NFC folder as disposable_root: a real plan with no list (macOS: one folder for both spellings)",
+   "needs": [
+    "darwin"
+   ],
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": ""
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/café"
+   },
+   "capture": {
+    "PLANN": "re:^plan: ([0-9a-f]{12}) "
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root \\S+: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ]
+   }
+  },
+  {
+   "name": "--apply with that plan, the folder protected in NFC while the root is spelled NFD: refused, the file is still there",
+   "needs": [
+    "darwin"
+   ],
+   "argv": [
+    "prune",
+    "--apply",
+    "--plan",
+    "$PLANN"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/café"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/café"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root \\S+ is the protected path "
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run",
+     "^deleted: "
+    ],
+    "files": [
+     {
+      "path": "$TMP/café/2026-09-01/x-evidence/a.log",
+      "contains": [
+       "nfc"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "an NFD entry protects the NFC root (any platform: the missing spelling compares as NFC text)",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/café"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/café"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root \\S+ is the protected path "
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ]
+   }
+  },
+  {
+   "name": "no usable device and inode (as a native Windows perl): the NFC text compare still refuses",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/café"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/café",
+    "STORE_TEST_NO_INO": "1"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root \\S+ is the protected path "
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ]
+   }
+  },
+  {
+   "name": "a firmlink alias (/System/Volumes/Data) of the --root refuses (macOS)",
+   "needs": [
+    "darwin"
+   ],
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/prot"
+   ],
+   "options": {
+    "prune_protected_roots": "/System/Volumes/Data$TMP/prot"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^folder $TMP/prot is the protected path /System/Volumes/Data$TMP/prot \\(prune_protected_roots\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ]
+   }
+  },
+  {
+   "needs": [
+    "darwin"
+   ],
+   "setup": [
+    {
+     "write": "$TMP/fl/2026-09-01/y-evidence/b.log",
+     "content": "fl\n",
+     "mtime_ago_s": 3456000
+    }
+   ]
+  },
+  {
+   "name": "a firmlink-guard disposable_root: a real plan with no list (macOS)",
+   "needs": [
+    "darwin"
+   ],
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": ""
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/fl"
+   },
+   "capture": {
+    "PLANF": "re:^plan: ([0-9a-f]{12}) "
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root \\S+: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ]
+   }
+  },
+  {
+   "name": "--apply with that plan, the root protected through its firmlink alias: refused, the file is still there (macOS)",
+   "needs": [
+    "darwin"
+   ],
+   "argv": [
+    "prune",
+    "--apply",
+    "--plan",
+    "$PLANF"
+   ],
+   "options": {
+    "prune_protected_roots": "/System/Volumes/Data$TMP/fl"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/fl"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run",
+     "^deleted: "
+    ],
+    "files": [
+     {
+      "path": "$TMP/fl/2026-09-01/y-evidence/b.log",
+      "contains": [
+       "fl"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/else/x"
+    },
+    {
+     "mkdir": "$TMP/else/prot"
+    },
+    {
+     "symlink": "$TMP/lnk",
+     "to": "$TMP/else/x"
+    }
+   ]
+  },
+  {
+   "name": "an entry with .. behind a link protects the folder the kernel names (lnk/.. is else/)",
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/else/prot"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/lnk/../prot"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^folder $TMP/else/prot is the protected path $TMP/lnk/\\.\\./prot \\(prune_protected_roots\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$TMP/race/2026-09-01/z-evidence/c.log",
+     "content": "race\n"
+    },
+    {
+     "touch": "$TMP/race/2026-09-01/z-evidence/c.log",
+     "at": "2026-09-01T10:00:00+03:00"
+    },
+    {
+     "write": "$TMP/prot2/z-evidence/c.log",
+     "content": "race\n"
+    },
+    {
+     "touch": "$TMP/prot2/z-evidence/c.log",
+     "at": "2026-09-01T10:00:00+03:00"
+    }
+   ]
+  },
+  {
+   "name": "race: a real plan whose root does not touch the protected folder",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/prot2"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/race"
+   },
+   "capture": {
+    "PLANR": "re:^plan: ([0-9a-f]{12}) "
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root \\S+: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ]
+   }
+  },
+  {
+   "name": "race: the dated folder becomes a link into the protected folder after the check; the unlink is refused, the protected file stays",
+   "argv": [
+    "prune",
+    "--apply",
+    "--plan",
+    "$PLANR"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/prot2"
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/race",
+    "STORE_TEST_PRUNE_SWAP": "$TMP/race/2026-09-01\t$TMP/prot2"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "^deleted: 0 files, ",
+     "^  failed: \\S+/c\\.log \\(inside the protected path $TMP/prot2\\)$"
+    ],
+    "files": [
+     {
+      "path": "$TMP/prot2/z-evidence/c.log",
+      "contains": [
+       "race"
       ]
      }
     ]
