@@ -1289,7 +1289,7 @@ sub _carried_context {
     return 0;
 }
 
-# restore_standing(body, \@chain) -> (body, [ids], {id => origin}, [entries]): a plugin handoff
+# restore_standing(body, \@chain [, transcript, sid]) -> (body, [ids], {id => origin}, [entries]): a plugin handoff
 # turn (0.1.15). The model writes every own approval in the context-only shape (the auto-mode
 # classifier blocked a usable approval in a Write the user did not ask for, 0.1.2); code then
 # puts back, byte for byte, each line the own chain's previous file holds as a checked,
@@ -1297,9 +1297,15 @@ sub _carried_context {
 # model wrote can widen it: the line comes from the plugin's own verified file, its quote was
 # checked when that file was published, and the publish record hashes it again. A `once`
 # approval stays context only here (re-ask): code cannot tell whether it was used since that
-# file was written, and a once approval must never run twice.
+# file was written, and a once approval must never run twice. Neither is one whose action a call
+# of this session was refused for (_denied, as approval-denied reads it in a handoff the user
+# asked for): it stays context only.
 sub restore_standing {
-    my ($body, $chain) = @_;
+    my ($body, $chain, $transcript, $sid) = @_;
+    my @deny;
+    if (denied_enabled() && defined $transcript && defined &transcript::denied_calls) {
+        @deny = map { _deny_keys($_) } @{ transcript::denied_calls($transcript, $sid) || [] };
+    }
     my @lines = split /\n/, $body // '', -1;
     my $in = section_lines(\@lines);
     my $tag_re = skills::spec::regex_at('carry.tag_re');
@@ -1315,6 +1321,7 @@ sub restore_standing {
                 my $p = parse_line($l) or next;
                 next unless $p->{standing} && $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote}
                     && $p->{action} eq $e->{action} && $p->{targets_text} eq $e->{targets_text};
+                last D if @deny && _denied($p, \@deny);
                 $lines[$i] = $l;
                 $done{ $e->{id} } = 1;
                 push @ids, $e->{id};

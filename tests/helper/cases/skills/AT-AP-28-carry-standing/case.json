@@ -396,6 +396,121 @@
    }
   },
   {
+   "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+   "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"2. confirmed/approved, don't ask again for the flaky suite reruns\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"> your yes to tag rc1\\nno need to ask. tag it as soon as it is green\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"you may deploy build 77 to staging whenever it is green, standing\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 78 to staging today\"}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin\"}}\n{\"type\": \"assistant\", \"uuid\": \"a9\", \"timestamp\": \"2026-10-21T13:50:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_d1\", \"name\": \"Bash\", \"input\": {\"command\": \"bin/test tests/flaky --rerun\", \"description\": \"rerun\"}}]}}\n{\"type\": \"user\", \"uuid\": \"u9\", \"timestamp\": \"2026-10-21T13:51:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_d1\", \"is_error\": true, \"content\": \"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.\"}]}}\n"
+  },
+  {
+   "name": "the plugin opens a precompact handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "b2c3d4e5",
+    "--reason",
+    "precompact",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "name": "begin binds it",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals-pre"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn.ht": "b2c3d4e5"
+    }
+   },
+   "capture": {
+    "STAGE3": "json:stage"
+   }
+  },
+  {
+   "name": "stamp 3",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE3"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE3/body.md",
+   "content": "# LAB-9 — approvals recorded\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"2. confirmed/approved, don't ask again for the flaky suite reruns\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "the session was refused the standing approval's action: publish does not put it back",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE3",
+    "--slug",
+    "approvals-pre",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "ht": "b2c3d4e5",
+       "approvals": {
+        "lines": 1,
+        "checked": 0,
+        "context": 1
+       }
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB3": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "measure: context only (plugin handoff)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB3"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(context only, re-ask\\): U-2 \\(plugin handoff\\)$"
+    ]
+   }
+  },
+  {
    "name": "status names the gate kinds the setting allows and warns about a word that is no gate kind",
    "options": {
     "standing_approval_gates": "deploy;nope"

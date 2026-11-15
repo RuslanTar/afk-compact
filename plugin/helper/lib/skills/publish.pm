@@ -208,7 +208,7 @@ sub run {
     # model's Write held only the context-only shape. Only these lines are listed as checked.
     my ($rids, $rorg, $rents) = ([], {}, []);
     if (defined $ht && !@$keep) {
-        (my $rbody, $rids, $rorg, $rents) = skills::approvals::restore_standing($body, \@achain);
+        (my $rbody, $rids, $rorg, $rents) = skills::approvals::restore_standing($body, \@achain, $transcript, $s->{session_id});
         $body = $rbody if @$rids;
     }
     $row->{bytes} = skills::util::blen($body);
