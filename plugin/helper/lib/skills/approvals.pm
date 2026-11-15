@@ -83,7 +83,11 @@ package skills::approvals;
 # approvals_checked, records no line hashes and writes `requested_by: plugin`, so nothing
 # in the file can carry. The same context-only line is accepted in any stage (never checked,
 # never carried), and `measure` lists such lines as context only: `(plugin handoff)` in a file
-# marked requested_by: plugin, where no line carries at all, else `(written as context)`.
+# marked requested_by: plugin, else `(written as context)`.
+# 0.1.15 (approvals survive the plugin's own handoffs): after the lint, publish puts back byte for
+# byte each context-only line that the own chain's previous file holds as a checked, hashed
+# `standing` approval (restore_standing) and lists and hashes only those; in a requested_by:
+# plugin file only such a line carries. A `once` approval stays context only there.
 #
 # The question (0.1.2): after the words, `(answer to "<question>")` may keep the
 # question a short answer replies to; the quote check reads the words only. Only a handoff the
@@ -1285,6 +1289,49 @@ sub _carried_context {
     return 0;
 }
 
+# restore_standing(body, \@chain) -> (body, [ids], {id => origin}, [entries]): a plugin handoff
+# turn (0.1.15). The model writes every own approval in the context-only shape (the auto-mode
+# classifier blocked a usable approval in a Write the user did not ask for, 0.1.2); code then
+# puts back, byte for byte, each line the own chain's previous file holds as a checked,
+# hash-verified `standing` approval with the same id, words, action and targets. Nothing the
+# model wrote can widen it: the line comes from the plugin's own verified file, its quote was
+# checked when that file was published, and the publish record hashes it again. A `once`
+# approval stays context only here (re-ask): code cannot tell whether it was used since that
+# file was written, and a once approval must never run twice.
+sub restore_standing {
+    my ($body, $chain) = @_;
+    my @lines = split /\n/, $body // '', -1;
+    my $in = section_lines(\@lines);
+    my $tag_re = skills::spec::regex_at('carry.tag_re');
+    my (@ids, %org, @ents, %done);
+    for my $i (sort { $a <=> $b } keys %$in) {
+        next if $tag_re && $lines[$i] =~ $tag_re;
+        my $e = context_enabled() ? parse_context_line($lines[$i]) : undef;
+        next unless $e && !$e->{question} && !$e->{denied} && !$done{ $e->{id} };
+        D: for my $d (@{ $chain || [] }) {
+            next unless $d->{checked}{ $e->{id} };
+            for my $l (split /\n/, $d->{text} // '') {
+                next if $tag_re && $l =~ $tag_re;
+                my $p = parse_line($l) or next;
+                next unless $p->{standing} && $p->{id} eq $e->{id} && $p->{quote} eq $e->{quote}
+                    && $p->{action} eq $e->{action} && $p->{targets_text} eq $e->{targets_text};
+                $lines[$i] = $l;
+                $done{ $e->{id} } = 1;
+                push @ids, $e->{id};
+                push @ents, $p;
+                $org{ $e->{id} } = _origin_word($d->{origins}{ $e->{id} });
+                last D;
+            }
+        }
+    }
+    # An id restored here that has another line in the section stays context only (one line
+    # per id): leave the body as written.
+    my %n;
+    for my $i (keys %$in) { my $p = parse_line($lines[$i]) // parse_context_line($lines[$i]); $n{ $p->{id} }++ if $p }
+    return ($body, [], {}, []) if grep { ($n{$_} // 0) != 1 } @ids;
+    return (join("\n", @lines), \@ids, \%org, \@ents);
+}
+
 # The ids of a frontmatter approvals_checked value.
 sub checked_ids {
     my ($v) = @_;
@@ -1603,7 +1650,13 @@ sub handoff_lines {
         my $plugin = ($d->{fm}{requested_by} // '') eq 'plugin';
         my $label = $plugin ? 'plugin handoff' : 'written as context';
         for my $c (grep { defined } map { parse_context_line($lines[$_]) } @own_idx) { $cx{ $c->{id} } //= $label }
-        if ($plugin) { $cx{ $_->{id} } //= $label for @e }
+        # 0.1.15: in such a file only a line publish put back from the own chain (a standing
+        # approval, restore_standing: listed in approvals_checked and hashed) carries; any other
+        # usable line there is the plugin handoff's, context only.
+        if ($plugin) {
+            my ($vok) = verify_checked($ctx, $d, checked_ids($d->{fm}{approvals_checked}));
+            $cx{ $_->{id} } //= $label for grep { !($vok->{ $_->{id} } && $_->{standing}) } @e;
+        }
     }
     my ($own, $why) = own_relation($d, $ctx, $sid);
     if (!$own) {

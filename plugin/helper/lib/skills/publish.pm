@@ -19,7 +19,8 @@ package skills::publish;
 # `approval_classes` (counts and class ids only).
 # 0.1.2: in a stage bound to a plugin handoff turn every own approval is context only
 # (skills/approvals.pm): no approvals_checked and no line-hash record, so nothing carries; the
-# frontmatter says `requested_by: plugin`.
+# frontmatter says `requested_by: plugin`. 0.1.15: except the standing approvals publish puts back
+# from the own chain's previous file (skills::approvals::restore_standing), checked and hashed.
 # 0.1.3: an own approval line of `## Approvals` failing approval-quote or
 # approval-plugin-turn moves to `## Open questions` as a re-ask instead of refusing (one ADVISORY
 # line each; skills::approvals::move_lines); a written row gains `approvals_moved` (a count).
@@ -202,6 +203,14 @@ sub run {
     $keep = _draft_lines($keep, $map);
     my @fixed = @{ $fx->{fixes} };
     $rules{ $_->{rule} } = 1 for @fixed;
+    # 0.1.15: a plugin handoff turn puts back, byte for byte, each standing approval the own
+    # chain's previous file holds as checked and hashed (skills::approvals::restore_standing); the
+    # model's Write held only the context-only shape. Only these lines are listed as checked.
+    my ($rids, $rorg, $rents) = ([], {}, []);
+    if (defined $ht && !@$keep) {
+        (my $rbody, $rids, $rorg, $rents) = skills::approvals::restore_standing($body, \@achain);
+        $body = $rbody if @$rids;
+    }
     $row->{bytes} = skills::util::blen($body);
     $row->{size_band} = _band($row->{bytes});
     my @b = @$keep;
@@ -215,8 +224,14 @@ sub run {
     $row->{ledger} = \%ln if grep { $_ } values %ln;
     # counts and outward class ids only, never a quote, action or target.
     my $ap = $res->{approvals} || {};
-    # A plugin handoff turn (0.1.2): nothing in this file is listed as checked or hashed.
-    $ap = { %$ap, checked => [], origins => {}, classes => [] } if defined $ht;
+    # A plugin handoff turn (0.1.2): nothing in this file is listed as checked or hashed, except
+    # (0.1.15) the standing approvals put back from the own chain above.
+    if (defined $ht) {
+        my %cl;
+        for my $e (@$rents) { $cl{$_} = 1 for @{ skills::approvals::classes($e)->{outward} } }
+        $ap = { %$ap, checked => $rids, origins => $rorg, classes => [ sort keys %cl ],
+                context => ($ap->{context} // 0) - scalar(@$rids) };
+    }
     if ($ap->{lines}) {
         $row->{approvals} = { lines => $ap->{lines}, checked => scalar(@{ $ap->{checked} || [] }), unchecked => $ap->{unchecked} // 0 };
         $row->{approvals}{context} = $ap->{context} if $ap->{context};

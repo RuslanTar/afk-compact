@@ -1,0 +1,454 @@
+{
+ "id": "AT-AP-28 (approvals carry: summary shapes, standing gates, plugin handoff turns)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.15: (1) measure --compact --copy reads a summary approval line in the handoff's shape: the question after the words ((answer to ...) or (quoting ...)), a used mark followed by words, no once/standing (once); a context-only line is skipped; a line naming an approval without targets or state is listed as not read (re-ask), never dropped (a real summary printed Approvals (checked): none). (2) standing_approval_gates (consent key, default empty): a standing approval whose every gate the setting lists is listed under Approvals (gate allowed by setting); a once one, another gate or a word that is no gate kind still re-asks. (3) plugin handoff turn: the model writes every approval context only (the classifier-safe shape, 0.1.2); publish puts back byte for byte each standing approval the own chain's previous file holds checked and hashed, lists it in approvals_checked and hashes it; a once approval stays context only; measure carries it for the session and its /clear successor, never for another session.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"2. confirmed/approved, don't ask again for the flaky suite reruns\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"> your yes to tag rc1\\nno need to ask. tag it as soon as it is green\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"you may deploy build 77 to staging whenever it is green, standing\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 78 to staging today\"}}\n{\"type\": \"user\", \"uuid\": \"u5\", \"timestamp\": \"2026-10-21T13:04:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin\"}}\n"
+    },
+    {
+     "write": "$ROOT/.sessions/cccccccc-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/dddddddd-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"handoff-resume\"}"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals\n- U-2: approval \"2. confirmed/approved, don't ask again for the flaky suite reruns\" (answer to \"Confirm the reruns again after a resume?\") — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing · used 2026-10-21 about 13:30 (memory flaky-reruns.md)\n- U-3: approval \"no need to ask. tag it as soon as it is green\" (quoting \"your yes to tag rc1\") — action git tag rc1 · targets commit 1a2b3c4 @ 1a2b3c4 · used for rc1\n- U-4: approval \"push feat/x to origin\" — action git push origin feat/x\n- U-5: approval \"you may deploy build 77 to staging whenever it is green, standing\" — action deploy build 77 · targets env staging @ build 77 · standing · not yet used\n- U-6: approval \"deploy build 78 to staging today\" — action deploy build 78 · targets env staging @ build 78 · once · not yet used\n- U-7: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-26, U-27: context only; see handoff\n"
+    }
+   ]
+  },
+  {
+   "name": "summary: the question after the words, a used mark with words, a missing scope and a context-only line are read; a line with no targets is listed as not read; a standing deploy is a gate by default",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-5 deploy build 77 → env staging @ build 77; U-6 deploy build 78 → env staging @ build 78$",
+     "^Approvals \\(not read, re-ask\\): U-4$"
+    ],
+    "stdout_lacks": [
+     "U-3",
+     "U-7",
+     "Approvals \\(unchecked\\)",
+     "gate allowed"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "summary",
+       "checked": 1,
+       "gate": 2,
+       "unchecked": 0,
+       "unread": 1
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "standing_approval_gates names deploy: the standing deploy carries as allowed, the once deploy still asks",
+   "options": {
+    "standing_approval_gates": "deploy"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(gate allowed by setting\\): U-5 deploy build 77 → env staging @ build 77$",
+     "^Approvals \\(gate, re-ask\\): U-6 deploy build 78 → env staging @ build 78$"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "summary",
+       "checked": 1,
+       "gate": 1,
+       "allowed": 1
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "a setting naming another gate, or a word that is no gate kind, allows nothing",
+   "options": {
+    "standing_approval_gates": "protected-push;deploys"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(gate, re-ask\\): U-5 deploy build 77 → env staging @ build 77; U-6 deploy build 78 → env staging @ build 78$"
+    ],
+    "stdout_lacks": [
+     "gate allowed"
+    ]
+   }
+  },
+  {
+   "name": "begin (a handoff the user asked for)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"2. confirmed/approved, don't ask again for the flaky suite reruns\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing · used 2026-10-21 13:30 +0300\n- U-8: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "publish: a standing and a once approval, both checked",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "the plugin opens an idle handoff turn",
+   "argv": [
+    "handoff-turn",
+    "open",
+    "--sid",
+    "$SID",
+    "--ht",
+    "a1b2c3d4",
+    "--reason",
+    "idle",
+    "--max-calls",
+    "34",
+    "--max-tokens",
+    "64000"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "ok\n"
+   }
+  },
+  {
+   "name": "begin binds the handoff turn",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals-idle"
+   ],
+   "expect": {
+    "exit": 0,
+    "json": {
+     "handoff_turn.ht": "a1b2c3d4"
+    }
+   },
+   "capture": {
+    "STAGE2": "json:stage",
+    "STEM2": "json:stem"
+   }
+  },
+  {
+   "name": "stamp 2",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE2"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE2/body.md",
+   "content": "# LAB-9 — approvals recorded\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"2. confirmed/approved, don't ask again for the flaky suite reruns\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-8: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n2. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n"
+  },
+  {
+   "name": "plugin handoff turn: the model writes both context only; publish puts the standing one back from the own chain, the once one stays context only",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE2",
+    "--slug",
+    "approvals-idle",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "^ADVISORY approval"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "handoff_publish",
+      "fields": {
+       "result": "wrote",
+       "ht": "a1b2c3d4",
+       "approvals": {
+        "lines": 2,
+        "checked": 1,
+        "context": 1,
+        "hashed": 1
+       }
+      }
+     }
+    ]
+   },
+   "capture": {
+    "PUB2": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "the written file holds the standing line as the chain had it, lists it as checked and is marked requested_by: plugin",
+   "expect": {
+    "files": [
+     {
+      "path": "$PUB2",
+      "has": [
+       "^- U-2: approval \"2\\. confirmed/approved, don't ask again for the flaky suite reruns\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing · used 2026-10-21 13:30 +0300$",
+       "^approvals_checked: U-2$",
+       "^requested_by: plugin$",
+       "^- U-8: approval \"push feat/x to origin\" .* ; context only, not valid here; re-ask$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "same session: the standing approval carries through the plugin handoff; the once one re-asks",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
+     "^Approvals \\(context only, re-ask\\): U-8 \\(plugin handoff\\)$"
+    ]
+   }
+  },
+  {
+   "name": "a /clear successor (own chain) carries it too",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "cccccccc-1111-4222-8333-444444444444",
+    "$PUB2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$"
+    ]
+   }
+  },
+  {
+   "name": "a new session that resumed this handoff (handoff-resume link) carries it: the line still matches the hash publish recorded",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "dddddddd-1111-4222-8333-444444444444",
+    "$PUB2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-2 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$"
+    ]
+   }
+  },
+  {
+   "name": "another session carries nothing",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "99999999-aaaa-4bbb-8ccc-dddddddddddd",
+    "$PUB2"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none \\(foreign: context only\\)$"
+    ]
+   }
+  },
+  {
+   "name": "status names the gate kinds the setting allows and warns about a word that is no gate kind",
+   "options": {
+    "standing_approval_gates": "deploy;nope"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^standing approvals may cover: deploy \\(other gates always ask\\)$",
+     "^  warning: standing_approval_gates #2 is no gate kind, ignored$"
+    ],
+    "stdout_lacks": [
+     "nope"
+    ]
+   }
+  },
+  {
+   "name": "status without the setting prints no such line",
+   "options": {
+    "standing_approval_gates": ""
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "standing approvals may cover"
+    ]
+   }
+  },
+  {
+   "name": "canary: no quote, action or target text in any watch row",
+   "expect": {
+    "files": [
+     {
+      "path": "$WATCH/*.jsonl",
+      "lacks": [
+       "flaky suite",
+       "build 77",
+       "feat/x to origin"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
