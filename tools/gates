@@ -12,7 +12,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
                 no-args-inline, readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc,
                 clear-life, nudge-folder, export-classes, settings-sections, no-network, export-schema,
                 report-skill, no-age-rule, perl-utf8, approvals, model-pin, queue-text, risk-corpus,
-                store-flags, readme-pins, planning)
+                store-flags, readme-pins, planning, changelog)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -163,12 +163,15 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
   planning     private notes: no path with a `.planning` component in the git
                index of the repository the tool sits in, and (unless --no-git-log) none added by a
                commit reachable from HEAD; skipped when the tree is not the top of its own work tree
+  changelog    a file target named CHANGELOG.md has the shape of Keep a Changelog 2.0.0 under the
+               house rules: the checks of tools/changelog-lint (its docstring lists the rules), each
+               hit printed as `GATE changelog <file>:<line>: <rule>: <text>`
   PENDING lists hits that wait for text not written yet (another WP's later step); they print as
   `PENDING <gate> <where>: <text>` and do not fail. A PENDING row with no hit prints
   `PENDING-DONE` (the integrator removes it). --no-pending counts them as hits.
 Exit 0 when every gate has 0 hits, else 1.
 """
-import getpass, json, os, re, subprocess, sys
+import getpass, importlib.machinery, importlib.util, json, os, re, subprocess, sys
 
 sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -2588,6 +2591,18 @@ def docs_gate_hits(gate, target, brand):
 
 
 DOC_GATES = ("wait-text", "no-run-text", "clear-life", "approvals", "store-flags", "readme-pins")
+CHANGELOG_NAME = "CHANGELOG.md"
+
+
+def changelog_hits(target):
+    """changelog: tools/changelog-lint over a file target named CHANGELOG.md."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "changelog-lint")
+    loader = importlib.machinery.SourceFileLoader("changelog_lint", path)
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("changelog_lint", loader))
+    loader.exec_module(mod)
+    lines = _read(target).split("\n")
+    return [(target, no, rule, "{}: {}".format(rule, msg), lines[no - 1] if no and no <= len(lines) else "")
+            for no, rule, msg in mod.lint_file(target)]
 
 
 TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), ("skill-budget", skill_budget_hits),
@@ -2827,6 +2842,8 @@ def main(argv):
         base = os.path.abspath(target if os.path.isdir(target) else os.path.dirname(os.path.abspath(target)))
         docs_target = is_docs_target(target)
         gate_list = [(g, None) for g in DOC_GATES] if docs_target else TEXT_GATES
+        if os.path.isfile(target) and os.path.basename(target) == CHANGELOG_NAME:
+            gate_list = gate_list + [("changelog", None)]
         for gate, fn in gate_list:
             if only and only != gate:
                 continue
@@ -2834,7 +2851,8 @@ def main(argv):
                 applicable |= {row for row in PENDING if row[0] == gate and os.path.exists(os.path.join(target, row[2]))}
             if not docs_target and not os.path.isdir(target):
                 continue
-            found = docs_gate_hits(gate, target, brand) if docs_target else fn(target, brand)
+            found = (changelog_hits(target) if gate == "changelog" else
+                     docs_gate_hits(gate, target, brand) if docs_target else fn(target, brand))
             for path, no, rule, text, line in found:
                 where = os.path.relpath(path) + (":{}".format(no) if no else "")
                 row = pending_row(gate, rule, os.path.relpath(os.path.abspath(path), base), line) if use_pending else None

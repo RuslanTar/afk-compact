@@ -27,9 +27,9 @@ withheld. It failed in 1 of 2 runs alone on that tree and on the one before it; 
 on a quiet machine before taking a failure for a regression.
 
 X-gates: tools/gates over plugin, README.md and docs (all gates), then names, user-path,
-attribution and stale-name alone over the community files that exist (CONTRIBUTING.md,
-CODE_OF_CONDUCT.md, SECURITY.md, CHANGELOG.md, .github, bench). X-name: stale-name over plugin,
-README.md and docs.
+attribution, stale-name and changelog (CHANGELOG.md only) alone over the community files that
+exist (CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, CHANGELOG.md, .github, bench). X-name:
+stale-name over plugin, README.md and docs.
 
 X-gen: tools/build --check, tools/fixtures-gen --check, tools/helper-replies-gen --check,
 tools/canary-baseline --check (pinned to the Claude Code binary the baseline records, so an
@@ -91,7 +91,9 @@ one FORMER_NAMES line, the docs (a no-run phrase in docs/usage.md and in the lan
 in src/docs a link to a missing anchor and to no page, a heading another shipped page has, a
 relative image in a shipped page and a page in neither ORDER list, all refused by tools/build;
 a renamed pinned heading in docs/ and plugin/README.md, installation.md without cc_min and a
-landing badge with another version, readme-pins). The copies never hold `.planning/`.
+landing badge with another version, readme-pins), the changelog gate (each
+tests/changelog/bad/<rule>.md planted as a CHANGELOG.md, reported under its rule; the clean copy
+also runs tests/changelog/run.py). The copies never hold `.planning/`.
 
 BT-02 (a real rename): copy the work tree to tmp/rename, set brand.json there
 to the drill name, run the regenerate steps (tools/build, tools/assemble --goldens,
@@ -1040,6 +1042,26 @@ def probes(name):
         edit(d, "docs/installation.md", cc, "9.9.9", count=-1)
         append(d, "README.md", "\n[![Claude Code](https://img.shields.io/badge/Claude_Code-2.1.200%2B-blue)](docs/installation.md)\n")
 
+    # The changelog gate: tests/changelog/run.py (its good files pass, each bad/<rule>.md fires
+    # only its rule) and tools/gates --only changelog over the good fixture; the plant puts each
+    # bad file in a folder of its own as a CHANGELOG.md, which the gate must report by rule.
+    clog_rules = sorted(f[:-3] for f in os.listdir(os.path.join(REPO, "tests", "changelog", "bad")) if f.endswith(".md"))
+
+    def changelog_gate(d):
+        planted = os.path.join(d, "tests", "changelog", "planted")
+        targets = ["tests/changelog/CHANGELOG.md"] + (
+            ["tests/changelog/planted/{}/CHANGELOG.md".format(x) for x in sorted(os.listdir(planted))]
+            if os.path.isdir(planted) else [])
+        return run_seq(["tests/changelog/run.py"],
+                       ["tools/gates"] + targets + ["--names", os.devnull, "--brand", name, "--no-git-log",
+                                                    "--only", "changelog"])(d)
+
+    def changelog_plant(d):
+        bad = os.path.join(d, "tests", "changelog", "bad")
+        for f in sorted(os.listdir(bad)):
+            with open(os.path.join(bad, f), encoding="utf-8", newline="") as fh:
+                write_text(os.path.join(d, "tests", "changelog", "planted", f[:-3], "CHANGELOG.md"), fh.read())
+
     readme = r"plugin/README\.md:\d+: "
     v, pinned = pinned_claude()
     canary = ["tools/canary-baseline", "--check"] + (["--claude", pinned] if pinned else [])
@@ -1180,6 +1202,9 @@ def probes(name):
           r"^GATE readme-pins plugin/README\.md: readme-pins: no heading 'Near a usage limit'",
           r"^GATE readme-pins docs/installation\.md: readme-pins: installation\.md does not name Claude Code ",
           r"^GATE readme-pins README\.md:\d+: readme-pins: the Claude Code badge says 2\.1\.200, "], None),
+        ("changelog", "Keep a Changelog shape", changelog_gate, changelog_plant,
+         [r"^GATE changelog tests/changelog/planted/{0}/CHANGELOG\.md(?::\d+)?: {0}: ".format(re.escape(r))
+          for r in clog_rules], None),
         ("stalled-def", "AT-TX-12", gates_only("stalled-def"), stalled,
          [r"^GATE stalled-def plugin/skills/resume/references/self-heal\.md: AT-TX-12 self-heal: STALLED row lacks"], None),
         ("prod-reads", "AT-PR-06", gates_only("prod-reads"), prod_reads,
@@ -1653,7 +1678,7 @@ def main(argv):
         # The hand-written community files and bench/ are not rendered: names, user paths,
         # attribution and old names only (markers would flag `${{ }}` in a workflow file).
         community = [f for f in COMMUNITY if os.path.exists(os.path.join(REPO, f))]
-        for g in ("names", "user-path", "attribution", "stale-name") if community else ():
+        for g in ("names", "user-path", "attribution", "stale-name", "changelog") if community else ():
             gates(community, names, name, only=g)
         steps.append("X-name")
         gates(["plugin", "README.md", "docs"], names, name, only="stale-name")
