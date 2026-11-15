@@ -1,0 +1,130 @@
+{
+ "id": "WIN-ID-13 (Windows pids: inventory reads an alive-unknown claude as unverified, never not running)",
+ "layer": "H",
+ "owner": "skills",
+ "note": "inventory <handoff> prints a `pid:` line with a live label for each live record of the handoff's session and a `claude_pid:` line for the handoff's claude_pid. Both are Claude Code's pids, under Git Bash's perl Windows pids, so inventory judges them with skills::ctx::liveness (identity::liveness) as record_live does, not kill 0. Seams as WIN-ID-01 (stand-in /proc, STORE_TEST_WINPIDS, STORE_TEST_PS_W, STORE_TEST_OS=msys; Windows pids above any Linux or macOS pid, so no real process can answer kill 0 for them): (1) a claude started from PowerShell, a WINPID only `ps -W` lists, is unverified in both lines, with or without a recorded start, never `no` or `not running`; a winpid that maps to a running MSYS pid (a claude started from Git Bash) reads yes with its start and start-differs with another, never no; an unlisted one reads no; (2) with no listing every Windows pid that maps to nothing is unverified; (3) control: a readable listing that no longer holds the PowerShell claude reads it as gone (no, not running); (4) a live record with an ended twin is not live (record_live), so its label comes from the pid alone: a PowerShell claude only `ps -W` lists reads unverified, not no, and no once the listing drops it; (5) macOS and Linux shape (no seams; needs unix-os, as under Git Bash's perl these steps would take the MSYS path and its real `ps -W`): kill 0 and the start time as before: yes, start-differs, no, running, not running",
+ "now": "2026-10-21T10:00:00+00:00",
+ "tz": "UTC",
+ "steps": [
+  {
+   "name": "(1) Git Bash shape: PowerShell claude 9999996 listed by ps -W, Git Bash claude 9999988 mapped, 9999992 gone",
+   "setup": [
+    {"write": "$TMP/proc/stat", "text": "cpu 0\nbtime 1792573200\n"},
+    {"write": "$TMP/proc/self/stat", "text": "4242 (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/proc/$RUNNER_PID/stat", "text": "$RUNNER_PID (claude) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/winpids", "text": "9999988 $RUNNER_PID\n"},
+    {"write": "$TMP/psw", "text": "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772    9999988  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n  4216496       0       0    9999996  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n"},
+    {"write": "$TMP/psw-gone", "text": "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772    9999988  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n"},
+    {"write": "$ROOT/repo/LAB-7/2026-10-21_09-30-00_$SID8_in.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0d\ndate: 2026-10-21T09:30:00+00:00\nsession_id: $SID\nactor: main\nclaude_pid: 9999996\n---\n⟪$BRAND v1 n=0a0b0c0d s=manual⟫\n# LAB-7 — work\n## Resume here\nStatus: active\n⟪/$BRAND n=0a0b0c0d⟫\n"},
+    {"write": "$ROOT/.sessions/by-pid/9999996-0.live-$SID8.json",
+     "json": {"pid": 9999996, "pid_lstart": null, "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:01+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/9999996-1792573200.live-$SID8.json",
+     "json": {"pid": 9999996, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:02+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/9999992-0.live-$SID8.json",
+     "json": {"pid": 9999992, "pid_lstart": null, "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:03+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/9999988-1792573200.live-$SID8.json",
+     "json": {"pid": 9999988, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:04+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/9999988-1792570000.live-$SID8.json",
+     "json": {"pid": 9999988, "pid_lstart": "Wed Oct 21 08:06:40 2026", "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:05+00:00"}}
+   ],
+   "env": {"STORE_TEST_CLAUDE_PID": null, "STORE_TEST_PPID": "1", "CLAUDE_PID": "9999988", "STORE_TEST_OS": "msys",
+           "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw"},
+   "argv": ["inventory", "$ROOT/repo/LAB-7/2026-10-21_09-30-00_$SID8_in.md"],
+   "expect": {"exit": 0,
+    "stdout_has": [
+     "(?s)^pid: 9999996 session $SID8 live=unverified$.*^pid: 9999996 session $SID8 live=unverified$",
+     "^pid: 9999988 session $SID8 live=yes$",
+     "^pid: 9999988 session $SID8 live=start-differs$",
+     "^pid: 9999992 session $SID8 live=no$",
+     "^claude_pid: 9999996 \\(unverified: a Windows pid with no start time here; match by record above\\)$"
+    ],
+    "stdout_lacks": ["^pid: 999999[68] session $SID8 live=no$", "^pid: 9999996 session $SID8 live=(?:yes|start-differs)$", "not running"]}
+  },
+  {
+   "name": "(2) no ps -W listing: every Windows pid that maps to nothing is unverified",
+   "env": {"STORE_TEST_CLAUDE_PID": null, "STORE_TEST_PPID": "1", "CLAUDE_PID": "9999988", "STORE_TEST_OS": "msys",
+           "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/no-such-listing"},
+   "argv": ["inventory", "$ROOT/repo/LAB-7/2026-10-21_09-30-00_$SID8_in.md"],
+   "expect": {"exit": 0,
+    "stdout_has": [
+     "^pid: 9999992 session $SID8 live=unverified$",
+     "^pid: 9999988 session $SID8 live=yes$",
+     "^pid: 9999988 session $SID8 live=start-differs$",
+     "^claude_pid: 9999996 \\(unverified: a Windows pid with no start time here; match by record above\\)$"
+    ],
+    "stdout_lacks": ["live=no$", "not running", "^pid: 9999996 session $SID8 live=(?:yes|start-differs)$"]}
+  },
+  {
+   "name": "(3) control: a readable listing without the PowerShell claude reads it as gone",
+   "env": {"STORE_TEST_CLAUDE_PID": null, "STORE_TEST_PPID": "1", "CLAUDE_PID": "9999988", "STORE_TEST_OS": "msys",
+           "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw-gone"},
+   "argv": ["inventory", "$ROOT/repo/LAB-7/2026-10-21_09-30-00_$SID8_in.md"],
+   "expect": {"exit": 0,
+    "stdout_has": [
+     "(?s)^pid: 9999996 session $SID8 live=no$.*^pid: 9999996 session $SID8 live=no$",
+     "^pid: 9999992 session $SID8 live=no$",
+     "^pid: 9999988 session $SID8 live=yes$",
+     "^claude_pid: 9999996 \\(not running\\)$"
+    ],
+    "stdout_lacks": ["unverified"]}
+  },
+  {
+   "name": "(4) a record with an ended twin, its PowerShell claude 9999996 only ps -W lists: unverified, not no",
+   "setup": [
+    {"write": "$ROOT/repo/LAB-10/2026-10-21_09-45-00_e0e0e0e0_in.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c10\ndate: 2026-10-21T09:45:00+00:00\nsession_id: e0e0e0e0-1111-4222-8333-444444444444\nactor: main\nclaude_pid: 9999996\n---\n⟪$BRAND v1 n=0a0b0c10 s=manual⟫\n# LAB-10 — work\n## Resume here\nStatus: active\n⟪/$BRAND n=0a0b0c10⟫\n"},
+    {"write": "$ROOT/.sessions/by-pid/9999996-1792573200.live-e0e0e0e0.json",
+     "json": {"pid": 9999996, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "session_id": "e0e0e0e0-1111-4222-8333-444444444444", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:09+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/9999996-1792573200.ended-e0e0e0e0.json",
+     "json": {"pid": 9999996, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "session_id": "e0e0e0e0-1111-4222-8333-444444444444", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:10+00:00"}}
+   ],
+   "env": {"STORE_TEST_CLAUDE_PID": null, "STORE_TEST_PPID": "1", "CLAUDE_PID": "9999988", "STORE_TEST_OS": "msys",
+           "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw"},
+   "argv": ["inventory", "$ROOT/repo/LAB-10/2026-10-21_09-45-00_e0e0e0e0_in.md"],
+   "expect": {"exit": 0,
+    "stdout_has": ["^pid: 9999996 session e0e0e0e0 live=unverified$"],
+    "stdout_lacks": ["live=(?:no|yes|start-differs)$"]}
+  },
+  {
+   "name": "(4) control: the same record once the listing no longer holds 9999996 reads no",
+   "env": {"STORE_TEST_CLAUDE_PID": null, "STORE_TEST_PPID": "1", "CLAUDE_PID": "9999988", "STORE_TEST_OS": "msys",
+           "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw-gone"},
+   "argv": ["inventory", "$ROOT/repo/LAB-10/2026-10-21_09-45-00_e0e0e0e0_in.md"],
+   "expect": {"exit": 0,
+    "stdout_has": ["^pid: 9999996 session e0e0e0e0 live=no$"],
+    "stdout_lacks": ["unverified"]}
+  },
+  {
+   "name": "(5) macOS and Linux shape: kill 0 and the start time, as before",
+   "needs": ["unix-os"],
+   "setup": [
+    {"write": "$ROOT/repo/LAB-8/2026-10-21_09-40-00_c0c0c0c0_in.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0e\ndate: 2026-10-21T09:40:00+00:00\nsession_id: c0c0c0c0-1111-4222-8333-444444444444\nactor: main\nclaude_pid: $RUNNER_PID\n---\n⟪$BRAND v1 n=0a0b0c0e s=manual⟫\n# LAB-8 — work\n## Resume here\nStatus: active\n⟪/$BRAND n=0a0b0c0e⟫\n"},
+    {"write": "$ROOT/repo/LAB-9/2026-10-21_09-50-00_c0c0c0c0_in.md",
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0a0b0c0f\ndate: 2026-10-21T09:50:00+00:00\nsession_id: d0d0d0d0-1111-4222-8333-444444444444\nactor: main\nclaude_pid: 9999992\n---\n⟪$BRAND v1 n=0a0b0c0f s=manual⟫\n# LAB-9 — work\n## Resume here\nStatus: active\n⟪/$BRAND n=0a0b0c0f⟫\n"},
+    {"write": "$ROOT/.sessions/by-pid/$RUNNER_PID-1.live-c0c0c0c0.json",
+     "json": {"pid": "$RUNNER_PID", "pid_lstart": "$RUNNER_LSTART", "host": "$HOST", "session_id": "c0c0c0c0-1111-4222-8333-444444444444", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:06+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/$RUNNER_PID-978307200.live-c0c0c0c0.json",
+     "json": {"pid": "$RUNNER_PID", "pid_lstart": "Mon Jan  1 00:00:00 2001", "host": "$HOST", "session_id": "c0c0c0c0-1111-4222-8333-444444444444", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:07+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/9999992-0.live-c0c0c0c0.json",
+     "json": {"pid": 9999992, "pid_lstart": null, "host": "$HOST", "session_id": "c0c0c0c0-1111-4222-8333-444444444444", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:08+00:00"}}
+   ],
+   "argv": ["inventory", "$ROOT/repo/LAB-8/2026-10-21_09-40-00_c0c0c0c0_in.md"],
+   "expect": {"exit": 0,
+    "stdout_has": [
+     "^pid: $RUNNER_PID session c0c0c0c0 live=yes$",
+     "^pid: $RUNNER_PID session c0c0c0c0 live=start-differs$",
+     "^pid: 9999992 session c0c0c0c0 live=no$",
+     "^claude_pid: $RUNNER_PID \\(running; match by record above\\)$"
+    ],
+    "stdout_lacks": ["unverified"]}
+  },
+  {
+   "name": "(5) macOS and Linux shape: a claude_pid that does not run",
+   "needs": ["unix-os"],
+   "argv": ["inventory", "$ROOT/repo/LAB-9/2026-10-21_09-50-00_c0c0c0c0_in.md"],
+   "expect": {"exit": 0, "stdout_has": ["^claude_pid: 9999992 \\(not running\\)$"]}
+  }
+ ]
+}

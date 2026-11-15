@@ -149,6 +149,17 @@ sub record_live {
 
 sub _cyg { return defined &identity::cyg && identity::cyg() ? 1 : 0 }
 
+# run | gone | unknown: whether the pid runs, start time aside. Under MSYS and Cygwin
+# identity::liveness: a pid with no /proc entry is read as a Windows pid (a CLAUDE_PID), and unknown
+# is a Windows pid only `ps -W` lists, or no listing (never gone). Elsewhere kill 0, EPERM counting
+# as running, as inventory always read it.
+sub liveness {
+    my ($pid) = @_;
+    return 'gone' unless defined $pid && $pid =~ /\A\d+\z/;
+    return identity::liveness($pid) if _cyg() && defined &identity::liveness;
+    return (kill(0, $pid) || $!{EPERM}) ? 'run' : 'gone';
+}
+
 # 1 when the pid runs and its start time equals the recorded one.
 sub pid_matches { return pid_state(@_) eq 'match' ? 1 : 0 }
 
@@ -161,7 +172,7 @@ sub pid_matches { return pid_state(@_) eq 'match' ? 1 : 0 }
 sub pid_state {
     my ($pid, $recorded) = @_;
     return 'gone' unless defined $pid && $pid =~ /\A\d+\z/ && $pid > 0;
-    my $lv = defined &identity::liveness ? identity::liveness($pid) : ((kill(0, $pid) || $!{EPERM}) ? 'run' : 'gone');
+    my $lv = liveness($pid);
     return 'gone' if $lv eq 'gone';
     return 'unverified' if $lv eq 'unknown';
     return 'unverified' unless defined $recorded && $recorded ne '';

@@ -82,17 +82,30 @@ sub run {
         }
     }
 
-    # Recorded pids of the handoff's session, matched by start time.
+    # Recorded pids of the handoff's session, matched by start time. These pids, and claude_pid, are
+    # Claude Code's: under MSYS and Cygwin perl a Windows pid, which kill 0 does not know, so
+    # skills::ctx::liveness judges them (identity::liveness): a Windows pid only `ps -W` lists, or
+    # no listing, is unverified, never `no` or `not running`. Elsewhere it is kill 0, as before.
     if ($hs ne '') {
         my $all = skills::ctx::records($ctx);
         for my $r (grep { ($_->{data}{session_id} // '') eq $hs && $_->{state} eq 'live' } @$all) {
             my $live = skills::ctx::record_live($ctx, $r, $all);
-            my $state = $live ? 'yes' : (kill(0, $r->{pid}) || $!{EPERM} ? 'start-differs' : 'no');
+            my $state;
+            if ($live) {
+                # record_live counts an unverified pid as live under MSYS and Cygwin only
+                $state = skills::ctx::_cyg() && skills::ctx::pid_state($r->{pid}, $r->{data}{pid_lstart}) ne 'match' ? 'unverified' : 'yes';
+            } else {
+                my $lv = skills::ctx::liveness($r->{pid});
+                $state = $lv eq 'run' ? 'start-differs' : $lv eq 'unknown' ? 'unverified' : 'no';
+            }
             skills::cli::say("pid: $r->{pid} session " . skills::ctx::sid8($hs) . " live=$state");
         }
     }
     if (defined $d->{fm}{claude_pid} && $d->{fm}{claude_pid} =~ /\A\d+\z/) {
-        skills::cli::say("claude_pid: $d->{fm}{claude_pid} (" . (kill(0, $d->{fm}{claude_pid}) || $!{EPERM} ? 'running; match by record above' : 'not running') . ')');
+        my $lv = skills::ctx::liveness($d->{fm}{claude_pid});
+        skills::cli::say("claude_pid: $d->{fm}{claude_pid} ("
+            . ($lv eq 'run' ? 'running; match by record above'
+               : $lv eq 'unknown' ? 'unverified: a Windows pid with no start time here; match by record above' : 'not running') . ')');
     }
 
     # Recipes, recorded jobs and counters.
