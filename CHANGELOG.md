@@ -6,15 +6,28 @@ Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-11-15
+
+afk-compact 0.1.13 adds a prompt cache meter for your status line, with a `/afk-compact:settings` step that prints its snippet, keeps a status line quiet once the plugin's folder is gone, and stops a false `copy-mismatch` warning for Claude Code's trailer.
+
 ### Added
 
-- **A cache meter for your status line.** `cache --stdin --bar` prints `██████░░░░░░ 30m`: 12 cells that fill as the prompt cache nears its expiry (blue, yellow from half its lifetime, red from 90%) and the cache's age; while keep-warm runs it reads `↻3/7` in cyan, a cold cache `cold 1h02m` or `cold miss`, and after a compaction `compacted`. Before the first response, or when the cache's lifetime is not known, it prints nothing. `--left` shows the time left instead of the age, `--short` drops the cells, `--ascii` draws `#` and `-`, and `--color auto|always|never` follows `NO_COLOR` and `TERM=dumb`. Where the helper cannot run, `--bar` prints nothing and exits 0 instead of `REFUSED: helper-runtime`. The flags are stable; the meter's text may change, and `--json` stays the format to parse. An older plugin copy given `--bar` shows nothing until you update.
-- **`/afk-compact:settings` shows the meter for your setup.** A "Status line meter" step reads which status line your user, project and local settings run (by the name of what it runs only, never the full command), previews the meter and prints the snippet for your case: a settings entry, a script that adds the meter as a second line under your own, or the values for a ccstatusline Custom Command widget. It changes no file; you paste the snippet. The helper call is `settings statusline show [--json]`.
+- **A cache meter for your status line.** `cache --stdin --bar` prints `██████░░░░░░ 30m`: 12 cells that fill as the prompt cache nears its expiry (blue, yellow from half its lifetime, red from 90%) and the cache's age; while keep-warm runs it reads `↻3/7` in cyan, a cold cache `cold 1h02m` or `cold miss` in magenta, and after a compaction `compacted`. Before the first response, or when the cache's lifetime is not known, it prints nothing. `--left` shows the time left instead of the age, `--short` drops the cells, `--ascii` draws `#` and `-`, and `--color auto|always|never` follows `NO_COLOR` and `TERM=dumb`. A locale that is not UTF-8 turns on `--ascii` by itself, and a `COLUMNS` below 60 turns on `--short`. Where the helper cannot run, `--bar` prints nothing and exits 0 instead of `REFUSED: helper-runtime`. The flags are stable; the meter's text may change, and `--json` stays the format to parse. An older plugin copy given `--bar` shows nothing until you update.
+- **`/afk-compact:settings` shows the meter for your setup.** A "Status line meter" step reads which status line your user, project and local settings run (by the name of what it runs only, never the full command), previews the meter and prints the snippet for your case: a settings entry, a script that adds the meter as a second line under your own, or the values for a ccstatusline Custom Command widget. Each snippet runs the meter only once the plugin's fixed path exists (`[ ! -f … ] || sh …`), so before the plugin's first session the line stays empty instead of showing an error. It changes no file; you paste the snippet. The helper call is `settings statusline show [--json]`.
 
 ### Fixed
 
 - **A status line no longer shows sh errors once the plugin's folder is gone.** The fixed path a status line calls, `~/.local/state/afk-compact/bin/afk-compact-store`, ran the installed copy's helper without checking for it, so after an uninstall, a prune or a failed update every refresh printed `sh` errors into the status line. It now checks first and, with that copy gone, prints nothing and exits 0; with the copy there it is still one `exec`. A shim written by an earlier version is rewritten at the next session start. A plugin folder path that holds a `'` now gets the shim too. After a downgrade to 0.1.12 or earlier the file keeps running the 0.1.13 copy while that copy exists (those versions do not recognise the new file and leave it alone), and once that copy is gone the segment stays blank; delete the file and the older version writes its own at its next session start (the plain line only: `--bar` needs 0.1.13).
 - **No false `copy-mismatch` warning for Claude Code's trailer.** When the installed summary differed from the saved copy only by lines Claude Code put after the end marker, the copy was complete, yet each such compaction showed a `copy-mismatch` toast and `/afk-compact:status` counted it, with a `verdict_mismatch`, under `escalations:`. That case now shows no toast and counts nothing; `save-copy` answers `EXISTS: <path> sha-differs-trailer`, and the log keeps it as a `copy_exists` row marked `trailer`. A real difference is still kept, shown and counted as before.
+
+### Upgrade notes
+
+- No action is required. To add the cache meter to your status line, run `/afk-compact:settings` and paste the snippet it prints.
+
+### Compatibility
+
+- Requires Claude Code 2.1.287 or newer. The one-line install needs 2.1.292 or newer.
+- Tested against Claude Code 2.1.325.
 
 ## [0.1.12] - 2026-11-14
 
@@ -470,7 +483,8 @@ This is an early (0.x) version. Some parts that need a live session or a managed
 - `git` for the git measurements.
 - Supported: macOS 13 or newer, and Linux with glibc. Expected to work but not yet tested in a session: Alpine/musl and WSL 2. Native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.13
 [0.1.12]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.12
 [0.1.11]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.11
 [0.1.10]: https://github.com/RuslanTar/afk-compact/releases/tag/v0.1.10
