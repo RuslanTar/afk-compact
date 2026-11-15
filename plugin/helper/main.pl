@@ -23,6 +23,8 @@ BEGIN {
             my $drain = <STDIN>;
             exit 0;
         }
+        # 0.1.13: the status-line meter (`cache --bar`) prints nothing and exits 0 instead
+        exit 0 if @ARGV && $ARGV[0] eq 'cache' && grep { $_ eq '--bar' } @ARGV;
         print "REFUSED: helper-runtime\n";
         exit 3;
     }
@@ -63,6 +65,9 @@ if (!defined $sub || !$KNOWN{$sub}) {
 }
 
 my $IS_HOOK = $sub eq 'hook';
+# 0.1.13: the status-line meter shows nothing rather than an error: a helper that cannot load or
+# run `cache --bar` exits 0 with nothing on stdout or stderr
+my $QUIET = $sub eq 'cache' && grep { $_ eq '--bar' } @ARGV;
 if ($IS_HOOK) {
     # Hooks never write stderr, and nothing but our text reaches stdout.
     open(STDERR, '>', '/dev/null');
@@ -121,6 +126,7 @@ for my $lib (grep { $load{$_} } @CORE) {
     my $ok = eval { require "$lib.pm"; 1 };
     if (!$ok) {
         if ($IS_HOOK) { local $/; my $d = <STDIN>; exit 0 }
+        exit 0 if $QUIET;
         print STDERR "$sub: cannot load $lib: $@";
         exit 70;
     }
@@ -160,12 +166,13 @@ userre::limits(@{ $userre::SUB_S{$sub} }) if $userre::SUB_S{$sub};
 my $file = "$HELPER_DIR/cmd/$sub.pl";
 if (!-f $file) {
     if ($IS_HOOK) { local $/; my $d = <STDIN>; exit 0 }
+    exit 0 if $QUIET;
     print STDERR "$sub: not implemented\n";
     exit 70;
 }
 my $ok = do $file;
 if (!defined $ok && $@) {
-    exit 0 if $IS_HOOK;
+    exit 0 if $IS_HOOK || $QUIET;
     print STDERR "$sub: $@";
 }
-exit($IS_HOOK ? 0 : 70);
+exit($IS_HOOK || $QUIET ? 0 : 70);

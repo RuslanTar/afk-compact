@@ -6,7 +6,8 @@
 # <Event>`, stdin unread. Without perl or a readable main.pl, from that call,
 # or for a hook whose perl cannot start or ends on a signal, it takes the
 # fallback path: a hook prints nothing and exits 0 after one content-free row
-# (none under a root the helper would refuse); any other command refuses.
+# (none under a root the helper would refuse); `cache --bar` prints nothing
+# and exits 0; any other command refuses.
 
 # Keep the user's perl library paths for queue_cmd children, then clear
 # every variable that can inject modules or change byte handling.
@@ -122,6 +123,10 @@ if [ "${1-}" = hook ]; then
     printf '{"v":1,"ts":"%s","ev":"helper_runtime_missing","sid":"%s","actor":"unknown","writer":"helper","pid":%s,"plugin_version":"%s","cc_version":null,"turn_seq":null,"event":"%s"}\n' \
       "$ts" "$sid" "$$" "$ver" "$event" >>"$watch/$sid.classic.jsonl" 2>/dev/null
   exit 0
+fi
+# The status-line meter (`cache --bar`, 0.1.13) prints nothing and exits 0 instead.
+if [ "${1-}" = cache ]; then
+  for a in "$@"; do [ "$a" = --bar ] && exit 0; done
 fi
 echo 'REFUSED: helper-runtime'
 exit 3

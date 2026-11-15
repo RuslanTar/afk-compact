@@ -1,0 +1,187 @@
+{
+ "id": "CACHE-16-bar-quiet",
+ "note": "0.1.13: a status line shows the meter or nothing, never an error: where the helper cannot run (a perl older than 5.28: main.pl's guard; no readable main.pl: the launcher's fallback) or a library cannot load, `cache --bar` prints nothing on stdout or stderr and exits 0, where `cache` without it still prints REFUSED: helper-runtime (exit 3) or exits 70. --bar loads no more of the helper's libraries than `cache` (CACHE-04's set, STORE_TEST_INC_OUT).",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "plugin_at": "$TMP/pc",
+ "steps": [
+  {
+   "name": "--bar loads the same libraries as cache (CACHE-04)",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--note-usage"
+   ],
+   "env": {
+    "STORE_TEST_INC_OUT": "$TMP/inc.txt"
+   },
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[34m██░░░░░░░░░░ 10m\u001b[0m\n",
+    "files": [
+     {
+      "path": "$TMP/inc.txt",
+      "lines": 1,
+      "has": [
+       "^args cachestate ctx jsonc usagerec util$"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a perl older than 5.28 (main.pl's guard): --bar prints nothing, exit 0",
+   "path_prepend": [
+    "$TMP/bin"
+   ],
+   "setup": [
+    {
+     "stub": "perl",
+     "script": "STORE_TEST_PERL_V=5.026003 exec /usr/bin/perl \"$@\""
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "the same perl without --bar: REFUSED, exit 3, as before",
+   "path_prepend": [
+    "$TMP/bin"
+   ],
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: helper-runtime\n"
+   }
+  },
+  {
+   "name": "no readable helper (the launcher's fallback): --bar prints nothing, exit 0",
+   "setup": [
+    {
+     "rename": "$PLUGIN/helper/main.pl",
+     "to": "$PLUGIN/helper/main.off"
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--note-usage"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "the same without --bar: REFUSED, exit 3",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 3,
+    "stdout": "REFUSED: helper-runtime\n"
+   }
+  },
+  {
+   "name": "a library that cannot load: --bar prints nothing on stdout or stderr, exit 0",
+   "setup": [
+    {
+     "rename": "$PLUGIN/helper/main.off",
+     "to": "$PLUGIN/helper/main.pl"
+    },
+    {
+     "rename": "$PLUGIN/helper/lib/cachestate.pm",
+     "to": "$PLUGIN/helper/lib/cachestate.off"
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "the same without --bar: exit 70, the reason on stderr",
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 70,
+    "stdout": "",
+    "stderr_has": [
+     "cannot load cachestate"
+    ]
+   }
+  }
+ ]
+}
