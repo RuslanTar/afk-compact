@@ -1,0 +1,364 @@
+#!/usr/bin/python3
+"""tools/changelog-lint: the shape of CHANGELOG.md under Keep a Changelog 2.0.0 (strict house rules).
+
+Usage: tools/changelog-lint FILE...
+  Prints `CHANGELOG <rule> <file>:<line>: <text>` for each hit, then one summary line per file.
+  Exit 0 when no file has a hit, 1 when one has, 2 on a usage error or an unreadable file.
+  tools/gates runs the same checks as its `changelog` gate on a file target named CHANGELOG.md.
+
+The checks are about shape only. Wording (plain sentences written for a user, the right type for
+a change) is for the person who writes and reviews the entry; CONTRIBUTING.md "Writing the
+changelog" has the rules. An `## [Unreleased]` section left empty passes.
+
+Rules (the <rule> word of each hit):
+  title            line 1 is `# Changelog`
+  preamble         the lines before the first `##` link KAC_URL and SEMVER_URL, hold no other link,
+                   no heading and no list
+  unreleased       exactly one `## [Unreleased]`, and it is the first `##`
+  version-heading  every other `##` is `## [X.Y.Z] - YYYY-MM-DD`, optionally ` [YANKED]` after it
+  version-date     the date of a version heading is a real calendar date
+  version-order    versions are unique and strictly descending from the top
+  date-order       dates never increase from one version to the one below it
+  heading-level    no `#` heading but line 1, no `####` or deeper
+  section-type     every `###` is one of Added, Changed, Deprecated, Removed, Fixed, Security
+  section-repeat   each type at most once per version
+  section-order    the types in that order
+  section-empty    every `###` has at least one entry
+  entry-shape      under a `###` only top-level `- ` bullets, each one paragraph: lines that
+                   continue a bullet follow it with no blank line; no nested list, no other text
+  summary-shape    at most one paragraph between a version heading and its first `###`, no list
+  summary-versions a released version's summary names `Requires Claude Code N.N.N or newer` and
+                   `tested against N.N.N` (versions in NO_VERSIONS are exempt)
+  breaking         `**Breaking:**` only at the very start of an entry under Changed or Removed
+  bold             no other bold in an entry or a summary
+  entry-length     an entry (without its `- `, continuation lines joined by one space) is at most
+                   ENTRY_MAX characters
+  internal-id      no internal case or test id (INTERNAL_ID) in an entry or a summary; CVE ids
+                   are allowed
+  links            the link references at the end of the file: one for each bracketed `##`
+                   heading, `[Unreleased]` first, then the versions in heading order, no
+                   duplicate, none that nothing uses, none above that final block
+  link-url         `[Unreleased]` is <base>/compare/v<newest>...HEAD, each version
+                   <base>/compare/v<previous>...v<X.Y.Z>, the oldest <base>/releases/tag/v<X.Y.Z>
+  link-base        every link reference has the same repository base URL
+"""
+import datetime, os, re, sys
+
+sys.dont_write_bytecode = True
+
+KAC_URL = "https://keepachangelog.com/en/2.0.0/"
+SEMVER_URL = "https://semver.org/spec/v2.0.0.html"
+TYPES = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"]
+BREAKING = "**Breaking:**"
+BREAKING_TYPES = ("Changed", "Removed")
+ENTRY_MAX = 280
+# Released versions whose original notes gave no Claude Code versions: their summary may leave out
+# the Requires/tested sentence. Add a version here only when its notes never named one.
+NO_VERSIONS = {}   # "X.Y.Z": "why"
+
+RULES = ["title", "preamble", "unreleased", "version-heading", "version-date", "version-order",
+         "date-order", "heading-level", "section-type", "section-repeat", "section-order",
+         "section-empty", "entry-shape", "summary-shape", "summary-versions", "breaking", "bold",
+         "entry-length", "internal-id", "links", "link-url", "link-base"]
+
+HEADING = re.compile(r"^(#{1,6})(?:[ \t]|$)")
+VERSION = re.compile(r"^## \[(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\] - (\d{4})-(\d{2})-(\d{2})( \[YANKED\])?$")
+LABEL = re.compile(r"^## \[([^\]]+)\]")
+LINKREF = re.compile(r"^\[([^\]]+)\]:[ \t]*(\S+)[ \t]*$")
+LIST_ITEM = re.compile(r"^[ \t]*(?:[-*+]|\d+[.)])(?:[ \t]|$)")
+QUOTE_OR_FENCE = re.compile(r"^[ \t]*(?:>|```|~~~)")
+INLINE_LINK = re.compile(r"\]\(([^)\s]+)(?:\s[^)]*)?\)|<(https?://[^>\s]+)>|(?<![(<\w])(https?://[^\s)>\]]+)")
+INTERNAL_ID = re.compile(r"\b[A-Z]{1,5}-\d{2,}\b")
+INTERNAL_ID_SHOWN = re.compile(r"\b(?:[A-Z]{1,5}-)+\d{2,}\b")   # the same ids, with any letter groups before them
+CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
+BOLD = re.compile(r"\*\*|(?<![\w_])__(?=\S)")
+REQUIRES = re.compile(r"Requires Claude Code \d+\.\d+\.\d+ or newer")
+TESTED = re.compile(r"tested against \d+\.\d+\.\d+")
+REF_URL = re.compile(r"^(https?://\S+?)/(?:compare/(\S+)|releases/tag/(\S+))$")
+
+
+def internal_ids(text):
+    return [m.group(0) for m in INTERNAL_ID_SHOWN.finditer(text)
+            if INTERNAL_ID.search(m.group(0)) and not m.group(0).startswith("CVE-")]
+
+
+def bold_left(text):
+    """Bold markers left in text once code spans are gone."""
+    return BOLD.search(CODE_SPAN.sub("", text))
+
+
+def lint_text(text):
+    """[(line or None, rule, message)] for a changelog's text, in line order."""
+    hits = []
+
+    def hit(no, rule, msg):
+        hits.append((no, rule, msg))
+
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    if not lines or lines[0] != "# Changelog":
+        hit(1, "title", "line 1 is not `# Changelog`")
+
+    # The link reference block: the trailing run of reference lines (blank lines between them).
+    end = len(lines)
+    while end > 0 and (lines[end - 1].strip() == "" or LINKREF.match(lines[end - 1])):
+        end -= 1
+    refs = [(i + 1, LINKREF.match(lines[i])) for i in range(end, len(lines)) if LINKREF.match(lines[i])]
+
+    versions = []      # dicts: label, no, released, version (tuple or None), date, summary, sections
+    preamble_links, preamble_seen_hash = [], False
+    cur = None         # the current version
+    sec = None         # the current ### section of cur
+    para_open = False  # the previous line belongs to a paragraph or a bullet
+    for i in range(1, end):
+        no, ln = i + 1, lines[i]
+        h = HEADING.match(ln)
+        if LINKREF.match(ln):
+            hit(no, "links", "a link reference above the block at the end of the file")
+        if h:
+            level = len(h.group(1))
+            para_open = False
+            if level == 1:
+                hit(no, "heading-level", "a `#` heading after line 1")
+                continue
+            if level >= 4:
+                hit(no, "heading-level", "a `{}` heading (only `##` and `###` are allowed)".format(h.group(1)))
+                continue
+            if level == 2:
+                sec = None
+                lm = LABEL.match(ln)
+                label = lm.group(1) if lm else None
+                cur = {"label": label, "no": no, "released": False, "version": None, "date": None,
+                       "summary": [], "paras": 0, "sections": [], "types": []}
+                versions.append(cur)
+                if ln == "## [Unreleased]":
+                    if any(v["label"] == "Unreleased" and v is not cur for v in versions):
+                        hit(no, "unreleased", "a second `## [Unreleased]`")
+                    elif len(versions) > 1:
+                        hit(no, "unreleased", "`## [Unreleased]` is not the first `##`")
+                    continue
+                m = VERSION.match(ln)
+                if not m:
+                    hit(no, "version-heading", "not `## [X.Y.Z] - YYYY-MM-DD` (optionally ` [YANKED]`): {}".format(ln))
+                    continue
+                cur["released"] = True
+                cur["version"] = tuple(int(x) for x in m.group(1, 2, 3))
+                try:
+                    cur["date"] = datetime.date(*(int(x) for x in m.group(4, 5, 6)))
+                except ValueError:
+                    hit(no, "version-date", "{}-{}-{} is not a calendar date".format(*m.group(4, 5, 6)))
+                prev = [v for v in versions[:-1] if v["version"]]
+                if any(v["version"] == cur["version"] for v in prev):
+                    hit(no, "version-order", "version {} appears twice".format(label))
+                elif prev and cur["version"] > prev[-1]["version"]:
+                    hit(no, "version-order", "version {} is newer than {} above it".format(label, prev[-1]["label"]))
+                dated = [v for v in versions[:-1] if v["date"]]
+                if cur["date"] and dated and cur["date"] > dated[-1]["date"]:
+                    hit(no, "date-order", "{} is dated {}, later than {} above it ({})".format(
+                        label, cur["date"], dated[-1]["label"], dated[-1]["date"]))
+                continue
+            # level 3
+            if cur is None:
+                hit(no, "preamble", "a `###` heading before the first `##`")
+                continue
+            name = ln[3:].strip()
+            sec = {"name": name, "no": no, "bullets": []}
+            cur["sections"].append(sec)
+            if name not in TYPES:
+                hit(no, "section-type", "`### {}` is not one of {}".format(name, ", ".join(TYPES)))
+                continue
+            if name in cur["types"]:
+                hit(no, "section-repeat", "a second `### {}` in {}".format(name, cur["label"]))
+                continue
+            if cur["types"] and TYPES.index(name) < TYPES.index(cur["types"][-1]):
+                hit(no, "section-order", "`### {}` after `### {}` (order: {})".format(name, cur["types"][-1], ", ".join(TYPES)))
+            cur["types"].append(name)
+            continue
+
+        blank = ln.strip() == ""
+        if cur is None:   # the preamble
+            if blank:
+                continue
+            if LIST_ITEM.match(ln) or QUOTE_OR_FENCE.match(ln):
+                hit(no, "preamble", "a list, quote or code block before the first `##`")
+            for m in INLINE_LINK.finditer(ln):
+                preamble_links.append((no, m.group(1) or m.group(2) or m.group(3)))
+            continue
+        if sec is None:   # between a version heading and its first ###
+            if blank:
+                para_open = False
+                continue
+            if LIST_ITEM.match(ln) or QUOTE_OR_FENCE.match(ln):
+                hit(no, "summary-shape", "a list, quote or code block before the first `###`")
+                para_open = True
+                continue
+            if not para_open:
+                cur["paras"] += 1
+                if cur["paras"] == 2:
+                    hit(no, "summary-shape", "a second paragraph before the first `###` (one summary paragraph at most)")
+            if cur["paras"] == 1:
+                cur["summary"].append((no, ln.strip()))
+            para_open = True
+            continue
+        # under a ###
+        if blank:
+            para_open = False
+            continue
+        if ln.startswith("- "):
+            sec["bullets"].append({"no": no, "parts": [ln[2:].strip()]})
+            para_open = True
+            continue
+        if LIST_ITEM.match(ln):
+            if ln[0] in " \t":
+                hit(no, "entry-shape", "a nested list item (entries are one level of `- ` bullets)")
+            else:
+                hit(no, "entry-shape", "a list item not written `- ` (entries are `- ` bullets)")
+            para_open = True
+            continue
+        if para_open and sec["bullets"] and not QUOTE_OR_FENCE.match(ln):
+            sec["bullets"][-1]["parts"].append(ln.strip())
+            continue
+        hit(no, "entry-shape", "text under `### {}` that is not part of a `- ` entry".format(sec["name"]))
+        para_open = True
+
+    # Preamble links.
+    urls = [u for _, u in preamble_links]
+    for need in (KAC_URL, SEMVER_URL):
+        if need not in urls:
+            hit(2, "preamble", "the preamble does not link {}".format(need))
+    for no, u in preamble_links:
+        if u not in (KAC_URL, SEMVER_URL):
+            hit(no, "preamble", "a link other than the format and versioning ones: {}".format(u))
+
+    if not any(lines[v["no"] - 1] == "## [Unreleased]" for v in versions):
+        hit(None, "unreleased", "no `## [Unreleased]` heading")
+
+    # Sections, entries and summaries.
+    for v in versions:
+        for s in v["sections"]:
+            if not s["bullets"]:
+                hit(s["no"], "section-empty", "`### {}` has no entry".format(s["name"]))
+            for b in s["bullets"]:
+                t = " ".join(p for p in b["parts"] if p)
+                rest = t
+                if t.startswith(BREAKING):
+                    rest = t[len(BREAKING):]
+                    if s["name"] not in BREAKING_TYPES:
+                        hit(b["no"], "breaking", "`**Breaking:**` under `### {}` (only Changed or Removed)".format(s["name"]))
+                if BREAKING in rest:
+                    hit(b["no"], "breaking", "`**Breaking:**` not at the very start of the entry")
+                    rest = rest.replace(BREAKING, "")
+                if bold_left(rest):
+                    hit(b["no"], "bold", "bold in an entry (only a leading `**Breaking:**` is allowed)")
+                if len(t) > ENTRY_MAX:
+                    hit(b["no"], "entry-length", "{} characters (at most {})".format(len(t), ENTRY_MAX))
+                for x in internal_ids(t):
+                    hit(b["no"], "internal-id", "internal id {}".format(x))
+        if v["summary"]:
+            no = v["summary"][0][0]
+            t = " ".join(p for _, p in v["summary"])
+            if BREAKING in t:
+                hit(no, "breaking", "`**Breaking:**` in a summary (it marks an entry)")
+                t_bold = t.replace(BREAKING, "")
+            else:
+                t_bold = t
+            if bold_left(t_bold):
+                hit(no, "bold", "bold in a summary")
+            for x in internal_ids(t):
+                hit(no, "internal-id", "internal id {}".format(x))
+        if v["released"] and v["label"] not in NO_VERSIONS:
+            t = " ".join(p for _, p in v["summary"])
+            where = v["summary"][0][0] if v["summary"] else v["no"]
+            missing = [w for w, rx in (("Requires Claude Code N.N.N or newer", REQUIRES),
+                                       ("tested against N.N.N", TESTED)) if not rx.search(t)]
+            if missing:
+                hit(where, "summary-versions", "{} has no summary naming {}".format(
+                    v["label"], " and ".join("`{}`".format(m) for m in missing)) if not v["summary"] else
+                    "the summary of {} lacks {}".format(v["label"], " and ".join("`{}`".format(m) for m in missing)))
+
+    # Link references.
+    labels = []
+    if any(v["label"] == "Unreleased" for v in versions):
+        labels.append("Unreleased")
+    for v in versions:
+        if v["label"] and v["label"] != "Unreleased" and v["label"] not in labels:
+            labels.append(v["label"])
+    seen = {}
+    for no, m in refs:
+        if m.group(1) in seen:
+            hit(no, "links", "a second reference for [{}]".format(m.group(1)))
+        else:
+            seen[m.group(1)] = (no, m.group(2))
+    body = "\n".join(lines[:end])
+    for label, (no, _) in seen.items():
+        if label not in labels and not re.search(r"\[" + re.escape(label) + r"\](?!:)", body):
+            hit(no, "links", "[{}] is not used by any heading or text".format(label))
+    for label in labels:
+        if label not in seen:
+            hit(None, "links", "no link reference for [{}]".format(label))
+    order = [m.group(1) for _, m in refs if m.group(1) in labels]
+    order = [x for k, x in enumerate(order) if x not in order[:k]]
+    if order != [x for x in labels if x in seen]:
+        hit(refs[0][0] if refs else None, "links", "the link references are not in heading order ({})".format(
+            ", ".join(labels)))
+    bases = {}
+    rel = [x for x in labels if x != "Unreleased"]
+    for label in labels:
+        if label not in seen:
+            continue
+        no, url = seen[label]
+        m = REF_URL.match(url)
+        if not m:
+            hit(no, "link-url", "[{}] is not a <base>/compare/… or <base>/releases/tag/… URL: {}".format(label, url))
+            continue
+        base = m.group(1)
+        bases.setdefault(base, []).append(no)
+        if label == "Unreleased":
+            want = base + "/compare/v{}...HEAD".format(rel[0]) if rel else None
+        else:
+            k = rel.index(label)
+            want = (base + "/compare/v{}...v{}".format(rel[k + 1], label) if k + 1 < len(rel)
+                    else base + "/releases/tag/v{}".format(label))
+        if want and url != want:
+            hit(no, "link-url", "[{}] is {}, want {}".format(label, url, want))
+    if len(bases) > 1:
+        main = min(bases, key=lambda b: min(bases[b]))   # the base of the first reference
+        for b, nos in sorted(bases.items()):
+            if b != main:
+                for no in nos:
+                    hit(no, "link-base", "base URL {} differs from {} (the first reference's)".format(b, main))
+
+    hits.sort(key=lambda h: (h[0] or 0))
+    return hits
+
+
+def lint_file(path):
+    with open(path, encoding="utf-8", newline="") as f:
+        return lint_text(f.read())
+
+
+def main(argv):
+    if not argv or any(a.startswith("-") for a in argv):
+        print(__doc__, file=sys.stderr)
+        return 2
+    failed = False
+    for path in argv:
+        try:
+            hits = lint_file(path)
+        except (OSError, UnicodeDecodeError) as e:
+            print("changelog-lint: cannot read {}: {}".format(path, e), file=sys.stderr)
+            return 2
+        counts = {}
+        for no, rule, msg in hits:
+            counts[rule] = counts.get(rule, 0) + 1
+            print("CHANGELOG {} {}{}: {}".format(rule, path, ":{}".format(no) if no else "", msg))
+        failed = failed or bool(hits)
+        print("CHANGELOG-LINT: {} {} ({} hits{})".format(
+            "FAIL" if hits else "PASS", path, len(hits),
+            "".join("; {} {}".format(r, counts[r]) for r in RULES if r in counts)))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

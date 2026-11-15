@@ -37,7 +37,9 @@ tsconfig.json	build
 src/plugin.json	build
 src/marketplace.json	build
 src/hooks.json	build
-tools/{build,assemble,gates,owners-check,typecheck,check,matrix,budget-reasons.json,launcher-flags,respawn-keepset}	build
+tools/{build,assemble,gates,owners-check,typecheck,check,matrix,budget-reasons.json,launcher-flags,respawn-keepset,changelog-lint}	build
+# The changelog gate's probe files (tools/changelog-lint).
+tests/changelog/**	build
 src/assets/**	text
 src/skills/**	text
 tests/fixtures/**	fix
