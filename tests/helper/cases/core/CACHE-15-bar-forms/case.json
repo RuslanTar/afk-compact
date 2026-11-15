@@ -320,6 +320,30 @@
    }
   },
   {
+   "name": "COLUMNS 60: the cells (short only below 60)",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "env": {
+    "COLUMNS": "60"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "██░░░░░░░░░░ 10m\n"
+   }
+  },
+  {
    "name": "COLUMNS 80: the cells",
    "argv": [
     "cache",
@@ -404,6 +428,69 @@
    "expect": {
     "exit": 0,
     "stdout": "\u001b[31m███████████░ 56m\u001b[0m\n"
+   }
+  },
+  {
+   "name": "--color always, exactly 50% (30m): yellow",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794227400,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[33m██████░░░░░░ 30m\u001b[0m\n"
+   }
+  },
+  {
+   "name": "--color always, exactly 90% (54m): red",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794225960,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[31m██████████░░ 54m\u001b[0m\n"
+   }
+  },
+  {
+   "name": "--color always, just under 50% (29m): blue",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "always"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794227401,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "\u001b[34m█████░░░░░░░ 29m\u001b[0m\n"
    }
   },
   {
@@ -617,11 +704,53 @@
    }
   },
   {
-   "name": "--color with another word: the usage on stderr, nothing on stdout, exit 0",
+   "name": "--color with another word under --bar: nothing on stdout or stderr, exit 0 (a status line's path stays silent)",
    "argv": [
     "cache",
     "--stdin",
     "--bar",
+    "--color",
+    "sometimes"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "an unknown flag beside --bar: silent too",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--bogus"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "--color with another word without --bar: the usage on stderr",
+   "argv": [
+    "cache",
+    "--stdin",
     "--color",
     "sometimes"
    ],

@@ -88,6 +88,89 @@
    }
   },
   {
+   "name": "a perl that cannot start (a version manager's shim, exit 127, its error on stderr): --bar prints nothing, exit 0",
+   "path_prepend": [
+    "$TMP/bin2"
+   ],
+   "setup": [
+    {
+     "stub": "perl",
+     "dir": "$TMP/bin2",
+     "script": "echo 'plenv: perl: command not found' >&2; exit 127"
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "a perl killed by a signal: --bar prints nothing, exit 0",
+   "path_prepend": [
+    "$TMP/bin3"
+   ],
+   "setup": [
+    {
+     "stub": "perl",
+     "dir": "$TMP/bin3",
+     "script": "echo 'partial' >&2; kill -9 $$"
+    }
+   ],
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "the same broken perl without --bar: its error and exit code as before",
+   "path_prepend": [
+    "$TMP/bin2"
+   ],
+   "argv": [
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 127,
+    "stderr_has": [
+     "command not found"
+    ]
+   }
+  },
+  {
    "name": "no readable helper (the launcher's fallback): --bar prints nothing, exit 0",
    "setup": [
     {

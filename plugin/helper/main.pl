@@ -68,8 +68,8 @@ my $IS_HOOK = $sub eq 'hook';
 # 0.1.13: the status-line meter shows nothing rather than an error: a helper that cannot load or
 # run `cache --bar` exits 0 with nothing on stdout or stderr
 my $QUIET = $sub eq 'cache' && grep { $_ eq '--bar' } @ARGV;
-if ($IS_HOOK) {
-    # Hooks never write stderr, and nothing but our text reaches stdout.
+if ($IS_HOOK || $QUIET) {
+    # Hooks and the meter never write stderr, and nothing but our text reaches stdout.
     open(STDERR, '>', '/dev/null');
     $SIG{__WARN__} = sub { };
     $SIG{PIPE} = 'IGNORE';

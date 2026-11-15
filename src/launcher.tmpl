@@ -41,6 +41,19 @@ elif [ -x "$perl" ] && [ -r "$root/helper/main.pl" ]; then
   # stderr before main.pl runs, which a skill's Bash output would carry; 0 keeps it quiet.
   PERL_BADLANG=0
   export PERL_BADLANG
+  # The status-line meter (`cache --bar`, 0.1.13) shows the meter or nothing: perl runs as a child
+  # with stderr dropped, and the meter exits 0 whatever it does (a version manager's shim with no
+  # perl picked prints its error and exits 127; a perl killed by a signal).
+  if [ "${1-}" = cache ]; then
+    for a in "$@"; do
+      if [ "$a" = --bar ]; then
+        # this shell's own stderr too: it reports a child killed by a signal there
+        exec 2>/dev/null
+        "$perl" "$root/helper/main.pl" "$@"
+        exit 0
+      fi
+    done
+  fi
   if [ "${1-}" != hook ]; then
     exec "$perl" "$root/helper/main.pl" "$@"
   fi

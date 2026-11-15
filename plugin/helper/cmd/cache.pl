@@ -21,7 +21,9 @@ sub run {
     my @argv = @_;
     my ($opt, $rest) = eval { args::parse(\@argv, known => [qw(sid color)], bools => [qw(stdin json note-usage bar ascii short left)]) };
     if (!$opt || @$rest || (defined $opt->{color} && $opt->{color} !~ /\A(?:auto|always|never)\z/)) {
-        print STDERR "usage: cache [--sid <id>] [--stdin] [--json] [--note-usage] [--bar [--ascii] [--color auto|always|never] [--short] [--left]]\n";
+        # the meter's path stays silent (main.pl drops its stderr too)
+        print STDERR "usage: cache [--sid <id>] [--stdin] [--json] [--note-usage] [--bar [--ascii] [--color auto|always|never] [--short] [--left]]\n"
+            unless grep { $_ eq '--bar' } @argv;
         return 0;
     }
     my $in;
