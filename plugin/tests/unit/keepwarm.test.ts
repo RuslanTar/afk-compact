@@ -12,7 +12,7 @@ import { hasTag } from '../../hooks/lib/assemble'
 import { DEFAULTS, parseOptions } from '../../hooks/lib/config'
 import { newState } from '../../hooks/lib/deps'
 import { IDLE_CACHE_MS, IDLE_LAPSE_FRACTION, cancelIdleTimer, resumeIdle, schedule } from '../../hooks/lib/idle'
-import { KEEP_WARM_COLD_SHARE, KEEP_WARM_LATEST_MS, KEEP_WARM_PING_MS, forkOutcome } from '../../hooks/lib/keepwarm'
+import { KEEP_WARM_COLD_SHARE, KEEP_WARM_LATEST_MS, KEEP_WARM_NATIVE_MS, KEEP_WARM_PING_MS, forkOutcome } from '../../hooks/lib/keepwarm'
 import { SID_A, SID_B, T0, World } from './harness.test'
 
 const IDLE = hasTag('handoff-turn', 'submit-idle')
@@ -144,7 +144,7 @@ test('AT-KW-03: vetoed, an agent running: pings at 50 and 100 min, the 54-min co
   expect([f.at.length, selfCompacts(w), stops(w).length]).toEqual([2, 1, 1])
 })
 
-test('AT-KW-04: native on, an agent running: the 55.5-min check waits; at the cutoff it compacts at the check while warm (agents 1)', { options: ON }, async ($, on) => {
+test('AT-KW-04: native on, an agent running: the 55.5-min check waits; at the cutoff it compacts at the check while warm (agents 1; 0.1.13: 260K, so the first ping at 55:15)', { options: ON }, async ($, on) => {
   const w = world(on, {})
   const f = forks(on, w)
   await w.start($)
@@ -153,10 +153,10 @@ test('AT-KW-04: native on, an agent running: the 55.5-min check waits; at the cu
   await until(w, t0, 57)
   expect(skips(w)).toEqual([['keep-warm', 'check']])
   expect(selfCompacts(w)).toBe(0)
-  await until(w, t0, 150)
-  expect(f.at).toEqual([50, 100])
+  await until(w, t0, 156)
+  expect(f.at).toEqual([55, 105])
   expect(stops(w)).toEqual([['cutoff', true, 2]])
-  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 9000, 1]])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 9315, 1]])
   expect(selfCompacts(w)).toBe(1)
 })
 
@@ -449,8 +449,9 @@ test('AT-KW-17: Claude Code compacted the session during the gap: warming stops 
   await until(w, t0, 60)
   await $.session.compact({ trigger: 'auto', messages: [{ role: 'user', text: 'hello', toolUses: [] }] } as never)
   await w.settle()
-  await until(w, t0, 101)
-  expect(f.at).toEqual([50])
+  // 0.1.13: native on at 260K: the first ping at 55:15, so the next due (where the stop is read) at 105:15.
+  await until(w, t0, 106)
+  expect(f.at).toEqual([55])
   expect(stops(w)).toEqual([['compacted', false, 1]])
 })
 
@@ -1004,9 +1005,14 @@ test('AT-KW-37: pings that take 15 s: each retry a minute after the last one end
 
 // ---- Review fixes (fix round 4)
 
-/** P2's world: native on (the 55.5-min check), the plugin's idle compaction off, a background shell and no agent. */
+/**
+ * P2's world: native on (the 55.5-min check), the plugin's idle compaction off, a background shell and no agent.
+ * 0.1.13: Claude Code's idle minimum above the context (300K), so native would not compact and the
+ * first ping stays at 50 (these cases are about the held check's retries from there).
+ */
 async function checkGap($: Engine, w: World): Promise<number> {
   w.agents = []
+  w.env = { ...w.env, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: '300000' }
   await w.start($)
   await w.userTurn($)
   w.tokens = 260000
@@ -1546,7 +1552,8 @@ test('AT-KW-51: native on, both idle paths off, an agent running: no idle record
   expect(f.at).toEqual([])
   expect([w.rowsOf('keep_warm_start').length, w.rowsOf('keep_warm_ping').length]).toEqual([0, 0])
   expect(stops(w)).toEqual([['no-idle-path', false, 0]])
-  expect(refusals(w)).toEqual([[0, 3000, false]])
+  // 0.1.13: native on at 260K, so the first ping (refused) is due at 55:15.
+  expect(refusals(w)).toEqual([[0, 3315, false]])
   expect([ic(w).length, selfCompacts(w), w.submits.length]).toEqual([0, 0, 0])
   // The next gap logs its own one row.
   const t1 = await humanTurn($, w)
@@ -1589,8 +1596,8 @@ test('AT-KW-51: only the handoff turn on (native on): the check record is armed,
   await w.start($)
   const t0 = await humanTurn($, w)
   f.t0 = t0
-  await until(w, t0, 101)
-  expect(f.at).toEqual([50, 100])
+  await until(w, t0, 106)
+  expect(f.at).toEqual([55, 105])
   expect(refusals(w)).toEqual([])
 })
 
@@ -1603,7 +1610,8 @@ test('AT-KW-52: native on, the first ping misses the main prefix: nothing held; 
   const t0 = await humanTurn($, w)
   f.t0 = t0
   await until(w, t0, 120)
-  expect(f.at).toEqual([50])
+  // 0.1.13: native on at 260K: the first ping at 55:15.
+  expect(f.at).toEqual([55])
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
   expect(skips(w)).toEqual([['fork-miss', 'check']])
   expect(w.rowsOf('idle_silent').map(r => [r.gap_s, r.tokens, r.agents])).toEqual([[3330, 260000, 1]])
@@ -1617,7 +1625,7 @@ test('AT-KW-52: native on, a later ping misses the main prefix: the held check i
   const t0 = await humanTurn($, w)
   f.t0 = t0
   await until(w, t0, 240)
-  expect(f.at).toEqual([50, 100])
+  expect(f.at).toEqual([55, 105])
   expect(stops(w)).toEqual([['fork-miss', false, 1]])
   expect(skips(w)).toEqual([['keep-warm', 'check']])
   expect([w.rowsOf('idle_silent').length, ic(w).length, selfCompacts(w)]).toEqual([0, 0, 0])
@@ -1632,9 +1640,9 @@ test('AT-KW-52: native on, no job open at a ping (260K): stop no-jobs, the held 
   await until(w, t0, 60)
   w.agents = [{ id: 'sub-1', status: 'completed' }]
   await until(w, t0, 240)
-  expect(f.at).toEqual([50])
+  expect(f.at).toEqual([55])
   expect(stops(w)).toEqual([['no-jobs', true, 1]])
-  expect(ic(w).map(r => [r.at, r.gap_s, r.agents, r.tokens])).toEqual([['check', 6000, 0, 260000]])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents, r.tokens])).toEqual([['check', 6315, 0, 260000]])
   expect(selfCompacts(w)).toBe(1)
   expect(w.submits.length).toBe(0)
 })
@@ -1702,12 +1710,13 @@ test('AT-KW-51: native on, warming, the check record cleared by another process 
   await w.start($)
   const t0 = await humanTurn($, w)
   f.t0 = t0
-  await until(w, t0, 52)
-  expect(f.at).toEqual([50])
+  // 0.1.13: native on at 260K: the first ping at 55:15, the check at 55:30.
+  await until(w, t0, 55.4)
+  expect(f.at).toEqual([55])
   const rec = w.storeGet(KEY) as Record<string, unknown>
   w.storeSet(KEY, { cancelled: true, sid: SID_A, load: 'other', due: rec.due, at: w.clock.now() })
   await until(w, t0, 240)
-  expect(f.at).toEqual([50])
+  expect(f.at).toEqual([55])
   expect(stops(w)).toEqual([['no-idle-path', false, 1]])
   expect([skips(w), ic(w).length, selfCompacts(w)]).toEqual([[], 0, 0])
 })
@@ -1847,7 +1856,7 @@ test('AT-KW-54: native on, a prompt a hook drops at 30 min: the 55.5-min check i
   expect(r.drop).toBe('a peer dropped it')
   w.dropIf = undefined
   await until(w, t0, 240)
-  expect(f.at).toEqual([50, 100])
+  expect(f.at).toEqual([55, 105])
   expect(skips(w)).toEqual([['keep-warm', 'check']])
   expect(stops(w)).toEqual([['cutoff', true, 2]])
   expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 1]])
@@ -2417,11 +2426,12 @@ test('AT-KW-61 (0.1.7 item 4): a fork-miss beside a window in the band (five_hou
   await w.start($)
   const t0 = await humanTurn($, w)
   f.t0 = t0
-  await until(w, t0, 51)
+  // 0.1.13: native on at 260K: the first ping at 55:15, the check at 55:30; the band between them.
+  await until(w, t0, 55.4)
   w.rateLimits = [{ kind: 'five_hour', percentUsed: 95 }, { kind: 'seven_day', percentUsed: 30 }]
   await measured($, w)
   await until(w, t0, 57)
-  expect(f.at).toEqual([50])
+  expect(f.at).toEqual([55])
   expect(stops(w)).toEqual([['fork-miss', false, 0]])
   expect(skips(w)).toEqual([['fork-miss', 'check']])
   expect(selfCompacts(w)).toBe(0)
@@ -2712,4 +2722,151 @@ test('KW-OFF-06 (0.1.11): in the limit band with a job open before the first pin
   expect(f.at).toEqual([])
   expect(offRows(w).map(r => [r[0], r[1], r[3]])).toEqual([['near-limit', 0, true]])
   expect(ic(w).map(r => [r.at, r.rule])).toEqual([['timer', 'band']])
+})
+
+// ---- 0.1.13: the native window. Claude Code compacts a 200K+ conversation on the one-hour cache
+// 54:00 after its last main request (never later than 55:00, no retry), and a ping does not move
+// that timer: with its idle compaction on or unreadable and the context at its idle minimum or
+// more, the first ping comes at 55:15, and only when nothing compacted.
+
+/** Every fork's clock minute since `t0` (exact), answered by `answer` (by call order). */
+function exactForks(on: On, w: World, answer: (i: number) => Answer = () => ({ isAnswered: true, text: 'OK', usage: WARM })): { at: number[]; t0: number } {
+  const out = { at: [] as number[], t0: 0 }
+  on('model.fork', () => {
+    out.at.push((w.clock.now() - out.t0) / MIN)
+    return { value: answer(out.at.length - 1) } as never
+  })
+  return out
+}
+
+const firsts = (w: World, ev: string) => w.rowsOf(ev).map(r => [r.first_due_s, r.first_why])
+
+test('KW-N55-01 (0.1.13): native on, 203K, an agent running: no fork before 55:15; one at 55:15 comes back warm; the check waits; the next ping 50 min after it', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = exactForks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 203000)
+  f.t0 = t0
+  await until(w, t0, 55.2)
+  expect(f.at).toEqual([])
+  expect(w.rowsOf('keep_warm_send').length).toBe(0)
+  await until(w, t0, 57)
+  expect(f.at).toEqual([55.25])
+  expect(pings(w)).toEqual([['warm', 1]])
+  expect(w.rowsOf('keep_warm_start').map(r => [r.gap_s, r.ping_s, r.first_due_s, r.first_why])).toEqual([[3315, 3000, 3315, 'native-window']])
+  expect(skips(w)).toEqual([['keep-warm', 'check']])
+  expect(selfCompacts(w)).toBe(0)
+  await until(w, t0, 106)
+  expect(f.at).toEqual([55.25, 105.25])
+})
+
+for (const c of [
+  { name: 'done at 54:40', doneAt: 54 + 40 / 60 },
+  { name: 'still running at 55:15 (done at 55:50)', doneAt: 55 + 50 / 60 },
+  { name: 'still running past the 58-min bound (done at 58:30)', doneAt: 58.5 },
+]) {
+  test(`KW-N55-02 (0.1.13): native on, 203K: Claude Code's idle compaction dispatched at 54:00, ${c.name}: no ping, the gap stops compacted`, { options: ON }, async ($, on) => {
+    const w = world(on, {})
+    const f = exactForks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w, 203000)
+    f.t0 = t0
+    await until(w, t0, 54)
+    let release: () => void = () => undefined
+    w.compactGate = new Promise<void>(r => { release = r })
+    const p = $.session.compact({ trigger: 'auto', messages: [{ role: 'user', text: 'hello', toolUses: [] }] } as never)
+    await until(w, t0, c.doneAt)
+    release()
+    await p
+    await w.settle()
+    await until(w, t0, 70)
+    expect(f.at).toEqual([])
+    expect(w.rowsOf('keep_warm_send').length).toBe(0)
+    expect(w.rowsOf('keep_warm_start').length).toBe(0)
+    expect(w.rowsOf('keep_warm_stop').map(r => [r.why, r.pings, r.handover, r.refused, r.first_due_s, r.first_why])).toEqual([['compacted', 0, false, true, 3315, 'native-window']])
+    expect([ic(w).length, selfCompacts(w)]).toEqual([0, 0])
+  })
+}
+
+test('KW-N55-03 (0.1.13): native on, 203K: the first ping fails (an API error each time): retries at 56:15 and 57:15, then the deadline path (stop deadline, the held check compacts while warm)', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = exactForks(on, w, () => OVERLOADED)
+  await w.start($)
+  const t0 = await humanTurn($, w, 203000)
+  f.t0 = t0
+  await until(w, t0, 70)
+  expect(f.at).toEqual([55.25, 56.25, 57.25])
+  expect(pings(w)).toEqual([['api-error', 0], ['api-error', 0], ['api-error', 0]])
+  expect(stops(w)).toEqual([['deadline', true, 0]])
+  expect(skips(w)).toEqual([['keep-warm', 'check']])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+test('KW-N55-04 (0.1.13): native on, 203K, the turn ends 110 s after its last request (the check at 57:20): the last retry at 57:15 fails with no record held yet: stop deadline, and the check then runs on its own', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = exactForks(on, w, () => OVERLOADED)
+  await w.start($)
+  await w.userTurn($)
+  await w.step($)
+  const t0 = w.clock.now()
+  f.t0 = t0
+  await w.advance(110000)
+  w.tokens = 203000
+  await w.turnEnd($)
+  await until(w, t0, 70)
+  expect(f.at).toEqual([55.25, 56.25, 57.25])
+  expect(stops(w)).toEqual([['deadline', false, 0]])
+  expect(skips(w)).toEqual([])
+  expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
+
+const n55Defaults: { name: string; policy: Record<string, unknown>; tokens: number; env: Record<string, string> }[] = [
+  { name: '197K (below Claude Code\'s idle minimum)', policy: {}, tokens: 197000, env: {} },
+  { name: 'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS 300000 at 260K', policy: {}, tokens: 260000, env: { CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: '300000' } },
+  { name: 'native vetoed ("idleCompaction": false) at 260K', policy: NATIVE_OFF, tokens: 260000, env: {} },
+  { name: 'automatic compaction off at 260K', policy: { autoCompactEnabled: false }, tokens: 260000, env: {} },
+]
+for (const c of n55Defaults) {
+  test(`KW-N55-05 (0.1.13): ${c.name}: the first ping at 50 as before (first_why default)`, { options: { ...ON, idle_handoff_min_tokens: 100000 } }, async ($, on) => {
+    const w = world(on, c.policy)
+    w.env = { ...w.env, ...c.env }
+    const f = exactForks(on, w)
+    await w.start($)
+    const t0 = await humanTurn($, w, c.tokens)
+    f.t0 = t0
+    await until(w, t0, 101)
+    expect(f.at).toEqual([50, 100])
+    expect(firsts(w, 'keep_warm_start')).toEqual([[3000, 'default']])
+  })
+}
+
+test('KW-N55-06 (0.1.13): native unreadable (settings reads fail) at 203K: the first ping at 55:15 too', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  w.settingsThrow = true
+  const f = exactForks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 203000)
+  f.t0 = t0
+  await until(w, t0, 57)
+  expect(f.at).toEqual([55.25])
+  expect(firsts(w, 'keep_warm_start')).toEqual([[3315, 'native-window']])
+})
+
+test('KW-N55-07 (0.1.13): native on, 203K, the five-minute cache (promptCacheTtl 5m): unchanged, refused ttl-5m at 50', { options: ON }, async ($, on) => {
+  const w = world(on, { promptCacheTtl: '5m' })
+  const f = exactForks(on, w)
+  await w.start($)
+  const t0 = await humanTurn($, w, 203000)
+  f.t0 = t0
+  await until(w, t0, 60)
+  expect(f.at).toEqual([])
+  expect(w.rowsOf('keep_warm_stop').map(r => [r.why, r.gap_s, r.refused, r.first_due_s, r.first_why])).toEqual([['ttl-5m', 3000, true, 3000, 'default']])
+})
+
+test('KW-N55-08 (0.1.13): the native-window first ping is after native\'s last start (55:00) and leaves two retries inside the 58-min bound', () => {
+  expect(KEEP_WARM_NATIVE_MS).toBe(55.25 * MIN)
+  expect(KEEP_WARM_NATIVE_MS > 55 * MIN).toBe(true)
+  expect(KEEP_WARM_NATIVE_MS + 2 * MIN < KEEP_WARM_LATEST_MS).toBe(true)
 })

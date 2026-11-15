@@ -1811,9 +1811,10 @@ test('AT-IC-C38: native on, agents running: G1 holds and the record is a tombsto
   w.agents = RUNNING
   await w.start($)
   await humanTurn($, w)
-  await w.advance(55 * MIN)
+  // 0.1.13: past keep-warm's first ping (55:15 at 260K with native on), before the check at 55:30.
+  await w.advance(55.4 * MIN)
   reads = 0
-  await w.advance(MIN)
+  await w.advance(0.6 * MIN)
   expect(reads).toBe(1)
   expect(isTomb(w.storeGet(KEY))).toBe(true)
   expect(ic(w).map(r => [r.at, r.agents])).toEqual([['check', 1]])

@@ -20,10 +20,12 @@
 //   Native fires 54:00 after the last request and the cache lasts to minute 60. When the plugin's
 //   own records show a main compaction since that turn end it stands down (`native-fired`);
 //   otherwise native stayed silent for whatever reason (served `off`, a keypress, a dialog, a
-//   failure, agents running), one `idle_silent` row counts the break, and, with `idle_compact`
-//   auto, the plugin compacts the main session itself while the cache is still warm: always while
-//   agents run (native never compacts then), and at Claude Code's idle minimum or more when
-//   none run (compact instead of the handoff turn). The same guards as `compact`
+//   failure, a rate-limit status, a session record held elsewhere), one `idle_silent` row counts
+//   the break, and, with `idle_compact` auto, the plugin compacts the main session itself while the
+//   cache is still warm: always while agents run (their result turns would read a cold cache;
+//   Claude Code 2.1.321 and later have no agent guard of their own, so agents alone do not keep
+//   native from compacting), and at Claude Code's idle minimum or more when none run (compact
+//   instead of the handoff turn). The same guards as `compact`
 //   (`compactGuards`), the same failure count. Below that minimum, or with
 //   `idle_compact: off`, the handoff turn runs (`agents-running` while agents run). Armed while
 //   `idle_handoff_turn` or `idle_compact` is auto.
@@ -40,7 +42,9 @@
 // handoff turn runs on the handoff-turn machinery (handoff-turn.ts); no plugin compaction and no continue
 // follow it; at most one per idle episode.
 // Keep-warm (keepwarm.ts): while the gap warms (a background job of this session open, the
-// one-hour cache), every kind's fire waits (`keep-warm`) and its record goes back here when warming
+// one-hour cache; 0.1.13: with native `on` or `unknown` at its idle minimum or more, the first ping
+// at 55:15, after native could have compacted, so the check at 55.5 finds that gap warming or
+// stopped), every kind's fire waits (`keep-warm`) and its record goes back here when warming
 // stops with the cache warm (`handOverIdle`), anchored at the last warm ping (`warm`). A gap with no
 // record armed or held (both paths off, or no kind at this size) or with `triggers` off never warms
 // (`no-idle-path`): no path here would take it over after the pings.
@@ -817,7 +821,7 @@ type Compact = { compact: true; gapS: number; tokens: number; agents: number; li
  * `idle_silent` row at 200K and more, then, with `idle_compact` auto, the plugin's own idle
  * compaction behind the guards it shares with the `compact` timer (`compactGuards`; an earlier
  * build had a shorter list here, without the cache and the limits): while agents run
- * (native never compacts then), and with none running at Claude Code's idle minimum or
+ * (their result turns would read a cold cache), and with none running at Claude Code's idle minimum or
  * more, or with the turn off (compact instead of the turn; a refusal is the
  * check's one row, no turn after it, as for `compact`). Before the guards it reads
  * Claude Code's automatic compaction once more (G0b, as the `compact` timer does at its fire):

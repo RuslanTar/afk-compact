@@ -15,6 +15,17 @@
 //   main request, then each warm ping), always within 55; a ping that would start more than
 //   58 minutes after it is not sent (the cache may have lapsed, and a late ping would write it all
 //   again): warming ends for the gap (`missed`).
+// - 0.1.13, a gap Claude Code's own idle compaction may take (`native-window`: its idle compaction
+//   `on` or unreadable, the context at its idle minimum `compactMin` or more at the turn end, the
+//   one-hour cache): the first ping is due at 55:15 instead. Claude Code arms one timer at each
+//   main turn end and compacts such a conversation 54:00 after the last main request (never later
+//   than 55:00, no retry); a ping does not move that timer, so a ping at 50 was wasted whenever it
+//   fired (51 of 162 such gaps on one machine). At 55:15 a compaction under way or done since the
+//   gap began sends nothing: the gap stops `compacted`. Otherwise the ping goes out as any other,
+//   with its retries a minute apart (56:15, 57:15) inside the 58-minute bound; a failed one whose
+//   retry would pass that bound stops `deadline` with the hand-over, whether or not the 55.5-min
+//   check is held yet (it fires 15 s or more after the first ping, `IDLE_CHECK_MS` from the turn
+//   end, and a gap that warms holds it). Later pings keep the 50-minute cadence from the last warm one.
 // - Warming starts, at the first ping or at an idle timer's fire, only for a main, non-headless
 //   session, while a background job of this session is open, on the one-hour cache (Claude Code's
 //   own TTL switch, else a five-hour or seven-day plan window reported: the idle path's reading,
@@ -83,7 +94,7 @@
 // the idle record it holds stays in the store (idle.ts `holdIdle`), so a load that adopts it after
 // a reload ends the warming (`reload`) and fires it at the next ping's due, while the cache is
 // still warm.
-import type { Deps, RequestUsage } from './deps'
+import type { Deps, IdleEnv, RequestUsage } from './deps'
 import type { Due } from './idle'
 import { compactedSince } from './compact'
 import { prefixRead } from './deps'
@@ -95,6 +106,12 @@ import { log } from './log'
 
 /** The next ping, after the start of the last cache-refreshing request (a share of the cache hour, test-seam-scaled). */
 export const KEEP_WARM_PING_MS = 50 * 60000
+/**
+ * 0.1.13: the first ping of a `native-window` gap, after the start of the last main request:
+ * 15 s past the last moment Claude Code's own idle compaction can start (54:00 plus its 60-s
+ * lateness bound), so its dispatch is seen first (test-seam-scaled).
+ */
+export const KEEP_WARM_NATIVE_MS = (55 * 60 + 15) * 1000
 /**
  * No ping starts later than this after it: 58 min, the idle path's lapse bound (idle.ts
  * IDLE_LAPSE_FRACTION of the cache hour; a literal here, as idle.ts and this module import each other).
@@ -164,7 +181,16 @@ export type KeepWarm = {
   bandJob?: boolean
   /** The last check's limit note (a reading at the limit that did not stop the ping), for its row. */
   note?: LimitNote
+  /**
+   * 0.1.13: why the first ping is due when it is (`native-window`: after Claude Code's own idle
+   * compaction could have started; `default`: 50 minutes), and that due (`firstAt`).
+   */
+  first: FirstWhy
+  firstAt: number
 }
+
+/** 0.1.13: the first ping's timing, on the gap's start row and on a refused stop row (`first_why`). */
+export type FirstWhy = 'default' | 'native-window'
 
 /**
  * The background tasks of the main session's last Stop (`background_tasks`), by id; `shells` the
@@ -264,10 +290,13 @@ export async function armKeepWarm(d: Deps, sid: string, endAt: number): Promise<
   if (d.cfg.keep_warm_hours <= 0 || s.headless || s.keepWarmSpent) return
   const gen = s.keepWarmGen
   const start = s.lastMainReqAt !== undefined && s.lastMainReqAt <= endAt ? s.lastMainReqAt : endAt
-  const scale = scaleOf(await d.idleEnv())
+  const env = await d.idleEnv()
+  const scale = scaleOf(env)
+  const first: FirstWhy = (await nativeWindow(d, env)) ? 'native-window' : 'default'
+  const firstAt = start + (first === 'native-window' ? KEEP_WARM_NATIVE_MS : KEEP_WARM_PING_MS) * scale
   const kw: KeepWarm = {
-    sid, start, warm: start, next: start + KEEP_WARM_PING_MS * scale, phase: 'armed', pings: 0, deferred: undefined,
-    cc: (await ccVersion(d)) ?? null, model: (await d.model()) ?? null,
+    sid, start, warm: start, next: firstAt, phase: 'armed', pings: 0, deferred: undefined,
+    cc: (await ccVersion(d)) ?? null, model: (await d.model()) ?? null, first, firstAt,
   }
   const now = await d.now()
   // A turn or prompt that came during these reads: no gap to arm.
@@ -275,6 +304,27 @@ export async function armKeepWarm(d: Deps, sid: string, endAt: number): Promise<
   s.keepWarm = kw
   tick(d, kw, now)
 }
+
+/**
+ * 0.1.13: Claude Code's own idle compaction may take this gap at 54 minutes: it is `on` or
+ * unreadable (not `vetoed`, not `compaction-off`), the context at the turn end is at its idle
+ * minimum or more (`compactMin`, as native counts it; not the plugin's lower floor with a job
+ * open), and the cache is the one-hour one. A context size or usage that cannot be read: no.
+ */
+async function nativeWindow(d: Deps, env: IdleEnv): Promise<boolean> {
+  const n = await d.nativeIdle()
+  if (n !== 'on' && n !== 'unknown') return false
+  let u: Awaited<ReturnType<Deps['usage']>> | undefined
+  try {
+    u = await d.usage()
+  } catch {
+    return false
+  }
+  if (u?.tokens === undefined || u.tokens < env.compactMin) return false
+  return oneHourCache(d, env, u)
+}
+
+const firstFields = (kw: KeepWarm): { first_due_s: number; first_why: FirstWhy } => ({ first_due_s: secs(kw.firstAt - kw.start), first_why: kw.first })
 
 async function ccVersion(d: Deps): Promise<string | undefined> {
   try {
@@ -413,8 +463,9 @@ async function blocked(d: Deps, kw: KeepWarm, now: number): Promise<Block | Wait
   // No idle path would take the gap over after the pings: no idle record armed or held for the
   // session (`incoming`: the one the idle timer's fire is asking about, a tombstone in the store by
   // then; `deferred`: the one this gap holds), or `triggers` off, which every idle path refuses.
-  // Pings then could run to the cutoff with no compaction or handoff turn behind them (and, native
-  // idle on, may keep Claude Code's own from firing).
+  // Pings then could run to the cutoff with no compaction or handoff turn behind them. (A ping does
+  // not keep Claude Code's own idle compaction from firing: its 54-min timer counts from the last
+  // main request, which a fork is not.)
   if (!d.cfg.triggers || ((kw.incoming ?? kw.deferred) === undefined && !(await idleArmed(d, kw.sid)))) {
     return { why: 'no-idle-path', handover: true }
   }
@@ -433,7 +484,7 @@ async function refuse(d: Deps, kw: KeepWarm, b: Block, now: number): Promise<voi
   const band = b.why === 'near-limit' && b.job === true
   if (band) kw.bandJob = true
   await log(d, kw.sid, 'keep_warm_stop', {
-    why: b.why, pings: 0, gap_s: secs(now - kw.start), handover: band, refused: true, ...(b.windows !== undefined ? { windows: b.windows } : {}),
+    why: b.why, pings: 0, gap_s: secs(now - kw.start), handover: band, refused: true, ...firstFields(kw), ...(b.windows !== undefined ? { windows: b.windows } : {}),
     ...(b.rule !== undefined ? { rule: b.rule, ...(await tierFields(d)) } : {}), ...b.usage,
   })
 }
@@ -463,7 +514,7 @@ async function begin(d: Deps, kw: KeepWarm, now: number): Promise<boolean> {
   if (moved()) return false
   if (kw.phase === 'armed') {
     kw.phase = 'warming'
-    kw.startRow = log(d, kw.sid, 'keep_warm_start', { jobs, gap_s: secs(now - kw.start), hours: d.cfg.keep_warm_hours, windows, ping_s: pingS })
+    kw.startRow = log(d, kw.sid, 'keep_warm_start', { jobs, gap_s: secs(now - kw.start), hours: d.cfg.keep_warm_hours, windows, ping_s: pingS, ...firstFields(kw) })
   }
   // Begun here, or by the other caller meanwhile: after its start row, while undisturbed (a gap
   // found `off`, the other's checks failing, writes nothing: the callers go on only while it warms).
@@ -608,10 +659,16 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     if (s.keepWarmGen !== gen && kw.resumed === s.keepWarmGen) gen = s.keepWarmGen
     return s.keepWarmGen === gen
   }
-  const b = await blocked(d, kw, now)
+  const b0 = await blocked(d, kw, now)
   const scale = scaleOf(await d.idleEnv())
   // A turn that started meanwhile ends the gap as `turn` (alive.ts): no stop row or hand-over here.
   if (!ours()) return
+  // 0.1.13: a `native-window` gap before its first warm ping: a main compaction under way (Claude
+  // Code's own 54-min one, dispatched and not done yet) counts as one since the gap began, so no
+  // ping goes out and the gap stops `compacted` with no hand-over (its outcome check stands down).
+  const b: Block | Wait | undefined = kw.first === 'native-window' && kw.pings === 0 && s.nativeCompacting > 0 && (b0 === undefined || 'wait' in b0 || b0.handover)
+    ? { why: 'compacted', handover: false }
+    : b0
   // A turn, a prompt arriving, a plugin turn or compaction under way: no fork, and no stop that
   // hands the record back beside it (the idle path would skip it as busy); a minute later. A stop
   // without a hand-over (`missed` at the 58-minute bound, among others) still ends the gap.
@@ -708,7 +765,14 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     if (o.result === 'nothing-to-fork') return handOver('nothing-to-fork')
     // The held record goes back while it can still fire, rather than be dropped at `missed`; the
     // job flag only with a job whose result turn is certain open, as at the cutoff.
-    if (kw.deferred !== undefined && t1 + retryMs(scale) > heldDeadline(kw.deferred, kw.warm, scale)) {
+    // 0.1.13: in a `native-window` gap the 55.5-min check may not be held yet when the last retry
+    // inside the 58-minute bound fails (it fires 55.5 min after the turn end, which can come later
+    // than the last request's start): the gap stops `deadline` all the same, so that check, when it
+    // fires, runs on its own instead of being held and dropped at `missed`.
+    const last = kw.deferred !== undefined
+      ? t1 + retryMs(scale) > heldDeadline(kw.deferred, kw.warm, scale)
+      : kw.first === 'native-window' && t1 + retryMs(scale) > kw.warm + KEEP_WARM_LATEST_MS * scale
+    if (last) {
       const job = await resultJobOpen(d, kw.sid)
       if (!ours()) return
       return handOver('deadline', job)
