@@ -141,6 +141,139 @@
    }
   },
   {
+   "name": "27m59s in: the age and the cells round down (5 cells, 27m)",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794227521,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "█████░░░░░░░ 27m\n"
+   }
+  },
+  {
+   "name": "keep-warm past its max (n 9 of 7): every cell, no more",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228900,
+     "ttl": "1h"
+    }
+   },
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": 1794225000,
+       "gap_start": 1794224700,
+       "hours": 6,
+       "n": 9,
+       "warm_at": 1794225300,
+       "last_at": 1794225300,
+       "result": "warm",
+       "warm_ping": [
+        1794225300,
+        1794225310
+       ]
+      }
+     }
+    }
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "████████████ ↻9/7\n"
+   }
+  },
+  {
+   "name": "cold with a transcript-only TTL: `~` before the age",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "schema_only": 1
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1",
+       "timestamp": "2026-11-09T10:50:00.000Z",
+       "version": "2.1.319",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "████████████ cold ~1h10m\n"
+   }
+  },
+  {
    "name": "transcript-only TTL: `~` before the age",
    "argv": [
     "cache",

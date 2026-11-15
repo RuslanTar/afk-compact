@@ -1,0 +1,92 @@
+{
+ "id": "CACHE-17-shim-downgrade",
+ "note": "0.1.13, the downgrade side: 0.1.12's keep_shim reads a shim only in the three-line form (its _shim_target pattern, embedded here verbatim from tag v0.1.12), so the 0.1.13 shim (with the `[ -x … ] || exit 0` check) reads as foreign to it and is left alone, still running the 0.1.13 copy while that copy exists; the docs' downgrade sentence rests on this.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "plugin_at": "$HOME/.claude/plugins/cache/m/$BRAND/9.0.0",
+ "manifest": {
+  "version": "9.0.0"
+ },
+ "steps": [
+  {
+   "name": "an installed copy's SessionStart writes the 0.1.13 shim",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim written"
+    ]
+   }
+  },
+  {
+   "name": "0.1.12's reader (its _shim_target pattern, verbatim) calls that shim foreign, so a downgraded copy leaves it running the newer copy",
+   "exec": [
+    "/usr/bin/perl",
+    "-e",
+    "my $t = do { local $/; open my $f, \"<\", $ARGV[0] or die; <$f> }; print defined $t && $t =~ m{\\A#!/bin/sh\\n# [^\\n]*kept by its SessionStart hook\\.\\nexec '(/[^'\\n]*)' \"\\$\\@\"\\n\\z} ? \"target $1\\n\" : \"foreign\\n\";",
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "foreign\n"
+   }
+  },
+  {
+   "name": "0.1.12's reader still reads the shim form it wrote (the pattern is the real one)",
+   "setup": [
+    {
+     "write": "$TMP/old-shim",
+     "content": "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n"
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "-e",
+    "my $t = do { local $/; open my $f, \"<\", $ARGV[0] or die; <$f> }; print defined $t && $t =~ m{\\A#!/bin/sh\\n# [^\\n]*kept by its SessionStart hook\\.\\nexec '(/[^'\\n]*)' \"\\$\\@\"\\n\\z} ? \"target $1\\n\" : \"foreign\\n\";",
+    "$TMP/old-shim"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout": "target $STORE\n"
+   }
+  },
+  {
+   "name": "the shim it left runs the 0.1.13 copy's meter while that copy exists",
+   "exec": [
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "expires_at": 1794228600,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "██░░░░░░░░░░ 10m\n",
+    "stderr_empty": true
+   }
+  }
+ ]
+}
