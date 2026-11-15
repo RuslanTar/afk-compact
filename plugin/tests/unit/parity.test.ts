@@ -188,6 +188,9 @@ describe('BT-05 recorded helper replies', () => {
     expect([saved.verdict, saved.kind, saved.marker_line, saved.sentinel_from_end]).toEqual(['ok', 'saved', 1, 1])
     const again = parseSave({ ok: true, exitCode: 0, stdout: join(reply('save-copy-exists').stdout), error: '' })
     expect([again.kind, again.path]).toEqual(['exists-match', saved.path])
+    // the same summary with a trailer after the sentinel: the copy holds it all
+    const trailer = parseSave({ ok: true, exitCode: 0, stdout: join(reply('save-copy-exists-trailer').stdout), error: '' })
+    expect([trailer.verdict, trailer.kind, trailer.path]).toEqual(['ok-trailer', 'exists-trailer', saved.path])
     expect(await claim(depsFor(reply('claim-claimed')), REPLY_SID, REPLY_NONCE, 'prompt.context')).toBe('CLAIMED')
     expect(await claim(depsFor(reply('claim-taken')), REPLY_SID, REPLY_NONCE, 'prompt.submit')).toBe('TAKEN')
     const block = await measure(depsFor(reply('measure')), REPLY_SID)
@@ -245,7 +248,8 @@ describe('BT-05 recorded helper replies', () => {
       // handoff-state answers the recorded line; the jobs stream refuses as outside Claude Code.
       if (r.name.startsWith('handoff-state-')) w.htStates.set(argv[argv.indexOf('--ht') + 1] ?? '', join(r.stdout).trimEnd())
       w.jobsReply = r.name === 'log-jobs-caller' ? { exitCode: 3, stdout: 'REFUSED: jobs-caller\n' } : { exitCode: 0, stdout: '' }
-      w.saveLine = r.name === 'save-copy-exists' ? 'EXISTS: ~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md sha-match' : undefined
+      const copy = '~/.claude/handoffs/r/LAB-42/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md'
+      w.saveLine = r.name === 'save-copy-exists' ? `EXISTS: ${copy} sha-match` : r.name === 'save-copy-exists-trailer' ? `EXISTS: ${copy} sha-differs-trailer` : undefined
       const fake = w.helper([bin, ...argv], {}, r.stdin === undefined ? undefined : join(r.stdin))
       if (fake === 'reject') throw new Error('fake helper rejected ' + r.name)
       const real = join(r.stdout)

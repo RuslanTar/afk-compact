@@ -1,6 +1,6 @@
 {
  "id": "AT-ST-01, AT-ST-02 (mismatch settle)",
- "note": "AT-ST-01: PostCompact saved the copy; the mod stash has the same body plus an unlisted trailer after the sentinel; the after-step save-copy --from it prints EXISTS sha-differs, the stash is dropped as redundant (stash_dropped), one copy, no keep. AT-ST-02: a stash whose body really differs and holds a JWT is kept redacted (pending/<nonce>.mod.mismatch.md, 0600, [redacted:jwt]) with its sha side file (raw_sha256 = the normalized original); no raw JWT anywhere under the watch dir; the copy is unchanged; a second and third Stop write nothing new",
+ "note": "AT-ST-01: PostCompact saved the copy; the mod stash has the same body plus an unlisted trailer after the sentinel; the after-step save-copy --from it prints EXISTS sha-differs-trailer (0.1.13; sha-differs before), the stash is dropped as redundant (stash_dropped), one copy, no keep. AT-ST-02: a stash whose body really differs and holds a JWT is kept redacted (pending/<nonce>.mod.mismatch.md, 0600, [redacted:jwt]) with its sha side file (raw_sha256 = the normalized original); no raw JWT anywhere under the watch dir; the copy is unchanged; a second and third Stop write nothing new",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -22,7 +22,7 @@
    ],
    "argv": ["save-copy", "--sid", "$SID", "--nonce", "1a2b3c4d", "--from", "$WATCH/$SID/pending/1a2b3c4d.mod.md", "--writer", "mod", "--scope", "main", "--cwd", "$TMP/work"],
    "expect": {"exit": 0,
-    "stdout_re": "^VERDICT ok-trailer marker_line=1 sentinel_from_end=2\\nEXISTS: .* sha-differs\\n$",
+    "stdout_re": "^VERDICT ok-trailer marker_line=1 sentinel_from_end=2\\nEXISTS: .* sha-differs-trailer\\n$",
     "files": [
      {"path": "$WATCH/$SID/pending/1a2b3c4d.mod.md", "count": 0},
      {"path": "$WATCH/$SID/pending/*.mismatch.*", "count": 0},

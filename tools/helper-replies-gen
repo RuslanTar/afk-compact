@@ -51,6 +51,10 @@ def summary(name):
             "## Resume here\nStatus: active\n⟪/{0} n={1}⟫\n</summary>\n").format(name, NONCE)
 
 
+# A line Claude Code may put after an installed summary's sentinel (one it is not known to write).
+TRAILER = "A closing line the summary itself does not hold.\n"
+
+
 def ht_setup(tmp, home):
     """Files `begin` and `publish` (WP-skills) write for a bound ht, written here directly so the
     recorded `handoff-state` replies cover every form (core lib/handoff_turn.pm)."""
@@ -109,6 +113,8 @@ def calls(tmp):
                       "is_read_only": True, "backgrounded": "flag"}, separators=(",", ":"))
     save = ["save-copy", "--sid", SID, "--nonce", NONCE, "--from", tmp + "/summary.txt", "--writer", "mod",
             "--scope", "main", "--tokens", "612345,41000"]
+    # the same summary as installed, with a trailer of Claude Code's after the sentinel
+    trailer = [tmp + "/summary-trailer.txt" if a == tmp + "/summary.txt" else a for a in save]
     return [
         ("ident", ["ident", "--sid", SID]),
         ("prev-copy-none", ["prev-copy", "--sid", SID, "--actor", "main"]),
@@ -117,6 +123,7 @@ def calls(tmp):
         ("checkpoint", ["checkpoint", "--sid", SID, "--nonce", NONCE, "--budget-ms", "10000"]),
         ("save-copy-saved", save),
         ("save-copy-exists", save),
+        ("save-copy-exists-trailer", trailer),
         ("prev-copy-path", ["prev-copy", "--sid", SID, "--actor", "main"]),
         ("sweep", ["sweep", "--sid", SID, "--nonce", NONCE]),
         ("claim-claimed", ["claim", "--sid", SID, "--nonce", NONCE, "--channel", "prompt.context"]),
@@ -183,6 +190,9 @@ def record():
         text = summary(name)
         with open(os.path.join(tmp, "summary.txt"), "w", encoding="utf-8") as f:
             f.write(text)
+        trailer = text.replace("</summary>\n", TRAILER + "</summary>\n")
+        with open(os.path.join(tmp, "summary-trailer.txt"), "w", encoding="utf-8") as f:
+            f.write(trailer)
         env = {"HOME": home, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "TZ": "Etc/GMT-3", "TMPDIR": tmp,
                "STORE_TEST_MODE": "1", "STORE_TEST_NOW": NOW, "STORE_TEST_CLAUDE_PID": CLAUDE_PID}
         rows = []
@@ -207,7 +217,7 @@ def record():
                     label, out, r.returncode, want))
             rows.append({"name": label, "argv": [portable(a, tmp, home, name) for a in argv],
                          "exitCode": r.returncode, "stdout": portable(out, tmp, home, name)})
-        inputs = {"$TMP/summary.txt": text.split(name)}
+        inputs = {"$TMP/summary.txt": text.split(name), "$TMP/summary-trailer.txt": trailer.split(name)}
         stdins = {lab: s[0].split(name) for lab, _a, *s in calls(tmp) if s and lab}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

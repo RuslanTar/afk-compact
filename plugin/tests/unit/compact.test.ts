@@ -254,6 +254,21 @@ test('after-step: EXISTS sha-match → copy_exists; EXISTS sha-differs → copy_
   expect(w.toasts.some(t => t.includes('copy-failed'))).toBe(true)
 })
 
+test('after-step: EXISTS sha-differs-trailer (only Claude Code\'s trailer after the sentinel differs) → copy_exists with trailer, no copy_mismatch, no toast; the block names the copy', async ($, on) => {
+  const w = new World().install(on)
+  w.saveLine = `EXISTS: ${ROOT}/r/x.md sha-differs-trailer`
+  await raiseCompact($, { trigger: 'auto' })
+  const nonce = w.flag(w.callsOf('dispatch')[0], '--nonce') ?? ''
+  expect(w.rowsOf('copy_exists').map(r => [r.nonce, r.trailer])).toEqual([[nonce, true]])
+  expect(w.rowsOf('copy_mismatch').length).toBe(0)
+  expect(w.rowsOf('copy_failed').length).toBe(0)
+  expect(w.toasts.some(t => t.includes('copy-mismatch'))).toBe(false)
+  const ctx = await $.prompt.context({ blocks: [] })
+  const block = ctx.blocks.find(b => b.name === `${w.name}-resume`)
+  expect(block?.text).toContain(`${ROOT}/r/x.md`)
+  expect(block?.text).not.toContain('not saved')
+})
+
 test('CC311-01: the Claude Code 2.1.311 installed form (tools-used block in a <system-reminder> block) matches the PostCompact copy: copy_exists, verdict ok, marker on line 1, no mismatch', async ($, on) => {
   const w = new World().install(on)
   w.summaryMode = 'cc311'

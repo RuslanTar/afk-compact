@@ -4,7 +4,8 @@ package copies;
 #   sub     -> <bucket>/compact/subagents/<stamp>_<sid8>[-a<agent8>]_c<seq>-<id6>.md
 #   unknown -> <bucket>/compact/unattributed/<stamp>_<sid8>_<id6>.md
 # <id6> = nonce6, or h + 5 hex of the normalized body's sha256. One copy per id6:
-# an existing file is verified by sha (EXISTS sha-match / sha-differs), never
+# an existing file is verified by sha (EXISTS sha-match / sha-differs, or sha-differs-trailer
+# when the text differs only by Claude Code's own trailer after the sentinel), never
 # replaced; a true h-id collision with other content gets -2. seq under seq.lock.
 # Mode 0400; frontmatter from the dispatch record and the boundary row only.
 # 0.1.5 (stable ledger): a main copy of a shaped summary (an ok verdict) also holds the
@@ -81,6 +82,24 @@ sub drop_stash {
     return unlink($path) ? 1 : 0;
 }
 
+# trailer_only(scan => scan, verdict => v, sha => the copy's body sha) -> 1 when the text's
+# verdict is ok-trailer and its body cut after the sentinel line has that sha: the text
+# differs from the copy only by an engine trailer after the sentinel (AT-M3-17), so the copy
+# is complete. Claude Code's trailer lines change between versions, so this is checked on
+# the text itself, not against the copy_trailers list.
+sub trailer_only {
+    my (%a) = @_;
+    my ($s, $csha) = @a{qw(scan sha)};
+    return 0 unless ($a{verdict} // '') eq 'ok-trailer' && defined $csha && ref $s eq 'HASH' && defined $s->{sentinel_from_end};
+    my @b = @{ $s->{lines} || [] };
+    my ($k, $at) = (0, undef);
+    for (my $j = $#b; $j >= 0; $j--) {
+        next if $b[$j] =~ /^\s*$/;
+        if (++$k == $s->{sentinel_from_end}) { $at = $j; last }
+    }
+    return (defined $at && sha::hex256(join("\n", @b[0 .. $at]) . "\n") eq $csha) ? 1 : 0;
+}
+
 # settle_mismatch(path => stash, save => copies::save result (EXISTS sha-differs), scan => scan)
 # -> 'dropped' | 'kept' | undef (not our stash, or no mismatch):
 #   redundant: the stash verdict is ok-trailer and its body cut after the sentinel line has the
@@ -103,18 +122,10 @@ sub settle_mismatch {
     my ($stem, $kind) = $base =~ /\A(.+)\.(post|mod)\.md\z/ or return undef;
     my $id6 = $save->{id6} // ($kind eq 'mod' ? substr($stem, 0, 6) : $stem);
     my $nonce = $save->{nonce} // ($kind eq 'mod' ? $stem : undef);
-    if (($save->{verdict} // '') eq 'ok-trailer' && defined $csha && defined $s->{sentinel_from_end}) {
-        my @b = @{ $s->{lines} };
-        my ($k, $at) = (0, undef);
-        for (my $j = $#b; $j >= 0; $j--) {
-            next if $b[$j] =~ /^\s*$/;
-            if (++$k == $s->{sentinel_from_end}) { $at = $j; last }
-        }
-        if (defined $at && sha::hex256(join("\n", @b[0 .. $at]) . "\n") eq $csha) {
-            return undef unless unlink $path;
-            rc::emit('stash_dropped', [id6 => $id6, nonce => $nonce, why => 'redundant', copy_rel => $save->{rel}]);
-            return 'dropped';
-        }
+    if (trailer_only(scan => $s, verdict => $save->{verdict}, sha => $csha)) {
+        return undef unless unlink $path;
+        rc::emit('stash_dropped', [id6 => $id6, nonce => $nonce, why => 'redundant', copy_rel => $save->{rel}]);
+        return 'dropped';
     }
     my $chars = $text;
     utf8::decode($chars) unless utf8::is_utf8($chars);
@@ -600,10 +611,10 @@ sub save {
                 # is a true collision, never "already saved": suffix -2, -3, ...
                 my $same = ($efm->{session_id} // '') eq $sid && ($efm->{nonce} // '') eq ($nonce // '');
                 if ($same && defined $esha && $esha eq $s->{sha256}) {
-                    return { kind => 'exists', path => $existing, match => 1, fm => $efm };
+                    return { kind => 'exists', path => $existing, match => 1, fm => $efm, sha => $esha };
                 }
                 if (!$same || $cur =~ /^h/) { $cur = $id6 . '-' . ($try + 1); next }
-                return { kind => 'exists', path => $existing, match => 0, fm => $efm };
+                return { kind => 'exists', path => $existing, match => 0, fm => $efm, sha => $esha };
             }
             my $seq = $scope eq 'unknown' ? undef : _seq($dir, $sid8, $actor_tag);
             # a late save (reconcile, from a stash) may come after a newer copy: no carry then
@@ -668,13 +679,17 @@ sub save {
     my $slot = $scope eq 'main' ? 'main' : $scope eq 'sub' ? 'subagents' : 'unattributed';
     if ($out->{kind} eq 'exists') {
         my $result = $out->{match} ? 'exists' : 'mismatch';
-        rc::emit('copy', [nonce => $nonce, id6 => $id6, result => $result, slot => $slot, rel_path => $rel, writer => $a{writer}]);
+        # a difference that is only Claude Code's trailer after the sentinel: the copy is complete,
+        # so the reply says so (sha-differs-trailer) and the rows carry `trailer` (no escalation)
+        my $trailer = !$out->{match} && trailer_only(scan => $s, verdict => $verdict, sha => $out->{sha});
+        my @tr = $trailer ? (trailer => jsonc::true()) : ();
+        rc::emit('copy', [nonce => $nonce, id6 => $id6, result => $result, slot => $slot, rel_path => $rel, writer => $a{writer}, @tr]);
         my $pv = $out->{fm}{verdict};
         if (($a{writer} // '') eq 'mod' && postcompact_writer($out->{fm}{writer}) && defined $pv && $pv ne $verdict) {
-            rc::emit('verdict_mismatch', [nonce => $nonce, postcompact => $pv, after_step => $verdict]);
+            rc::emit('verdict_mismatch', [nonce => $nonce, postcompact => $pv, after_step => $verdict, @tr]);
         }
-        return { %ret, exit => 0, result => $result, path => $out->{path}, rel => $rel,
-                 line2 => 'EXISTS: ' . util::abbrev($out->{path}) . ($out->{match} ? ' sha-match' : ' sha-differs') };
+        return { %ret, exit => 0, result => $result, path => $out->{path}, rel => $rel, ($trailer ? (trailer => 1) : ()),
+                 line2 => 'EXISTS: ' . util::abbrev($out->{path}) . ($out->{match} ? ' sha-match' : $trailer ? ' sha-differs-trailer' : ' sha-differs') };
     }
     return $refuse->($out->{why} // 'race') unless $out->{kind} eq 'saved';
     my $result = $a{late} ? 'late' : $scope eq 'unknown' ? 'unattributed' : 'saved';

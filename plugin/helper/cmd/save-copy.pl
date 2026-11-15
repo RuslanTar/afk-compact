@@ -2,7 +2,8 @@
 # --scope main|sub|unknown [--agent ID] [--tokens B,A] [--cwd DIR] [--transcript PATH]`
 # line 1 `VERDICT <v> marker_line=<n|-> sentinel_from_end=<k|->`; line 2 one of
 # `Saved copy: <path>` · `EXISTS: <path> sha-match` · `EXISTS: <path> sha-differs` ·
-# `REFUSED: <reason>` (exit 3).
+# `EXISTS: <path> sha-differs-trailer` (the text differs only by Claude Code's trailer after the
+# sentinel: the copy is complete) · `REFUSED: <reason>` (exit 3).
 use strict;
 use warnings;
 use utf8;
