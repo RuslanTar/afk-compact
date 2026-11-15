@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 - A standing approval now stays valid after a handoff the plugin asked for itself (idle, before a compaction, at a stop). The plugin puts back each standing approval your previous handoff held as checked. One-time approvals in such a handoff are still asked again.
 - After a compaction or a resume, a standing approval you already used still counts. Before, the resume rule said to act only on an unused one.
+- An approval counts as standing only when your own words say so, such as "don't ask again", "no need to ask", "whenever", "every time" or "from now on". A summary or handoff that calls other words standing is read as one-time.
+- After a compaction or a resume, an approval whose action was refused in the session is listed as denied and asked again.
 
 ### Fixed
 
