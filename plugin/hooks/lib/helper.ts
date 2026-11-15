@@ -227,7 +227,8 @@ export type SaveResult = {
   verdict: string | null
   marker_line: number | null
   sentinel_from_end: number | null
-  kind: 'saved' | 'exists-match' | 'exists-differs' | 'refused' | 'failed'
+  /** `exists-trailer`: the copy exists and the text differs from it only by Claude Code's trailer after the sentinel. */
+  kind: 'saved' | 'exists-match' | 'exists-differs' | 'exists-trailer' | 'refused' | 'failed'
   path: string | null
   reason: string | null
 }
@@ -266,8 +267,8 @@ export function parseSave(r: RunResult): SaveResult {
   if ((m = /^Saved copy: (.+)$/.exec(l2))) {
     out.kind = 'saved'
     out.path = m[1] ?? null
-  } else if ((m = /^EXISTS: (.+) sha-(match|differs)$/.exec(l2))) {
-    out.kind = m[2] === 'match' ? 'exists-match' : 'exists-differs'
+  } else if ((m = /^EXISTS: (.+) sha-(match|differs-trailer|differs)$/.exec(l2))) {
+    out.kind = m[2] === 'match' ? 'exists-match' : m[2] === 'differs' ? 'exists-differs' : 'exists-trailer'
     out.path = m[1] ?? null
   } else if ((m = /^REFUSED: (.+)$/.exec(l2))) {
     out.kind = 'refused'

@@ -501,6 +501,11 @@ export async function afterStep(d: Deps, a: AfterArgs): Promise<{ verdict: Verdi
       else if (sr.kind === 'exists-match') {
         savedCopy = sr.path
         await log(d, a.sid, 'copy_exists', { nonce: a.nonce }, actor)
+      } else if (sr.kind === 'exists-trailer') {
+        // Only Claude Code's trailer after the sentinel differs: the copy is complete, so no
+        // escalation; the row keeps the case visible in the log.
+        savedCopy = sr.path
+        await log(d, a.sid, 'copy_exists', { nonce: a.nonce, trailer: true }, actor)
       } else if (sr.kind === 'exists-differs') {
         savedCopy = sr.path
         await log(d, a.sid, 'copy_mismatch', { nonce: a.nonce }, actor)

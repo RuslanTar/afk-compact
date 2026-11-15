@@ -13,6 +13,11 @@ export const REPLY_INPUTS: Readonly<Record<string, readonly string[]>> = {
   "<summary>\n\u27ea",
   " v1 n=1a2b3c4d s=main\u27eb\n# LAB-42 \u2014 retry in progress\n## Resume here\nStatus: active\n\u27ea/",
   " n=1a2b3c4d\u27eb\n</summary>\n"
+ ],
+ "$TMP/summary-trailer.txt": [
+  "<summary>\n\u27ea",
+  " v1 n=1a2b3c4d s=main\u27eb\n# LAB-42 \u2014 retry in progress\n## Resume here\nStatus: active\n\u27ea/",
+  " n=1a2b3c4d\u27eb\nA closing line the summary itself does not hold.\n</summary>\n"
  ]
 }
 
@@ -354,6 +359,55 @@ export const HELPER_REPLIES: readonly RecordedReply[] = [
   "stdout": [
    "VERDICT ok marker_line=1 sentinel_from_end=1\nEXISTS: ~/.local/state/",
    "/handoffs/work/general/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md sha-match\n"
+  ]
+ },
+ {
+  "name": "save-copy-exists-trailer",
+  "argv": [
+   [
+    "save-copy"
+   ],
+   [
+    "--sid"
+   ],
+   [
+    "5e55a001-0c0f-4f1e-9a00-00000000a001"
+   ],
+   [
+    "--nonce"
+   ],
+   [
+    "1a2b3c4d"
+   ],
+   [
+    "--from"
+   ],
+   [
+    "$TMP/summary-trailer.txt"
+   ],
+   [
+    "--writer"
+   ],
+   [
+    "mod"
+   ],
+   [
+    "--scope"
+   ],
+   [
+    "main"
+   ],
+   [
+    "--tokens"
+   ],
+   [
+    "612345,41000"
+   ]
+  ],
+  "exitCode": 0,
+  "stdout": [
+   "VERDICT ok-trailer marker_line=1 sentinel_from_end=2\nEXISTS: ~/.local/state/",
+   "/handoffs/work/general/compact/2026-10-21_14-05-12_5e55a001_c1-1a2b3c.md sha-differs-trailer\n"
   ]
  },
  {
