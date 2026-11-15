@@ -251,7 +251,10 @@ our %SCHEMA = (
     # ping going out (keep_warm_send, before its result row); a warm fork that took over about
     # 2 minutes or came back past the 58-minute bound is the result `late` (a fork-miss or a failure
     # keeps its own class)
-    keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int', ping_s => 'int' },
+    # 0.1.13: the first ping's due after the gap began (first_due_s) and why (`native-window`: Claude
+    # Code's own idle compaction may take the gap at 54 min, so 55:15; `default`: 50 min), also on a refused stop row
+    keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int', ping_s => 'int',
+                         first_due_s => 'int', first_why => [enum => qw(default native-window)] },
     keep_warm_send => { n => 'int', gap_s => 'num', since_s => 'num' },
     keep_warm_ping => { n => 'int', result => [enum => qw(warm fork-miss nothing-to-fork api-error aborted error late)], cache_read => 'num',
                         cache_creation => 'num', since_s => 'num', gap_s => 'num', ms => 'num', status => 'int',
@@ -265,6 +268,7 @@ our %SCHEMA = (
                                              no-idle-path)],
                         pings => 'int', gap_s => 'num', handover => 'bool', refused => 'bool', windows => [list => 'window'],
                         rule => [enum => @LIMIT_RULE], plan => 'word', tier => 'word',
+                        first_due_s => 'int', first_why => [enum => qw(default native-window)],
                         %USAGE },
     # 0.1.11: the first main response after a pause of 5 minutes or more (the sweep, from the
     # transcript's usage and Claude Code's `message.diagnostics`): the pause, the response's time,
