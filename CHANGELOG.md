@@ -1,8 +1,8 @@
 # Changelog
 
-All notable changes to afk-compact are listed here, newest first. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). While the version is 0.x, a minor release may change settings or behaviour; each release lists what to do under Upgrade notes.
+All notable changes to afk-compact are listed here, newest first.
 
-Each version links to its GitHub release. Tags are named `vX.Y.Z`. Every release states the Claude Code versions it needs and the one it was tested against under Compatibility.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). A breaking change is one a user must act on after upgrading: a setting, a slash command or its flags, a command pasted into a status line, or the minimum Claude Code version. While the version is 0.x a minor or patch release may contain one; each is marked **Breaking:**.
 
 ## [Unreleased]
 

@@ -106,7 +106,7 @@ CC_TYPES_DIR=/folder/that/holds/claude-code.d.ts tools/typecheck
 tools/gates plugin README.md docs --names <file> --no-git-log
 ```
 
-The gates also run over `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CHANGELOG.md`, `.github` and `bench`; run `tools/gates CONTRIBUTING.md --names <file> --no-git-log --only attribution` and the same call with `--only names`, `--only user-path` and `--only stale-name` for the files you touched.
+The gates also run over `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CHANGELOG.md`, `.github` and `bench`; run `tools/gates CONTRIBUTING.md --names <file> --no-git-log --only attribution` and the same call with `--only names`, `--only user-path` and `--only stale-name` for the files you touched. For `CHANGELOG.md` the `changelog` gate checks its shape as well; `tools/changelog-lint CHANGELOG.md` runs that check alone (see [Writing the changelog](#writing-the-changelog)).
 
 The gates reject things such as absolute paths into a home folder, your account name and git email, leftover template markers, stale plugin names, co-author trailers and generator footers in files and commit messages, and wording rules for the skills and assets. `--names` takes a list of plugin and tool names that the README, the docs and the shipped files must not mention. The maintainer keeps that list outside the repository; for your own runs, any file with one name per line works, such as `printf 'placeholder-name\n' > /tmp/names.txt`. Your run therefore cannot catch a listed name; the maintainer runs the real list before merging your pull request.
 
@@ -130,7 +130,7 @@ After a Claude Code update, `tools/launcher-flags` compares the restart launcher
 2. Make one focused change. Smaller pull requests are reviewed faster.
 3. Add or update a test case when you change behaviour, and the text in `src/landing.md` or `src/docs/` when you change what a user sees.
 4. Run `tools/build` if you changed `src/`, then the checks listed above.
-5. Add a line under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) for any change a user could notice. Do not change the version number; maintainers do that at release.
+5. Add an entry under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) for any change a user could notice, as described in [Writing the changelog](#writing-the-changelog). Do not change the version number; maintainers do that at release.
 6. Open the pull request and fill in the template. Say what you ran and what you could not run. The checks you cannot run are the names list (a placeholder works for your own run), the type declarations for `tools/typecheck`, and Docker for the Linux launcher cases; the maintainer covers those.
 
 **Commit messages.** Use a short plain subject that starts with the area, then a colon, then what changed, such as `gates: refuse a hook command that names a plugin folder` or `README: the install steps name the marketplace`. Use the body to explain why the change is needed and what you checked. Leave out co-author trailers and generator footers; the gates reject them, and GitHub credits you through the pull request.
@@ -141,12 +141,33 @@ After a Claude Code update, `tools/launcher-flags` compares the restart launcher
 
 **Review.** A maintainer reviews pull requests when they can; the project is small and replies may take days. If a review asks for changes, push to the same branch. A pull request with no reply from its author for a few weeks may be closed, and you can reopen it at any time.
 
+## Writing the changelog
+
+`CHANGELOG.md` follows [Keep a Changelog 2.0.0](https://keepachangelog.com/en/2.0.0/) strictly. It is written for the people who use the plugin, and many of them are not developers. `tools/changelog-lint CHANGELOG.md` checks its shape, and CI runs the same check as the `changelog` text gate; the wording is up to you and the reviewer.
+
+**Each version** has this shape:
+
+- The heading is `## [X.Y.Z] - YYYY-MM-DD`, newest version first. `## [Unreleased]` stays at the top and collects the entries for the next release; it needs no summary and may be empty.
+- Directly under the heading comes one summary paragraph of one or two plain sentences on what the release brings for a user. It ends with the sentence `Requires Claude Code A.B.C or newer; tested against D.E.F.` When the one-line install needs a newer Claude Code than the plugin does, `The one-line install needs G.H.I or newer.` comes just before it.
+- Then only these headings, in this order, each at most once and only when it has entries: `### Added`, `### Changed`, `### Deprecated`, `### Removed`, `### Fixed`, `### Security`. There is no other heading at any level: no upgrade notes, compatibility, platform or known-issues sections.
+
+**Which heading.** Added is something new a user can use. Changed means it worked as intended and now works differently. Fixed means it was wrong and is now right. Deprecated still works but will be removed in a later release (say which). Removed is gone. A vulnerability or a leak of private data goes under Security, even when it is also a fix; lead with the CVE id when there is one.
+
+**Each entry:**
+
+- One `- ` bullet of one or two plain sentences, at most 280 characters: what changed for the user and, if it helps, why.
+- No nested lists, no bold lead-ins, no internal case or test ids (such as `AT-KW-04`), and no names of internal functions or files that a user never types. Commands, settings and file names that a user does type go in backticks.
+- When a user must do something after upgrading, the entry starts with `**Breaking:**`, sits under Changed or Removed, and says in the same entry what to do. That is the only bold allowed. The changelog's opening lines say what counts as breaking. Advice that needs no action is left out.
+- One change a user can see is one entry, even when it took several commits. Leave out what no user would notice: tests, CI, refactoring and changes to the test tools.
+- A fix for one platform goes under Fixed like any other fix. A known limitation is a sentence in the entry it limits.
+- State only what is true. Do not add a number or a version that you have not checked.
+
 ## What CI runs
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request, on Ubuntu and macOS:
 
 - **generated files are current**: the four `--check` commands from [Running the checks](#running-the-checks). If it fails, run `tools/build` and commit what changed; edit `src/docs/<page>.md` or `src/landing.md`, never the page under `docs/`.
-- **text gates**: `tools/gates` over the built output and the community files. A pull request from a fork has no access to the names list, so its run uses a placeholder.
+- **text gates**: `tools/gates` over the built output and the community files, including the shape of `CHANGELOG.md`. A pull request from a fork has no access to the names list, so its run uses a placeholder.
 - **validate and unit tests**: `claude plugin validate` and `claude plugin test`, with Claude Code installed from npm and no login.
 - **helper, watcher and launcher cases**: the Perl and shell cases.
 
@@ -178,9 +199,15 @@ If the report might hold something you cannot share, do not attach it: open the 
 
 **Cutting a release:**
 
-1. Set `version` in `brand.json`, run `tools/build`, and move the `Unreleased` entries in `CHANGELOG.md` under the new version with its date.
-2. Run `tools/check integration` on a quiet machine and keep the log.
-3. Merge to `main` and create the tag `vX.Y.Z` on the merge commit. Check first that `plugin.json` and the marketplace entry agree on the version.
-4. Create the GitHub release from that tag, titled with the version and using the new CHANGELOG section as its text.
+1. Set `version` in `brand.json` and run `tools/build`.
+2. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` with the release date, and add a new, empty `## [Unreleased]` above it.
+3. Edit the version's entries to the rules in [Writing the changelog](#writing-the-changelog).
+4. Write its summary, ending with the `Requires Claude Code A.B.C or newer; tested against D.E.F.` sentence. If one of those versions changed, update `src/docs/compatibility.md` too (a new minimum also goes in `cc_min` in `brand.json`) and run `tools/build`.
+5. Update the link references at the end of `CHANGELOG.md`: `[Unreleased]` becomes `…/compare/vX.Y.Z...HEAD`, and the new `[X.Y.Z]` is `…/compare/v<previous version>...vX.Y.Z`.
+6. Run `tools/check integration` on a quiet machine and keep the log.
+7. Merge to `main` and create the tag `vX.Y.Z` on the merge commit. Check first that `plugin.json` and the marketplace entry agree on the version.
+8. Create the GitHub release from that tag, titled `afk-compact X.Y.Z`. Its text is the version's section from the summary to the last entry, unchanged; anything extra goes only below a `---` line.
+
+To withdraw a release, keep its section in `CHANGELOG.md` and append ` [YANKED]` to its heading.
 
 Thank you for helping.
