@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-11-15
+
+afk-compact 0.1.15 fixes the status line meter: it reads `0m` as soon as you send a prompt and stays `compacted` after a compaction until your next request. The one-line install needs 2.1.292 or newer. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.
+
 ### Fixed
 
 - The status line meter now reads `0m` as soon as you send a prompt, instead of a brief `cold` or the old cache's age while the request is under way. After a compaction it stays `compacted` until your next request, however long the session is idle.
@@ -399,7 +403,8 @@ The first release of afk-compact, a Claude Code plugin for long unattended sessi
 - The plugin needs Perl 5.28 or newer with only the modules that ship with it, already present on macOS, Debian and Ubuntu (on Alpine, run `apk add perl`). The git measurements need `git`.
 - Supported on macOS 13 or newer and Linux with glibc. Alpine/musl and WSL 2 are expected to work but not yet tested in a session, and native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/RuslanTar/afk-compact/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/RuslanTar/afk-compact/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/RuslanTar/afk-compact/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/RuslanTar/afk-compact/compare/v0.1.11...v0.1.12
