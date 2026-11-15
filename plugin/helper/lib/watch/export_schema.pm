@@ -152,7 +152,9 @@ our %SCHEMA = (
     copy => { nonce => 'nonce', id6 => 'id6', result => [pre => [qw(saved exists late unattributed mismatch)], [qw(failed)]],
               slot => [enum => qw(main subagents unattributed)], rel_path => 'slot',
               # 0.1.5: counts of the ledger lines carried from the previous copy, changed or reused
-              ledger => [obj => { carried => 'int', changed => 'int', reused => 'int' }] },
+              ledger => [obj => { carried => 'int', changed => 'int', reused => 'int' }],
+              # 0.1.13: a mismatch that is only Claude Code's trailer after the sentinel
+              trailer => 'bool' },
     copy_attributed => { id6 => 'id6', nonce => 'nonce', from_rel => 'slot', rel_path => 'slot', actor => 'actor',
                          proof => [enum => qw(a b c slot)], seq => 'int', pre_tokens => 'num', post_tokens => 'num' },
     copy_attribution_ambiguous => { id6 => 'id6', candidates => 'int' },
@@ -360,7 +362,7 @@ our %SCHEMA = (
     compaction_unresolved => { nonce => 'nonce', trigger => [enum => @TRIGGER], channel => [enum => @CHANNEL] },
     copy_deferred => { nonce => 'nonce', id6 => 'id6', why => 'word' },
     copy_late => { nonce => 'nonce', id6 => 'id6', rel_path => 'slot' },
-    copy_exists => { nonce => 'nonce' },
+    copy_exists => { nonce => 'nonce', trailer => 'bool' },
     copy_failed => { nonce => 'nonce', reason => 'word' },
     copy_mismatch => { nonce => 'nonce' },
     checkpoint => { nonce => 'nonce', ms => 'num', bytes => 'int', measured => 'bool', consent => 'word' },
@@ -418,7 +420,7 @@ our %SCHEMA = (
     trigger_unknown => { trigger => 'word' },
     triggers_off => {},
     verdict => { nonce => 'nonce', verdict => [enum => @VERDICT] },
-    verdict_mismatch => { nonce => 'nonce', postcompact => [enum => @VERDICT], after_step => [enum => @VERDICT] },
+    verdict_mismatch => { nonce => 'nonce', postcompact => [enum => @VERDICT], after_step => [enum => @VERDICT], trailer => 'bool' },
     version_change => { from => 'version', to => 'version' },
     # restart on update, content-free (no argv, model, path or env value)
     version_drift => { running => 'version', installed => 'version' },

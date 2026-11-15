@@ -138,10 +138,12 @@ sub run {
 
     # escalations
     my %n;
-    for my $r (@all) { my $e = $r->{ev} // ''; $n{$e}++ if grep { $_ eq $e } @ESCALATIONS }
+    # a verdict_mismatch whose texts differ only by Claude Code's trailer after the sentinel
+    # (`trailer`: the copy is complete) is no escalation; its row stays in the log
+    for my $r (@all) { my $e = $r->{ev} // ''; next if $e eq 'verdict_mismatch' && $r->{trailer}; $n{$e}++ if grep { $_ eq $e } @ESCALATIONS }
     # The classic saver has no mod stream: its EXISTS sha-differs (a second summary under one
     # nonce, which is not saved) counts as copy_mismatch; the mod logs its own for writer mod.
-    $n{copy_mismatch} += grep { ($_->{ev} // '') eq 'copy' && ($_->{result} // '') eq 'mismatch' && ($_->{writer} // '') ne 'mod' } @$classic;
+    $n{copy_mismatch} += grep { ($_->{ev} // '') eq 'copy' && ($_->{result} // '') eq 'mismatch' && ($_->{writer} // '') ne 'mod' && !$_->{trailer} } @$classic;
     my @esc = map { "$_ $n{$_}" } grep { $n{$_} } @ESCALATIONS;
     push @out, 'escalations: ' . (@esc ? join(', ', @esc) : 'none');
 

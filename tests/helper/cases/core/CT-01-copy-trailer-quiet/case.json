@@ -1,0 +1,424 @@
+{
+ "id": "CT-01 (0.1.13: a trailer-only copy difference is quiet)",
+ "note": "The saved copy and the installed summary differ only by lines Claude Code put after the sentinel (not in copy_trailers): save-copy answers EXISTS <path> sha-differs-trailer, drops the stash as redundant, marks its copy and verdict_mismatch rows trailer, and status counts no escalation for it (1: a plain copy; 3: a copy that carries ledger lines, whose ledger_carried sha is the summary's own). 2: a real difference (a changed body line, with a trailer) answers sha-differs, keeps the redacted stash and is counted under escalations as before.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "name": "set-up",
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "dispatch": {
+      "nonce": "1a1a1a1a",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 300,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "2b2b2b2b",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 200,
+      "midturn": false
+     }
+    },
+    {
+     "dispatch": {
+      "nonce": "3c3c3c3c",
+      "actor": "main",
+      "channel": "mod-hook",
+      "trigger": "auto",
+      "age_s": 100,
+      "midturn": false
+     }
+    },
+    {
+     "write": "$TMP/s1.md",
+     "content": "⟪$BRAND v1 n=1a1a1a1a s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-2: ask \"fix the retry window\" — status open\n## Decisions and do-not-re-raise\n- D-1: retry budget 3 — because the gateway caps at 3 (user)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=1a1a1a1a⟫\n"
+    },
+    {
+     "write": "$TMP/s2.md",
+     "content": "⟪$BRAND v1 n=2b2b2b2b s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1 by D-2 (2026-10-21 14:00 +0300)\n- D-2: retry budget 5 — because the gateway now allows 5 (external)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=2b2b2b2b⟫\n"
+    },
+    {
+     "write": "$TMP/s3.md",
+     "content": "⟪$BRAND v1 n=3c3c3c3c s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1 by D-2 (2026-10-21 14:00 +0300)\n- D-2: retry budget 5 — because the gateway now allows 5 (external)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=3c3c3c3c⟫\n"
+    }
+   ]
+  },
+  {
+   "name": "1: PostCompact saves the first copy",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a1a1a1a",
+    "--from",
+    "$TMP/s1.md",
+    "--writer",
+    "postcompact",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^VERDICT ok ",
+     "^Saved copy: "
+    ]
+   }
+  },
+  {
+   "name": "1: the installed summary differs only by Claude Code's trailer: sha-differs-trailer, stash dropped, rows marked trailer",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/pending/1a1a1a1a.mod.md",
+     "content": "This session is being continued from a previous conversation.\n\nSummary:\n⟪$BRAND v1 n=1a1a1a1a s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n- U-2: ask \"fix the retry window\" — status open\n## Decisions and do-not-re-raise\n- D-1: retry budget 3 — because the gateway caps at 3 (user)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=1a1a1a1a⟫\n<remote-control-device-report/>\nThe summarized conversation included text marked as authored by others.\n"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "1a1a1a1a",
+    "--from",
+    "$WATCH/$SID/pending/1a1a1a1a.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "^VERDICT ok-trailer marker_line=1 sentinel_from_end=3\\nEXISTS: .*_c1-1a1a1a\\.md sha-differs-trailer\\n$",
+    "files": [
+     {
+      "path": "$WATCH/$SID/pending/1a1a1a1a.mod.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/*.mismatch.*",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "nonce": "1a1a1a1a",
+       "result": "mismatch",
+       "writer": "mod",
+       "trailer": true
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "verdict_mismatch",
+      "count": 1,
+      "fields": {
+       "nonce": "1a1a1a1a",
+       "postcompact": "ok",
+       "after_step": "ok-trailer",
+       "trailer": true
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stash_dropped",
+      "count": 1,
+      "fields": {
+       "nonce": "1a1a1a1a",
+       "why": "redundant"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stash_kept",
+      "count": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "3: PostCompact saves a copy that carries U-2 from the first (ledger_carried)",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2b2b2b2b",
+    "--from",
+    "$TMP/s2.md",
+    "--writer",
+    "postcompact",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Saved copy: "
+    ],
+    "files": [
+     {
+      "path": "$ROOT/work/general/compact/*_c2-2b2b2b.md",
+      "count": 1,
+      "has": [
+       "^ledger_carried: \"1 line \\(U-2\\); sha256 [0-9a-f]{64}\"$",
+       "^- U-2: ask "
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "3: the carried copy and a trailer-only installed summary: sha-differs-trailer, stash dropped",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/pending/2b2b2b2b.mod.md",
+     "content": "This session is being continued from a previous conversation.\n\nSummary:\n⟪$BRAND v1 n=2b2b2b2b s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1 by D-2 (2026-10-21 14:00 +0300)\n- D-2: retry budget 5 — because the gateway now allows 5 (external)\n## In flight\nNothing in flight as of the last message (not checked)\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=2b2b2b2b⟫\n<remote-control-device-report/>\nThe summarized conversation included text marked as authored by others.\n"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "2b2b2b2b",
+    "--from",
+    "$WATCH/$SID/pending/2b2b2b2b.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\nEXISTS: .*_c2-2b2b2b\\.md sha-differs-trailer\\n$",
+    "files": [
+     {
+      "path": "$WATCH/$SID/pending/2b2b2b2b.mod.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/*.mismatch.*",
+      "count": 0
+     },
+     {
+      "path": "$ROOT/work/general/compact/*.md",
+      "count": 2
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 1,
+      "fields": {
+       "nonce": "2b2b2b2b",
+       "result": "mismatch",
+       "trailer": true
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "verdict_mismatch",
+      "count": 1,
+      "fields": {
+       "nonce": "2b2b2b2b",
+       "trailer": true
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stash_dropped",
+      "count": 1,
+      "fields": {
+       "nonce": "2b2b2b2b",
+       "why": "redundant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "the mod's rows for both (copy_exists, trailer)",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-10-21T11:00:01.000Z\", \"ev\": \"copy_exists\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.323\", \"nonce\": \"1a1a1a1a\", \"trailer\": true}\n{\"v\": 1, \"ts\": \"2026-10-21T11:01:41.000Z\", \"ev\": \"copy_exists\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.323\", \"nonce\": \"2b2b2b2b\", \"trailer\": true}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "status: no escalation for a trailer-only difference",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^escalations: none$"
+    ]
+   }
+  },
+  {
+   "name": "2: PostCompact saves a third copy",
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "3c3c3c3c",
+    "--from",
+    "$TMP/s3.md",
+    "--writer",
+    "postcompact",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Saved copy: "
+    ]
+   }
+  },
+  {
+   "name": "2: a real difference (a body line changed, and a trailer): sha-differs, kept as before",
+   "setup": [
+    {
+     "write": "$WATCH/$SID/pending/3c3c3c3c.mod.md",
+     "content": "This session is being continued from a previous conversation.\n\nSummary:\n⟪$BRAND v1 n=3c3c3c3c s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: working · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- Superseded: D-1 by D-2 (2026-10-21 14:00 +0300)\n- D-2: retry budget 5 — because the gateway now allows 5 (external)\n## In flight\nNothing in flight as of the last message (not checked) and a line the copy lacks\n## Live state\nnone beyond git (not checked)\n## Open questions\nnone\n## Next steps\n1. `git status` — done when clean\n⟪/$BRAND n=3c3c3c3c⟫\n<remote-control-device-report/>\nThe summarized conversation included text marked as authored by others.\n"
+    }
+   ],
+   "argv": [
+    "save-copy",
+    "--sid",
+    "$SID",
+    "--nonce",
+    "3c3c3c3c",
+    "--from",
+    "$WATCH/$SID/pending/3c3c3c3c.mod.md",
+    "--writer",
+    "mod",
+    "--scope",
+    "main",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_re": "\\nEXISTS: .*_c3-3c3c3c\\.md sha-differs\\n$",
+    "files": [
+     {
+      "path": "$WATCH/$SID/pending/3c3c3c3c.mod.md",
+      "count": 0
+     },
+     {
+      "path": "$WATCH/$SID/pending/3c3c3c3c.mod.mismatch.md",
+      "count": 1
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "stash_kept",
+      "count": 1,
+      "fields": {
+       "nonce": "3c3c3c3c",
+       "why": "mismatch"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 3,
+      "fields": {
+       "result": "mismatch"
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "copy",
+      "count": 2,
+      "fields": {
+       "result": "mismatch",
+       "trailer": true
+      }
+     },
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "verdict_mismatch",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "the mod's row for it (copy_mismatch)",
+   "argv": [
+    "log",
+    "--sid",
+    "$SID",
+    "--stdin"
+   ],
+   "stdin_text": "{\"v\": 1, \"ts\": \"2026-10-21T11:03:21.000Z\", \"ev\": \"copy_mismatch\", \"sid\": \"$SID\", \"actor\": \"main\", \"writer\": \"mod\", \"pid\": 4242, \"plugin_version\": \"$PLUGIN_VERSION\", \"cc_version\": \"2.1.323\", \"nonce\": \"3c3c3c3c\"}\n",
+   "expect": {
+    "exit": 0,
+    "stdout": ""
+   }
+  },
+  {
+   "name": "status: the real difference is counted, the trailer-only ones are not",
+   "argv": [
+    "status",
+    "--sid",
+    "$SID",
+    "--cwd",
+    "$TMP/work"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^escalations: copy_mismatch 1, verdict_mismatch 1$"
+    ]
+   }
+  }
+ ]
+}
