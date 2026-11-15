@@ -393,7 +393,9 @@ our %SCHEMA = (
     # approvals a measure found checked (handoff or summary); counts and class ids only;
     # origins: the carried ones by the origin kind of the row
     # their quote was found in
-    approvals_carry => { source => [enum => qw(handoff summary)], checked => 'int', gate => 'int', unchecked => 'int', unverified => 'int', context => 'int', classes => [list => 'word'],
+    # 0.1.15: unread, approval lines of a summary that did not parse; allowed, standing
+    # approvals whose gates standing_approval_gates lists
+    approvals_carry => { source => [enum => qw(handoff summary)], checked => 'int', gate => 'int', unchecked => 'int', unverified => 'int', context => 'int', unread => 'int', allowed => 'int', classes => [list => 'word'],
                          origins => [counts => [enum => qw(human composer bridge sdk none dialog unknown)]] },
     mod_outcome => { nonce => 'nonce', nudged => 'bool', continued => 'bool', halt => 'word', resume => 'word' },
     order_anomaly => { id6 => 'id6', nonce => 'nonce', uuid => 'hash', kind => 'word' },

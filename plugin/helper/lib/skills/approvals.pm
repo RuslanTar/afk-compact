@@ -220,7 +220,17 @@ my $LINE_RE = qr/\bU-[0-9]+:\s*approval\b/;
 # A scope or state field of approval_re, which a context-only line never holds.
 my $STATE_WORDS = qr/·[ \t]*(?:once|standing)\b|\bnot yet used\b|\bused[ \t]+[0-9]{4}-[0-9]{2}-[0-9]{2}\b/;
 # Loose form for compaction summaries (the summary writes several on one line or a list).
-my $LOOSE_RE = qr/U-([0-9]+):?[ \t]+approval[ \t]+"([^"]+)"[ \t]+—[ \t]+action[ \t]+(.+?)[ \t]+·[ \t]+targets[ \t]+(.+?)[ \t]+·[ \t]+(once|standing(?:[ \t]*\([^)]*\))?)[ \t]+·[ \t]+(not yet used|used[ \t]+[0-9]{4}-[0-9]{2}-[0-9]{2}[ \t]+[0-9]{2}:[0-9]{2}(?:[ \t]+[+-][0-9]{4})?)/;
+# 0.1.15: the summary copies the handoff's shape, so the question a short answer replies to may
+# follow the words (`(answer to "<question>")`, or another parenthesis holding one quoted text,
+# such as `(quoting "<line>")`); the check still reads the words only. A missing once/standing
+# reads as once (spec §4: the words did not say standing), and the state is `not yet used` or
+# `used` with any words after it (`used 2026-11-15 about 06:17`, `used for 0.1.13`): a used mark
+# only ever narrows. A line that names an approval (`U-n: approval "`) without an action,
+# targets or a state is not read, and measure lists it (`Approvals (not read, re-ask)`), never
+# drops it silently: a real 0.1.13 summary carried two approvals in the handoff's shape and the
+# block printed only `Approvals (checked): none`.
+my $LOOSE_RE = qr/U-([0-9]+):?[ \t]+approval[ \t]+"([^"]+)"(?:[ \t]+\([^()"]*"[^"]*"\))?[ \t]+—[ \t]+action[ \t]+(.+?)[ \t]+·[ \t]+targets[ \t]+(.+?)[ \t]+·[ \t]+(?:(once|standing(?:[ \t]*\([^)]*\))?)[ \t]+·[ \t]+)?(not yet used|used\b)/;
+my $LOOSE_ANY_RE = qr/\bU-([0-9]+):?[ \t]+approval[ \t]+"/;
 
 # The spec knows the section (a spec older than the approvals section has none: nothing is checked).
 sub enabled {
@@ -1616,17 +1626,26 @@ sub summary_lines {
     my ($text, $transcript, $cwd, $sid) = @_;
     return ([], undef) unless enabled();
     my $tag_re = skills::spec::regex_at('carry.tag_re');
-    my (@e, %seen);
+    my (@e, %seen, @unread);
     for my $l (split /\n/, $text // '') {
         next if $tag_re && $l =~ $tag_re;
+        # A context-only line grants nothing and is no shape fault.
+        next if $l =~ /;[ \t]*context only\b/;
+        my %got;
         while ($l =~ /$LOOSE_RE/g) {
-            my %x = (n => $1, quote => $2, action => $3, targets_text => $4, scope => $5, state => $6);
+            my %x = (n => $1, quote => $2, action => $3, targets_text => $4, scope => $5 // 'once', state => $6);
             $x{id} = "U-$x{n}";
+            $got{ $x{id} } = 1;
             next if $seen{ $x{id} }++;
             push @e, _finish(\%x);
         }
+        while ($l =~ /$LOOSE_ANY_RE/g) {
+            my $id = "U-$1";
+            push @unread, $id unless $got{$id} || $seen{$id}++;
+        }
     }
-    return ([ 'Approvals (checked): none' ], { source => 'summary', checked => 0, gate => 0, classes => [] }) unless @e;
+    my @nr = @unread ? ('Approvals (not read, re-ask): ' . join(', ', @unread)) : ();
+    return ([ 'Approvals (checked): none', @nr ], { source => 'summary', checked => 0, gate => 0, classes => [], (@unread ? (unread => scalar @unread) : ()) }) unless @e;
     # A session another one claimed counts only rows after the claim (quote_floor). The store root
     # is the run context's (rc, set up by the measure command); no context: unchecked.
     my $root = defined &rc::root ? eval { rc::root() } : undef;
@@ -1640,7 +1659,9 @@ sub summary_lines {
     for my $k (0 .. $#e) {
         if ($res && $res->[$k]) { $e[$k]{origin} = $org[$k]; push @ok, $e[$k] } else { push @no, $e[$k] }
     }
-    return _report(\@ok, \@no, 'summary', $cwd);
+    my ($out, $row) = _report(\@ok, \@no, 'summary', $cwd);
+    if (@unread) { push @$out, @nr; $row->{unread} = scalar @unread }
+    return ($out, $row);
 }
 
 sub _report {
