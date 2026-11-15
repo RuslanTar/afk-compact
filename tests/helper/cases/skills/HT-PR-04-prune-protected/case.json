@@ -5,7 +5,7 @@
  ],
  "layer": "H",
  "owner": "skills",
- "note": "0.1.17 prune_protected_roots (settings file only) and --protect DIR: before anything is listed, every root prune reads or writes (handoff_root, disposable_root, the old default folders, each --root, the cache state folder) is compared with each protected path as real paths (~ expanded, links resolved, a missing path through its longest existing folder) by whole /-separated parts. equals, inside or contains refuses (exit 3, REFUSED: protected-root, each root and protected path named, no plan, nothing deleted, in the dry run and with --apply); a sibling with a shared text prefix does not; an entry that is not an absolute path refuses too; an empty list changes nothing; a plugin option in the environment cannot replace the file value. Identity (0.1.17 review): existing ancestors compare by device and inode, so an NFD spelling of an NFC folder and a macOS firmlink alias (/System/Volumes/Data...) refuse, also with --apply and a real plan from an unguarded dry run (the file stays); a root at or above the macOS join point (/System/Volumes/Data, /System/Volumes) holds a protected folder under it; a missing tail compares as NFC, case-folded text; with no usable identity (a test process replaces the identity sub, as a native Windows perl leaves it) the text compare alone decides; an entry's .. behind a link resolves as the kernel reads it; a folder swapped for a link into a protected folder after the check (a test wrapper, race.pl, swaps it) is neither deleted from nor rmdir-ed, and no MANIFEST row reads pruned for a file still there; --apply with a list that touches no root deletes and marks the row pruned only after the delete.",
+ "note": "0.1.17 prune_protected_roots (settings file only) and --protect DIR: before anything is listed, every root prune reads or writes (handoff_root, disposable_root, the old default folders, each --root, the cache state folder) is compared with each protected path as real paths (~ expanded, links resolved, a missing path through its longest existing folder) by whole /-separated parts. equals, inside or contains refuses (exit 3, REFUSED: protected-root, each root and protected path named, no plan, nothing deleted, in the dry run and with --apply); a sibling with a shared text prefix does not; an entry that is not an absolute path refuses too; an empty list changes nothing; a plugin option in the environment cannot replace the file value. Identity (0.1.17 review): existing ancestors compare by device and inode, so an NFD spelling of an NFC folder and a macOS firmlink alias (/System/Volumes/Data...) refuse, also with --apply and a real plan from an unguarded dry run (the file stays); a root at or above the macOS join point (/System/Volumes/Data, /System/Volumes) holds a protected folder under it; a missing tail compares as NFC, case-folded text; with no usable identity (a test process replaces the identity sub, as a native Windows perl leaves it) the text compare alone decides; an entry's .. behind a link resolves as the kernel reads it; a folder swapped for a link into a protected folder after the check (a test wrapper, race.pl, swaps it) is neither deleted from nor rmdir-ed, and no MANIFEST row reads pruned for a file still there; --apply with a list that touches no root deletes and marks the row pruned only after the delete. An alias probe that passes through a link inside the root does not count (prune never follows one).",
  "now": "2026-11-08T12:00:00+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -886,6 +886,59 @@
     "stdout_has": [
      "^/System/Volumes/Data \\| \\S+/prot \\| contains$",
      "^/System/Volumes \\| \\S+/prot \\| none$"
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "mkdir": "$TMP/pa/a/b"
+    },
+    {
+     "mkdir": "$TMP/lr"
+    },
+    {
+     "symlink": "$TMP/lr/b",
+     "to": "$TMP/pa/a/b"
+    }
+   ]
+  },
+  {
+   "name": "a link inside a root into a protected folder does not refuse (prune never follows a link inside a root)",
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/lr"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/pa/a/b"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Aprune: dry run, nothing deleted"
+    ],
+    "stdout_lacks": [
+     "REFUSED",
+     "protected path"
+    ]
+   }
+  },
+  {
+   "name": "a real folder in the root that is the protected folder still refuses (fail closed)",
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/pa/a"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/lr/b"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^folder $TMP/pa/a holds the protected path $TMP/lr/b \\(prune_protected_roots\\)$"
     ]
    }
   },

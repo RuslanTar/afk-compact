@@ -481,15 +481,23 @@ sub _within {
 # deepest existing folder under the same trailing names: <root>/<last k names of that folder> has
 # its identity, for any k (a root above an alias join point, such as a bind mount's parent or the
 # volume a firmlink leads into, where no ancestor of the protected path has the root's identity).
+# A probe that passes through a link inside the root does not count (prune never follows one).
 sub _holds_alias {
     my ($r, $p) = @_;
     return 0 if @{ $r->{tail} };
     my $hid = $p->{ids}[-1] // return 0;
     my @n = @{ $p->{raw} };
     my $base = $r->{real} eq '/' ? '' : $r->{real};
-    for my $k (0 .. $#n) {
-        my $q = join('/', $base, @n[$k .. $#n]);
-        my $id = -e $q ? _id($q) : undef;
+    PROBE: for my $k (0 .. $#n) {
+        # each step below the root by lstat: a link inside the root is never followed by prune
+        # (_dirs and _unit_files skip links), so a probe through one does not make the root hold it
+        my $q = $base;
+        for my $part (@n[$k .. $#n]) {
+            $q .= "/$part";
+            my @l = lstat $q;
+            next PROBE if !@l || -l _;
+        }
+        my $id = _id($q);
         return 1 if defined $id && $id eq $hid;
     }
     return 0;

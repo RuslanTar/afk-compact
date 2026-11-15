@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 ### Changed
 
 - After the update, every session reads its whole transcript once more for the GSD line, on any operating system: the GSD line now reads Windows file paths it used to skip, so its saved progress starts over once. Later reads take only the new part of the transcript again.
+- `/afk-compact:prune` now marks a manifest row `pruned` only after its file is deleted, so a file that could not be deleted, or a run that stopped early, never leaves a row saying `pruned` for a file that is still there.
 
 ### Fixed
 
