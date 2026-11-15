@@ -17,7 +17,7 @@ use warnings;
 use utf8;
 require "userre.pm";    # U-06: the time bound for the user's own patterns
 
-# The keys (45 with idle_digest, restart_on_update, idle_handoff_near_limit and keep_warm_hours): type; fallback (used only when the manifest lacks the key:
+# The keys (46 with idle_digest, restart_on_update, idle_handoff_near_limit, keep_warm_hours and prune_protected_roots): type; fallback (used only when the manifest lacks the key:
 # defaults and min/max come from plugin.json userConfig, one source; the config-defaults gate
 # holds the fallback equal to the manifest default); export class (AT-WB-08: num,
 # bool, enum, path, list or drop; export_view()).
@@ -83,6 +83,8 @@ our @KEYS = (
     # branches added to the
     # shipped protected list (protected() below); a protective key
     [protected_branches          => 'str',  '',                        'list'],
+    # 0.1.17: folders `prune` never works in (lib/skills/prune.pm); a protective key
+    [prune_protected_roots       => 'str',  '',                        'list'],
     # GSD re-entry per session: loop skills, beside
     # the shipped list (lib/gsd.pm %DRIVERS) and the skills whose own text runs gsd-tools, that a
     # session re-enters when it invoked them
@@ -149,6 +151,7 @@ our %SECTION = (
     prod_patterns               => [qw(safety common)],
     secret_extra_rules          => [qw(safety common)],
     protected_branches          => [qw(safety common)],
+    prune_protected_roots       => [qw(safety advanced)],
     deny_class_patterns         => [qw(safety advanced)],
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
@@ -188,8 +191,8 @@ our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unat
 # more. Flags and env are ignored with the same note; the value comes from the config dir's
 # settings file, and a foreign config dir does not reset it (that would weaken protection).
 # protected_branches is one: a flag or env value that replaced the file's
-# list would drop the user's own entries.
-our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules protected_branches);
+# list would drop the user's own entries; so is prune_protected_roots (0.1.17), for the same reason.
+our %NO_FLAG = map { $_ => 1 } qw(prod_patterns secret_extra_rules protected_branches prune_protected_roots);
 # Tighten-only keys: every source counts and the strictest value wins, so a flag
 # or env can make the plugin stricter, never looser than the settings file. Values from loose to
 # strict.
@@ -241,6 +244,7 @@ our %FLAG_ALIAS = (
     'repo-roots' => 'repo_roots', 'relaunch-auto' => 'relaunch_auto', 'relaunch-allow' => 'relaunch_allow',
     'unattended-prod-reads' => 'unattended_prod_reads', 'prod-patterns' => 'prod_patterns', 'queue-cmd' => 'queue_cmd',
     'secret-extra-rules' => 'secret_extra_rules', 'protected-branches' => 'protected_branches',
+    'prune-protected-roots' => 'prune_protected_roots',
     'restart-on-update' => 'restart_on_update',
 );
 
@@ -1165,6 +1169,7 @@ our %RESET_EFFECT = (
     prod_patterns => 'its default leaves only the built-in production rule (looser than now)',
     secret_extra_rules => 'its default leaves only the built-in secret rules (looser than now)',
     protected_branches => 'its default leaves only the built-in protected branches (looser than now)',
+    prune_protected_roots => 'its default protects no folder from prune (looser than now)',
     resume_proceed => 'its default true lets a resume you start go on after its report (looser than now)',
 );
 # Source labels (spec Behaviour 1).

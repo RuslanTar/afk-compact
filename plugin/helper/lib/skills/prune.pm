@@ -356,12 +356,71 @@ sub _mark {
     return $n;
 }
 
+# ---------------------------------------------------------------- protected roots (0.1.17)
+#
+# prune_protected_roots (a protective key: the settings file only) and each --protect DIR name
+# folders prune must never work in. A root that equals one, lies inside one or holds one refuses
+# the whole run. Both sides are compared as real paths (~ expanded, links resolved; a path that
+# does not exist resolves through its longest existing folder, util::real_path), by whole
+# `/`-separated parts, never as text prefixes (/a/bc is not inside /a/b). Letter case is ignored
+# where the file system usually ignores it (macOS, Windows), as roots.pm reads `.planning`.
+
+# _resolve(path) -> its real path as `/`-separated parts (letter case folded where the file system
+# folds it), or undef when it is not an absolute path (after ~).
+sub _resolve {
+    my ($p) = @_;
+    return undef unless defined $p && $p ne '';
+    my $rf = util::root_form(skills::util::bytes($p)) // return undef;
+    my $r = util::real_path($rf) // return undef;
+    $r = skills::util::text($r);
+    my $os = util::os();
+    $r = lc $r if $os eq 'darwin' || $os eq 'msys' || $os eq 'cygwin' || $os eq 'MSWin32';
+    return [ grep { $_ ne '' } split m{/+}, $r ];
+}
+
+# _overlap(parts a, parts b) -> 'equals', 'inside' (a lies in b), 'contains' (a holds b) or undef.
+sub _overlap {
+    my ($x, $y) = @_;
+    my $n = @$x < @$y ? scalar @$x : scalar @$y;
+    for my $i (0 .. $n - 1) { return undef if $x->[$i] ne $y->[$i] }
+    return @$x == @$y ? 'equals' : @$x > @$y ? 'inside' : 'contains';
+}
+
+# _protected_refusal(ctx, --protect values, [[label, path], ...]) -> undef, or the refusal's
+# lines: each root that touches a protected path, and each protected entry prune cannot read
+# (not an absolute path), which refuses too rather than protect nothing.
+sub _protected_refusal {
+    my ($ctx, $flags, $roots) = @_;
+    my @prot;
+    push @prot, map { ['prune_protected_roots', $_] } settings::list($ctx->{settings}{prune_protected_roots});
+    push @prot, map { ['--protect', $_] } @$flags;
+    return undef unless @prot;
+    my (@lines, @res);
+    for my $p (@prot) {
+        my $parts = _resolve($p->[1]);
+        if (!$parts) { push @lines, "$p->[0] entry " . _show($p->[1]) . ': not an absolute path (nothing deleted; fix the entry)'; next }
+        push @res, [ @$p, $parts ];
+    }
+    for my $r (@$roots) {
+        my ($label, $path) = @$r;
+        next unless defined $path;
+        my $rp = _resolve($path) // next;
+        for my $p (@res) {
+            my $how = _overlap($rp, $p->[2]) // next;
+            my $rel = $how eq 'equals' ? 'is' : $how eq 'inside' ? 'lies inside' : 'holds';
+            push @lines, "$label " . _show($path) . " $rel the protected path " . _show($p->[1]) . " ($p->[0])";
+        }
+    }
+    return undef unless @lines;
+    return [ @lines, 'nothing listed, nothing deleted: change the root or the protected list' ];
+}
+
 # ---------------------------------------------------------------- run
 
 sub run {
     my ($argv) = @_;
-    my $o = skills::cli::opts($argv, 'days=s', 'min-mb=s', 'root=s@', 'apply', 'plan=s', 'all');
-    die skills::cli::usage('prune [--days N] [--min-mb N] [--root DIR]... [--all] [--apply --plan H]') if @$argv;
+    my $o = skills::cli::opts($argv, 'days=s', 'min-mb=s', 'root=s@', 'protect=s@', 'apply', 'plan=s', 'all');
+    die skills::cli::usage('prune [--days N] [--min-mb N] [--root DIR]... [--protect DIR]... [--all] [--apply --plan H]') if @$argv;
     my $ctx = skills::ctx::new({});
     my $kd = $ctx->{settings}{disposable_keep_days};
     my ($days, $why);
@@ -401,6 +460,11 @@ sub run {
         my $layout = (grep { $_ =~ $DAY_RE } _dirs($p)) ? 'disposable' : 'handoff';
         push @roots, ['folder', $p, $layout, 1];
     }
+    # 0.1.17: no root may touch a protected path (prune_protected_roots, --protect). The check runs
+    # before anything is listed, over every root prune would read or write and the cache state
+    # folder, so a refusal deletes nothing and lists nothing as deletable.
+    my $pr = _protected_refusal($ctx, $o->{protect} || [], [ @roots, ['cache state folder', cachestate::dir()] ]);
+    die skills::cli::refuse('protected-root', @$pr) if $pr;
     @roots = grep { defined $_->[1] && -d $_->[1] } @roots;
 
     my %acc = (docs => [], cited => {});

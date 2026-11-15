@@ -1,0 +1,548 @@
+{
+ "id": "HT-PR-04 (prune: a root that is, lies inside or holds a protected path refuses the whole run and deletes nothing; real paths by whole parts; a missing protected path still protects)",
+ "needs": [
+  "symlinks"
+ ],
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.17 prune_protected_roots (settings file only) and --protect DIR: before anything is listed, every root prune reads or writes (handoff_root, disposable_root, the old default folders, each --root, the cache state folder) is compared with each protected path as real paths (~ expanded, links resolved, a missing path through its longest existing folder) by whole /-separated parts. equals, inside or contains refuses (exit 3, REFUSED: protected-root, each root and protected path named, no plan, nothing deleted, in the dry run and with --apply); a sibling with a shared text prefix does not; an entry that is not an absolute path refuses too; an empty list changes nothing; a plugin option in the environment cannot replace the file value.",
+ "now": "2026-11-08T12:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+     "content": "old run log\n",
+     "mtime_ago_s": 3456000
+    },
+    {
+     "mkdir": "$TMP/prot/2026-09-02"
+    },
+    {
+     "write": "$TMP/prot/2026-09-02/x-evidence/a.log",
+     "content": "kept\n",
+     "mtime_ago_s": 3456000
+    },
+    {
+     "symlink": "$TMP/via",
+     "to": "$TMP/prot"
+    },
+    {
+     "mkdir": "$TMP/a/bc"
+    }
+   ]
+  },
+  {
+   "name": "no protected list: the old folder is listed as before",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": ""
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Aprune: dry run, nothing deleted",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ],
+    "stdout_lacks": [
+     "REFUSED",
+     "protected"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "equals: the disposable root is the protected path",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$DISP"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable is the protected path ~/\\.local/state/$BRAND/disposable \\(prune_protected_roots\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "inside: the roots lie inside a protected parent, the cache state folder too",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$HOME/.local/state"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable lies inside the protected path ~/\\.local/state \\(prune_protected_roots\\)$",
+     "^handoff_root ~/\\.local/state/$BRAND/handoffs lies inside the protected path ~/\\.local/state ",
+     "^cache state folder ~/\\.local/state/$BRAND/cache lies inside the protected path ~/\\.local/state "
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "contains: a protected folder inside the root, written with ~",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "~/.local/state/$BRAND/disposable/2026-09-01"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable holds the protected path ~/\\.local/state/$BRAND/disposable/2026-09-01 \\(prune_protected_roots\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a sibling that shares a text prefix (disposable-x, dispos) does not refuse",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$HOME/.local/state/$BRAND/disposable-x;$HOME/.local/state/$BRAND/dispos"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Aprune: dry run, nothing deleted",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ],
+    "stdout_lacks": [
+     "REFUSED",
+     "protected"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a --root that is a link into a protected folder refuses by its real path",
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/via"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/prot"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^folder $TMP/prot is the protected path $TMP/prot \\(prune_protected_roots\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a disposable_root set to a link into a protected folder refuses by its real path",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/prot"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root \\S+ is the protected path $TMP/prot \\(prune_protected_roots\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_DISPOSABLE_ROOT": "$TMP/via"
+   }
+  },
+  {
+   "name": "a protected path written as a link to the root refuses too",
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/prot"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/via"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^folder $TMP/prot is the protected path $TMP/via \\(prune_protected_roots\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a protected path that does not exist still protects (inside the root)",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$DISP/2026-09-01/never/made"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable holds the protected path ~/\\.local/state/$BRAND/disposable/2026-09-01/never/made \\(prune_protected_roots\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a protected path below a missing folder above the root still protects",
+   "argv": [
+    "prune",
+    "--root",
+    "$TMP/prot"
+   ],
+   "options": {
+    "prune_protected_roots": "$TMP/prot/../prot/new/deeper"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^folder $TMP/prot holds the protected path "
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "--protect DIR (repeatable) adds to the list",
+   "argv": [
+    "prune",
+    "--protect",
+    "$TMP/a/bc",
+    "--protect",
+    "$DISP"
+   ],
+   "options": {
+    "prune_protected_roots": ""
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable is the protected path ~/\\.local/state/$BRAND/disposable \\(--protect\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "--protect on a sibling (a/b beside a/bc) does not refuse",
+   "argv": [
+    "prune",
+    "--protect",
+    "$TMP/a/b"
+   ],
+   "options": {
+    "prune_protected_roots": ""
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Aprune: dry run, nothing deleted",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ],
+    "stdout_lacks": [
+     "REFUSED",
+     "protected"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "--apply with a plan is refused the same way; nothing is deleted",
+   "argv": [
+    "prune",
+    "--apply",
+    "--plan",
+    "000000000000"
+   ],
+   "options": {
+    "prune_protected_roots": "$DISP"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable is the protected path ~/\\.local/state/$BRAND/disposable "
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "a plugin option in the environment cannot replace the file list",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "$DISP"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable is the protected path ~/\\.local/state/$BRAND/disposable "
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   },
+   "env": {
+    "CLAUDE_PLUGIN_OPTION_PRUNE_PROTECTED_ROOTS": "$TMP/elsewhere"
+   }
+  },
+  {
+   "name": "an entry that is not an absolute path refuses rather than protect nothing",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "relative/dir"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^nothing listed, nothing deleted: change the root or the protected list$",
+     "^prune_protected_roots entry relative/dir: not an absolute path \\(nothing deleted; fix the entry\\)$"
+    ],
+    "stdout_lacks": [
+     "^plan: ",
+     "folders?, ",
+     "^total: ",
+     "^prune: dry run"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "back to an empty list: unchanged behaviour",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": ""
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "\\Aprune: dry run, nothing deleted",
+     "^disposable_root ~/\\.local/state/$BRAND/disposable: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ],
+    "stdout_lacks": [
+     "REFUSED",
+     "protected"
+    ],
+    "files": [
+     {
+      "path": "$DISP/2026-09-01/2026-09-01_10-00-00_11111111_old-evidence/run.log",
+      "contains": [
+       "old run log"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

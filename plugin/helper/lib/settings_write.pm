@@ -262,6 +262,8 @@ sub _entry_bad {
     if ($key eq 'relaunch_allow') { return ($e =~ /\A\^/ && settings::pattern_ok($e, $LIST_LEN)) ? undef : 'not a pattern starting ^ that the plugin runs' }
     # as settings::repo_roots reads an entry: a drive form is absolute under MSYS or Cygwin perl
     if ($key eq 'repo_roots') { return defined util::root_form($e) ? undef : 'not an absolute path' }
+    # as skills/prune.pm reads an entry (0.1.17)
+    if ($key eq 'prune_protected_roots') { return defined util::root_form($e) ? undef : 'not an absolute path' }
     return undef;    # driver_skills: names, any text
 }
 

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A `prune_protected_roots` setting, and `prune --protect DIR`, name folders `/afk-compact:prune` never works in. When a folder it would read or delete in is one, lies inside one or holds one, prune refuses and deletes nothing.
+
 ### Changed
 
 - After the update, every session reads its whole transcript once more for the GSD line, on any operating system: the GSD line now reads Windows file paths it used to skip, so its saved progress starts over once. Later reads take only the new part of the transcript again.
