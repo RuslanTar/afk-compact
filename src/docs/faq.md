@@ -31,7 +31,7 @@ It never edits a summary and never blocks a compaction. It adds its handoff inst
 
 ## Can the model change my settings?
 
-Not the ones that matter. `/{{plugin}}:settings` changes the plugin's saved options only when you ask, shows the change and asks before it writes. The six consent keys (`repo_roots`, `relaunch_auto`, `relaunch_allow`, `unattended_prod_reads`, `restart_on_update` and `queue_cmd`) are read from your settings file only, and the plugin never sets or removes them, whoever runs its commands. See [Settings](configuration.md#settings).
+Not the ones that matter. `/{{plugin}}:settings` changes the plugin's saved options only when you ask, shows the change and asks before it writes. The seven consent keys (`repo_roots`, `relaunch_auto`, `relaunch_allow`, `unattended_prod_reads`, `restart_on_update`, `standing_approval_gates` and `queue_cmd`) are read from your settings file only, and the plugin never sets or removes them, whoever runs its commands. See [Settings](configuration.md#settings).
 
 ## What happens after /clear?
 
