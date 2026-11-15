@@ -704,6 +704,9 @@ sub classes {
                 }
             }
         }
+        # `--all`, `--branches` and `--mirror` push every branch, protected ones too, whatever the
+        # target names (0.1.16 review; `--tags` is the unnamed-push rule's, as before).
+        $protected = 1 if $any{push} && $e->{action} =~ /(?<![\w-])--(?:all|branches|mirror)(?![\w-])/;
         if ($protected || ($any{push} && $PUSH_UNNAMED_IS_GATE && !_push_named($e, $cwd))) {
             $gate //= 'protected-push';
             $all{'protected-push'} = 1;
@@ -1880,6 +1883,11 @@ sub _words_name_gates {
     # must be named in the granting words too: "push to main" never covers `push --force`.
     my %wo = map { $_ => 1 } @{ $wc->{outward} || [] };
     return 0 if grep { $DESTRUCTIVE{$_} && !$wo{$_} } @{ $c->{outward} || [] };
+    # A push that deletes a branch (`--delete`, `-d`, or a `:<branch>` refspec) needs the word
+    # delete or remove in the granting words: "push to main" never covers deleting main.
+    if ($e->{action} =~ /\bpush\b/i && $e->{action} =~ /(?<![\w-])(?:--delete|-d)(?![\w-])|(?:^|\s)\+?:[\w.\/-]/) {
+        return 0 unless grep { /\b(?:delet|remov)\w*/ } @cl;
+    }
     if (grep { $_ eq 'protected-push' } @{ $c->{gates} || [] }) {
         # The protected branches the push goes to: names in the action itself or in a `branch`
         # target (an `env staging` target names an environment, which the deploy gate covers).
@@ -1894,7 +1902,7 @@ sub _words_name_gates {
         # origin main"); a comma or any other word breaks it ("push, the main thing is speed").
         for my $n (@n) {
             my $ln = lc $n;
-            return 0 unless grep { /\b(?:push|merg)\w*(?: +$PUSH_LINK){0,4} +\Q$ln\E(?![\w\/-])/ } @cl;
+            return 0 unless grep { /\b(?:push|merg|delet|remov)\w*(?: +$PUSH_LINK){0,4} +\Q$ln\E(?![\w\/-])/ } @cl;
         }
     }
     return 1;

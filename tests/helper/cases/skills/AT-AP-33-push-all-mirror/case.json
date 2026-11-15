@@ -1,0 +1,121 @@
+{
+ "id": "AT-AP-33 (push --all, --branches and --mirror are protected-push)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.16 review follow-up: `git push --all`, `--branches` and `--mirror` reach every branch, protected ones too, so classes() reads them as the protected-push gate whatever the target names (risk already did); with the gate tier they are never gate-allowed by words (no branch to name). Neighbours pinned as they were: a delete of main (`:main`, `--delete main`) and a `+` force refspec to main (`+main`, `+HEAD:main`, also force-push) are protected-push; a tag push stays protected-push by the unnamed-push rule; a push of feat/x carries. A push that deletes a branch (--delete, -d, a :<branch> refspec) is gate-allowed only when the granting words say delete or remove.",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"q1\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to push to main from now on\"}}\n{\"type\": \"user\", \"uuid\": \"q2\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to push and delete main from now on\"}}\n"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals\n- U-91: approval \"feel free to push to main from now on\" — action git push --all origin · targets branch feat/x @ 1a2b3c4 · standing · not yet used\n- U-92: approval \"feel free to push to main from now on\" — action git push --branches origin · targets branch feat/x @ 1a2b3c4 · standing · not yet used\n- U-93: approval \"feel free to push to main from now on\" — action git push --mirror origin · targets repo origin @ 1a2b3c4 · standing · not yet used\n- U-94: approval \"feel free to push to main from now on\" — action git push origin :main · targets branch main @ 1a2b3c4 · standing · not yet used\n- U-95: approval \"feel free to push to main from now on\" — action git push origin --delete main · targets branch main @ 1a2b3c4 · standing · not yet used\n- U-96: approval \"feel free to push to main from now on\" — action git push origin +main · targets branch main @ 1a2b3c4 · standing · not yet used\n- U-97: approval \"feel free to push to main from now on\" — action git push origin +HEAD:main · targets branch main @ 1a2b3c4 · standing · not yet used\n- U-98: approval \"feel free to push to main from now on\" — action git push --tags origin · targets tag v1.2.0 @ 1a2b3c4 · standing · not yet used\n- U-99: approval \"feel free to push to main from now on\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · standing · not yet used\n"
+    },
+    {
+     "write": "$TMP/copy2.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals\n- U-90: approval \"feel free to push and delete main from now on\" — action git push origin --delete main · targets branch main @ 1a2b3c4 · standing · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "no setting: --all, --branches and --mirror pushes are protected-push like a delete or a + force refspec of main and a tag push; only the push of feat/x carries",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-99 git push origin feat/x → branch feat/x @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-91 git push --all origin → branch feat/x @ 1a2b3c4; U-92 git push --branches origin → branch feat/x @ 1a2b3c4; U-93 git push --mirror origin → repo origin @ 1a2b3c4; U-94 git push origin :main → branch main @ 1a2b3c4; U-95 git push origin --delete main → branch main @ 1a2b3c4; U-96 git push origin \\+main → branch main @ 1a2b3c4; U-97 git push origin \\+HEAD:main → branch main @ 1a2b3c4; U-98 git push --tags origin → tag v1\\.2\\.0 @ 1a2b3c4$"
+    ]
+   }
+  },
+  {
+   "name": "protected-push listed and words that name main: none of them is gate-allowed (no branch to name, or a force/delete the words do not name)",
+   "options": {
+    "standing_approval_gates": "protected-push"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(gate, re-ask\\): U-91 git push --all origin → branch feat/x @ 1a2b3c4; U-92 git push --branches origin → branch feat/x @ 1a2b3c4; U-93 git push --mirror origin → repo origin @ 1a2b3c4; U-94 git push origin :main → branch main @ 1a2b3c4; U-95 git push origin --delete main → branch main @ 1a2b3c4; U-96 git push origin \\+main → branch main @ 1a2b3c4; U-97 git push origin \\+HEAD:main → branch main @ 1a2b3c4; U-98 git push --tags origin → tag v1\\.2\\.0 @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "gate allowed"
+    ]
+   }
+  },
+  {
+   "name": "words that say push and delete main cover the delete of main",
+   "options": {
+    "standing_approval_gates": "protected-push"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy2.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(gate allowed by setting\\): U-90 git push origin --delete main "
+    ]
+   }
+  }
+ ]
+}
