@@ -19,4 +19,6 @@ The helper is the only way you change these settings. Never edit, write or read 
 6. **Consent keys** (`repo_roots`, `relaunch_auto`, `relaunch_allow`, `unattended_prod_reads`, `queue_cmd`, `restart_on_update`): the helper never writes them, whoever asks. For one the user wants changed, run `<store> settings set '<key>=<value>'` without `--apply`: it refuses and prints the ways the user changes it, `/config` and a `! … claude plugin configure …` line. Relay those lines; never run the `!` line yourself.
 7. **Reset.** To put keys back to their defaults: `<store> settings reset <key>…` (or `--all`, which keeps the consent and protective keys) as a dry run, relay it, ask as in step 5, then run the apply line it printed.
 
+8. **Status line meter.** Run `<store> settings statusline show --sid '${CLAUDE_SESSION_ID}'` (an empty or `${` value: run it as written, never guess an id). Relay as printed: `status line in use`, the notes, `this session now`, the samples, `the command` and the snippet. Say that the meter shows the cache's age (`--left` gives the time left) and that `--note-usage` feeds the plugin's near-limit checks. The user pastes the snippet; never edit a settings file or a status line tool's config yourself.
+
 End with: the changes apply in a new session or after `/reload-plugins`, and `/afk-compact:status` lists every value the plugin uses.
