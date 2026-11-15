@@ -83,7 +83,7 @@ Uninstalling removes the hooks and skills. It leaves your handoffs, copies, evid
 
 It also leaves `~/.local/state/afk-compact/bin/afk-compact-store`, the fixed path a [status line](status-line.md#the-cache-state-in-your-status-line) calls, which keeps running the old copy of the plugin:
 
-- a copy in Claude Code's plugin cache until Claude Code deletes that folder, then it fails;
+- a copy in Claude Code's plugin cache until Claude Code deletes that folder, then it prints nothing;
 - a copy read in place from a local folder marketplace for as long as that folder exists, since Claude Code never deletes it.
 
 Delete it and remove the call from your status line.
