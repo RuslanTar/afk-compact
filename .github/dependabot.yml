@@ -5,6 +5,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # Propose a release only once it is 7 days old.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"
   # TypeScript is the only npm dependency, and it is for tools/typecheck only (never shipped).
@@ -12,5 +15,8 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # Propose a release only once it is 7 days old, as .npmrc's min-release-age does for npm.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "deps"
