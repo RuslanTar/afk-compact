@@ -83,6 +83,9 @@ our @KEYS = (
     # branches added to the
     # shipped protected list (protected() below); a protective key
     [protected_branches          => 'str',  '',                        'list'],
+    # 0.1.15: the explicit gate kinds (deploy, env-write, infra-write, prod-write,
+    # protected-push) that a checked standing approval may cover unattended; a consent key
+    [standing_approval_gates     => 'str',  '',                        'list'],
     # GSD re-entry per session: loop skills, beside
     # the shipped list (lib/gsd.pm %DRIVERS) and the skills whose own text runs gsd-tools, that a
     # session re-enters when it invoked them
@@ -149,6 +152,7 @@ our %SECTION = (
     prod_patterns               => [qw(safety common)],
     secret_extra_rules          => [qw(safety common)],
     protected_branches          => [qw(safety common)],
+    standing_approval_gates     => [qw(safety common)],
     deny_class_patterns         => [qw(safety advanced)],
 );
 our %TYPE = map { $_->[0] => $_->[1] } @KEYS;
@@ -183,7 +187,9 @@ our %SWITCH = (handoff_turn => [qw(halt off)], precompact_turn => [qw(model code
 # queue_cmd is one (an injected flag would run a program), and so is
 # unattended_prod_reads.
 # restart_on_update is one: it lets the plugin end and restart a session.
-our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unattended_prod_reads queue_cmd restart_on_update);
+# standing_approval_gates is one (0.1.15): it lets a recorded standing approval cover a gate.
+our %FILE_ONLY = map { $_ => 1 } qw(repo_roots relaunch_auto relaunch_allow unattended_prod_reads queue_cmd restart_on_update
+    standing_approval_gates);
 # Protective keys: they can only make the plugin ask or withhold
 # more. Flags and env are ignored with the same note; the value comes from the config dir's
 # settings file, and a foreign config dir does not reset it (that would weaken protection).
@@ -241,7 +247,7 @@ our %FLAG_ALIAS = (
     'repo-roots' => 'repo_roots', 'relaunch-auto' => 'relaunch_auto', 'relaunch-allow' => 'relaunch_allow',
     'unattended-prod-reads' => 'unattended_prod_reads', 'prod-patterns' => 'prod_patterns', 'queue-cmd' => 'queue_cmd',
     'secret-extra-rules' => 'secret_extra_rules', 'protected-branches' => 'protected_branches',
-    'restart-on-update' => 'restart_on_update',
+    'restart-on-update' => 'restart_on_update', 'standing-approval-gates' => 'standing_approval_gates',
 );
 
 sub _unset {
@@ -282,7 +288,7 @@ sub config_dir { return $ENV{CLAUDE_CONFIG_DIR} && $ENV{CLAUDE_CONFIG_DIR} ne ''
 # by its real path or its device and inode) counts as that folder for every consent key: it is
 # the same bytes, so no new trust. Another file there still gives the safe values.
 our %SAFE = (repo_roots => '', relaunch_auto => 'off', relaunch_allow => '', unattended_prod_reads => 'false', queue_cmd => '',
-             restart_on_update => 'off');
+             restart_on_update => 'off', standing_approval_gates => '');
 our $TEST_CONSENT_MARK = '.test-consent-home';
 sub account_home { my $h = (getpwuid($<))[7]; return defined $h && $h ne '' ? $h : undef }
 sub consent_dir {
@@ -1110,6 +1116,27 @@ sub protected_user {
     return defined $lin ? $g[$lin]{id} : undef;
 }
 
+# ---------------------------------------------------------------- standing approval gates
+# standing_approval_gates (0.1.15, a consent key: %FILE_ONLY): a `;` list of explicit gate kinds
+# (@APPROVAL_GATES, the spec's explicit_gate_classes) that a checked, standing approval naming
+# that gate may cover after a compaction or a resume (skills::approvals::_report). Empty, the
+# default: every gate re-asks. An entry is matched case-insensitively; any other word is
+# ignored (a `config_invalid {key, index}` note on /status), never read as a wider kind.
+# approval_gates([resolved]) -> {kinds => {kind => 1}, invalid => [{key, index}]}
+our @APPROVAL_GATES = qw(deploy env-write infra-write prod-write protected-push);
+sub approval_gates {
+    my ($r) = @_;
+    my $v = ref $r eq 'HASH' && ref $r->{values} eq 'HASH' ? $r->{values}{standing_approval_gates} : undef;
+    my %ok = map { $_ => 1 } @APPROVAL_GATES;
+    my (%kinds, @invalid);
+    my @e = list($v);
+    for my $i (0 .. $#e) {
+        my $k = lc trim($e[$i]);
+        if ($ok{$k}) { $kinds{$k} = 1 } else { push @invalid, { key => 'standing_approval_gates', index => $i + 1 } }
+    }
+    return { kinds => \%kinds, invalid => \@invalid };
+}
+
 # ---------------------------------------------------------------- export
 # export_view([resolved]) -> ordered object {key => exported value} for every key whose class is
 # not `drop`: num/bool as is; enum the value when it is one of the key's values, else `other`;
@@ -1152,7 +1179,7 @@ sub export_view {
 }
 
 # ---------------------------------------------------------------- visible defaults (0.1.2)
-# The ten keys `settings reset --all` leaves: the six consent keys, the three protective
+# The eleven keys `settings reset --all` leaves: the seven consent keys, the three protective
 # lists and resume_proceed. Named on
 # its own a consent key is still refused (the writer never writes one, lib/settings_write.pm), and
 # a protective list or resume_proceed is removed only when that loosens nothing, with what its
@@ -1162,6 +1189,7 @@ our %RESET_EFFECT = (
     repo_roots => 'its default accepts no repository for exports', relaunch_auto => 'its default on lets a lost background job start again by itself (looser than now)',
     relaunch_allow => 'its default allows no command to start again by itself', unattended_prod_reads => 'its default false asks before production reads',
     queue_cmd => 'its default runs no queue program', restart_on_update => 'its default off restarts nothing on an update',
+    standing_approval_gates => 'its default empty re-asks every gate, approved or not',
     prod_patterns => 'its default leaves only the built-in production rule (looser than now)',
     secret_extra_rules => 'its default leaves only the built-in secret rules (looser than now)',
     protected_branches => 'its default leaves only the built-in protected branches (looser than now)',

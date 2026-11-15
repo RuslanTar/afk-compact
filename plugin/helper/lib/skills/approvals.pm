@@ -567,6 +567,9 @@ sub classes {
     $any{push} = 1 if $any{'force-push'};
     my %gates = map { $_ => 1 } @{ (eval { skills::spec::get(q(explicit_gate_classes)) }) || [] };
     my ($gate) = grep { $gates{$_} } @ids, (grep { $word{$_} } map { $_->[0] } @ACTION_WORDS);
+    # 0.1.15: every gate the approval names (`gates`), for standing_approval_gates: a gate is
+    # allowed only when the setting lists each one ("push to main and deploy" needs both).
+    my %all = map { $_ => 1 } grep { $gates{$_} } @ids, (grep { $word{$_} } map { $_->[0] } @ACTION_WORDS);
     # Production: one named read carries; a write or an unclear action is the
     # prod-write gate.
     my $prod;
@@ -582,8 +585,10 @@ sub classes {
         if ($PROD_READ_CARRIES && _prod_read($e, $text, \%any)) { $prod = 'read' }
         else { $gate = 'prod-write' }
     }
+    elsif (defined $prod && !($PROD_READ_CARRIES && _prod_read($e, $text, \%any))) { $all{'prod-write'} = 1 }
+    $all{$gate} = 1 if defined $gate;
     my $merge = $e->{action} =~ /\bmerge\b/i && !$any{'mr-write'};
-    if (!defined $gate && ($any{push} || $merge)) {
+    if ($any{push} || $merge) {
         my $pre = skills::spec::regex_at('protected_branch_re');
         my $pb = skills::core::protected();
         my %def = map { $_ => 1 } _default_branches($cwd);
@@ -605,9 +610,12 @@ sub classes {
                 }
             }
         }
-        $gate = 'protected-push' if $protected || ($any{push} && $PUSH_UNNAMED_IS_GATE && !_push_named($e, $cwd));
+        if ($protected || ($any{push} && $PUSH_UNNAMED_IS_GATE && !_push_named($e, $cwd))) {
+            $gate //= 'protected-push';
+            $all{'protected-push'} = 1;
+        }
     }
-    return { outward => \@ids, gate => $gate, prod => $prod };
+    return { outward => \@ids, gate => $gate, prod => $prod, gates => [ sort keys %all ] };
 }
 
 # _push_named(entry, cwd) -> 1 when a push approval names the branch it pushes (P-2; see
@@ -1666,21 +1674,37 @@ sub summary_lines {
 
 sub _report {
     my ($ok, $no, $source, $cwd) = @_;
-    my (@carry, @gate, %cls);
+    my (@carry, @gate, @allowed, %cls);
+    # 0.1.15: the gate kinds the user's standing_approval_gates setting lets a standing approval
+    # cover (a consent key: settings file only; empty by default, so every gate re-asks).
+    my $allow = skills::core::approval_gates();
     for my $e (@$ok) {
         my $c = classes($e, $cwd);
-        if (defined $c->{gate}) { push @gate, $e; next }
+        if (defined $c->{gate}) {
+            # A standing approval whose every gate the setting lists carries as allowed; a once
+            # approval, or one naming any other gate, re-asks as before.
+            if ($e->{standing} && @{ $c->{gates} || [] } && !grep { !$allow->{$_} } @{ $c->{gates} }) {
+                push @allowed, $e;
+                $cls{$_} = 1 for @{ $c->{outward} };
+                next;
+            }
+            push @gate, $e;
+            next;
+        }
         next if $e->{used} && !$e->{standing};
         push @carry, $e;
         $cls{$_} = 1 for @{ $c->{outward} };
     }
     my @out = ('Approvals (checked): ' . (@carry ? join('; ', map { _entry($_) } @carry) : 'none'));
+    push @out, 'Approvals (gate allowed by setting): ' . join('; ', map { _entry($_) } @allowed) if @allowed;
     push @out, 'Approvals (gate, re-ask): ' . join('; ', map { _entry($_) } @gate) if @gate;
     push @out, 'Approvals (unchecked): ' . join(', ', map { $_->{id} } @$no) if @$no;
     # The carried approvals by the origin of the row their
     # quote was found in (class words only, never text).
+    my @c = (@carry, @allowed);
     return (\@out, { source => $source, checked => scalar(@carry), gate => scalar(@gate), unchecked => scalar(@$no),
-                     classes => [ sort keys %cls ], (@carry ? (origins => _origin_counts(\@carry)) : ()) });
+                     (@allowed ? (allowed => scalar @allowed) : ()),
+                     classes => [ sort keys %cls ], (@c ? (origins => _origin_counts(\@c)) : ()) });
 }
 
 1;

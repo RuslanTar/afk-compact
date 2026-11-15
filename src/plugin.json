@@ -288,6 +288,12 @@
       "description": "Branch names or wildcard patterns, separated by ';', that count as protected on top of the built-in list (the remote's default branch, main, master, develop, staging, release and hotfix branches and similar): a push to one, or a merge into one, always asks you again, whatever you approved before. Empty (the default) means the built-in list only; add your own deployment branches, for example qa-env;uat/*, and note that entries can only add, never unprotect a built-in branch (only your settings file counts for this option, flags and environment variables are ignored).",
       "default": ""
     },
+    "standing_approval_gates": {
+      "type": "string",
+      "title": "Gates a standing approval may cover [default: empty = always ask]",
+      "description": "Gate kinds, separated by ';', that an approval you gave as standing (\"don't ask again\") may cover in unattended work after a compaction or a resume: deploy, env-write (environment or secrets), infra-write (infrastructure), prod-write (production data) and protected-push (a push to a protected branch). Empty (the default) means the plugin always asks again at each of these, whatever you approved before; a one-time approval always asks again (only your settings file counts for this option, flags and environment variables are ignored).",
+      "default": ""
+    },
     "restart_on_update": {
       "type": "string",
       "title": "Restart on Claude Code update (beta) [default off]",
