@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The status line meter no longer shows `compacted` for hours: it turns cold once the cache expires. A prompt sent to a cold or compacted cache shows `…` while its request is in flight instead of a brief `cold`.
+
 ## [0.1.14] - 2026-11-15
 
 afk-compact 0.1.14 moves keep-warm's first request, in an idle gap where Claude Code's own idle compaction can run, to after that compaction, so the request is no longer wasted. The one-line install needs 2.1.292 or newer. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.

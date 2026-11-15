@@ -42,7 +42,7 @@
 // handoff turn runs on the handoff-turn machinery (handoff-turn.ts); no plugin compaction and no continue
 // follow it; at most one per idle episode.
 // Keep-warm (keepwarm.ts): while the gap warms (a background job of this session open, the
-// one-hour cache; 0.1.13: with native `on` or `unknown` at its idle minimum or more, the first ping
+// one-hour cache; 0.1.14: with native `on` or `unknown` at its idle minimum or more, the first ping
 // at 55:15, after native could have compacted, so the check at 55.5 finds that gap warming or
 // stopped), every kind's fire waits (`keep-warm`) and its record goes back here when warming
 // stops with the cache warm (`handOverIdle`), anchored at the last warm ping (`warm`). A gap with no

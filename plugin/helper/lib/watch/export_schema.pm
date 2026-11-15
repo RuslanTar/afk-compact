@@ -251,7 +251,7 @@ our %SCHEMA = (
     # ping going out (keep_warm_send, before its result row); a warm fork that took over about
     # 2 minutes or came back past the 58-minute bound is the result `late` (a fork-miss or a failure
     # keeps its own class)
-    # 0.1.13: the first ping's due after the gap began (first_due_s) and why (`native-window`: Claude
+    # 0.1.14: the first ping's due after the gap began (first_due_s) and why (`native-window`: Claude
     # Code's own idle compaction may take the gap at 54 min, so 55:15; `default`: 50 min), also on a refused stop row
     keep_warm_start => { jobs => 'int', gap_s => 'num', hours => 'num', windows => 'int', ping_s => 'int',
                          first_due_s => 'int', first_why => [enum => qw(default native-window)] },
