@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Fixed
 
-- The status line meter no longer shows `compacted` for hours: it turns cold once the cache expires. A prompt sent to a cold or compacted cache shows `…` while its request is in flight instead of a brief `cold`.
+- The status line meter now reads `0m` as soon as you send a prompt, instead of a brief `cold` or the old cache's age while the request is under way. After a compaction it stays `compacted` until your next request, however long the session is idle.
 
 ## [0.1.14] - 2026-11-15
 
