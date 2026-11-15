@@ -3,7 +3,7 @@
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.16 review findings: (1) an approval is standing only when the line says standing AND the user's quote-checked words match the spec's standing_words_re; a once deploy a summary labels standing re-asks even with deploy listed (PROBE-P1), and a standing label without standing words reads once in a handoff and is never put back in a plugin turn; (2) a summary approval whose action a call of the session was refused for is listed as denied, re-ask (PROBE-P2); (3) restore and carry read only the hash-verified section line, so a standing twin appended outside the section is never put back (PROBE-P3 with standing words); (4) a context-only segment does not hide a real approval on the same line; (5) an approval without targets does not borrow the next one's; (6) a multi-gate standing approval is allowed only when every gate is listed; a plugin-turn line with changed targets is not put back.",
+ "note": "0.1.16 review findings: (1) an approval is standing only when the line says standing AND the user's quote-checked words match the spec's standing_words_re; a once deploy a summary labels standing re-asks (PROBE-P1), and a standing label without standing words reads once in a handoff and is never put back in a plugin turn; (2) a summary approval whose action a call of the session was refused for is listed as denied, re-ask (PROBE-P2); (3) restore and carry read only the hash-verified section line, so a standing twin appended outside the section is never put back (PROBE-P3 with standing words); (4) a context-only segment does not hide a real approval on the same line; (5) an approval without targets does not borrow the next one's; (6) a standing approval naming a deploy and a protected push re-asks (gate); a plugin-turn line with changed targets is not put back.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -38,10 +38,7 @@
    ]
   },
   {
-   "name": "summary, gates deploy and protected-push not both listed: a once deploy the summary labels standing re-asks (P1); a refused standing deploy is denied (P2); a deploy+protected-push with only deploy listed re-asks; a context-only segment does not hide the approval after it on the line; an approval with no targets does not borrow the next one's",
-   "options": {
-    "standing_approval_gates": "deploy"
-   },
+   "name": "summary: a once deploy the summary labels standing re-asks (P1); a refused standing deploy is denied (P2); a standing deploy+protected-push re-asks; a context-only segment does not hide the approval after it on the line; an approval with no targets does not borrow the next one's",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -83,39 +80,7 @@
    }
   },
   {
-   "name": "both gates listed: the multi-gate standing approval is allowed; the relabelled once deploy still re-asks",
-   "options": {
-    "standing_approval_gates": "deploy;protected-push"
-   },
-   "cwd": "$TMP/repo",
-   "argv": [
-    "measure",
-    "--sid",
-    "$SID",
-    "--compact",
-    "--cwd",
-    "$TMP/repo",
-    "--copy",
-    "$TMP/copyA.md",
-    "--transcript",
-    "$HOME/.claude/projects/-x/$SID.jsonl"
-   ],
-   "expect": {
-    "exit": 0,
-    "stdout_has": [
-     "^Approvals \\(gate allowed by setting\\): U-11 ",
-     "^Approvals \\(gate, re-ask\\): U-6 deploy build 78 "
-    ],
-    "stdout_lacks": [
-     "U-5 bin/deploy"
-    ]
-   }
-  },
-  {
    "name": "begin",
-   "options": {
-    "standing_approval_gates": ""
-   },
    "cwd": "$TMP/repo",
    "argv": [
     "begin",

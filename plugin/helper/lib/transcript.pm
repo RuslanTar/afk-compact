@@ -258,8 +258,7 @@ our @ITEM_VERBS = (
 );
 # A refusal or a delay in a reply line: such a line is never an approval, and such an unnumbered
 # line in a numbered reply makes no line of it count.
-# Also read by skills::approvals (_granting_clauses), the one refusal list.
-our $ITEM_NO = qr/(?<![A-Za-z'\x{2019}])(?:no|not|nope|nah|never|don['\x{2019}]?t|wait|later|stop|cancel|hold|skip|tomorrow|pause|abort|postpone)(?![A-Za-z'\x{2019}])|n['\x{2019}]t(?![A-Za-z])/i;
+my $ITEM_NO = qr/(?<![A-Za-z'\x{2019}])(?:no|not|nope|nah|never|don['\x{2019}]?t|wait|later|stop|cancel|hold|skip|tomorrow|pause|abort|postpone)(?![A-Za-z'\x{2019}])|n['\x{2019}]t(?![A-Za-z])/i;
 
 # A short quote and a message compared whole: folded, lower case, end dots and `!` dropped.
 sub _whole { my ($s) = @_; my $x = lc _fold($s); $x =~ s/[.!\s]+\z//; return $x }

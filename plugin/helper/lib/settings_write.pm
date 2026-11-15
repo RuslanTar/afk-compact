@@ -6,7 +6,7 @@ package settings_write;
 # What it may change: pluginConfigs["<plugin>@<marketplace>"].options in
 # ${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json, one member per key of this plugin, and nothing
 # else. What it refuses, with nothing written:
-#   - the seven consent keys (%settings::FILE_ONLY) on every path, set and reset alike: the helper
+#   - the six consent keys (%settings::FILE_ONLY) on every path, set and reset alike: the helper
 #     cannot tell a command the user typed (`!`) from one the model ran, so it never writes them;
 #     consent_lines() gives the user-run ways (/config, Claude Code's own `plugin configure`);
 #   - a value the plugin would not read as written (check_value: the manifest's type, min and max,

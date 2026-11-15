@@ -577,13 +577,6 @@ sub protected_user {
     return defined &settings::protected_user ? settings::protected_user($name, $p) : undef;
 }
 
-# Standing approval gates (0.1.15): settings::approval_gates over the run context's resolved
-# settings, {gate kind => 1}. Without that seam (or when it fails): {} (every gate re-asks).
-sub approval_gates {
-    my $r = defined &settings::approval_gates ? eval { settings::approval_gates(rc::settings()) } : undef;
-    return ref $r eq 'HASH' && ref $r->{kinds} eq 'HASH' ? $r->{kinds} : {};
-}
-
 sub detect_summary {
     my ($text) = @_;
     my $r = eval { detect::summary($text) };

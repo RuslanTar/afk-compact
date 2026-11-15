@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-30 (second review: standing phrases, words name the gates, denials along the line)",
+ "id": "AT-AP-30 (standing phrases, gates re-ask, denials along the line)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.16 second review: standing_words_re keeps only clear standing phrases (don't ask again, no need to ask, feel free to, from now on, without asking, the whole word standing, until further notice/I say so, whenever/any time you want/need) and no match after not/don't/never/no within three words; V1 until, V3 negation, V4 long-standing, V5 whenever-one-time and V6 always read once; four real phrases still read standing. A gate is allowed only when the user's own words name every gate of the line, a protected branch by name (V2: push words never cover a production deploy). Denials count over every session on the own line from the writer to the reader (B between A and C), and an unreadable transcript on that line allows no gate (denied_unread).",
+ "note": "0.1.16 second review: standing_words_re keeps only clear standing phrases (don't ask again, no need to ask, feel free to, from now on, without asking, the whole word standing, until further notice/I say so, whenever/any time you want/need) and no match after not/don't/never/no within three words; V1 until, V3 negation, V4 long-standing, V5 whenever-one-time and V6 always read once; four real phrases still read standing. The gate tier does not ship: every gate re-asks. Denials count over every session on the own line from the writer to the reader (B between A and C), and an unreadable transcript on that line is counted (denied_unread).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -38,10 +38,7 @@
    ]
   },
   {
-   "name": "standing words: V1 until, V3 negation, V4 long-standing, V5 whenever-one-time, V6 always read once (gate, re-ask); the four real phrases read standing (a used standing approval carries); V2 push words never cover a production deploy; unnamed-branch push words never cover a protected push; a protected push named in the words is allowed",
-   "options": {
-    "standing_approval_gates": "deploy;prod-write;protected-push"
-   },
+   "name": "standing words: V1 until, V3 negation, V4 long-standing, V5 whenever-one-time, V6 always read once; the four real phrases read standing (a used standing approval carries); every deploy and protected push re-asks, standing or not (V2, U-41, U-42 named in the words)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -59,16 +56,15 @@
     "exit": 0,
     "stdout_has": [
      "^Approvals \\(checked\\): U-30 rerun lane step 0 → lane:bench @ step 0; U-31 rerun lane step 1 → lane:bench @ step 1; U-32 rerun lane step 2 → lane:bench @ step 2; U-33 rerun lane step 3 → lane:bench @ step 3$",
-     "^Approvals \\(gate allowed by setting\\): U-42 git push origin feat/x:main → branch main @ 1a2b3c4$",
-     "^Approvals \\(gate, re-ask\\): U-20 deploy build 81 [^;]*; U-21 deploy build 83 [^;]*; U-22 deploy build 84 [^;]*; U-23 deploy build 85 [^;]*; U-24 deploy build 86 [^;]*; U-40 deploy build 78 to production [^;]*; U-41 git push origin feat/x:main [^;]*$"
+     "^Approvals \\(gate, re-ask\\): U-20 deploy build 81 [^;]*; U-21 deploy build 83 [^;]*; U-22 deploy build 84 [^;]*; U-23 deploy build 85 [^;]*; U-24 deploy build 86 [^;]*; U-40 deploy build 78 to production [^;]*; U-41 git push origin feat/x:main [^;]*; U-42 git push origin feat/x:main [^;]*$"
+    ],
+    "stdout_lacks": [
+     "gate allowed"
     ]
    }
   },
   {
    "name": "begin",
-   "options": {
-    "standing_approval_gates": "deploy"
-   },
    "cwd": "$TMP/repo",
    "argv": [
     "begin",
@@ -127,7 +123,7 @@
    }
   },
   {
-   "name": "A reads N: the standing deploy is gate-allowed (deploy listed), the rerun carries",
+   "name": "A reads N: the standing deploy re-asks (gate), the rerun carries",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -139,7 +135,10 @@
     "exit": 0,
     "stdout_has": [
      "^Approvals \\(checked\\): U-3 rerun the flaky suite ",
-     "^Approvals \\(gate allowed by setting\\): U-2 deploy build 90 "
+     "^Approvals \\(gate, re-ask\\): U-2 deploy build 90 "
+    ],
+    "stdout_lacks": [
+     "gate allowed"
     ]
    }
   },
@@ -164,7 +163,7 @@
    ]
   },
   {
-   "name": "C (after B, after A) reads N: B was refused the rerun and ended without a handoff, so U-3 is denied; C's own transcript cannot be read, so no gate is allowed (denied_unread)",
+   "name": "C (after B, after A) reads N: B was refused the rerun and ended without a handoff, so U-3 is denied; C's own transcript cannot be read (denied_unread, a count only); the deploy re-asks as always",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",

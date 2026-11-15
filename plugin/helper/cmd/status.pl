@@ -10,7 +10,6 @@
 # written); relaunch_allow active; the unattended_prod_reads line;
 # the kept mismatch stashes with their paths; the
 # protected branches line with a warning per ignored protected_branches entry.
-# 0.1.15: the standing approval gates line, only when that setting is set.
 # `status` without a session id (missing, empty or unsubstituted --sid):
 # `session: unknown (no session id)` and the store-wide lines only; nothing is written. A
 # placeholder id (`unknown`, `smoke`, `anon-*`) is taken the same way.
@@ -272,7 +271,6 @@ sub store_lines {
     push @out, restart_lines($sid, $mod || []);
     push @out, prod_lines();
     push @out, protected_lines();
-    push @out, approval_gate_lines();
     push @out, regex_lines($classic);
     push @out, idle_lines($headless, $mod), keep_warm_lines($headless, $sid, $mod), usage_lines($sid), settings_keys_line(), values_lines();
     # The queue adapter mode (no queue call: the setting, the file and this
@@ -736,19 +734,6 @@ sub protected_lines {
     my $src = $SRC{ $r->{source}{protected_branches} // 'default' } // 'default';
     my @l = ('protected branches: the shipped list + ' . ($p->{user} // 0) . " yours ($src)");
     push @l, "  warning: protected_branches #$_->{index} invalid, ignored (the shipped list still applies)" for @{ $p->{invalid} || [] };
-    return @l;
-}
-
-# ---------------------------------------------------------------- standing approval gates
-# 0.1.15: only when standing_approval_gates is set: the gate kinds a standing approval may
-# cover, and one warning per ignored entry by its position, never its text.
-sub approval_gate_lines {
-    my $r = rc::settings();
-    my $g = eval { settings::approval_gates($r) } || { kinds => {}, invalid => [] };
-    my @k = sort keys %{ $g->{kinds} || {} };
-    return () unless @k || @{ $g->{invalid} || [] };
-    my @l = ('standing approvals may cover: ' . (@k ? join(', ', @k) : 'no gate') . ' (other gates always ask)');
-    push @l, "  warning: standing_approval_gates #$_->{index} is no gate kind, ignored" for @{ $g->{invalid} || [] };
     return @l;
 }
 

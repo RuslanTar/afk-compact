@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-28 (approvals carry: summary shapes, standing gates, plugin handoff turns)",
+ "id": "AT-AP-28 (approvals carry: summary shapes, gates re-ask, plugin handoff turns)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.15: (1) measure --compact --copy reads a summary approval line in the handoff's shape: the question after the words ((answer to ...) or (quoting ...)), a used mark followed by words, no once/standing (once); a context-only line is skipped; a line naming an approval without targets or state is listed as not read (re-ask), never dropped (a real summary printed Approvals (checked): none). (2) standing_approval_gates (consent key, default empty): a standing approval whose every gate the setting lists is listed under Approvals (gate allowed by setting); a once one, another gate or a word that is no gate kind still re-asks. (3) plugin handoff turn: the model writes every approval context only (the classifier-safe shape, 0.1.2); publish puts back byte for byte each standing approval the own chain's previous file holds checked and hashed, lists it in approvals_checked and hashes it; a once approval stays context only; measure carries it for the session and its /clear successor, never for another session.",
+ "note": "0.1.15: (1) measure --compact --copy reads a summary approval line in the handoff's shape: the question after the words ((answer to ...) or (quoting ...)), a used mark followed by words, no once/standing (once); a context-only line is skipped; a line naming an approval without targets or state is listed as not read (re-ask), never dropped (a real summary printed Approvals (checked): none). (2) a standing deploy is still a gate: listed under Approvals (gate, re-ask) with the once one. (3) plugin handoff turn: the model writes every approval context only (the classifier-safe shape, 0.1.2); publish puts back byte for byte each standing approval the own chain's previous file holds checked and hashed, lists it in approvals_checked and hashes it; a once approval stays context only; measure carries it for the session and its /clear successor, never for another session.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -46,7 +46,7 @@
    ]
   },
   {
-   "name": "summary: the question after the words, a used mark with words, a missing scope and a context-only line are read; a line with no targets is listed as not read; a standing deploy is a gate by default",
+   "name": "summary: the question after the words, a used mark with words, a missing scope and a context-only line are read; a line with no targets is listed as not read; a standing deploy is still a gate (re-ask)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -85,73 +85,6 @@
        "unread": 1
       }
      }
-    ]
-   }
-  },
-  {
-   "name": "standing_approval_gates names deploy: the standing deploy carries as allowed, the once deploy still asks",
-   "options": {
-    "standing_approval_gates": "deploy"
-   },
-   "cwd": "$TMP/repo",
-   "argv": [
-    "measure",
-    "--sid",
-    "$SID",
-    "--compact",
-    "--cwd",
-    "$TMP/repo",
-    "--copy",
-    "$TMP/copy.md",
-    "--transcript",
-    "$HOME/.claude/projects/-x/$SID.jsonl"
-   ],
-   "expect": {
-    "exit": 0,
-    "stdout_has": [
-     "^Approvals \\(checked\\): U-2 rerun the flaky suite → suite tests/flaky @ 1a2b3c4$",
-     "^Approvals \\(gate allowed by setting\\): U-5 deploy build 77 → env staging @ build 77$",
-     "^Approvals \\(gate, re-ask\\): U-6 deploy build 78 → env staging @ build 78$"
-    ],
-    "rows": [
-     {
-      "file": "$WATCH/$SID.classic.jsonl",
-      "ev": "approvals_carry",
-      "fields": {
-       "source": "summary",
-       "checked": 1,
-       "gate": 1,
-       "allowed": 1
-      }
-     }
-    ]
-   }
-  },
-  {
-   "name": "a setting naming another gate, or a word that is no gate kind, allows nothing",
-   "options": {
-    "standing_approval_gates": "protected-push;deploys"
-   },
-   "cwd": "$TMP/repo",
-   "argv": [
-    "measure",
-    "--sid",
-    "$SID",
-    "--compact",
-    "--cwd",
-    "$TMP/repo",
-    "--copy",
-    "$TMP/copy.md",
-    "--transcript",
-    "$HOME/.claude/projects/-x/$SID.jsonl"
-   ],
-   "expect": {
-    "exit": 0,
-    "stdout_has": [
-     "^Approvals \\(gate, re-ask\\): U-5 deploy build 77 → env staging @ build 77; U-6 deploy build 78 → env staging @ build 78$"
-    ],
-    "stdout_lacks": [
-     "gate allowed"
     ]
    }
   },
@@ -507,46 +440,6 @@
     "stdout_has": [
      "^Approvals \\(checked\\): none$",
      "^Approvals \\(context only, re-ask\\): U-2 \\(plugin handoff\\)$"
-    ]
-   }
-  },
-  {
-   "name": "status names the gate kinds the setting allows and warns about a word that is no gate kind",
-   "options": {
-    "standing_approval_gates": "deploy;nope"
-   },
-   "cwd": "$TMP/repo",
-   "argv": [
-    "status",
-    "--sid",
-    "$SID"
-   ],
-   "expect": {
-    "exit": 0,
-    "stdout_has": [
-     "^standing approvals may cover: deploy \\(other gates always ask\\)$",
-     "^  warning: standing_approval_gates #2 is no gate kind, ignored$"
-    ],
-    "stdout_lacks": [
-     "nope"
-    ]
-   }
-  },
-  {
-   "name": "status without the setting prints no such line",
-   "options": {
-    "standing_approval_gates": ""
-   },
-   "cwd": "$TMP/repo",
-   "argv": [
-    "status",
-    "--sid",
-    "$SID"
-   ],
-   "expect": {
-    "exit": 0,
-    "stdout_lacks": [
-     "standing approvals may cover"
     ]
    }
   },

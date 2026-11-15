@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-31 (third review: gate words only in the clauses that grant)",
+ "id": "AT-AP-31 (gate approvals always re-ask: third-review wordings)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.16 third review (probes N1-N9): _words_name_gates reads the quote's granting clauses only: split at . ; ! ? and at but / except / unless / however, kept when the clause holds a non-negated standing phrase and its sentence is no question, cut at the first not/don't/never/no outside its standing phrases. A protected branch counts only right after push/merge in such a clause, with at most four link words between; only the branches the push goes to (the action, a branch target) are needed. A negation within three words before the standing phrase fails closed (no worries, feel free to push to main re-asks).",
+ "note": "0.1.16: the gate tier does not ship, so a deploy, an environment, infrastructure or production write and a protected-branch push are always listed as gate, re-ask; probes N1-N9 of the third review are kept as wordings that must never open a gate, including those the gate tier allowed (N7, N8, N9).",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -38,10 +38,7 @@
    ]
   },
   {
-   "name": "gates are read only in granting clauses: a question (N1), a negated sentence (N2), a but-never clause (N3), a gate the words do not name (N4), main as an ordinary word (N5), push words without the branch (N6) and a negation before the standing phrase all re-ask; push to main from now on (N7, N9 with a remote prefix) and a plain deploy (N8) are allowed",
-   "options": {
-    "standing_approval_gates": "deploy;prod-write;protected-push"
-   },
+   "name": "every gate approval re-asks, whatever the words: a question (N1), a negated sentence (N2), a but-never clause (N3), a gate the words do not name (N4), main as an ordinary word (N5), push words without the branch (N6), a negation before the standing phrase, and words that name the gate (push to main from now on, N7 and N9 with a remote prefix; a plain deploy, N8)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -58,8 +55,11 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Approvals \\(gate allowed by setting\\): U-67 git push origin main → branch main @ 1a2b3c4; U-68 deploy build 78 → env staging @ build 78; U-69 git push origin HEAD:main → branch origin/main @ 1a2b3c4$",
-     "^Approvals \\(gate, re-ask\\): U-61 deploy build 78 → env staging @ build 78; U-62 deploy build 78 → env staging @ build 78; U-63 deploy build 78 to production → env production @ build 78; U-64 deploy build 78 to production → env production @ build 78; U-65 git push origin main → branch main @ 1a2b3c4; U-66 git push origin main → branch main @ 1a2b3c4; U-70 git push origin main → branch main @ 1a2b3c4$"
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(gate, re-ask\\): U-61 deploy build 78 → env staging @ build 78; U-62 deploy build 78 → env staging @ build 78; U-63 deploy build 78 to production → env production @ build 78; U-64 deploy build 78 to production → env production @ build 78; U-65 git push origin main → branch main @ 1a2b3c4; U-66 git push origin main → branch main @ 1a2b3c4; U-67 git push origin main → branch main @ 1a2b3c4; U-68 deploy build 78 → env staging @ build 78; U-69 git push origin HEAD:main → branch origin/main @ 1a2b3c4; U-70 git push origin main → branch main @ 1a2b3c4$"
+    ],
+    "stdout_lacks": [
+     "gate allowed"
     ]
    }
   }

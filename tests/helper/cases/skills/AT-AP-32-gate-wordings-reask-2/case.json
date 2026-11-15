@@ -1,9 +1,9 @@
 {
- "id": "AT-AP-32 (fourth review: structural granting clauses, a destructive push needs its word)",
+ "id": "AT-AP-32 (gate approvals always re-ask: fourth-review wordings)",
  "tmp_base": "repo",
  "layer": "H",
  "owner": "skills",
- "note": "0.1.16 fourth review (probes A-Q of cases5): full-width marks map to . ? ! ; , first; clauses end at line breaks, list markers (also ` - ` and ` 2. ` inside a line, where a summary joined bullets), . ; ! ?, commas and but / except / unless / however, never at a dash; a kept clause holds a non-negated standing phrase and is cut at the first word of transcript.pm's $ITEM_NO refusal list (any n't word, hold, wait, ...) or avoid / instead of / rather than / before. A destructive kind the line names (force-push, history-rewrite, recursive-delete) must be named in the granting words. E (dash) and O (deploy and push to main) stay allowed; a refusal earlier in the sentence (no problem, ...) and a comma list (push, merge and deploy) re-ask (fail closed).",
+ "note": "0.1.16: the gate tier does not ship; probes A-Q of the fourth review (cases5) are kept as wordings that must never open a gate, those it allowed (U-75 dash, U-84 deploy and push to main, U-88 force push named) included; push --all and --mirror (U-79, U-80) are protected-push.",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "steps": [
@@ -38,10 +38,7 @@
    ]
   },
   {
-   "name": "granting clauses end at commas, line breaks, list markers and full-width marks, and stop at a refusal word; a destructive push needs its own word",
-   "options": {
-    "standing_approval_gates": "deploy;protected-push"
-   },
+   "name": "every gate approval re-asks, whatever the words: refusals, list markers, full-width marks, a dash (U-75), deploy and push to main together (U-84) and a force push the words name (U-88)",
    "cwd": "$TMP/repo",
    "argv": [
     "measure",
@@ -58,12 +55,12 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^Approvals \\(gate allowed by setting\\): U-75 deploy build 78 → env staging @ build 78; U-84 deploy build 78 and git push origin main → env staging @ build 78, branch main @ 1a2b3c4; U-88 git push --force origin main → branch main @ 1a2b3c4$",
-     "^Approvals \\(gate, re-ask\\): U-71 deploy build 78 → env staging @ build 78; U-72 deploy build 78 → env staging @ build 78; U-73 deploy build 78 → env staging @ build 78; U-74 deploy build 78 → env staging @ build 78; U-76 deploy build 78 → env staging @ build 78; U-77 git push --force origin main → branch main @ 1a2b3c4; U-78 git push origin HEAD:refs/heads/main → branch feat/x @ 1a2b3c4; U-79 git push --all origin → branch feat/x @ 1a2b3c4; U-80 git push --mirror origin → repo origin @ 1a2b3c4; U-81 deploy build 78 → env staging @ build 78; U-82 deploy build 78 → env staging @ build 78; U-83 git push → branch feat/x @ 1a2b3c4, upstream main @ 1a2b3c4; U-85 deploy build 78 → env staging @ build 78; U-86 git push origin main → branch main @ 1a2b3c4; U-87 deploy build 78 → env staging @ build 78$"
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(gate, re-ask\\): U-71 deploy build 78 → env staging @ build 78; U-72 deploy build 78 → env staging @ build 78; U-73 deploy build 78 → env staging @ build 78; U-74 deploy build 78 → env staging @ build 78; U-75 deploy build 78 → env staging @ build 78; U-76 deploy build 78 → env staging @ build 78; U-77 git push --force origin main → branch main @ 1a2b3c4; U-78 git push origin HEAD:refs/heads/main → branch feat/x @ 1a2b3c4; U-79 git push --all origin → branch feat/x @ 1a2b3c4; U-80 git push --mirror origin → repo origin @ 1a2b3c4; U-81 deploy build 78 → env staging @ build 78; U-82 deploy build 78 → env staging @ build 78; U-83 git push → branch feat/x @ 1a2b3c4, upstream main @ 1a2b3c4; U-84 deploy build 78 and git push origin main → env staging @ build 78, branch main @ 1a2b3c4; U-85 deploy build 78 → env staging @ build 78; U-86 git push origin main → branch main @ 1a2b3c4; U-87 deploy build 78 → env staging @ build 78; U-88 git push --force origin main → branch main @ 1a2b3c4$"
     ],
     "stdout_lacks": [
      "Approvals \\(unchecked\\)",
-     "gate allowed by setting\\):.*U-79"
+     "gate allowed"
     ]
    }
   }

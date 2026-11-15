@@ -577,48 +577,6 @@ sub _standing_spans {
     return \@out;
 }
 
-# _granting_clauses(words) -> the clauses of the user's words that grant (0.1.16 third review):
-# the words split at `.`, `;`, `!`, `?` and at but / except / unless / however; a clause is kept
-# only when it holds a non-negated standing phrase and its sentence does not end in `?`, and it is
-# cut at the first not / don't / never / no outside its standing phrases (a gate word after it
-# is no grant: "feel free to deploy build 78, never to production").
-sub _granting_clauses {
-    my ($q) = @_;
-    eval { require transcript; 1 } unless defined $transcript::ITEM_NO;
-    my $no = $transcript::ITEM_NO;
-    my $t = $q // '';
-    # Full-width and other-script marks first (fourth review: "？" was no question).
-    $t =~ tr/\x{FF1F}\x{061F}\x{203D}\x{3002}\x{FF0E}\x{FF01}\x{FF1B}\x{FF0C}\x{3001}/???..!;,,/;
-    # the same marks when the words arrive as UTF-8 bytes
-    my %b = ("\xef\xbc\x9f" => '?', "\xd8\x9f" => '?', "\xe2\x80\xbd" => '?', "\xe3\x80\x82" => '.', "\xef\xbc\x8e" => '.',
-             "\xef\xbc\x81" => '!', "\xef\xbc\x9b" => ';', "\xef\xbc\x8c" => ',', "\xe3\x80\x81" => ',');
-    $t =~ s/(\xef\xbc[\x9f\x8e\x81\x9b\x8c]|\xd8\x9f|\xe2\x80\xbd|\xe3\x80[\x82\x81])/$b{$1}/g;
-    my @keep;
-    # Line breaks and list markers (at a line start, or ` - ` / ` 2. ` inside a line, where a
-    # summary joined the bullets) end a clause; a dash (—, –) does not.
-    for my $piece (split /\n|(?:^|\s)(?:[-*+]|[0-9]+[.)])\s/, $t) {
-        my $w = _fold_words($piece);
-        while ($w =~ /([^.;!?]+)([.;!?]?)/g) {
-            my ($sent, $end) = ($1, $2);
-            next if $end eq '?';
-            for my $cl (split /,|\b(?:but|except|unless|however)\b/, $sent) {
-                my $sp = _standing_spans($cl);
-                next unless @$sp;
-                my $m = $cl;
-                substr($m, $_->[0], $_->[1] - $_->[0]) = ' ' x ($_->[1] - $_->[0]) for reverse @$sp;
-                # Cut at the first refusal word outside the standing phrases (transcript.pm
-                # $ITEM_NO, the reply-line list) or avoid / instead of / rather than / before.
-                my @at = grep { defined } (
-                    (defined $no && $m =~ $no ? $-[0] : undef),
-                    ($m =~ /\b(?:avoid\w*|instead of|rather than|before)\b/ ? $-[0] : undef));
-                if (@at) { my ($c) = sort { $a <=> $b } @at; $cl = substr($cl, 0, $c) }
-                push @keep, $cl if $cl =~ /\S/;
-            }
-        }
-    }
-    return @keep;
-}
-
 # section_lines(\@lines) -> {index => 1} for the body lines of `## Approvals`.
 sub section_lines {
     my ($lines) = @_;
@@ -660,9 +618,6 @@ sub classes {
     $any{push} = 1 if $any{'force-push'};
     my %gates = map { $_ => 1 } @{ (eval { skills::spec::get(q(explicit_gate_classes)) }) || [] };
     my ($gate) = grep { $gates{$_} } @ids, (grep { $word{$_} } map { $_->[0] } @ACTION_WORDS);
-    # 0.1.15: every gate the approval names (`gates`), for standing_approval_gates: a gate is
-    # allowed only when the setting lists each one ("push to main and deploy" needs both).
-    my %all = map { $_ => 1 } grep { $gates{$_} } @ids, (grep { $word{$_} } map { $_->[0] } @ACTION_WORDS);
     # Production: one named read carries; a write or an unclear action is the
     # prod-write gate.
     my $prod;
@@ -678,11 +633,8 @@ sub classes {
         if ($PROD_READ_CARRIES && _prod_read($e, $text, \%any)) { $prod = 'read' }
         else { $gate = 'prod-write' }
     }
-    elsif (defined $prod && !($PROD_READ_CARRIES && _prod_read($e, $text, \%any))) { $all{'prod-write'} = 1 }
-    $all{$gate} = 1 if defined $gate;
     my $merge = $e->{action} =~ /\bmerge\b/i && !$any{'mr-write'};
-    my @pnames;
-    if ($any{push} || $merge) {
+    if (!defined $gate && ($any{push} || $merge)) {
         my $pre = skills::spec::regex_at('protected_branch_re');
         my $pb = skills::core::protected();
         my %def = map { $_ => 1 } _default_branches($cwd);
@@ -699,7 +651,7 @@ sub classes {
                     my $b = $part =~ s{\A\+}{}r;
                     $b =~ s{\Arefs/(?:heads|remotes)/}{};
                     for my $n ($b, ($b =~ m{\A[^/]+/(.+)\z} ? $1 : ())) {
-                        if (($pre && lc($n) =~ $pre) || $def{$n} || defined skills::core::protected_user($n, $pb)) { $protected = 1; push @pnames, $n }
+                        $protected = 1 if ($pre && lc($n) =~ $pre) || $def{$n} || defined skills::core::protected_user($n, $pb);
                     }
                 }
             }
@@ -707,12 +659,9 @@ sub classes {
         # `--all`, `--branches` and `--mirror` push every branch, protected ones too, whatever the
         # target names (0.1.16 review; `--tags` is the unnamed-push rule's, as before).
         $protected = 1 if $any{push} && $e->{action} =~ /(?<![\w-])--(?:all|branches|mirror)(?![\w-])/;
-        if ($protected || ($any{push} && $PUSH_UNNAMED_IS_GATE && !_push_named($e, $cwd))) {
-            $gate //= 'protected-push';
-            $all{'protected-push'} = 1;
-        }
+        $gate = 'protected-push' if $protected || ($any{push} && $PUSH_UNNAMED_IS_GATE && !_push_named($e, $cwd));
     }
-    return { outward => \@ids, gate => $gate, prod => $prod, gates => [ sort keys %all ], protected_names => [ @pnames ] };
+    return { outward => \@ids, gate => $gate, prod => $prod };
 }
 
 # _push_named(entry, cwd) -> 1 when a push approval names the branch it pushes (P-2; see
@@ -1796,7 +1745,7 @@ sub handoff_lines {
     }
     my $unread = _denied_unread(\@tx);
     my ($keep, $den) = _split_denied(\@cand, \@tx);
-    my ($out, $row) = _report($keep, [], 'handoff', undef, $den, no_gate_allow => $unread);
+    my ($out, $row) = _report($keep, [], 'handoff', undef, $den);
     $row->{denied_unread} = $unread if $unread;
     my %ctx_only = (%cx, map { $_ => $HASH_WHY{ $unver->{$_} } } keys %$unver);
     my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %ctx_only;
@@ -1856,56 +1805,10 @@ sub summary_lines {
     my $txs = [ [ $transcript, $sid ] ];
     my $unread = _denied_unread($txs);
     my ($keep, $den) = _split_denied(\@ok, $txs);
-    my ($out, $row) = _report($keep, \@no, 'summary', $cwd, $den, no_gate_allow => $unread);
+    my ($out, $row) = _report($keep, \@no, 'summary', $cwd, $den);
     $row->{denied_unread} = $unread if $unread;
     if (@unread) { push @$out, @nr; $row->{unread} = scalar @unread }
     return ($out, $row);
-}
-
-# _words_name_gates(entry, classes, cwd) -> 1 when the user's own words name every gate the line
-# names (0.1.16 second review: a summary attached a production deploy to "feel free to push"):
-# the words read as an action and a target (classes) hold each gate of the line, and each protected
-# branch the line names appears in the words as a whole word (an unnamed push never qualifies).
-# Outward kinds a granting clause must name itself (_words_name_gates, fourth review).
-our %DESTRUCTIVE = map { $_ => 1 } qw(force-push history-rewrite recursive-delete);
-# The words that may stand between push / merge and the branch it names (_words_name_gates).
-my $PUSH_LINK = qr/(?:it|this|that|them|everything|changes|commits|my|our|the|up|directly|straight|to|into|onto|branch|origin|upstream|remote|[a-z0-9_.-]+\/[a-z0-9_.\/-]+)/;
-sub _words_name_gates {
-    my ($e, $c, $cwd) = @_;
-    # Only the clauses that grant (third review: a gate the user negated or asked about counted).
-    my @cl = _granting_clauses($e->{quote} // '');
-    return 0 unless @cl;
-    my $g = join('. ', @cl);
-    my $wc = classes({ action => $g, targets_text => $g, targets => [] }, $cwd);
-    my %w = map { $_ => 1 } @{ $wc->{gates} || [] };
-    return 0 if grep { !$w{$_} } @{ $c->{gates} || [] };
-    # A destructive kind the line names (a force push, a history rewrite, a recursive delete)
-    # must be named in the granting words too: "push to main" never covers `push --force`.
-    my %wo = map { $_ => 1 } @{ $wc->{outward} || [] };
-    return 0 if grep { $DESTRUCTIVE{$_} && !$wo{$_} } @{ $c->{outward} || [] };
-    # A push that deletes a branch (`--delete`, `-d`, or a `:<branch>` refspec) needs the word
-    # delete or remove in the granting words: "push to main" never covers deleting main.
-    if ($e->{action} =~ /\bpush\b/i && $e->{action} =~ /(?<![\w-])(?:--delete|-d)(?![\w-])|(?:^|\s)\+?:[\w.\/-]/) {
-        return 0 unless grep { /\b(?:delet|remov)\w*/ } @cl;
-    }
-    if (grep { $_ eq 'protected-push' } @{ $c->{gates} || [] }) {
-        # The protected branches the push goes to: names in the action itself or in a `branch`
-        # target (an `env staging` target names an environment, which the deploy gate covers).
-        my %seen_n;
-        my @n = grep { my $x = $_; !$seen_n{ lc $x }++
-                       && ($e->{action} =~ /(?<![\w\/-])\Q$x\E(?![\w\/-])/
-                           || grep { /\Abranch\s+(?:[^\s\/]+\/)?\Q$x\E(?![\w\/-])/ } @{ $e->{targets} || [] }) }
-                @{ $c->{protected_names} || [] };
-        return 0 unless @n;
-        # The name right after push / merge in one granting clause, with only spaces and at most
-        # four link words between ("push to main", "merge feat/x into main", "push it straight to
-        # origin main"); a comma or any other word breaks it ("push, the main thing is speed").
-        for my $n (@n) {
-            my $ln = lc $n;
-            return 0 unless grep { /\b(?:push|merg|delet|remov)\w*(?: +$PUSH_LINK){0,4} +\Q$ln\E(?![\w\/-])/ } @cl;
-        }
-    }
-    return 1;
 }
 
 # _split_denied(\@entries, [[transcript, sid]…]) -> (\@kept, \@denied): the entries whose action a
@@ -1927,48 +1830,33 @@ sub _split_denied {
 }
 
 # _denied_unread([[transcript, sid]…]) -> the number of those sessions whose transcript cannot be
-# read (no path, or no file): their refusals are unknown, so the caller allows no gate.
+# read (no path, or no file): their refusals are unknown. A count on the row only; gates re-ask
+# anyway, so it changes no line.
 sub _denied_unread {
     my ($txs) = @_;
     return scalar grep { !defined $_->[0] || !-f $_->[0] } @{ $txs || [] };
 }
 
 sub _report {
-    my ($ok, $no, $source, $cwd, $denied, %o) = @_;
+    my ($ok, $no, $source, $cwd, $denied) = @_;
     $denied ||= [];
-    my (@carry, @gate, @allowed, %cls);
-    # 0.1.15: the gate kinds the user's standing_approval_gates setting lets a standing approval
-    # cover (a consent key: settings file only; empty by default, so every gate re-asks).
-    my $allow = skills::core::approval_gates();
+    my (@carry, @gate, %cls);
     for my $e (@$ok) {
         my $c = classes($e, $cwd);
-        if (defined $c->{gate}) {
-            # A standing approval whose every gate the setting lists carries as allowed; a once
-            # approval, or one naming any other gate, re-asks as before.
-            if (!$o{no_gate_allow} && $e->{standing} && @{ $c->{gates} || [] } && !(grep { !$allow->{$_} } @{ $c->{gates} })
-                && _words_name_gates($e, $c, $cwd)) {
-                push @allowed, $e;
-                $cls{$_} = 1 for @{ $c->{outward} };
-                next;
-            }
-            push @gate, $e;
-            next;
-        }
+        if (defined $c->{gate}) { push @gate, $e; next }
         next if $e->{used} && !$e->{standing};
         push @carry, $e;
         $cls{$_} = 1 for @{ $c->{outward} };
     }
     my @out = ('Approvals (checked): ' . (@carry ? join('; ', map { _entry($_) } @carry) : 'none'));
-    push @out, 'Approvals (gate allowed by setting): ' . join('; ', map { _entry($_) } @allowed) if @allowed;
     push @out, 'Approvals (gate, re-ask): ' . join('; ', map { _entry($_) } @gate) if @gate;
     push @out, 'Approvals (denied, re-ask): ' . join(', ', map { $_->{id} } @$denied) if @$denied;
     push @out, 'Approvals (unchecked): ' . join(', ', map { $_->{id} } @$no) if @$no;
     # The carried approvals by the origin of the row their
     # quote was found in (class words only, never text).
-    my @c = (@carry, @allowed);
     return (\@out, { source => $source, checked => scalar(@carry), gate => scalar(@gate), unchecked => scalar(@$no),
-                     (@allowed ? (allowed => scalar @allowed) : ()), (@$denied ? (denied => scalar @$denied) : ()),
-                     classes => [ sort keys %cls ], (@c ? (origins => _origin_counts(\@c)) : ()) });
+                     (@$denied ? (denied => scalar @$denied) : ()),
+                     classes => [ sort keys %cls ], (@carry ? (origins => _origin_counts(\@carry)) : ()) });
 }
 
 1;
