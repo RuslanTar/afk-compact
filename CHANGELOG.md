@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- New setting `standing_approval_gates` (empty by default). List gate kinds, such as `deploy;protected-push`, that an approval you gave as standing may cover in unattended work. Empty means every gate still asks. Read from your settings file only.
+
+### Changed
+
+- A standing approval now stays valid after a handoff the plugin asked for itself (idle, before a compaction, at a stop). The plugin puts back each standing approval your previous handoff held as checked. One-time approvals in such a handoff are still asked again.
+- After a compaction or a resume, a standing approval you already used still counts. Before, the resume rule said to act only on an unused one.
+
+### Fixed
+
+- After a compaction, approvals the summary copied from a handoff (with the question after your words, or a used time with words) were not read, and the resume block said `Approvals (checked): none`. They are read now, and a line the plugin cannot read is listed to ask again.
+
 ## [0.1.15] - 2026-11-15
 
 afk-compact 0.1.15 fixes the status line meter: it reads `0m` as soon as you send a prompt and stays `compacted` after a compaction until your next request. The one-line install needs 2.1.292 or newer. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.
