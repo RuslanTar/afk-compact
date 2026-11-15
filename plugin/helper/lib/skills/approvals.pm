@@ -538,18 +538,27 @@ sub _finish {
 # "without asking (me)", the whole word "standing", "until further notice" / "until I say so" and
 # the like, "whenever you want" / "any time you need" and the like), read on the lower-cased words
 # with typographic apostrophes folded, and not after "not", "don't", "never" or "no" within the
-# three words before it. No spec pattern: never (fail closed).
+# three words before it, nor in a clause (up to `.`, `;`, `!`, `?` or a line break) that also
+# says it is one time ($ONCE_WORDS: "feel free to deploy, just this once"). No spec pattern:
+# never (fail closed).
 sub standing_words { return @{ _standing_spans($_[0]) } ? 1 : 0 }
 
 # _fold_words(text) -> the lower-cased text with typographic apostrophes folded and white space
 # runs made one space (the form standing_words_re and the clause rules read).
+# In list context also the same text with each white space run that holds a line break made one
+# line break instead (same length, so a position in one is the same in the other).
 sub _fold_words {
     my ($q) = @_;
     (my $w = lc($q // '')) =~ s/\xe2\x80[\x98\x99]/'/g;
     $w =~ s/[\x{2018}\x{2019}`]/'/g;
-    $w =~ s/\s+/ /g;
-    return $w;
+    $w =~ s{(\s+)}{ index($1, "\n") >= 0 ? "\n" : ' ' }ge;
+    (my $one = $w) =~ tr/\n/ /;
+    return wantarray ? ($one, $w) : $one;
 }
+
+# Words that make the clause they stand in one time, whatever standing phrase it also holds
+# (0.1.16 review: "feel free to deploy this once" read as standing).
+my $ONCE_WORDS = qr/(?<![a-z'])(?:this once|just once|only once|one time|this time|today only|only today|for now)(?![a-z'])/;
 
 # _standing_spans(words) -> [[start, end]…] of the non-negated standing phrases in the folded
 # words (see standing_words).
@@ -557,7 +566,7 @@ sub _standing_spans {
     my ($q) = @_;
     return [] unless defined $q && !ref $q;
     my $re = skills::spec::regex_at('standing_words_re') or return [];
-    my $w = _fold_words($q);
+    my ($w, $wl) = _fold_words($q);
     my @out;
     # A negation within the three words before the phrase ("do not deploy without asking me")
     # makes that match no standing phrase (0.1.16 second review).
@@ -572,6 +581,10 @@ sub _standing_spans {
             my ($clause) = substr($w, 0, $at + 1) =~ /([^.;!?]*)\z/;
             next if defined $clause && $clause =~ /(?:^|[^a-z'])(?:not|don'?t|never|no)(?![a-z'])/;
         }
+        # The clause holding the phrase also says one time ("just this once"): not standing.
+        my ($head) = substr($wl, 0, $at) =~ /([^.;!?\n]*)\z/;
+        my ($tail) = substr($wl, $at) =~ /\A([^.;!?\n]*)/;
+        next if (($head // '') . ($tail // '')) =~ $ONCE_WORDS;
         push @out, [ $at, $end ];
     }
     return \@out;
