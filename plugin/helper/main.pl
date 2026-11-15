@@ -69,9 +69,10 @@ my $IS_HOOK = $sub eq 'hook';
 # run `cache --bar` exits 0 with nothing on stdout or stderr
 my $QUIET = $sub eq 'cache' && grep { $_ eq '--bar' } @ARGV;
 if ($IS_HOOK || $QUIET) {
-    # Hooks and the meter never write stderr, and nothing but our text reaches stdout.
-    require File::Spec;
-    open(STDERR, '>', File::Spec->devnull);
+    # Hooks and the meter never write stderr, and nothing but our text reaches stdout. The null
+    # device by name, as File::Spec->devnull gives it ('nul' for a native Windows perl, else
+    # '/dev/null'), with no module load: this line runs in every hook and meter process.
+    open(STDERR, '>', $^O eq 'MSWin32' ? 'nul' : '/dev/null');
     $SIG{__WARN__} = sub { };
     $SIG{PIPE} = 'IGNORE';
 }
