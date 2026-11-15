@@ -131,7 +131,7 @@
      {
       "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
       "contains": [
-       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n"
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\n[ -x '$STORE' ] || exit 0\nexec '$STORE' \"$@\"\n"
       ]
      }
     ],

@@ -15,8 +15,9 @@ package cachestate;
 # the next row heals it. Nothing is written inside a git work tree or a .planning folder (the
 # unsafe-root walk, no git call).
 # SessionStart also keeps a launcher shim with a stable path, ${XDG_STATE_HOME:-~/.local/state}/
-# <plugin>/bin/ and the launcher's own file name (keep_shim): a two-line #!/bin/sh exec of this
-# plugin copy's launcher, for status lines; never to a --plugin-dir load.
+# <plugin>/bin/ and the launcher's own file name (keep_shim): a #!/bin/sh exec of this plugin
+# copy's launcher, for status lines, that prints nothing once that launcher is gone (0.1.13);
+# never to a --plugin-dir load.
 use strict;
 use warnings;
 use utf8;
@@ -257,16 +258,33 @@ sub on_end {
 
 # ---------------------------------------------------------------- the stable launcher shim
 
+# _sh_word(path) -> the path as one single-quoted sh word, each ' written '\''
+sub _sh_word { my ($p) = @_; $p =~ s/'/'\\''/g; return "'$p'" }
+
+# _shim_text(target): 0.1.13: the shim checks its launcher first and, with that copy gone
+# (uninstalled, pruned, a failed update), exits 0 with no output, so a status line shows an empty
+# segment instead of sh errors; `[` is a sh builtin, so the normal case is still one exec.
 sub _shim_text {
     my ($target) = @_;
     my $b = ctx::brand();
-    return "#!/bin/sh\n# $b: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$target' \"\$@\"\n";
+    my $w = _sh_word($target);
+    return "#!/bin/sh\n# $b: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\n[ -x $w ] || exit 0\nexec $w \"\$@\"\n";
 }
 
-# _shim_target(text) -> the launcher a shim of this form runs, or undef (not ours)
+# _shim_target(text) -> the launcher a shim of this form runs, or undef (not ours). Reads the
+# 0.1.13 form and the earlier one (no check, no ' in the path), so keep_shim rewrites an earlier
+# shim to this copy instead of calling it foreign.
 sub _shim_target {
     my ($t) = @_;
-    return undef unless defined $t && $t =~ m{\A#!/bin/sh\n# [^\n]*kept by its SessionStart hook\.\nexec '(/[^'\n]*)' "\$\@"\n\z};
+    return undef unless defined $t;
+    my $word = qr{'/(?:[^'\n]|'\\'')*'};
+    if ($t =~ m{\A#!/bin/sh\n# [^\n]*kept by its SessionStart hook\.\n\[ -x ($word) \] \|\| exit 0\nexec ($word) "\$\@"\n\z}) {
+        my ($w, $x) = ($1, $2);
+        return undef unless $w eq $x;
+        (my $p = substr($w, 1, -1)) =~ s/'\\''/'/g;
+        return $p;
+    }
+    return undef unless $t =~ m{\A#!/bin/sh\n# [^\n]*kept by its SessionStart hook\.\nexec '(/[^'\n]*)' "\$\@"\n\z};
     return $1;
 }
 
@@ -290,13 +308,14 @@ sub installed {
 
 # keep_shim() -> what it did: written, same, newer-kept, foreign, dev-load, no-launcher, unquotable,
 # no-home, failed. The shim points at this copy's launcher unless it points at a newer version's
-# that still exists; one pointing at a launcher that is gone is pointed here again. A file there
-# that is not such a shim is left alone.
+# that still exists; one pointing at a launcher that is gone is pointed here again, and one of
+# the earlier form (no check) is rewritten. A file there that is not such a shim is left alone.
+# unquotable: a control character in the path (a ' is quoted).
 sub keep_shim {
     return 'dev-load' unless installed();
     my $target = ctx::launcher();
     return 'no-launcher' unless -f $target;
-    return 'unquotable' if $target =~ /['\x00-\x1f]/;
+    return 'unquotable' if $target =~ /[\x00-\x1f]/;
     my $shim = shim_path() // return 'no-home';
     my $want = _shim_text($target);
     if (-l $shim || (-e _ && !-f _)) { return 'foreign' }

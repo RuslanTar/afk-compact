@@ -1,0 +1,109 @@
+{
+ "id": "CACHE-13-shim-quoted-path",
+ "note": "0.1.13: an installed copy whose folder path holds a space and a single quote still gets the status line's shim: the path is one single-quoted sh word with each ' written '\\''. The shim runs the launcher, passes arguments and stdin through, and prints nothing with the launcher gone.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "plugin_at": "$HOME/my files/it's here/.claude/plugins/cache/m/$BRAND/9.0.0",
+ "manifest": {
+  "version": "9.0.0"
+ },
+ "steps": [
+  {
+   "name": "SessionStart: the shim written with the quoted path",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim written"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "mode": "0755",
+      "has": [
+       "^\\[ -x '/[^\\n]*/my files/it'\\\\''s here/\\.claude/plugins/cache/m/[^/\\n]+/9\\.0\\.0/scripts/[^/\\n]+-store' \\] \\|\\| exit 0\\nexec '/[^\\n]*/my files/it'\\\\''s here/\\.claude/plugins/cache/m/[^/\\n]+/9\\.0\\.0/scripts/[^/\\n]+-store' \"\\$@\"\\n\\z"
+      ]
+     }
+    ]
+   },
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    }
+   ]
+  },
+  {
+   "name": "the same again: read back as this copy's shim, left as it is",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim same"
+    ]
+   }
+  },
+  {
+   "name": "it runs the launcher, arguments and stdin passed through",
+   "exec": [
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 10m left\n",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "the launcher gone: exit 0, nothing printed",
+   "exec": [
+    "/bin/sh",
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   },
+   "setup": [
+    {
+     "rename": "$PLUGIN/scripts/$BRAND-store",
+     "to": "$PLUGIN/scripts/moved-away"
+    }
+   ]
+  }
+ ]
+}

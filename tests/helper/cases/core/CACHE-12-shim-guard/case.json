@@ -1,0 +1,158 @@
+{
+ "id": "CACHE-12-shim-guard",
+ "note": "0.1.13: the status line's shim (CACHE-05) checks its launcher before it runs it: with that copy gone (uninstalled, pruned, a failed update) it exits 0 and prints nothing, so a status line that calls it shows an empty segment instead of sh errors on every refresh. With the launcher there it is still one exec, arguments and stdin passed through. A shim of the earlier form (no check) pointing at this same copy is rewritten to the new form at the next SessionStart.",
+ "now": "2026-11-09T12:00:00Z",
+ "tz": "UTC",
+ "plugin_at": "$HOME/.claude/plugins/cache/m/$BRAND/9.0.0",
+ "manifest": {
+  "version": "9.0.0"
+ },
+ "steps": [
+  {
+   "name": "an earlier shim (no check) to this same copy: rewritten with the check",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim written"
+    ],
+    "files": [
+     {
+      "path": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+      "mode": "0755",
+      "contains": [
+       "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\n[ -x '$STORE' ] || exit 0\nexec '$STORE' \"$@\"\n"
+      ]
+     }
+    ]
+   },
+   "setup": [
+    {
+     "mkdir": "$TMP/work"
+    },
+    {
+     "write": "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+     "content": "#!/bin/sh\n# $BRAND: a fixed path to the installed plugin's helper, for status lines (README: the cache state in your status line); kept by its SessionStart hook.\nexec '$STORE' \"$@\"\n",
+     "mode": "0755"
+    }
+   ]
+  },
+  {
+   "name": "the same again: left as it is",
+   "argv": [
+    "hook",
+    "SessionStart"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "cwd": "$TMP/work",
+    "hook_event_name": "SessionStart",
+    "source": "startup"
+   },
+   "expect": {
+    "exit": 0,
+    "trace_has": [
+     "cache-shim same"
+    ]
+   }
+  },
+  {
+   "name": "the launcher there: one exec, arguments and stdin passed through",
+   "exec": [
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 10m left\n",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "the launcher gone: exit 0, nothing on stdout or stderr",
+   "exec": [
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   },
+   "setup": [
+    {
+     "rename": "$PLUGIN/scripts/$BRAND-store",
+     "to": "$PLUGIN/scripts/moved-away"
+    }
+   ]
+  },
+  {
+   "name": "and under sh, as a status line command runs it",
+   "exec": [
+    "/bin/sh",
+    "-c",
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store cache --stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "",
+    "stderr_empty": true
+   }
+  },
+  {
+   "name": "the launcher back: it runs again",
+   "exec": [
+    "$HOME/.local/state/$BRAND/bin/$BRAND-store",
+    "cache",
+    "--stdin"
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "prompt_cache": {
+     "ttl": "1h",
+     "expires_at": 1794226200
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "cache 1h warm 10m left\n"
+   },
+   "setup": [
+    {
+     "rename": "$PLUGIN/scripts/moved-away",
+     "to": "$PLUGIN/scripts/$BRAND-store"
+    }
+   ]
+  }
+ ]
+}
