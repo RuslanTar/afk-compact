@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- After the update, every session reads its whole transcript once more for the GSD line, on any operating system: the GSD line now reads Windows file paths it used to skip, so its saved progress starts over once. Later reads take only the new part of the transcript again.
+
+### Fixed
+
+- Under Git Bash or Cygwin on Windows, GSD work done through Edit and Write is now seen: Claude Code on Windows records those files as `C:\…\.planning\STATE.md`, which the GSD line missed. Paths on a network share or in WSL (`\\server\…`) are still not read.
+- Under Git Bash or Cygwin on Windows, when the session's transcript is in more than one project folder, the GSD line now reads it from the folder Claude Code names from the Windows path (`C--work-app` for `C:\work\app`).
+- Under Git Bash or Cygwin on Windows, a running Claude Code session started from PowerShell, cmd, Windows Terminal or Git Bash is no longer taken for ended, so another session no longer closes its open work, takes over its handoff or reports its background jobs as lost.
+- Under Git Bash or Cygwin on Windows, the plugin's skills, which run through the Bash tool, now find the session they run in, instead of working as if outside any session.
+- Under Git Bash or Cygwin on Windows, the resume skill's check of background work no longer reports a running Claude Code session started from PowerShell or Git Bash as not running. A session started from PowerShell now reads as unverified, as its start time cannot be read.
+
 ## [0.1.16] - 2026-11-15
 
 afk-compact 0.1.16 keeps your standing approvals working across the plugin's own handoffs, compactions and resumes, counts an approval as standing only when your words say so, and asks again for denied approvals and pushes that reach every branch. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.
