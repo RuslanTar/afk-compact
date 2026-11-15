@@ -706,11 +706,13 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   // prompt that came during this row's write: no fork.
   await log(d, kw.sid, 'keep_warm_send', { n: kw.pings, gap_s: secs(now - kw.start), since_s: secs(now - kw.warm) })
   if (!ours() || kw.phase !== 'warming') return
-  if (busyNow(s)) return again(d, kw, now, scale)
   // The main requests before the fork: one that comes while it runs already changed the history.
   const reqs = s.mainReqs
   // The fork's own time, for the 2-minute bound: from just before it (the checks above take time too).
   const tf = await d.now()
+  // 0.1.13: a compaction or a turn that began during the send row or the clock read: no fork beside
+  // it (no await between this check and the fork), a minute later.
+  if (busyNow(s)) return again(d, kw, now, scale)
   let r: unknown
   try {
     r = await d.fork(KEEP_WARM_PROMPT)

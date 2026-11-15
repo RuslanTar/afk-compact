@@ -2907,3 +2907,52 @@ test('KW-N55-08 (0.1.13): the native-window first ping is after native\'s last s
   expect(KEEP_WARM_NATIVE_MS > 55 * MIN).toBe(true)
   expect(KEEP_WARM_NATIVE_MS + 2 * MIN < KEEP_WARM_LATEST_MS).toBe(true)
 })
+
+for (const c of [
+  { name: 'during the start row (begin)', row: 'keep_warm_start', sends: 0 },
+  { name: 'during the send row', row: 'keep_warm_send', sends: 1 },
+]) {
+  test(`KW-N55-11 (0.1.13): native on, 203K: Claude Code's idle compaction dispatched ${c.name} of the 55:15 ping: no fork beside it; done at 55:50, the retry at 56:15 stops compacted`, { options: ON }, async ($, on) => {
+    const w = world(on, {})
+    const f = exactForks(on, w)
+    let release: () => void = () => undefined
+    let p: Promise<unknown> | undefined
+    w.atHelper = async (sub, args) => {
+      if (sub !== 'log' || p !== undefined || !args.some(a => a.includes(`"ev":"${c.row}"`))) return
+      w.compactGate = new Promise<void>(r => { release = r })
+      p = $.session.compact({ trigger: 'auto', messages: [{ role: 'user', text: 'hello', toolUses: [] }] } as never).catch(() => undefined)
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+    }
+    await w.start($)
+    const t0 = await n55Turn($, w, 203000)
+    f.t0 = t0
+    await until(w, t0, 55 + 50 / 60)
+    expect(p).toBeDefined()
+    release()
+    await p
+    await w.settle()
+    await until(w, t0, 70)
+    expect(f.at).toEqual([])
+    expect(w.rowsOf('keep_warm_send').length).toBe(c.sends)
+    expect(w.rowsOf('keep_warm_stop').map(r => [r.why, r.pings])).toEqual([['compacted', 0]])
+  })
+}
+
+test('KW-N55-12 (0.1.13): native on, 203K, an agent running, keep_warm_hours 2 (AT-KW-04 on the native window): pings at 55:15 and 105:15, the cutoff at the next due (155:15), the check compacts while warm', { options: ON }, async ($, on) => {
+  const w = world(on, {})
+  const f = exactForks(on, w)
+  await w.start($)
+  const t0 = await n55Turn($, w, 203000)
+  f.t0 = t0
+  await until(w, t0, 57)
+  expect(skips(w)).toEqual([['keep-warm', 'check']])
+  await until(w, t0, 155)
+  expect(f.at).toEqual([55.25, 105.25])
+  expect(stops(w)).toEqual([])
+  expect(selfCompacts(w)).toBe(0)
+  await until(w, t0, 156)
+  expect(stops(w)).toEqual([['cutoff', true, 2]])
+  expect(w.rowsOf('keep_warm_stop').map(r => r.gap_s)).toEqual([9315])
+  expect(ic(w).map(r => [r.at, r.gap_s, r.agents])).toEqual([['check', 9315, 1]])
+  expect(selfCompacts(w)).toBe(1)
+})
