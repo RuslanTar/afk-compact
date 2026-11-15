@@ -24,17 +24,19 @@ cache 1h warm 8m left ↻2/7 · ping pending
 cache 1h warm 6m left · keep-warm off (near-limit)
 ```
 
-The command is `cache --stdin`, called through a fixed path that the plugin keeps pointing at its installed copy, `~/.local/state/{{plugin}}/bin/{{plugin}}-store` (`$XDG_STATE_HOME/{{plugin}}/bin/` when Claude Code's environment sets `XDG_STATE_HOME`); the first session of an installed copy writes it (one in Claude Code's plugin cache or its synced plugins folder, or one Claude Code reads in place from a local folder marketplace), and a `--plugin-dir` run never changes it. When the copy it points at is gone (uninstalled, pruned, a failed update), it prints nothing and exits 0, so the status line shows no cache segment instead of an error. After a downgrade to 0.1.12 or earlier the segment stays blank until the next upgrade or until you delete that file. It reads Claude Code's own cache figures from the status line's input (Claude Code 2.1.312 and later; else the session's transcript) and the plugin's keep-warm record, writes nothing (unless you add `--note-usage`, below) and exits 0 (on a host whose perl the helper cannot run it prints `REFUSED: helper-runtime`, as every command does, except with `--bar`, which then prints nothing). A plugin copy older than 0.1.13 does not know `--bar`: the meter stays blank until the plugin is updated. Neither that path, the keep-warm record nor the shared usage record (`--note-usage`, below) is written inside a git work tree, such as a dotfiles repository at your home folder; set `XDG_STATE_HOME` outside it then (without the usage record, each session reads only its own usage, and `/{{plugin}}:status` shows none). The details are in `assets/cache-contract.md` in the plugin folder.
+The command is `cache --stdin`, called through a fixed path that the plugin keeps pointing at its installed copy, `~/.local/state/{{plugin}}/bin/{{plugin}}-store` (`$XDG_STATE_HOME/{{plugin}}/bin/` when Claude Code's environment sets `XDG_STATE_HOME`); the first session of an installed copy writes it (one in Claude Code's plugin cache or its synced plugins folder, or one Claude Code reads in place from a local folder marketplace), and a `--plugin-dir` run never changes it. When the copy it points at is gone (uninstalled, pruned, a failed update), it prints nothing and exits 0, so the status line shows no cache segment instead of an error. After a downgrade to 0.1.12 or earlier the file keeps running the 0.1.13 copy while that copy exists (those versions do not recognise the new file and leave it alone), and once that copy is gone the segment stays blank; delete the file and the older version writes its own at its next session start (the plain line only: `--bar` needs 0.1.13). It reads Claude Code's own cache figures from the status line's input (Claude Code 2.1.312 and later; else the session's transcript) and the plugin's keep-warm record, writes nothing (unless you add `--note-usage`, below) and exits 0 (on a host whose perl the helper cannot run it prints `REFUSED: helper-runtime`, as every command does, except with `--bar`, which then prints nothing). A plugin copy older than 0.1.13 does not know `--bar`: the meter stays blank until the plugin is updated. Neither that path, the keep-warm record nor the shared usage record (`--note-usage`, below) is written inside a git work tree, such as a dotfiles repository at your home folder; set `XDG_STATE_HOME` outside it then (without the usage record, each session reads only its own usage, and `/{{plugin}}:status` shows none). The details are in `assets/cache-contract.md` in the plugin folder.
 
 **A plain status line.** Claude Code runs one status line command and shows its output as the whole line, so this replaces the status line you have now. In `~/.claude/settings.json`:
 
 ```json
 "statusLine": {
   "type": "command",
-  "command": "~/.local/state/{{plugin}}/bin/{{plugin}}-store cache --stdin --bar --note-usage",
+  "command": "[ ! -f ~/.local/state/{{plugin}}/bin/{{plugin}}-store ] || sh ~/.local/state/{{plugin}}/bin/{{plugin}}-store cache --stdin --bar --note-usage",
   "refreshInterval": 30
 }
 ```
+
+The `[ ! -f … ] ||` part runs the meter only once that file exists: before the plugin's first session writes it, the line stays empty instead of showing an error.
 
 To keep your own line, call both from one script; the meter on a second line leaves your line exactly as it was, and a removed plugin drops only the meter:
 
@@ -47,7 +49,7 @@ t=~/.local/state/{{plugin}}/bin/{{plugin}}-store
 exit 0
 ```
 
-**ccstatusline.** Add a Custom Command widget in ccstatusline's own settings screen with the command `~/.local/state/{{plugin}}/bin/{{plugin}}-store cache --stdin --bar --note-usage` (ccstatusline passes Claude Code's JSON on to it; write the full path where `~` is not expanded), a timeout of 1000 ms, and "preserve colors" on (or add `--color never` and leave it off). `/{{plugin}}:settings` prints these values with the full path; the plugin never edits ccstatusline's own file.
+**ccstatusline.** Add a Custom Command widget in ccstatusline's own settings screen with the command `[ ! -f ~/.local/state/{{plugin}}/bin/{{plugin}}-store ] || sh ~/.local/state/{{plugin}}/bin/{{plugin}}-store cache --stdin --bar --note-usage` (ccstatusline passes Claude Code's JSON on to it; write the full path where `~` is not expanded), a timeout of 1000 ms, and "preserve colors" on (or add `--color never` and leave it off). `/{{plugin}}:settings` prints these values with the full path; the plugin never edits ccstatusline's own file.
 
 **`--note-usage`.** With it, the command also records the usage limits the status line shows (the five-hour and seven-day shares and their reset times) in one small file of the plugin's, `~/.local/state/{{plugin}}/usage.v1.json`, where each session's hooks record their own readings too. It writes no account or conversation data, and leave it out to keep the command read-only: the plugin works the same without a status line.
 
