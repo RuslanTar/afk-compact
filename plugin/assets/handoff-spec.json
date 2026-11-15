@@ -528,6 +528,10 @@
       "why": "the helper path changes with each plugin update and names your home folder",
       "fix": "write <store> instead of the path"
     },
+    "approval-standing-words": {
+      "why": "the line says standing but the user's words do not (such as don't ask again, no need to ask, from now on), so it reads as once",
+      "fix": "write once, or keep standing only for words that say so; the next session re-asks after use"
+    },
     "approval-unchecked": {
       "why": "an unchecked approval cannot carry",
       "fix": "nothing to do; the next session re-asks"
@@ -573,6 +577,7 @@
       "secret-warn",
       "acuity",
       "store-path",
+      "approval-standing-words",
       "approval-unchecked",
       "ledger-changed",
       "ledger-carried"
@@ -932,7 +937,7 @@
   "protected_branch_re": "^(main|master|trunk|develop|development|stable|staging|gh-pages|prod|production|(prod|production)[/_-].+|releases?([/_-].+)?|hotfix/.+)$",
   "approval_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+?)\"(?: \\(answer to \".+\"\\))? — action (.+?) · targets (.+?) · (once|standing( \\([^)]*\\))?) · (not yet used|used [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} [+-][0-9]{4})( · given .+)?$",
   "approval_context_re": "^[-*]?[ \\t]*U-([0-9]+): approval \"(.+?)\"( \\(answer to \".+\"\\))? — action (.+?) · targets (.+?) ; context only, not valid here; re-ask( · denied [^·]+?)?( · given .+)?$",
-  "standing_words_re": "(?:^|[^a-z'])(?:don'?t ask(?: me)? again|do not ask(?: me)? again|no need to ask|(?:don'?t|do not) need to ask|without asking|standing|always(?! (?:ask|check|confirm))|whenever|every ?time|each time|from now on|until|feel free to|any ?time)(?:$|[^a-z])",
+  "standing_words_re": "(?:^|[^a-z'-])(?:(?:don'?t|do not) ask(?: me)? again|no need to ask|(?:don'?t|do not) need to ask|feel free to|from now on|without asking(?: me)?|standing|until (?:further notice|i say (?:so|otherwise|stop)|i tell you otherwise|revoked)|(?:whenever|any ?time) (?:you (?:want|like|need)|needed|necessary))(?=$|[^a-z'-])",
   "risk_classes": [
     {
       "id": "gate",

@@ -29,7 +29,7 @@
     },
     {
      "write": "$HOME/.claude/projects/-x/$SID.jsonl",
-     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge MR !12 once the pipeline is green\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 77 to staging today\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"you may always rerun the flaky suite\"}}\n"
+     "content": "{\"type\": \"user\", \"uuid\": \"u1\", \"timestamp\": \"2026-10-21T13:00:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to origin\"}}\n{\"type\": \"user\", \"uuid\": \"u2\", \"timestamp\": \"2026-10-21T13:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"merge MR !12 once the pipeline is green\"}}\n{\"type\": \"user\", \"uuid\": \"u3\", \"timestamp\": \"2026-10-21T13:02:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 77 to staging today\"}}\n{\"type\": \"user\", \"uuid\": \"u4\", \"timestamp\": \"2026-10-21T13:03:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"you may rerun the flaky suite from now on\"}}\n"
     },
     {
      "write": "$ROOT/.sessions/cccccccc-1111-4222-8333-444444444444.lineage.json",
@@ -80,7 +80,7 @@
   },
   {
    "write": "$STAGE/body.md",
-   "content": "# LAB-9 — approvals recorded\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-3: approval \"merge MR !12 once the pipeline is green\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · used 2026-10-21 13:30 +0300\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · used 2026-10-21 13:40 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+   "content": "# LAB-9 — approvals recorded\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-3: approval \"merge MR !12 once the pipeline is green\" — action merge MR !12 · targets MR !12 @ head 9f8e7d6 · once · used 2026-10-21 13:30 +0300\n- U-4: approval \"deploy build 77 to staging today\" — action deploy build 77 · targets env staging @ build 77 · once · not yet used\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · used 2026-10-21 13:40 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
   },
   {
    "name": "publish: every quote is the user's",
@@ -397,11 +397,11 @@
     },
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-20-00_dup.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e0e\ndate: 2026-10-21T14:20:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=0e0e0e0e s=manual⟫\n# LAB-9 — an edited file\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-2: approval \"push feat/x to origin\" — action git push origin main · targets branch main @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=0e0e0e0e⟫\n"
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 0e0e0e0e\ndate: 2026-10-21T14:20:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=0e0e0e0e s=manual⟫\n# LAB-9 — an edited file\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-2: approval \"push feat/x to origin\" — action git push origin main · targets branch main @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=0e0e0e0e⟫\n"
     },
     {
      "write": "$ROOT/.sessions/approvals/$SID.0e0e0e0e.json",
-     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"0e0e0e0e\",\"session_id\":\"$SID\",\"v\":1}"
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"d809edde43c008391961e2e91e1bc40b79369c26244694e3c00e1df64af05523\"},\"nonce\":\"0e0e0e0e\",\"session_id\":\"$SID\",\"v\":1}"
     }
    ]
   },
@@ -492,27 +492,27 @@
    "setup": [
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-21-00_hashed.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 1a1a1a1a\ndate: 2026-10-21T14:21:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=1a1a1a1a s=manual⟫\n# LAB-9 — hashed\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=1a1a1a1a⟫\n"
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 1a1a1a1a\ndate: 2026-10-21T14:21:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=1a1a1a1a s=manual⟫\n# LAB-9 — hashed\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=1a1a1a1a⟫\n"
     },
     {
      "write": "$ROOT/.sessions/approvals/$SID.1a1a1a1a.json",
-     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"1a1a1a1a\",\"session_id\":\"$SID\",\"v\":1}"
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"d809edde43c008391961e2e91e1bc40b79369c26244694e3c00e1df64af05523\"},\"nonce\":\"1a1a1a1a\",\"session_id\":\"$SID\",\"v\":1}"
     },
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-22-00_added.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 2b2b2b2b\ndate: 2026-10-21T14:22:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5, U-6\n---\n⟪$BRAND v1 n=2b2b2b2b s=manual⟫\n# LAB-9 — a line added after publish\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n- U-6: approval \"push feat/x to origin\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=2b2b2b2b⟫\n"
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 2b2b2b2b\ndate: 2026-10-21T14:22:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5, U-6\n---\n⟪$BRAND v1 n=2b2b2b2b s=manual⟫\n# LAB-9 — a line added after publish\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n- U-6: approval \"push feat/x to origin\" — action git push origin feat/y · targets branch feat/y @ 1a2b3c4 · once · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=2b2b2b2b⟫\n"
     },
     {
      "write": "$ROOT/.sessions/approvals/$SID.2b2b2b2b.json",
-     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"2b2b2b2b\",\"session_id\":\"$SID\",\"v\":1}"
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"d809edde43c008391961e2e91e1bc40b79369c26244694e3c00e1df64af05523\"},\"nonce\":\"2b2b2b2b\",\"session_id\":\"$SID\",\"v\":1}"
     },
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-23-00_targets.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 3c3c3c3c\ndate: 2026-10-21T14:23:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=3c3c3c3c s=manual⟫\n# LAB-9 — targets edited\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=3c3c3c3c⟫\n"
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 3c3c3c3c\ndate: 2026-10-21T14:23:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=3c3c3c3c s=manual⟫\n# LAB-9 — targets edited\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/y @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=3c3c3c3c⟫\n"
     },
     {
      "write": "$ROOT/.sessions/approvals/$SID.3c3c3c3c.json",
-     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"3c3c3c3c\",\"session_id\":\"$SID\",\"v\":1}"
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"d809edde43c008391961e2e91e1bc40b79369c26244694e3c00e1df64af05523\"},\"nonce\":\"3c3c3c3c\",\"session_id\":\"$SID\",\"v\":1}"
     },
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-24-00_quote.md",
@@ -520,27 +520,27 @@
     },
     {
      "write": "$ROOT/.sessions/approvals/$SID.4d4d4d4d.json",
-     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"4d4d4d4d\",\"session_id\":\"$SID\",\"v\":1}"
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"d809edde43c008391961e2e91e1bc40b79369c26244694e3c00e1df64af05523\"},\"nonce\":\"4d4d4d4d\",\"session_id\":\"$SID\",\"v\":1}"
     },
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-25-00_id.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 5e5e5e5e\ndate: 2026-10-21T14:25:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-7, U-5\n---\n⟪$BRAND v1 n=5e5e5e5e s=manual⟫\n# LAB-9 — id edited\n## Approvals\n- U-7: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=5e5e5e5e⟫\n"
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 5e5e5e5e\ndate: 2026-10-21T14:25:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-7, U-5\n---\n⟪$BRAND v1 n=5e5e5e5e s=manual⟫\n# LAB-9 — id edited\n## Approvals\n- U-7: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=5e5e5e5e⟫\n"
     },
     {
      "write": "$ROOT/.sessions/approvals/$SID.5e5e5e5e.json",
-     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"5e5e5e5e\",\"session_id\":\"$SID\",\"v\":1}"
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"d809edde43c008391961e2e91e1bc40b79369c26244694e3c00e1df64af05523\"},\"nonce\":\"5e5e5e5e\",\"session_id\":\"$SID\",\"v\":1}"
     },
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-26-00_unhashed.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 6f6f6f6f\ndate: 2026-10-21T14:26:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=6f6f6f6f s=manual⟫\n# LAB-9 — published before the hashes\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=6f6f6f6f⟫\n"
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 6f6f6f6f\ndate: 2026-10-21T14:26:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=6f6f6f6f s=manual⟫\n# LAB-9 — published before the hashes\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=6f6f6f6f⟫\n"
     },
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-27-00_otherrec.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7a7a7a7a\ndate: 2026-10-21T14:27:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=7a7a7a7a s=manual⟫\n# LAB-9 — a record of another file\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=7a7a7a7a⟫\n"
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7a7a7a7a\ndate: 2026-10-21T14:27:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=7a7a7a7a s=manual⟫\n# LAB-9 — a record of another file\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 · once · not yet used\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing (until the suite is fixed) · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n⟪/$BRAND n=7a7a7a7a⟫\n"
     },
     {
      "write": "$ROOT/.sessions/approvals/$SID.7a7a7a7a.json",
-     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"328573b813071756357b5bd1a9776b6b8110611aa91d910103db2ef093ddea72\"},\"nonce\":\"1a1a1a1a\",\"session_id\":\"$SID\",\"v\":1}"
+     "content": "{\"lines\":{\"U-2\":\"78bf50ac84581d292a07406db695586b21cad55201f048cafd2aed688a529979\",\"U-5\":\"d809edde43c008391961e2e91e1bc40b79369c26244694e3c00e1df64af05523\"},\"nonce\":\"1a1a1a1a\",\"session_id\":\"$SID\",\"v\":1}"
     }
    ]
   },
@@ -703,7 +703,7 @@
    "setup": [
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-30-00_plugin-turn.md",
-     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7e7e7e7e\ndate: 2026-10-21T14:30:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=7e7e7e7e s=manual⟫\n# LAB-9 — plugin handoff turn\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-5: approval \"you may always rerun the flaky suite\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:03 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## Next steps\n1. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n⟪/$BRAND n=7e7e7e7e⟫\n"
+     "content": "---\nkind: handoff\nwriter: handoff\nnonce: 7e7e7e7e\ndate: 2026-10-21T14:30:00+03:00\nsession_id: $SID\nactor: main\napprovals_checked: U-2, U-5\n---\n⟪$BRAND v1 n=7e7e7e7e s=manual⟫\n# LAB-9 — plugin handoff turn\n## Approvals\n- U-2: approval \"push feat/x to origin\" — action git push origin feat/x · targets branch feat/x @ 1a2b3c4 ; context only, not valid here; re-ask\n- U-5: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 ; context only, not valid here; re-ask · given 11111111 2026-10-21 13:03 +0300\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## Next steps\n1. ask user: push feat/x to origin (user-run: ! git push origin feat/x)\n⟪/$BRAND n=7e7e7e7e⟫\n"
     },
     {
      "write": "$ROOT/repo/approvals/2026-10-21_14-31-00_both-forms.md",

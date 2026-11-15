@@ -1,0 +1,200 @@
+{
+ "id": "AT-AP-30 (second review: standing phrases, words name the gates, denials along the line)",
+ "tmp_base": "repo",
+ "layer": "H",
+ "owner": "skills",
+ "note": "0.1.16 second review: standing_words_re keeps only clear standing phrases (don't ask again, no need to ask, feel free to, from now on, without asking, the whole word standing, until further notice/I say so, whenever/any time you want/need) and no match after not/don't/never/no within three words; V1 until, V3 negation, V4 long-standing, V5 whenever-one-time and V6 always read once; four real phrases still read standing. A gate is allowed only when the user's own words name every gate of the line, a protected branch by name (V2: push words never cover a production deploy). Denials count over every session on the own line from the writer to the reader (B between A and C), and an unreadable transcript on that line allows no gate (denied_unread).",
+ "now": "2026-10-21T14:05:12+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "repo": {
+      "branch": "feat/x",
+      "commits": [
+       {
+        "files": {
+         "app/retry.rb": "x = 1\n"
+        },
+        "msg": "seed"
+       }
+      ]
+     },
+     "at": "$TMP/repo"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194000-1072915200.live-11111111.json",
+     "content": "{\"pid\": 4194000, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"$SID\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"startup\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/$SID.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"w0\", \"timestamp\": \"2026-10-21T13:10:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"wait until CI is green, then deploy build 81 to staging\"}}\n{\"type\": \"user\", \"uuid\": \"w1\", \"timestamp\": \"2026-10-21T13:11:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"do not deploy build 83 to staging without asking me\"}}\n{\"type\": \"user\", \"uuid\": \"w2\", \"timestamp\": \"2026-10-21T13:12:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"fix the long-standing flake then deploy build 84 to staging\"}}\n{\"type\": \"user\", \"uuid\": \"w3\", \"timestamp\": \"2026-10-21T13:13:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 85 to staging whenever you finish this one fix\"}}\n{\"type\": \"user\", \"uuid\": \"w4\", \"timestamp\": \"2026-10-21T13:14:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"always run the tests before you deploy build 86 to staging\"}}\n{\"type\": \"user\", \"uuid\": \"w5\", \"timestamp\": \"2026-10-21T13:15:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"confirmed/approved, don't ask again for this lane of work\"}}\n{\"type\": \"user\", \"uuid\": \"w6\", \"timestamp\": \"2026-10-21T13:16:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"no need to ask. do as soon as ready\"}}\n{\"type\": \"user\", \"uuid\": \"w7\", \"timestamp\": \"2026-10-21T13:17:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to push and create releases\"}}\n{\"type\": \"user\", \"uuid\": \"w8\", \"timestamp\": \"2026-10-21T13:18:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"feel free to install any version without asking me\"}}\n{\"type\": \"user\", \"uuid\": \"w9\", \"timestamp\": \"2026-10-21T13:19:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"deploy build 90 to staging whenever you want\"}}\n{\"type\": \"user\", \"uuid\": \"w10\", \"timestamp\": \"2026-10-21T13:20:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"push feat/x to main whenever you want\"}}\n{\"type\": \"user\", \"uuid\": \"w11\", \"timestamp\": \"2026-10-21T13:21:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"you may rerun the flaky suite from now on\"}}\n"
+    },
+    {
+     "write": "$TMP/copy.md",
+     "content": "---\nkind: compact-summary\nwriter: mod\nsession_id: $SID\n---\n## Approvals\n- U-20: approval \"wait until CI is green, then deploy build 81 to staging\" — action deploy build 81 · targets env staging @ build 81 · standing · not yet used\n- U-21: approval \"do not deploy build 83 to staging without asking me\" — action deploy build 83 · targets env staging @ build 83 · standing · not yet used\n- U-22: approval \"fix the long-standing flake then deploy build 84 to staging\" — action deploy build 84 · targets env staging @ build 84 · standing · not yet used\n- U-23: approval \"deploy build 85 to staging whenever you finish this one fix\" — action deploy build 85 · targets env staging @ build 85 · standing · not yet used\n- U-24: approval \"always run the tests before you deploy build 86 to staging\" — action deploy build 86 · targets env staging @ build 86 · standing · not yet used\n- U-30: approval \"confirmed/approved, don't ask again for this lane of work\" — action rerun lane step 0 · targets lane:bench @ step 0 · standing · used 2026-10-21 13:20\n- U-31: approval \"no need to ask. do as soon as ready\" — action rerun lane step 1 · targets lane:bench @ step 1 · standing · used 2026-10-21 13:20\n- U-32: approval \"feel free to push and create releases\" — action rerun lane step 2 · targets lane:bench @ step 2 · standing · used 2026-10-21 13:20\n- U-33: approval \"feel free to install any version without asking me\" — action rerun lane step 3 · targets lane:bench @ step 3 · standing · used 2026-10-21 13:20\n- U-40: approval \"feel free to push and create releases\" — action deploy build 78 to production · targets env prod @ build 78 · standing · not yet used\n- U-41: approval \"feel free to push and create releases\" — action git push origin feat/x:main · targets branch main @ 1a2b3c4 · standing · not yet used\n- U-42: approval \"push feat/x to main whenever you want\" — action git push origin feat/x:main · targets branch main @ 1a2b3c4 · standing · not yet used\n"
+    }
+   ]
+  },
+  {
+   "name": "standing words: V1 until, V3 negation, V4 long-standing, V5 whenever-one-time, V6 always read once (gate, re-ask); the four real phrases read standing (a used standing approval carries); V2 push words never cover a production deploy; unnamed-branch push words never cover a protected push; a protected push named in the words is allowed",
+   "options": {
+    "standing_approval_gates": "deploy;prod-write;protected-push"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "--compact",
+    "--cwd",
+    "$TMP/repo",
+    "--copy",
+    "$TMP/copy.md",
+    "--transcript",
+    "$HOME/.claude/projects/-x/$SID.jsonl"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-30 rerun lane step 0 → lane:bench @ step 0; U-31 rerun lane step 1 → lane:bench @ step 1; U-32 rerun lane step 2 → lane:bench @ step 2; U-33 rerun lane step 3 → lane:bench @ step 3$",
+     "^Approvals \\(gate allowed by setting\\): U-42 git push origin feat/x:main → branch main @ 1a2b3c4$",
+     "^Approvals \\(gate, re-ask\\): U-20 deploy build 81 [^;]*; U-21 deploy build 83 [^;]*; U-22 deploy build 84 [^;]*; U-23 deploy build 85 [^;]*; U-24 deploy build 86 [^;]*; U-40 deploy build 78 to production [^;]*; U-41 git push origin feat/x:main [^;]*$"
+    ]
+   }
+  },
+  {
+   "name": "begin",
+   "options": {
+    "standing_approval_gates": "deploy"
+   },
+   "cwd": "$TMP/repo",
+   "argv": [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "approvals"
+   ],
+   "expect": {
+    "exit": 0
+   },
+   "capture": {
+    "STAGE": "json:stage"
+   }
+  },
+  {
+   "name": "stamp",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "stamp",
+    "--stage",
+    "$STAGE"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "write": "$STAGE/body.md",
+   "content": "# LAB-9 — approvals recorded\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Approvals\n- U-2: approval \"deploy build 90 to staging whenever you want\" — action deploy build 90 · targets env staging @ build 90 · standing · not yet used\n- U-3: approval \"you may rerun the flaky suite from now on\" — action rerun the flaky suite · targets suite tests/flaky @ 1a2b3c4 · standing · not yet used\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n"
+  },
+  {
+   "name": "publish A's handoff N",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "publish",
+    "--stage",
+    "$STAGE",
+    "--slug",
+    "approvals",
+    "--status",
+    "in-progress"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks": [
+     "^LINT ",
+     "approval-standing-words"
+    ]
+   },
+   "capture": {
+    "PUB": "re:^Wrote handoff to: (.+)$"
+   }
+  },
+  {
+   "name": "A reads N: the standing deploy is gate-allowed (deploy listed), the rerun carries",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): U-3 rerun the flaky suite ",
+     "^Approvals \\(gate allowed by setting\\): U-2 deploy build 90 "
+    ]
+   }
+  },
+  {
+   "setup": [
+    {
+     "write": "$ROOT/.sessions/bbbbbbbb-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"$SID\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/eeeeeeee-1111-4222-8333-444444444444.lineage.json",
+     "content": "{\"previous_session_id\": \"bbbbbbbb-1111-4222-8333-444444444444\", \"lineage_reason\": \"clear\"}"
+    },
+    {
+     "write": "$ROOT/.sessions/by-pid/4194001-1072915200.live-bbbbbbbb.json",
+     "content": "{\"pid\": 4194001, \"pid_lstart\": \"Thu Jan  1 00:00:00 2004\", \"session_id\": \"bbbbbbbb-1111-4222-8333-444444444444\", \"cwd\": \"/x\", \"worktree\": \"/x\", \"source\": \"clear\", \"ts\": \"2026-10-21T12:50:00+03:00\"}"
+    },
+    {
+     "write": "$HOME/.claude/projects/-x/bbbbbbbb-1111-4222-8333-444444444444.jsonl",
+     "content": "{\"type\": \"user\", \"uuid\": \"b1\", \"timestamp\": \"2026-10-21T14:01:00+03:00\", \"origin\": {\"kind\": \"human\"}, \"message\": {\"role\": \"user\", \"content\": \"carry on\"}}\n{\"type\": \"assistant\", \"uuid\": \"b2\", \"timestamp\": \"2026-10-21T14:02:00+03:00\", \"message\": {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"toolu_b9\", \"name\": \"Bash\", \"input\": {\"command\": \"bin/test tests/flaky --rerun\", \"description\": \"rerun\"}}]}}\n{\"type\": \"user\", \"uuid\": \"b3\", \"timestamp\": \"2026-10-21T14:03:00+03:00\", \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_b9\", \"is_error\": true, \"content\": \"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.\"}]}}\n"
+    }
+   ]
+  },
+  {
+   "name": "C (after B, after A) reads N: B was refused the rerun and ended without a handoff, so U-3 is denied; C's own transcript cannot be read, so no gate is allowed (denied_unread)",
+   "cwd": "$TMP/repo",
+   "argv": [
+    "measure",
+    "--sid",
+    "eeeeeeee-1111-4222-8333-444444444444",
+    "$PUB"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^Approvals \\(checked\\): none$",
+     "^Approvals \\(gate, re-ask\\): U-2 deploy build 90 ",
+     "^Approvals \\(denied, re-ask\\): U-3$"
+    ],
+    "stdout_lacks": [
+     "gate allowed"
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/eeeeeeee-1111-4222-8333-444444444444.classic.jsonl",
+      "ev": "approvals_carry",
+      "fields": {
+       "source": "handoff",
+       "denied": 1,
+       "denied_unread": 1,
+       "gate": 1
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

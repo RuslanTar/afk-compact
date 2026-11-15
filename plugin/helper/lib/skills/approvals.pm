@@ -534,9 +534,11 @@ sub _finish {
 }
 
 # standing_words(words) -> 1 when the user's words themselves make an approval standing: the spec's
-# standing_words_re ("don't ask again", "no need to ask", "standing", "always", "whenever",
-# "every time", "from now on", "until …", "feel free to", "any time"; not "always ask"), read on
-# the lower-cased words with typographic apostrophes folded. No spec pattern: never (fail closed).
+# standing_words_re ("don't ask (me) again", "no need to ask", "feel free to", "from now on",
+# "without asking (me)", the whole word "standing", "until further notice" / "until I say so" and
+# the like, "whenever you want" / "any time you need" and the like), read on the lower-cased words
+# with typographic apostrophes folded, and not after "not", "don't", "never" or "no" within the
+# three words before it. No spec pattern: never (fail closed).
 sub standing_words {
     my ($q) = @_;
     return 0 unless defined $q && !ref $q;
@@ -544,7 +546,22 @@ sub standing_words {
     (my $w = lc $q) =~ s/\xe2\x80[\x98\x99]/'/g;
     $w =~ s/[\x{2018}\x{2019}`]/'/g;
     $w =~ s/\s+/ /g;
-    return $w =~ $re ? 1 : 0;
+    # A negation within the three words before the phrase ("do not deploy without asking me")
+    # makes that match no standing phrase (0.1.16 second review).
+    while ($w =~ /$re/g) {
+        my $at = $-[0];    # saved: every later match resets @-
+        my @before = split / /, substr($w, 0, $at + 1);
+        @before = @before[-3 .. -1] if @before > 3;
+        next if grep { /\A(?:not|don'?t|never|no)[.,;:!?)]*\z/ } @before;
+        # "without asking" after a negation anywhere earlier in its sentence ("do not deploy build
+        # 83 to staging without asking me") is a prohibition, not a standing approval.
+        if (substr($w, $at) =~ /\A[^a-z'-]?without asking/) {
+            my ($clause) = substr($w, 0, $at + 1) =~ /([^.;!?]*)\z/;
+            next if defined $clause && $clause =~ /(?:^|[^a-z'])(?:not|don'?t|never|no)(?![a-z'])/;
+        }
+        return 1;
+    }
+    return 0;
 }
 
 # section_lines(\@lines) -> {index => 1} for the body lines of `## Approvals`.
@@ -609,6 +626,7 @@ sub classes {
     elsif (defined $prod && !($PROD_READ_CARRIES && _prod_read($e, $text, \%any))) { $all{'prod-write'} = 1 }
     $all{$gate} = 1 if defined $gate;
     my $merge = $e->{action} =~ /\bmerge\b/i && !$any{'mr-write'};
+    my @pnames;
     if ($any{push} || $merge) {
         my $pre = skills::spec::regex_at('protected_branch_re');
         my $pb = skills::core::protected();
@@ -626,7 +644,7 @@ sub classes {
                     my $b = $part =~ s{\A\+}{}r;
                     $b =~ s{\Arefs/(?:heads|remotes)/}{};
                     for my $n ($b, ($b =~ m{\A[^/]+/(.+)\z} ? $1 : ())) {
-                        $protected = 1 if ($pre && lc($n) =~ $pre) || $def{$n} || defined skills::core::protected_user($n, $pb);
+                        if (($pre && lc($n) =~ $pre) || $def{$n} || defined skills::core::protected_user($n, $pb)) { $protected = 1; push @pnames, $n }
                     }
                 }
             }
@@ -636,7 +654,7 @@ sub classes {
             $all{'protected-push'} = 1;
         }
     }
-    return { outward => \@ids, gate => $gate, prod => $prod, gates => [ sort keys %all ] };
+    return { outward => \@ids, gate => $gate, prod => $prod, gates => [ sort keys %all ], protected_names => [ @pnames ] };
 }
 
 # _push_named(entry, cwd) -> 1 when a push approval names the branch it pushes (P-2; see
@@ -971,6 +989,13 @@ sub lint {
         $hold{ $e->{id} } = $e;
         push @own, $e;
         $verdict->($e);
+    }
+    # 0.1.16 (second review): a line that says standing while the user's words hold no standing
+    # phrase reads as once (standing_words); say so, so the model sees why it will be re-asked.
+    if (skills::spec::lint_ids()->{advisory}{'approval-standing-words'}) {
+        for my $e (grep { !$_->{context} && !$_->{failed} && ($_->{scope} // '') =~ /\Astanding\b/ && !standing_words($_->{quote}) } @own) {
+            push @{ $r{advisory} }, [ 'approval-standing-words', $e->{where} ];
+        }
     }
     my %cls;
     # A context-only line is never checked: it grants nothing, here or after a resume.
@@ -1578,7 +1603,7 @@ sub own_relation {
     }
     my $claimed = _claim_cut($ctx, $d, \@line);
     return (0, $claimed) if defined $claimed;
-    return (1, '');
+    return (1, '', \@line);
 }
 
 # claim_path(ctx, sid) -> `.sessions/successors/<sid>.json`, the claim that a session took sid's
@@ -1685,7 +1710,7 @@ sub handoff_lines {
             $cx{ $_->{id} } //= $label for grep { !($vok->{ $_->{id} } && $_->{standing}) } @e;
         }
     }
-    my ($own, $why) = own_relation($d, $ctx, $sid);
+    my ($own, $why, $oline) = own_relation($d, $ctx, $sid);
     if (!$own) {
         return ([ 'Approvals (checked): none (' . $why . ': context only)' ], { source => 'handoff', checked => 0, gate => 0, classes => [] }) if @e || %cx;
         return ([ 'Approvals (checked): none' ], { source => 'handoff', checked => 0, gate => 0, classes => [] });
@@ -1701,17 +1726,20 @@ sub handoff_lines {
     # 0.1.16 (review): a carried approval whose action a call was refused for since, in the writing
     # session or in the reading one, is re-ask (approval-denied, read from their transcripts).
     my @cand = grep { $ok->{ $_->{id} } && $n{ $_->{id} } == 1 && !$cx{ $_->{id} } } @e;
+    # Every session on the own line from the reader to the writer (0.1.16 second review: a
+    # session between them that was refused and ended without a handoff counted for nothing).
     my @tx;
     if (@cand) {
         my %seen_sid;
-        for my $s (grep { defined && !ref && $_ ne '' } ($d->{fm}{session_id}, $sid)) {
+        for my $s (grep { defined && !ref && $_ ne '' } ($d->{fm}{session_id}, @{ $oline || [ $sid ] })) {
             next if $seen_sid{$s}++;
-            my $tp = transcript_path($ctx, $s, $d->{fm}{worktree}, eval { require Cwd; Cwd::getcwd() });
-            push @tx, [ $tp, $s ] if defined $tp;
+            push @tx, [ transcript_path($ctx, $s, $d->{fm}{worktree}, eval { require Cwd; Cwd::getcwd() }), $s ];
         }
     }
+    my $unread = _denied_unread(\@tx);
     my ($keep, $den) = _split_denied(\@cand, \@tx);
-    my ($out, $row) = _report($keep, [], 'handoff', undef, $den);
+    my ($out, $row) = _report($keep, [], 'handoff', undef, $den, no_gate_allow => $unread);
+    $row->{denied_unread} = $unread if $unread;
     my %ctx_only = (%cx, map { $_ => $HASH_WHY{ $unver->{$_} } } keys %$unver);
     my @bad = sort { (substr($a, 2) <=> substr($b, 2)) } keys %ctx_only;
     if (@bad) {
@@ -1767,10 +1795,32 @@ sub summary_lines {
     }
     # 0.1.16 (review): an approval whose action a call of this session was refused for is re-ask
     # on this path too, as approval-denied reads it at publish.
-    my ($keep, $den) = _split_denied(\@ok, [ [ $transcript, $sid ] ]);
-    my ($out, $row) = _report($keep, \@no, 'summary', $cwd, $den);
+    my $txs = [ [ $transcript, $sid ] ];
+    my $unread = _denied_unread($txs);
+    my ($keep, $den) = _split_denied(\@ok, $txs);
+    my ($out, $row) = _report($keep, \@no, 'summary', $cwd, $den, no_gate_allow => $unread);
+    $row->{denied_unread} = $unread if $unread;
     if (@unread) { push @$out, @nr; $row->{unread} = scalar @unread }
     return ($out, $row);
+}
+
+# _words_name_gates(entry, classes, cwd) -> 1 when the user's own words name every gate the line
+# names (0.1.16 second review: a summary attached a production deploy to "feel free to push"):
+# the words read as an action and a target (classes) hold each gate of the line, and each protected
+# branch the line names appears in the words as a whole word (an unnamed push never qualifies).
+sub _words_name_gates {
+    my ($e, $c, $cwd) = @_;
+    my $q = $e->{quote} // '';
+    my $wc = classes({ action => $q, targets_text => $q, targets => [] }, $cwd);
+    my %w = map { $_ => 1 } @{ $wc->{gates} || [] };
+    return 0 if grep { !$w{$_} } @{ $c->{gates} || [] };
+    if (grep { $_ eq 'protected-push' } @{ $c->{gates} || [] }) {
+        my @n = @{ $c->{protected_names} || [] };
+        return 0 unless @n;
+        my $lq = lc $q;
+        for my $n (@n) { return 0 unless $lq =~ /(?<![\w\/-])\Q${\ lc $n}\E(?![\w\/-])/ }
+    }
+    return 1;
 }
 
 # _split_denied(\@entries, [[transcript, sid]…]) -> (\@kept, \@denied): the entries whose action a
@@ -1791,8 +1841,15 @@ sub _split_denied {
     return (\@k, \@d);
 }
 
+# _denied_unread([[transcript, sid]…]) -> the number of those sessions whose transcript cannot be
+# read (no path, or no file): their refusals are unknown, so the caller allows no gate.
+sub _denied_unread {
+    my ($txs) = @_;
+    return scalar grep { !defined $_->[0] || !-f $_->[0] } @{ $txs || [] };
+}
+
 sub _report {
-    my ($ok, $no, $source, $cwd, $denied) = @_;
+    my ($ok, $no, $source, $cwd, $denied, %o) = @_;
     $denied ||= [];
     my (@carry, @gate, @allowed, %cls);
     # 0.1.15: the gate kinds the user's standing_approval_gates setting lets a standing approval
@@ -1803,7 +1860,8 @@ sub _report {
         if (defined $c->{gate}) {
             # A standing approval whose every gate the setting lists carries as allowed; a once
             # approval, or one naming any other gate, re-asks as before.
-            if ($e->{standing} && @{ $c->{gates} || [] } && !grep { !$allow->{$_} } @{ $c->{gates} }) {
+            if (!$o{no_gate_allow} && $e->{standing} && @{ $c->{gates} || [] } && !(grep { !$allow->{$_} } @{ $c->{gates} })
+                && _words_name_gates($e, $c, $cwd)) {
                 push @allowed, $e;
                 $cls{$_} = 1 for @{ $c->{outward} };
                 next;
