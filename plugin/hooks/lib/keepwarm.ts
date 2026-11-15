@@ -15,7 +15,7 @@
 //   main request, then each warm ping), always within 55; a ping that would start more than
 //   58 minutes after it is not sent (the cache may have lapsed, and a late ping would write it all
 //   again): warming ends for the gap (`missed`).
-// - 0.1.13, a gap Claude Code's own idle compaction may take (`native-window`: its idle compaction
+// - 0.1.14, a gap Claude Code's own idle compaction may take (`native-window`: its idle compaction
 //   `on` or unreadable, the context at its idle minimum `compactMin` or more at the turn end, the
 //   one-hour cache, and a main request seen in this load to anchor it; with none, a reload during
 //   the turn, the anchor is the turn end, which may be minutes late, so 50 min stays): the first
@@ -110,7 +110,7 @@ import { log } from './log'
 /** The next ping, after the start of the last cache-refreshing request (a share of the cache hour, test-seam-scaled). */
 export const KEEP_WARM_PING_MS = 50 * 60000
 /**
- * 0.1.13: the first ping of a `native-window` gap, after the start of the last main request:
+ * 0.1.14: the first ping of a `native-window` gap, after the start of the last main request:
  * 15 s past the last moment Claude Code's own idle compaction can start (54:00 plus its 60-s
  * lateness bound), so its dispatch is seen first (test-seam-scaled).
  */
@@ -185,14 +185,14 @@ export type KeepWarm = {
   /** The last check's limit note (a reading at the limit that did not stop the ping), for its row. */
   note?: LimitNote
   /**
-   * 0.1.13: why the first ping is due when it is (`native-window`: after Claude Code's own idle
+   * 0.1.14: why the first ping is due when it is (`native-window`: after Claude Code's own idle
    * compaction could have started; `default`: 50 minutes), and that due (`firstAt`).
    */
   first: FirstWhy
   firstAt: number
 }
 
-/** 0.1.13: the first ping's timing, on the gap's start row and on a refused stop row (`first_why`). */
+/** 0.1.14: the first ping's timing, on the gap's start row and on a refused stop row (`first_why`). */
 export type FirstWhy = 'default' | 'native-window'
 
 /**
@@ -295,7 +295,7 @@ export async function armKeepWarm(d: Deps, sid: string, endAt: number): Promise<
   const start = s.lastMainReqAt !== undefined && s.lastMainReqAt <= endAt ? s.lastMainReqAt : endAt
   const env = await d.idleEnv()
   const scale = scaleOf(env)
-  // 0.1.13: no main request seen in this load (a reload during the turn): the turn end anchors the
+  // 0.1.14: no main request seen in this load (a reload during the turn): the turn end anchors the
   // gap, perhaps minutes after the request native counts from, so 55:15 may come too late.
   const anchored = s.lastMainReqAt !== undefined && s.lastMainReqAt <= endAt
   const first: FirstWhy = anchored && (await nativeWindow(d, env)) ? 'native-window' : 'default'
@@ -312,7 +312,7 @@ export async function armKeepWarm(d: Deps, sid: string, endAt: number): Promise<
 }
 
 /**
- * 0.1.13: Claude Code's own idle compaction may take this gap at 54 minutes: it is `on` or
+ * 0.1.14: Claude Code's own idle compaction may take this gap at 54 minutes: it is `on` or
  * unreadable (not `vetoed`, not `compaction-off`), the context at the turn end is at its idle
  * minimum or more (`compactMin`, as native counts it; not the plugin's lower floor with a job
  * open), and the cache is the one-hour one. A context size or usage that cannot be read: no.
@@ -698,7 +698,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     if (!(await begin(d, kw, now))) return
   } else if (b !== undefined) return stop(d, kw, b.why, b.handover, now, false, b)
   if (kw.phase !== 'warming') return
-  // 0.1.13: a compaction (Claude Code's own 54-min one, in a `native-window` gap) or a turn that
+  // 0.1.14: a compaction (Claude Code's own 54-min one, in a `native-window` gap) or a turn that
   // began during the reads above: no fork beside it, a minute later as above (one that then
   // completes stops the gap `compacted`; one that fails leaves the ping to go out).
   if (busyNow(s)) return again(d, kw, now, scale)
@@ -710,7 +710,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
   const reqs = s.mainReqs
   // The fork's own time, for the 2-minute bound: from just before it (the checks above take time too).
   const tf = await d.now()
-  // 0.1.13: a compaction or a turn that began during the send row or the clock read: no fork beside
+  // 0.1.14: a compaction or a turn that began during the send row or the clock read: no fork beside
   // it (no await between this check and the fork), a minute later.
   if (busyNow(s)) return again(d, kw, now, scale)
   let r: unknown
@@ -772,7 +772,7 @@ async function due(d: Deps, kw: KeepWarm, now: number, gen0: number): Promise<vo
     if (o.result === 'nothing-to-fork') return handOver('nothing-to-fork')
     // The held record goes back while it can still fire, rather than be dropped at `missed`; the
     // job flag only with a job whose result turn is certain open, as at the cutoff.
-    // 0.1.13: in a `native-window` gap the 55.5-min check may not be held yet when the last retry
+    // 0.1.14: in a `native-window` gap the 55.5-min check may not be held yet when the last retry
     // inside the 58-minute bound fails (it fires 55.5 min after the turn end, which can come later
     // than the last request's start): the gap stops `deadline` all the same, so that check, when it
     // fires, runs on its own instead of being held and dropped at `missed`.
