@@ -14,4 +14,5 @@ The same production rule holds for the checks resume runs itself: with `unattend
 - A comma ends the sentence that grants, so "feel free to push, merge and deploy" covers only the push.
 - A protected branch counts only when it is named right after "push" or "merge" in that sentence. A push written as `refs/heads/main`, or one whose only target is an upstream, is asked again.
 - Only the listed standing phrases count; "don't hesitate" or "go ahead any time" read as one-time.
+- Deleting a branch by a push (`--delete`, `:main`) needs the word "delete" or "remove" next to the branch, and a push with `--all`, `--branches` or `--mirror` names no branch, so it is always asked again.
 - A force push needs the word "force" in your approval; "feel free to push to main from now on" does not cover `git push --force`.

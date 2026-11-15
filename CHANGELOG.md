@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ### Fixed
 
+- An approval for `git push --all`, `--branches` or `--mirror` now counts as a push to a protected branch and is asked again after a compaction or a resume, since such a push reaches every branch.
 - After a compaction, approvals the summary copied from a handoff (with the question after your words, or a used time with words) were not read, and the resume block said `Approvals (checked): none`. They are read now, and a line the plugin cannot read is listed to ask again.
 
 ## [0.1.15] - 2026-11-15
