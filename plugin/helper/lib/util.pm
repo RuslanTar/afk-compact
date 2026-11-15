@@ -588,8 +588,9 @@ sub run {
     pipe($out_r, $out_w) or return { exit => -1, out => '', timed_out => 0, ms => 0, started => 0 };
     my $stdin = $o{stdin};
     if (defined $stdin) { pipe($in_r, $in_w) or return { exit => -1, out => '', timed_out => 0, ms => 0, started => 0 } }
-    require File::Spec;    # loaded here, once a process, so the child has nothing to load
-    my $devnull = File::Spec->devnull;
+    # The null device by name, as File::Spec->devnull gives it ('nul' for a native Windows perl,
+    # else '/dev/null'), read before the fork with no module load: hooks run children here.
+    my $devnull = $^O eq 'MSWin32' ? 'nul' : '/dev/null';
     my $pid = fork();
     if (!defined $pid) {
         return { exit => -1, out => '', timed_out => 0, ms => 0, started => 0 };

@@ -260,9 +260,9 @@ sub _detach {
 # then sends its numbers: the limit counts the matching only.
 sub _child {
     my ($entries, $from, $to, $job, $until, $limit, $cap) = @_;
-    # loaded here, once a process and before the clock starts, so the child has nothing to load
-    require File::Spec;
-    my $devnull = File::Spec->devnull;
+    # The null device by name, as File::Spec->devnull gives it ('nul' for a native Windows perl,
+    # else '/dev/null'), read before the fork with no module load: hooks with user patterns run here.
+    my $devnull = $^O eq 'MSWin32' ? 'nul' : '/dev/null';
     my $sw = _watch();
     my $free = sub { my $t = defined $_[0] ? $_[0] : $sw->{el}->(); return $t < $FREE_S ? $t : $FREE_S };
     my $fail = sub { return { got => {}, miss => $from, why => 'error', ended => 0, cost => $sw->{el}->() - $free->() } };

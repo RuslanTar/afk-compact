@@ -37,8 +37,9 @@ sub call {
     my ($stage, $fn) = @_;
     return if (rc::val('watcher') // 'shadow') eq 'off';
     open(my $saved, '>&', \*STDOUT) or return;
-    require File::Spec;
-    open(STDOUT, '>', File::Spec->devnull);
+    # The null device by name, as File::Spec->devnull gives it ('nul' for a native Windows perl,
+    # else '/dev/null'), with no module load: most hooks call the watcher.
+    open(STDOUT, '>', $^O eq 'MSWin32' ? 'nul' : '/dev/null');
     my $ok = eval { require "watch.pm"; $fn->(); 1 };
     my $err = $@;
     open(STDOUT, '>&', $saved);
