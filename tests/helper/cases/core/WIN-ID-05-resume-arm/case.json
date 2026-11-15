@@ -1,0 +1,66 @@
+{
+ "id": "WIN-ID-05 (Windows pids: no resume block is armed while another process of the session may still run)",
+ "note": "SessionStart(resume) arms <watch>/<sid>/resume-pending.json only when no other process of the session id still runs (resumeblock::_other_live -> sessions::record_live -> identity::alive; AT-RP-04 step 15 with pid 1). Under Git Bash's perl (seams as WIN-ID-01) the other record names a Windows pid: one only `ps -W` lists is alive-unknown and nothing is armed; a winpid mapped to a running MSYS pid with the recorded start is live and nothing is armed; one whose start is recorded but whose pid only `ps -W` lists (22193) is alive-unknown too; with no `ps -W` listing (a missing file) a pid that nothing maps is unknown, not gone: nothing is armed and close_gone writes no gone twin for it; once the other record's pid is neither mapped nor listed (gone), the next resume arms it",
+ "now": "2026-10-21T10:00:00+00:00",
+ "tz": "UTC",
+ "env": {"STORE_TEST_CLAUDE_PID": null, "STORE_TEST_PPID": "1", "CLAUDE_PID": "12044", "STORE_TEST_OS": "msys",
+         "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw"},
+ "steps": [
+  {"name": "stand-in /proc, winpid map, ps -W listing; a pending block; another process's record, alive-unknown",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"write": "$TMP/proc/stat", "text": "cpu 0\nbtime 1792573200\n"},
+    {"write": "$TMP/proc/self/stat", "text": "4242 (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/proc/$RUNNER_PID/stat", "text": "$RUNNER_PID (claude) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/winpids", "text": "12044 $RUNNER_PID\n12045 $RUNNER_PID\n"},
+    {"write": "$TMP/psw", "text": "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772      12044  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n  4216496       0       0      22192  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n  4216497       0       0      22193  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n"},
+    {"write": "$WATCH/$SID/resume-pending.json",
+     "json": {"args": {"midturn": false, "nonce": "ab0c0011", "nonok": false, "notSaved": "summary-not-found", "prodAllow": false, "savedCopy": null}, "block": "BLOCK ab0c0011",
+              "built_at": 1792573000000, "load_id": "0a1b2c3d", "measured_at": 1792573000000, "nonce": "ab0c0011", "outcome": {"continued": false, "halt": false, "nudged": false},
+              "remeasure": "Git: main @ 3f9c2e1, 0 modified, 0 untracked", "session_id": "$SID", "state": "pending", "v": 1}},
+    {"write": "$ROOT/.sessions/by-pid/22192-0.live-$SID8.json",
+     "json": {"cwd": "$TMP/work", "host": "$HOST", "pid": 22192, "pid_lstart": null, "session_id": "$SID", "source": "startup", "ts": "2026-10-21T09:00:05+00:00"}}
+   ]},
+  {"name": "resume beside an alive-unknown process of the session (PowerShell shape): nothing armed",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"cwd": "$TMP/work", "hook_event_name": "SessionStart", "session_id": "$SID", "source": "resume", "transcript_path": "$TMP/proj/$SID.jsonl"},
+   "expect": {"exit": 0, "stdout": "", "absent": ["$WATCH/$SID/resume-armed.json"],
+    "files": [{"path": "$WATCH/$SID/resume-pending.json", "json": {"nonce": "ab0c0011", "state": "pending"}}]}},
+  {"name": "that process ended; another one runs, its winpid mapped with the recorded start: nothing armed",
+   "setup": [
+    {"write": "$ROOT/.sessions/by-pid/22192-0.ended-$SID8.json", "json": {"reason": "prompt_input_exit", "session_id": "$SID", "ts": "2026-10-21T09:30:00+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/12045-1792573200.live-$SID8.json",
+     "json": {"cwd": "$TMP/work", "host": "$HOST", "pid": 12045, "pid_lstart": "Wed Oct 21 09:00:00 2026", "session_id": "$SID", "source": "startup", "ts": "2026-10-21T09:00:06+00:00"}}
+   ],
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"cwd": "$TMP/work", "hook_event_name": "SessionStart", "session_id": "$SID", "source": "resume", "transcript_path": "$TMP/proj/$SID.jsonl"},
+   "expect": {"exit": 0, "stdout": "", "absent": ["$WATCH/$SID/resume-armed.json"],
+    "files": [{"path": "$WATCH/$SID/resume-pending.json", "json": {"nonce": "ab0c0011", "state": "pending"}}]}},
+  {"name": "that one ended too; another one's start is recorded and only ps -W lists its pid (alive-unknown): nothing armed",
+   "setup": [
+    {"write": "$ROOT/.sessions/by-pid/12045-1792573200.ended-$SID8.json", "json": {"reason": "prompt_input_exit", "session_id": "$SID", "ts": "2026-10-21T09:40:00+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/22193-1792573200.live-$SID8.json",
+     "json": {"cwd": "$TMP/work", "host": "$HOST", "pid": 22193, "pid_lstart": "Wed Oct 21 09:00:00 2026", "session_id": "$SID", "source": "startup", "ts": "2026-10-21T09:00:08+00:00"}}
+   ],
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"cwd": "$TMP/work", "hook_event_name": "SessionStart", "session_id": "$SID", "source": "resume", "transcript_path": "$TMP/proj/$SID.jsonl"},
+   "expect": {"exit": 0, "stdout": "", "absent": ["$WATCH/$SID/resume-armed.json", "$ROOT/.sessions/by-pid/22193-1792573200.ended-$SID8.json"],
+    "files": [{"path": "$WATCH/$SID/resume-pending.json", "json": {"nonce": "ab0c0011", "state": "pending"}}]}},
+  {"name": "that one ended too; a third record's pid is not mapped and there is no ps -W listing (a missing file): unknown, nothing armed, no gone twin",
+   "setup": [
+    {"write": "$ROOT/.sessions/by-pid/22193-1792573200.ended-$SID8.json", "json": {"reason": "prompt_input_exit", "session_id": "$SID", "ts": "2026-10-21T09:45:00+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/33333-0.live-$SID8.json",
+     "json": {"cwd": "$TMP/work", "host": "$HOST", "pid": 33333, "pid_lstart": null, "session_id": "$SID", "source": "startup", "ts": "2026-10-21T09:00:07+00:00"}}
+   ],
+   "env": {"STORE_TEST_PS_W": "$TMP/no-such-listing"},
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"cwd": "$TMP/work", "hook_event_name": "SessionStart", "session_id": "$SID", "source": "resume", "transcript_path": "$TMP/proj/$SID.jsonl"},
+   "expect": {"exit": 0, "stdout": "", "absent": ["$WATCH/$SID/resume-armed.json", "$ROOT/.sessions/by-pid/33333-0.ended-$SID8.json"],
+    "files": [{"path": "$WATCH/$SID/resume-pending.json", "json": {"nonce": "ab0c0011", "state": "pending"}}]}},
+  {"name": "with the listing, that third record's pid is gone (neither mapped nor listed): the resume arms the block",
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"cwd": "$TMP/work", "hook_event_name": "SessionStart", "session_id": "$SID", "source": "resume", "transcript_path": "$TMP/proj/$SID.jsonl"},
+   "expect": {"exit": 0, "stdout": "", "absent": ["$WATCH/$SID/resume-pending.json"],
+    "files": [{"path": "$WATCH/$SID/resume-armed.json", "json": {"nonce": "ab0c0011", "state": "pending"}}]}}
+ ]
+}

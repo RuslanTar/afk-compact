@@ -15,7 +15,8 @@
 #     pin locks (.sessions/*.lock); a copy of them would show a draft twice or a stale lock;
 #   - the pin and lineage files (.sessions/<sid>.json, .sessions/<sid>.lineage.json) of a session with
 #     a live record in the old root's .sessions/by-pid (sessions::live_in: the pid runs with the
-#     recorded start time, no ended- twin) are left out and listed by session: a session of an
+#     recorded start time, or may run: one whose start cannot be read, and under MSYS or Cygwin a
+#     Windows pid only `ps -W` lists, alive-unknown; no ended- twin) are left out and listed by session: a session of an
 #     older version still writes them there, and a copy would hide its later changes (the new
 #     root's file is read first); a rerun once those sessions end copies them;
 #   - a file whose size or mtime changes while it is copied counts as failed (util::copy_new), and so

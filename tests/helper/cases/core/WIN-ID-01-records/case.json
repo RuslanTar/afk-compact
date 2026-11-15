@@ -1,0 +1,70 @@
+{
+ "id": "WIN-ID-01 (Windows pids: SessionStart's records in the Git Bash and PowerShell shapes)",
+ "note": "Under Git Bash's perl the CLAUDE_PID a hook anchors on is Claude Code's Windows pid, which kill 0 and /proc do not know (PC sittings 5 and 6: winpid 12044 is MSYS pid 772). identity::win_probe maps it to its MSYS pid (Cygwin::winpid_to_pid, else /proc/*/winpid) and reads that pid's /proc start, so SessionStart writes a real pid_lstart and a record key with its start; a claude started from PowerShell has no MSYS pid and only `ps -W` lists it: alive-unknown, the start null as before. Seams (test mode): STORE_TEST_OS msys, STORE_TEST_PROC_ROOT (a stand-in /proc: btime and the MSYS pid's stat, start = btime), STORE_TEST_WINPIDS (the winpid map: 12044 is the runner's pid, which runs on every host) and STORE_TEST_PS_W (the listing: 12044 and 22192); STORE_TEST_PPID 1 as a hook's perl sees it there. A skill's helper under the Bash tool's shells (STORE_TEST_PPID 885 and STORE_TEST_PROC: 885 -> 841 -> 1, no Claude Code above) cannot climb to Claude Code there, so the walk takes CLAUDE_PID, found, unless that pid is gone (identity::_walk); without the Cygwin sub the map is one scan of /proc/*/winpid (STORE_TEST_NO_CYGWIN, no STORE_TEST_WINPIDS)",
+ "now": "2026-10-21T10:00:00+00:00",
+ "tz": "UTC",
+ "env": {
+  "STORE_TEST_CLAUDE_PID": null,
+  "STORE_TEST_PPID": "1",
+  "STORE_TEST_OS": "msys",
+  "STORE_TEST_PROC_ROOT": "$TMP/proc",
+  "STORE_TEST_WINPIDS": "$TMP/winpids",
+  "STORE_TEST_PS_W": "$TMP/psw"
+ },
+ "steps": [
+  {
+   "name": "the stand-in /proc, winpid map and ps -W listing",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"write": "$TMP/proc/stat", "text": "cpu 0\nbtime 1792573200\n"},
+    {"write": "$TMP/proc/self/stat", "text": "4242 (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/proc/$RUNNER_PID/stat", "text": "$RUNNER_PID (claude) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/winpids", "text": "12044 $RUNNER_PID\n"},
+    {"write": "$TMP/psw", "text": "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772      12044  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n  4216496       0       0      22192  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n"}
+   ]
+  },
+  {
+   "name": "Git Bash shape: the winpid maps to a running MSYS pid, whose /proc start the records hold",
+   "env": {"CLAUDE_PID": "12044"},
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "startup"},
+   "expect": {"exit": 0,
+    "files": [
+     {"path": "$WATCH/$SID/classic-alive.json", "json": {"pid": 12044, "pid_lstart": "Wed Oct 21 09:00:00 2026", "source": "startup"}},
+     {"path": "$ROOT/.sessions/by-pid/12044-1792573200.live-$SID8.json", "json": {"pid": 12044, "pid_lstart": "Wed Oct 21 09:00:00 2026"}},
+     {"path": "$ROOT/.sessions/loads/*_12044-1792573200_*.json", "count": 1}
+    ]}},
+  {
+   "name": "PowerShell shape: no MSYS pid, ps -W lists it: alive-unknown, its start null",
+   "env": {"CLAUDE_PID": "22192"},
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "a2a2a2a2-1111-4222-8333-444444444444", "transcript_path": "$TMP/proj/a2.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "startup"},
+   "expect": {"exit": 0,
+    "files": [
+     {"path": "$WATCH/a2a2a2a2-1111-4222-8333-444444444444/classic-alive.json", "has": ["\"pid\":22192,\"pid_lstart\":null"]},
+     {"path": "$ROOT/.sessions/by-pid/22192-0.live-a2a2a2a2.json", "has": ["\"pid\":22192,\"pid_lstart\":null"]}
+    ]}},
+  {
+   "name": "a skill's helper under the Bash tool's shells (885 -> 841 -> 1, Git Bash shape): the walk cannot climb, CLAUDE_PID is the anchor",
+   "env": {"CLAUDE_PID": "12044", "STORE_TEST_PPID": "885", "STORE_TEST_PROC": "$TMP/ptable"},
+   "setup": [{"write": "$TMP/ptable", "text": "885 841 /usr/bin/bash\n841 1 /usr/bin/bash\n"}],
+   "argv": ["ident", "--sid", "$SID"],
+   "expect": {"exit": 0, "json": {"pid": 12044, "pid_lstart": "Wed Oct 21 09:00:00 2026"}}},
+  {
+   "name": "the same in the PowerShell shape: CLAUDE_PID, its start unknown",
+   "env": {"CLAUDE_PID": "22192", "STORE_TEST_PPID": "885", "STORE_TEST_PROC": "$TMP/ptable"},
+   "argv": ["ident", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": ["\\A\\{\"pid\":22192,\"pid_lstart\":null,"]}},
+  {
+   "name": "a CLAUDE_PID that is gone (neither mapped nor listed) is never taken: the walk's start, as before",
+   "env": {"CLAUDE_PID": "33333", "STORE_TEST_PPID": "885", "STORE_TEST_PROC": "$TMP/ptable"},
+   "argv": ["ident", "--sid", "$SID"],
+   "expect": {"exit": 0, "stdout_has": ["\\A\\{\"pid\":885,"]}},
+  {
+   "name": "a perl without Cygwin::winpid_to_pid (and no map seam) reads one scan of /proc/*/winpid",
+   "env": {"CLAUDE_PID": "12044", "STORE_TEST_PPID": "885", "STORE_TEST_PROC": "$TMP/ptable", "STORE_TEST_WINPIDS": null, "STORE_TEST_NO_CYGWIN": "1"},
+   "setup": [{"write": "$TMP/proc/$RUNNER_PID/winpid", "text": "12044\n"}],
+   "argv": ["ident", "--sid", "$SID"],
+   "expect": {"exit": 0, "json": {"pid": 12044, "pid_lstart": "Wed Oct 21 09:00:00 2026"}}}
+ ]
+}

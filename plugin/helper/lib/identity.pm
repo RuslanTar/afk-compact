@@ -8,7 +8,8 @@ package identity;
 # many at once (the same /proc fields on the same platforms, else one `ps -axo` listing).
 # Test mode: STORE_TEST_CLAUDE_PID=<pid>:<lstart> replaces the walk; STORE_TEST_PPID=<pid>
 # stands in for getppid() where the walk starts; STORE_TEST_PROC_ROOT=<dir> stands in for /proc
-# in the start-time read (with util::os's STORE_TEST_OS).
+# in the start-time read (with util::os's STORE_TEST_OS); STORE_TEST_WINPIDS and STORE_TEST_PS_W
+# stand in for the Windows pid map and the `ps -W` listing (win_probe).
 use strict;
 use warnings;
 use utf8;
@@ -53,16 +54,146 @@ sub _proc {
     return '/proc';
 }
 
+# cyg() -> 1 under MSYS or Cygwin perl (util::os, so STORE_TEST_OS in test mode).
+sub cyg { my $os = util::os(); return $os eq 'msys' || $os eq 'cygwin' ? 1 : 0 }
+
+# Windows pids under MSYS and Cygwin perl. Claude Code is a native Windows program: the CLAUDE_PID
+# it sets, which every record holds, is its Windows pid, which this perl's kill 0 and /proc do not
+# know. A claude started from Git Bash has an MSYS pid too (winpid 12044 was MSYS pid 772 on the
+# PC); one started from PowerShell, cmd or Windows Terminal has none.
+# win_probe(pid) -> ('run', pid to read) | ('unknown') | ('gone'), under MSYS and Cygwin only:
+#   - /proc/<pid> exists: an MSYS pid, as on Linux: run when kill 0 reaches it, else gone;
+#   - else the pid read as a Windows pid and mapped to its MSYS pid (_winpid_to_pid): run, with
+#     that pid's kill 0 and /proc start time, when kill 0 reaches it, else gone;
+#   - else one `ps -W` listing (_ps_w): a pid in its WINPID column is alive-unknown (it runs, its
+#     start time cannot be read), one not listed is gone, and with no listing it is unknown.
+# Only a pid that a record took from CLAUDE_PID may be a Windows pid: a record of a helper's own
+# $$ (a lock holder) holds an MSYS pid and is judged by alive_own, never through this.
+# liveness(pid) -> 'run' | 'unknown' | 'gone': kill 0 (EPERM counts as running) anywhere else.
+sub liveness {
+    my ($pid) = @_;
+    return 'gone' unless defined $pid && !ref $pid && $pid =~ /\A\d+\z/ && $pid > 0;
+    if (cyg()) { my ($st) = win_probe($pid); return $st }
+    return (kill(0, $pid) || $!{EPERM}) ? 'run' : 'gone';
+}
+
+sub win_probe {
+    my ($pid) = @_;
+    return ('gone') unless defined $pid && !ref $pid && $pid =~ /\A[1-9][0-9]{0,9}\z/;
+    if (-e (_proc() . "/$pid")) { return (kill(0, $pid) || $!{EPERM}) ? ('run', 0 + $pid) : ('gone') }
+    my $m = _win_msys($pid);
+    if (defined $m) { return (kill(0, $m) || $!{EPERM}) ? ('run', $m) : ('gone') }
+    my $l = _ps_w() // return ('unknown');
+    return $l->{$pid} ? ('unknown') : ('gone');
+}
+
+# _win_msys(pid) -> the MSYS pid that pid, read as a Windows pid, maps to (_winpid_to_pid) when
+# that is another pid with a /proc entry, else undef. The map only: never the `ps -W` listing.
+sub _win_msys {
+    my ($pid) = @_;
+    my $m = _winpid_to_pid($pid);
+    return defined $m && $m != $pid && -e (_proc() . "/$m") ? $m : undef;
+}
+
+# win_alt_start(pid) -> under MSYS and Cygwin, the start time (lstart form) of the MSYS process
+# that pid maps to when read as a Windows pid (_win_msys), else undef. A pid with a /proc entry is
+# judged as that MSYS process first (win_probe); a recorded start time that differs from its
+# start is checked against this one before the record is taken as ended, since the same number
+# may be a live claude's Windows pid (Git Bash shape: its MSYS stub holds the recorded start).
+sub win_alt_start {
+    my ($pid) = @_;
+    return undef unless cyg() && defined $pid && !ref $pid && $pid =~ /\A[1-9][0-9]{0,9}\z/;
+    my $m = _win_msys($pid) // return undef;
+    my (undef, $s) = _read_start($m);
+    return $s;
+}
+
+# Cygwin gives a Windows process with no Cygwin pid the pseudo-pid winpid + this (ps -W showed
+# 4204488 for winpid 10184): never an MSYS pid with a /proc entry.
+our $CYG_MAX_PID = 4194304;
+our $WIN_CACHE_MS = 2000;
+# A `ps -W` that takes longer gives no listing (unknown): it can run inside a hook's orphans pass.
+our $PSW_TIMEOUT_MS = 1000;
+my ($WINMAP, $WINMAP_AT, $PSW, $PSW_AT);
+
+# _stand_in() -> 1 in test mode with a stand-in /proc (STORE_TEST_PROC_ROOT): that process world is
+# the case's, so the host's real winpid map and `ps -W` are never read for it, on any host.
+sub _stand_in { return util::test_mode() && _proc() ne '/proc' ? 1 : 0 }
+
+# _winpid_to_pid(winpid) -> its MSYS pid, or undef: Cygwin::winpid_to_pid when perl has it, else
+# one scan of /proc/*/winpid (kept $WIN_CACHE_MS). Test mode: STORE_TEST_WINPIDS=<file> of
+# `<winpid> <pid>` lines replaces both (an unlisted winpid maps to nothing); STORE_TEST_NO_CYGWIN=1
+# or a stand-in /proc (_stand_in) hides the real sub, as for util's path subs, so the scan reads
+# STORE_TEST_PROC_ROOT.
+sub _winpid_to_pid {
+    my ($w) = @_;
+    my $m;
+    if (util::test_mode() && defined $ENV{STORE_TEST_WINPIDS} && $ENV{STORE_TEST_WINPIDS} ne '') {
+        for my $l (split /\n/, util::read_file($ENV{STORE_TEST_WINPIDS}) // '') {
+            if ($l =~ /\A\s*(\d+)\s+(\d+)\s*\z/ && $1 == $w) { $m = 0 + $2; last }
+        }
+    } elsif (do { no strict 'refs'; defined &{'Cygwin::winpid_to_pid'} } && !(util::test_mode() && ($ENV{STORE_TEST_NO_CYGWIN} // '') eq '1') && !_stand_in()) {
+        no strict 'refs';
+        $m = eval { &{'Cygwin::winpid_to_pid'}(0 + $w) };
+    } else {
+        my $now = util::clock_ms();
+        if (!$WINMAP || $now - $WINMAP_AT > $WIN_CACHE_MS) {
+            my %t;
+            for my $p (grep { /\A[1-9][0-9]*\z/ } util::list_dir(_proc())) {
+                my $raw = util::read_file(_proc() . "/$p/winpid", 64) // next;
+                $t{$1} //= 0 + $p if $raw =~ /\A\s*(\d+)\s*\z/;
+            }
+            ($WINMAP, $WINMAP_AT) = (\%t, $now);
+        }
+        $m = $WINMAP->{0 + $w};
+    }
+    return undef unless defined $m && !ref $m && $m =~ /\A[1-9][0-9]*\z/ && $m < $CYG_MAX_PID;
+    return 0 + $m;
+}
+
+# _ps_w() -> {winpid => 1} of every Windows process `ps -W` lists (its WINPID column), kept
+# $WIN_CACHE_MS; undef when there is no listing (no ps, a failure or a timeout after
+# $PSW_TIMEOUT_MS, nothing parsed): an unknown answer, never a gone one. Read only under a real
+# MSYS or Cygwin perl, and never for a stand-in /proc (_stand_in). Test mode:
+# STORE_TEST_PS_W=<file> holds the listing, read as a real one: its header line alone means no Windows
+# process runs; a missing file, or text with neither that header nor a row that parses, means no listing.
+sub _ps_w {
+    my $now = util::clock_ms();
+    return $PSW if $PSW_AT && $now - $PSW_AT <= $WIN_CACHE_MS;
+    my $raw;
+    if (util::test_mode() && defined $ENV{STORE_TEST_PS_W} && $ENV{STORE_TEST_PS_W} ne '') {
+        $raw = util::read_file($ENV{STORE_TEST_PS_W});
+    } elsif (($^O eq 'msys' || $^O eq 'cygwin') && !_stand_in()) {
+        my $ps = util::which('ps');
+        my $r = defined $ps ? util::run([$ps, '-W'], timeout_ms => $PSW_TIMEOUT_MS, env => { LC_ALL => 'C', LANG => 'C' }) : undef;
+        $raw = $r && $r->{exit} == 0 ? $r->{out} : undef;
+    }
+    my $t;
+    if (defined $raw) {
+        my %w;
+        # [status letter] PID PPID PGID WINPID TTY UID STIME COMMAND
+        for my $l (split /\n/, $raw) { $w{ 0 + $1 } = 1 if $l =~ /\A\s*(?:[A-Za-z]\s+)?\d+\s+\d+\s+\d+\s+(\d+)\s/ }
+        $t = (%w || $raw =~ /^\s*PID\s+PPID\s+PGID\s+WINPID\s/m) ? \%w : undef;
+    }
+    ($PSW, $PSW_AT) = ($t, $now);
+    return $t;
+}
+
 # _read_start(pid, ps) -> (epoch, lstart string), both undef when unreadable; never cached.
 # Linux with a readable /proc/<pid>/stat: field 22 + btime, so no `ps` is needed (a
 # slim image has no procps); else `ps -o lstart=` (ps: a path, default the first on PATH).
 # MSYS and Cygwin (Git Bash's perl): /proc/<pid>/stat only, as on Linux; their ps has no -o
-# (`ps: unknown option -- o`), so without it the start stays unknown.
+# (`ps: unknown option -- o`), so without it the start stays unknown. A Windows pid there (no
+# /proc/<pid>) reads its MSYS pid's /proc start (_win_msys: the map only, no `ps -W`, which could
+# not tell a start time); with none it stays unknown.
 sub _read_start {
     my ($pid, $ps) = @_;
     return (undef, undef) unless defined $pid && $pid =~ /^\d+$/;
     my $os = util::os();
     my $cyg = $os eq 'msys' || $os eq 'cygwin';
+    if ($cyg && $pid > 0 && !-e (_proc() . "/$pid")) {
+        $pid = _win_msys($pid) // return (undef, undef);
+    }
     if (($os eq 'linux' || $cyg) && -r (_proc() . "/$pid/stat")) {
         my (undef, undef, $ticks) = _proc_stat($pid);
         return (undef, undef) unless defined $ticks;
@@ -93,6 +224,15 @@ sub start_time {
     return $s;
 }
 
+# start_time_own(pid) -> start_time of a helper process's own pid ($$, a lock holder): under MSYS
+# and Cygwin by MSYS rules only (its own /proc entry, never the winpid map; alive_own).
+sub start_time_own {
+    my ($pid) = @_;
+    return start_time($pid) unless cyg();
+    return undef unless defined $pid && $pid =~ /^\d+$/ && -e (_proc() . "/$pid");
+    return start_time($pid);
+}
+
 # start_epoch(pid, ps => path) -> seconds since epoch of the process start, or undef. Not
 # cached, so a reused pid shows its new start (the wait helper polls with it).
 sub start_epoch {
@@ -109,7 +249,10 @@ sub start_epoch {
 # for all the pids that run (read once per process: a daily prune's hundreds of pids cost one ps,
 # not hundreds); a pid it lacks, or no listing (no ps, one without -o): undef. MSYS and Cygwin
 # make no listing (their ps has no -o, as _read_start): a running pid there whose stat is not
-# readable is undef. Test mode: STORE_TEST_PROC_STARTS
+# readable is undef. There a pid with no /proc folder is a Windows pid (win_probe): its MSYS pid's
+# /proc start, else undef while it may run (alive-unknown), 0 once gone; a pid with a /proc folder
+# whose number also maps, as a Windows pid, to an MSYS process with another start (win_alt_start)
+# is undef. Test mode: STORE_TEST_PROC_STARTS
 # names a file of `<pid> <epoch>` lines (`<pid> ?`: start unknown) that replaces all of it: an
 # unlisted pid does not run. The load and record prunes use it (lib/plugver.pm, lib/sessions.pm).
 my $PS_STARTS;
@@ -138,8 +281,28 @@ sub start_epochs {
                 my $s = POSIX::strftime('%a %b %e %H:%M:%S %Y', localtime(_btime() + int($ticks / $hz)));
                 $s =~ s/  / /g;
                 $out{$p} = lstart_epoch($s);
+                # MSYS and Cygwin: the same number read as a Windows pid may map to another MSYS
+                # process (win_alt_start) with another start: which one a record names cannot be
+                # told here, so its start is unknown (a record with either start is kept)
+                if ($cyg && defined $out{$p}) {
+                    my $alt = lstart_epoch(win_alt_start($p));
+                    $out{$p} = undef if defined $alt && abs($alt - $out{$p}) > 2;
+                }
                 next;
             }
+        } elsif ($cyg && !-e (_proc() . "/$p")) {
+            # a Windows pid (win_probe): its MSYS pid's start, else unknown while it may run
+            my ($st, $m) = win_probe($p);
+            my (undef, undef, $ticks) = $st eq 'run' ? _proc_stat($m) : ();
+            if (defined $ticks) {
+                my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
+                my $s = POSIX::strftime('%a %b %e %H:%M:%S %Y', localtime(_btime() + int($ticks / $hz)));
+                $s =~ s/  / /g;
+                $out{$p} = lstart_epoch($s);
+            } else {
+                $out{$p} = $st eq 'gone' ? 0 : undef;
+            }
+            next;
         } elsif ($proc && !-e (_proc() . "/$p")) {
             $out{$p} = 0;
             next;
@@ -281,7 +444,9 @@ sub _by_exe {
 # Under MSYS and Cygwin (util::os) a walk that starts at pid 1 or below has no parent chain to read
 # (Git Bash's perl sees getppid() = 1 in a hook): CLAUDE_PID is then the anchor, and without it the
 # walk finds nothing, as before. Elsewhere a helper whose parent is pid 1 is an orphan, whose
-# CLAUDE_PID may name a process that has exited: it finds nothing, as before.
+# CLAUDE_PID may name a process that has exited: it finds nothing, as before. Under MSYS and
+# Cygwin a walk that cannot climb to Claude Code (a skill's helper under the Bash tool's shells)
+# takes CLAUDE_PID too, found, unless that pid is gone.
 sub _walk {
     my ($pid) = @_;
     my $env = (defined $ENV{CLAUDE_PID} && $ENV{CLAUDE_PID} =~ /^[1-9][0-9]*$/) ? 0 + $ENV{CLAUDE_PID} : 0;
@@ -305,6 +470,13 @@ sub _walk {
         push @below, [$pid, $comm];
         $pid = $ppid;
     }
+    # MSYS and Cygwin: a walk from a Bash-tool shell ends at that shell (their ps has no -o, and a
+    # native claude.exe is no MSYS parent), so it would take the transient shell's pid. CLAUDE_PID,
+    # the Windows pid the session's records hold, is then the anchor, unless it is gone (win_probe).
+    if ($env && cyg()) {
+        my ($st) = win_probe($env);
+        return (0 + $env, 1) unless $st eq 'gone';
+    }
     return (undef, 0);
 }
 
@@ -316,7 +488,8 @@ our $CACHED;
 our $OWN_START = 0;
 # claude_pid() -> {pid, lstart, found}. The start time comes from this session's
 # classic-alive.json (SessionStart writes it for the process it ran in: {pid, pid_lstart}) when
-# that record names the same pid, else from start_time (one `ps` call off Linux; 0.1.4 T-14).
+# that record names the same pid, else from start_time (one `ps` call off Linux; 0.1.4 T-14;
+# under MSYS and Cygwin _claude_start).
 sub claude_pid {
     return $CACHED if $CACHED;
     if (util::test_mode() && defined $ENV{STORE_TEST_CLAUDE_PID} && $ENV{STORE_TEST_CLAUDE_PID} =~ /^(\d+):(.*)$/) {
@@ -340,8 +513,21 @@ sub claude_pid {
     my $rec = defined $raw ? eval { jsonc::decode($raw) } : undef;
     my $ls = ref $rec eq 'HASH' && defined $rec->{pid} && !ref $rec->{pid} && $rec->{pid} =~ /\A[1-9][0-9]*\z/ && $rec->{pid} == $pid
              && defined $rec->{pid_lstart} && !ref $rec->{pid_lstart} && $rec->{pid_lstart} =~ /\S/ ? $rec->{pid_lstart} : undef;
-    $CACHED = { pid => 0 + $pid, lstart => $ls // start_time($pid), found => $found };
+    $CACHED = { pid => 0 + $pid, lstart => $ls // _claude_start($pid), found => $found };
     return $CACHED;
+}
+
+# _claude_start(pid) -> start_time(pid). Under MSYS and Cygwin, for the pid CLAUDE_PID names (Claude
+# Code's Windows pid), the start of the MSYS process it maps to comes first (win_alt_start): the same
+# number may also be a running MSYS pid with a /proc entry, whose start is not the claude's, and a
+# record that held that start would read as ended once that process exits while the claude runs.
+sub _claude_start {
+    my ($pid) = @_;
+    if (cyg() && defined $ENV{CLAUDE_PID} && $ENV{CLAUDE_PID} =~ /\A[1-9][0-9]*\z/ && $ENV{CLAUDE_PID} == $pid) {
+        my $s = win_alt_start($pid);
+        return $s if defined $s;
+    }
+    return start_time($pid);
 }
 
 # alive(pid, lstart) -> 1 when the pid runs and its start time matches, or cannot be read now
@@ -356,25 +542,54 @@ sub claude_pid {
 # record was written (its own reading moved with memory); only a record whose process kept its
 # size gets another verdict now. Such records matter only while processes started before the
 # upgrade still run.
+# MSYS and Cygwin: a Windows pid is judged by win_probe (liveness): through its MSYS pid as above,
+# and a pid only `ps -W` lists, or one with no listing, is alive-unknown: 1, whatever lstart says.
+# A pid with a /proc entry whose start differs is still alive when the same number, read as a
+# Windows pid, maps to an MSYS process with the recorded start (win_alt_start).
 sub alive {
     my ($pid, $lstart) = @_;
     return 0 unless defined $pid && $pid =~ /^\d+$/ && $pid > 0;
-    return 0 unless kill(0, $pid) || $!{EPERM};
+    my $lv = liveness($pid);
+    return 0 if $lv eq 'gone';
+    return 1 if $lv eq 'unknown';
     return 1 unless defined $lstart && $lstart ne '';
     if (util::test_mode() && defined $ENV{STORE_TEST_CLAUDE_PID} && $ENV{STORE_TEST_CLAUDE_PID} =~ /^(\d+):(.*)$/ && $1 == $pid) {
         return $2 eq $lstart ? 1 : 0;
     }
     my $now = start_time($pid);
     return 1 unless defined $now;
+    return 1 if $now eq $lstart;
+    return 0 unless cyg();
+    my $alt = win_alt_start($pid);
+    return defined $alt && $alt eq $lstart ? 1 : 0;
+}
+
+# alive_own(pid, lstart) -> alive for a record of a helper process's own pid ($$: a lock holder,
+# lib/lock.pm). Under MSYS and Cygwin that is an MSYS pid, never a Windows one, so it is judged by
+# MSYS rules only: kill 0 and its own /proc start time, never the winpid map or `ps -W` (a dead
+# holder whose number a live Windows process holds would read alive-unknown and its lock would
+# never be taken over). Elsewhere it is alive.
+sub alive_own {
+    my ($pid, $lstart) = @_;
+    return alive($pid, $lstart) unless cyg();
+    return 0 unless defined $pid && $pid =~ /^\d+$/ && $pid > 0;
+    return 0 unless kill(0, $pid) || $!{EPERM};
+    return 1 unless defined $lstart && $lstart ne '';
+    if (util::test_mode() && defined $ENV{STORE_TEST_CLAUDE_PID} && $ENV{STORE_TEST_CLAUDE_PID} =~ /^(\d+):(.*)$/ && $1 == $pid) {
+        return $2 eq $lstart ? 1 : 0;
+    }
+    my (undef, $now) = -e (_proc() . "/$pid") ? _read_start($pid) : ();
+    return 1 unless defined $now;
     return $now eq $lstart ? 1 : 0;
 }
 
 # alive_verified(pid, lstart) -> 1 only when the pid runs and its start time, read now, equals
-# lstart: a missing or unreadable start time is never proof that the process is the one recorded.
+# lstart: a missing or unreadable start time is never proof that the process is the one recorded
+# (an alive-unknown Windows pid gives 0).
 sub alive_verified {
     my ($pid, $lstart) = @_;
     return 0 unless defined $pid && $pid =~ /^\d+$/ && $pid > 0;
-    return 0 unless kill(0, $pid) || $!{EPERM};
+    return 0 unless liveness($pid) eq 'run';
     return 0 unless defined $lstart && $lstart ne '';
     if (util::test_mode() && defined $ENV{STORE_TEST_CLAUDE_PID} && $ENV{STORE_TEST_CLAUDE_PID} =~ /^(\d+):(.*)$/ && $1 == $pid) {
         return $2 eq $lstart ? 1 : 0;

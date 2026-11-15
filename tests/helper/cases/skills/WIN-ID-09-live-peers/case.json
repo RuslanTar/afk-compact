@@ -1,0 +1,408 @@
+{
+ "id" : "WIN-ID-09 (Windows pids: measure and begin see an alive-unknown session as live, and skip their own)",
+ "layer" : "H",
+ "note" : "measure <handoff> prints `handoff session live in another process` for a live record of the handoff's session that is not this process's (skills::core::claude_pid) and `live session: ... on this checkout` for live peers (skills::ctx::live_peers); begin lists the peers and refuses a --topic-explicit re-pin into a bucket another live session's pin holds (_bucket_holder). All read skills::ctx::record_live: under MSYS and Cygwin a pid whose start cannot be checked (alive-unknown, `ps -W` only) is live, never ended. Seams as WIN-ID-07: (1) this session (Git Bash shape) sees P, alive-unknown, as live in both lines, and G, gone, in neither; Q, alive-unknown with a recorded start (pid 22193, which only ps -W lists), is a live peer too; P's other process, 22194, alive-unknown with a recorded start, is `live in another process`; (2) P itself (PowerShell shape, CLAUDE_PID 22192) skips its own record: no false `live in another process` line for its own pid, only for 22194; (3) begin lists P and Q as live peers and refuses the re-pin into P's bucket, and (3a) into Q's; (4) control: H's pin holds a bucket, H is gone, the re-pin is ok; (5)-(7) the CW-1 cases in a Windows shape: begin and locate with no --sid take the session from the record (the walk takes CLAUDE_PID), in both shapes; with a CLAUDE_PID that is gone the identity stays degraded",
+ "owner" : "skills",
+ "steps" : [
+  {
+   "setup" : [
+    {
+     "at" : "$TMP/repo",
+     "repo" : {
+      "branch" : "feat/x",
+      "commits" : [
+       {
+        "files" : {
+         "app/retry.rb" : "x = 1\n",
+         "src/a.rb" : "# TODO a\n"
+        },
+        "msg" : "seed"
+       }
+      ]
+     }
+    },
+    {
+     "text" : "cpu 0\nbtime 1792573200\n",
+     "write" : "$TMP/proc/stat"
+    },
+    {
+     "text" : "4242 (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+     "write" : "$TMP/proc/self/stat"
+    },
+    {
+     "text" : "$RUNNER_PID (claude) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+     "write" : "$TMP/proc/$RUNNER_PID/stat"
+    },
+    {
+     "text" : "12044 $RUNNER_PID\n12045 $RUNNER_PID\n",
+     "write" : "$TMP/winpids"
+    },
+    {
+     "text" : "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772      12044  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n  4216496       0       0      22192  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n  4216497       0       0      22193  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n  4216498       0       0      22194  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n",
+     "write" : "$TMP/psw"
+    },
+    {
+     "text" : "885 841 /usr/bin/bash\n841 1 /usr/bin/bash\n",
+     "write" : "$TMP/ptable"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":22192,\"pid_lstart\":null,\"session_id\":\"a9a9a9a9-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/22192-0.live-a9a9a9a9.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":33333,\"pid_lstart\":null,\"session_id\":\"a8a8a8a8-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/33333-0.live-a8a8a8a8.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":33334,\"pid_lstart\":null,\"session_id\":\"a7a7a7a7-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/33334-0.live-a7a7a7a7.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":12044,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"$SID\",\"source\":\"startup\",\"ts\":\"2026-10-21T13:50:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/12044-1792573200.live-$SID8.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":22193,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"a6a6a6a6-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/22193-1792573200.live-a6a6a6a6.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":22194,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"a9a9a9a9-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T11:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/22194-1792573200.live-a9a9a9a9.json"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "a9a9a9a9-1111-4222-8333-444444444444",
+    "--topic",
+    "win-peer"
+   ],
+   "capture" : {
+    "STAGE_PUB_P" : "json:stage"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "begin as win-peer",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "stamp",
+    "--stage",
+    "$STAGE_PUB_P"
+   ],
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "stamp win-peer",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup" : [
+    {
+     "content" : "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+     "write" : "$STAGE_PUB_P/body.md"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "publish",
+    "--stage",
+    "$STAGE_PUB_P",
+    "--slug",
+    "win-peer",
+    "--status",
+    "in-progress"
+   ],
+   "capture" : {
+    "PUB_P" : "re:^Wrote handoff to: (.+)$"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks" : [
+     "^LINT "
+    ]
+   },
+   "name" : "publish as win-peer",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup" : [
+    {
+     "content" : "{\"session_id\": \"a9a9a9a9-1111-4222-8333-444444444444\", \"bucket\": \"repo/held\", \"bucket_path\": \"$ROOT/repo/held\"}",
+     "write" : "$ROOT/.sessions/a9a9a9a9-1111-4222-8333-444444444444.json"
+    },
+    {
+     "content" : "{\"session_id\": \"$SID\", \"bucket\": \"repo/LAB-7\", \"bucket_path\": \"$ROOT/repo/LAB-7\"}",
+     "write" : "$ROOT/.sessions/$SID.json"
+    },
+    {
+     "content" : "{\"session_id\": \"a7a7a7a7-1111-4222-8333-444444444444\", \"bucket\": \"repo/free\", \"bucket_path\": \"$ROOT/repo/free\"}",
+     "write" : "$ROOT/.sessions/a7a7a7a7-1111-4222-8333-444444444444.json"
+    },
+    {
+     "mkdir" : "$ROOT/repo/held"
+    },
+    {
+     "mkdir" : "$ROOT/repo/free"
+    },
+    {
+     "content" : "{\"session_id\": \"a6a6a6a6-1111-4222-8333-444444444444\", \"bucket\": \"repo/held2\", \"bucket_path\": \"$ROOT/repo/held2\"}",
+     "write" : "$ROOT/.sessions/a6a6a6a6-1111-4222-8333-444444444444.json"
+    },
+    {
+     "mkdir" : "$ROOT/repo/held2"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "measure",
+    "--sid",
+    "$SID",
+    "$PUB_P"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^handoff session live in another process: pid 22192$",
+     "^handoff session live in another process: pid 22194$",
+     "^live session: a9a9a9a9 pid 22192 on this checkout$",
+     "^live session: a6a6a6a6 pid 22193 on this checkout$"
+    ],
+    "stdout_lacks" : [
+     "^live session: a8a8a8a8",
+     "pid 33333"
+    ]
+   },
+   "name" : "(1) this session measures P's handoff: P is live (alive-unknown), and so is Q (alive-unknown, start recorded); G is not"
+  },
+  {
+   "argv" : [
+    "measure",
+    "--sid",
+    "a9a9a9a9-1111-4222-8333-444444444444",
+    "$PUB_P"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "22192",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^handoff session live in another process: pid 22194$"
+    ],
+    "stdout_lacks" : [
+     "^handoff session live in another process: pid 22192$",
+     "^live session: a9a9a9a9"
+    ]
+   },
+   "name" : "(2) P measures its own handoff (PowerShell shape): its own record is skipped"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "held",
+    "--topic-explicit"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "json" : {
+     "ownership.live_peers.0.pid" : 22192,
+     "ownership.live_peers.0.sid8" : "a9a9a9a9",
+     "ownership.live_peers.1.pid" : 22193,
+     "ownership.live_peers.1.sid8" : "a6a6a6a6",
+     "ownership.repin.held_by" : "a9a9a9a9",
+     "ownership.repin.result" : "refused"
+    }
+   },
+   "name" : "(3) begin: P and Q (alive-unknown, start recorded) are live peers, and P holds its bucket: the re-pin is refused"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "held2",
+    "--topic-explicit"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "json" : {
+     "ownership.repin.held_by" : "a6a6a6a6",
+     "ownership.repin.result" : "refused"
+    }
+   },
+   "name" : "(3a) begin: Q, alive-unknown with a recorded start, holds its bucket: the re-pin is refused"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "free",
+    "--topic-explicit"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "json" : {
+     "bucket.path" : "repo/free",
+     "ownership.repin.result" : "ok"
+    }
+   },
+   "name" : "(4) control: H is gone, so its pin holds nothing: the re-pin is ok"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--topic",
+    "cw"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "json" : {
+     "session.id" : "$SID",
+     "session.identity" : {
+      "null" : 1
+     }
+    }
+   },
+   "name" : "(5) CW-1 in the Git Bash shape: begin with no --sid takes the session from its record, not degraded"
+  },
+  {
+   "argv" : [
+    "locate",
+    "--cwd",
+    "$TMP/repo",
+    "--arg",
+    ""
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "22192",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^relation: same-session$"
+    ]
+   },
+   "name" : "(6) CW-1 in the PowerShell shape: locate with no --sid finds P's own handoff (same-session)"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--topic",
+    "cw"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "33335",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "json" : {
+     "session.id" : {
+      "re" : "^anon-[0-9a-f]{16}$"
+     },
+     "session.identity" : "degraded (no-session-id)"
+    }
+   },
+   "name" : "(7) CW-1 with a CLAUDE_PID that is gone: degraded as before (no-session-id)"
+  }
+ ],
+ "tmp_base" : "repo",
+ "tz" : "Etc/GMT-3"
+}

@@ -1,0 +1,663 @@
+{
+ "id" : "WIN-ID-07 (Windows pids: heal-check never reads a same-session or alive-unknown owner as LOST)",
+ "layer" : "H",
+ "note" : "heal-check under Git Bash's perl, from a skill's helper whose parent chain is the Bash tool's shells (STORE_TEST_PPID 885, STORE_TEST_PROC: 885 -> 841 -> 1, no Claude Code above): the walk takes CLAUDE_PID (identity::_walk), so the identity is the session's record and the relation same-session or successor, never degraded. The owner of a job with no job record is its origin's newest live record, judged by skills::ctx::pid_state through identity::liveness (seams as WIN-ID-01, at +03). (1) This session in the Git Bash shape (CLAUDE_PID 12044 maps to a running MSYS pid with the recorded start): owner 'this', the job RUNNING, never relaunched. (2) A predecessor whose record names a pid only `ps -W` lists (alive-unknown, start null): owner unverified, V2 unmeasured, NOT-LOST, never LOST or ok. (3) A /clear predecessor whose start is recorded and whose pid is alive-unknown (jobs::_cleared): V2 unmeasured, never LOST. (4a) The same predecessor with no `ps -W` listing (a missing file): a pid that nothing maps is unknown, never gone: NOT-LOST. (4b) A newer record of it whose start is recorded and whose pid only `ps -W` lists (alive-unknown, owner_state through pid_state): NOT-LOST. (4) Control: once its pids neither map nor are listed they are gone: LOST, high, ok, as on Unix. (5) The PowerShell shape (CLAUDE_PID 22192, no MSYS pid, start unknown): the session's own record (start null on both sides) is found, same-session, owner unverified: NOT-LOST, never LOST",
+ "owner" : "skills",
+ "steps" : [
+  {
+   "setup" : [
+    {
+     "at" : "$TMP/repo",
+     "repo" : {
+      "branch" : "feat/x",
+      "commits" : [
+       {
+        "files" : {
+         "app/retry.rb" : "x = 1\n",
+         "src/a.rb" : "# TODO a\n"
+        },
+        "msg" : "seed"
+       }
+      ]
+     }
+    },
+    {
+     "text" : "cpu 0\nbtime 1792573200\n",
+     "write" : "$TMP/proc/stat"
+    },
+    {
+     "text" : "4242 (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+     "write" : "$TMP/proc/self/stat"
+    },
+    {
+     "text" : "$RUNNER_PID (claude) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+     "write" : "$TMP/proc/$RUNNER_PID/stat"
+    },
+    {
+     "text" : "12044 $RUNNER_PID\n12045 $RUNNER_PID\n",
+     "write" : "$TMP/winpids"
+    },
+    {
+     "text" : "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772      12044  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n  4216496       0       0      22192  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n  4216497       0       0      22193  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n  4216498       0       0      22194  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n",
+     "write" : "$TMP/psw"
+    },
+    {
+     "text" : "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772      12044  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n  4216496       0       0      22192  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n  4216497       0       0      22193  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n",
+     "write" : "$TMP/psw2"
+    },
+    {
+     "text" : "885 841 /usr/bin/bash\n841 1 /usr/bin/bash\n",
+     "write" : "$TMP/ptable"
+    },
+    {
+     "json" : {
+      "pluginConfigs" : {
+       "$BRAND@m" : {
+        "options" : {
+         "relaunch_auto" : "on"
+        }
+       }
+      }
+     },
+     "write" : "$HOME/.claude/settings.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":12044,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"$SID\",\"source\":\"startup\",\"ts\":\"2026-10-21T13:50:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/12044-1792573200.live-$SID8.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":22192,\"pid_lstart\":null,\"session_id\":\"e1e1e1e1-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/22192-0.live-e1e1e1e1.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":33333,\"pid_lstart\":null,\"session_id\":\"e2e2e2e2-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T11:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/33333-0.live-e2e2e2e2.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":22193,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"e3e3e3e3-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T10:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/22193-1792573200.live-e3e3e3e3.json"
+    },
+    {
+     "content" : "{\"session_id\": \"e3e3e3e3-1111-4222-8333-444444444444\", \"reason\": \"clear\", \"ts\": \"2026-10-21T10:30:00+03:00\"}",
+     "write" : "$ROOT/.sessions/by-pid/22193-1792573200.ended-e3e3e3e3.json"
+    },
+    {
+     "content" : "{\"previous_session_id\": \"e1e1e1e1-1111-4222-8333-444444444444\", \"lineage_reason\": \"clear\"}",
+     "write" : "$ROOT/.sessions/$SID.lineage.json"
+    },
+    {
+     "content" : "{\"previous_session_id\": \"e2e2e2e2-1111-4222-8333-444444444444\", \"lineage_reason\": \"clear\"}",
+     "write" : "$ROOT/.sessions/e1e1e1e1-1111-4222-8333-444444444444.lineage.json"
+    },
+    {
+     "content" : "{\"previous_session_id\": \"e3e3e3e3-1111-4222-8333-444444444444\", \"lineage_reason\": \"clear\"}",
+     "write" : "$ROOT/.sessions/e2e2e2e2-1111-4222-8333-444444444444.lineage.json"
+    },
+    {
+     "content" : "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r1\", \"type\": \"shell\", \"status\": \"running\", \"output_path\": \"$TMP/out/r1.output\"}], \"crons\": []}",
+     "write" : "$WATCH/$SID/bg/slot-0.json"
+    },
+    {
+     "content" : "x\n",
+     "write" : "$TMP/out/r1.output"
+    },
+    {
+     "age" : "$TMP/out/r1.output",
+     "minutes" : 60
+    },
+    {
+     "content" : "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r4\", \"type\": \"shell\", \"status\": \"running\", \"output_path\": \"$TMP/out/r4.output\"}], \"crons\": []}",
+     "write" : "$WATCH/e1e1e1e1-1111-4222-8333-444444444444/bg/slot-0.json"
+    },
+    {
+     "content" : "x\n",
+     "write" : "$TMP/out/r4.output"
+    },
+    {
+     "age" : "$TMP/out/r4.output",
+     "minutes" : 60
+    },
+    {
+     "content" : "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r5\", \"type\": \"shell\", \"status\": \"running\", \"output_path\": \"$TMP/out/r5.output\"}], \"crons\": []}",
+     "write" : "$WATCH/e2e2e2e2-1111-4222-8333-444444444444/bg/slot-0.json"
+    },
+    {
+     "content" : "x\n",
+     "write" : "$TMP/out/r5.output"
+    },
+    {
+     "age" : "$TMP/out/r5.output",
+     "minutes" : 60
+    },
+    {
+     "content" : "{\"v\": 1, \"ts\": \"2026-10-21T13:29:00.000+03:00\", \"seq\": 3, \"set_hash\": \"abcd0123\", \"source\": \"Stop\", \"tasks\": [{\"id\": \"r6\", \"type\": \"shell\", \"status\": \"running\", \"output_path\": \"$TMP/out/r6.output\"}], \"crons\": []}",
+     "write" : "$WATCH/e3e3e3e3-1111-4222-8333-444444444444/bg/slot-0.json"
+    },
+    {
+     "content" : "x\n",
+     "write" : "$TMP/out/r6.output"
+    },
+    {
+     "age" : "$TMP/out/r6.output",
+     "minutes" : 60
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "$SID",
+    "--topic",
+    "win-this"
+   ],
+   "capture" : {
+    "STAGE_PUB_S" : "json:stage"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "begin as win-this",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "stamp",
+    "--stage",
+    "$STAGE_PUB_S"
+   ],
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "stamp win-this",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup" : [
+    {
+     "content" : "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+     "write" : "$STAGE_PUB_S/body.md"
+    },
+    {
+     "content" : "item: B-1 · runtime id r1 · class auto\nscript: none\ncommand: ls -la src; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: none\nfinished parts: none yet\nidempotency check: ls src\n",
+     "write" : "$STAGE_PUB_S/restart/B-1.md"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "publish",
+    "--stage",
+    "$STAGE_PUB_S",
+    "--slug",
+    "win-this",
+    "--status",
+    "in-progress"
+   ],
+   "capture" : {
+    "PUB_S" : "re:^Wrote handoff to: (.+)$"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks" : [
+     "^LINT "
+    ]
+   },
+   "name" : "publish as win-this",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "e1e1e1e1-1111-4222-8333-444444444444",
+    "--topic",
+    "win-unknown"
+   ],
+   "capture" : {
+    "STAGE_PUB_U" : "json:stage"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "begin as win-unknown",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "stamp",
+    "--stage",
+    "$STAGE_PUB_U"
+   ],
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "stamp win-unknown",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup" : [
+    {
+     "content" : "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+     "write" : "$STAGE_PUB_U/body.md"
+    },
+    {
+     "content" : "item: B-1 · runtime id r4 · class auto\nscript: none\ncommand: ls -la src; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: none\nfinished parts: none yet\nidempotency check: ls src\n",
+     "write" : "$STAGE_PUB_U/restart/B-1.md"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "publish",
+    "--stage",
+    "$STAGE_PUB_U",
+    "--slug",
+    "win-unknown",
+    "--status",
+    "in-progress"
+   ],
+   "capture" : {
+    "PUB_U" : "re:^Wrote handoff to: (.+)$"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks" : [
+     "^LINT "
+    ]
+   },
+   "name" : "publish as win-unknown",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "e2e2e2e2-1111-4222-8333-444444444444",
+    "--topic",
+    "win-gone"
+   ],
+   "capture" : {
+    "STAGE_PUB_G" : "json:stage"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "begin as win-gone",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "stamp",
+    "--stage",
+    "$STAGE_PUB_G"
+   ],
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "stamp win-gone",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup" : [
+    {
+     "content" : "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+     "write" : "$STAGE_PUB_G/body.md"
+    },
+    {
+     "content" : "item: B-1 · runtime id r5 · class auto\nscript: none\ncommand: ls -la src; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: none\nfinished parts: none yet\nidempotency check: ls src\n",
+     "write" : "$STAGE_PUB_G/restart/B-1.md"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "publish",
+    "--stage",
+    "$STAGE_PUB_G",
+    "--slug",
+    "win-gone",
+    "--status",
+    "in-progress"
+   ],
+   "capture" : {
+    "PUB_G" : "re:^Wrote handoff to: (.+)$"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks" : [
+     "^LINT "
+    ]
+   },
+   "name" : "publish as win-gone",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "e3e3e3e3-1111-4222-8333-444444444444",
+    "--topic",
+    "win-cleared"
+   ],
+   "capture" : {
+    "STAGE_PUB_C" : "json:stage"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "begin as win-cleared",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "stamp",
+    "--stage",
+    "$STAGE_PUB_C"
+   ],
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "stamp win-cleared",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup" : [
+    {
+     "content" : "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+     "write" : "$STAGE_PUB_C/body.md"
+    },
+    {
+     "content" : "item: B-1 · runtime id r6 · class auto\nscript: none\ncommand: ls -la src; echo \"__exit $?\"\ncwd: $TMP/repo\nspawns: none\nexpected outputs: none\nfinished parts: none yet\nidempotency check: ls src\n",
+     "write" : "$STAGE_PUB_C/restart/B-1.md"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "publish",
+    "--stage",
+    "$STAGE_PUB_C",
+    "--slug",
+    "win-cleared",
+    "--status",
+    "in-progress"
+   ],
+   "capture" : {
+    "PUB_C" : "re:^Wrote handoff to: (.+)$"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks" : [
+     "^LINT "
+    ]
+   },
+   "name" : "publish as win-cleared",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "heal-check",
+    "--origin",
+    "$SID",
+    "--item",
+    "r1"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 3,
+    "stdout_has" : [
+     "^signal: V2 owner-ended fail \\(owner is this process and session\\)$",
+     "^verdict: RUNNING ",
+     "^REFUSED: running$"
+    ],
+    "stdout_lacks" : [
+     "^verdict: LOST",
+     "^ok ",
+     "^run: "
+    ]
+   },
+   "name" : "(1) Git Bash shape, this session: owner this, RUNNING, never relaunched"
+  },
+  {
+   "argv" : [
+    "heal-check",
+    "--origin",
+    "e1e1e1e1-1111-4222-8333-444444444444",
+    "--item",
+    "r4"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 3,
+    "stdout_has" : [
+     "^signal: V2 owner-ended unmeasured \\(owner pid alive; its start time could not be checked\\)$",
+     "^verdict: NOT-LOST ",
+     "^REFUSED: not-lost$"
+    ],
+    "stdout_lacks" : [
+     "^verdict: LOST",
+     "^ok ",
+     "^run: "
+    ]
+   },
+   "name" : "(2) a predecessor alive-unknown (ps -W only): V2 unmeasured, NOT-LOST, never LOST"
+  },
+  {
+   "argv" : [
+    "heal-check",
+    "--origin",
+    "e3e3e3e3-1111-4222-8333-444444444444",
+    "--item",
+    "r6"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 3,
+    "stdout_has" : [
+     "^signal: V2 owner-ended unmeasured \\(owner pid alive; its start time could not be checked\\)$",
+     "^REFUSED: "
+    ],
+    "stdout_lacks" : [
+     "^verdict: LOST",
+     "^ok ",
+     "^run: "
+    ]
+   },
+   "name" : "(3) a /clear predecessor, start recorded, pid alive-unknown: V2 unmeasured, never LOST"
+  },
+  {
+   "argv" : [
+    "heal-check",
+    "--origin",
+    "e2e2e2e2-1111-4222-8333-444444444444",
+    "--item",
+    "r5"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/no-such-listing",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 3,
+    "stdout_has" : [
+     "^signal: V2 owner-ended unmeasured \\(owner pid alive; its start time could not be checked\\)$",
+     "^verdict: NOT-LOST ",
+     "^REFUSED: not-lost$"
+    ],
+    "stdout_lacks" : [
+     "^verdict: LOST",
+     "^ok ",
+     "^run: "
+    ]
+   },
+   "name" : "(4a) the gone predecessor with no ps -W listing (a missing file): its pid is unknown, not gone: V2 unmeasured, NOT-LOST, never LOST"
+  },
+  {
+   "argv" : [
+    "heal-check",
+    "--origin",
+    "e2e2e2e2-1111-4222-8333-444444444444",
+    "--item",
+    "r5"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 3,
+    "stdout_has" : [
+     "^signal: V2 owner-ended unmeasured \\(owner pid alive; its start time could not be checked\\)$",
+     "^verdict: NOT-LOST ",
+     "^REFUSED: not-lost$"
+    ],
+    "stdout_lacks" : [
+     "^verdict: LOST",
+     "^ok ",
+     "^run: "
+    ]
+   },
+   "name" : "(4b) a newer record of that predecessor, its start recorded, its pid only ps -W lists (alive-unknown): V2 unmeasured, NOT-LOST, never LOST",
+   "setup" : [
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":22194,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"e2e2e2e2-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T11:30:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/22194-1792573200.live-e2e2e2e2.json"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "heal-check",
+    "--origin",
+    "e2e2e2e2-1111-4222-8333-444444444444",
+    "--item",
+    "r5"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw2",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^signal: V2 owner-ended pass ",
+     "^verdict: LOST · confidence high · effects none$",
+     "\\nok [^\\n]*/restart/B-1\\.md\\nrun: ls -la src; echo \"__exit \\$\\?\"\\nrun-source: handoff\\n\\z"
+    ]
+   },
+   "name" : "(4) control: that predecessor's processes are gone (22194 left the ps -W listing; 33333 neither maps nor is listed): LOST, high, ok"
+  },
+  {
+   "argv" : [
+    "heal-check",
+    "--origin",
+    "e1e1e1e1-1111-4222-8333-444444444444",
+    "--item",
+    "r4"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "22192",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 3,
+    "stdout_has" : [
+     "^signal: V2 owner-ended unmeasured \\(owner pid alive; its start time could not be checked\\)$",
+     "^verdict: NOT-LOST ",
+     "^REFUSED: not-lost$"
+    ],
+    "stdout_lacks" : [
+     "^verdict: LOST",
+     "^ok ",
+     "^run: "
+    ]
+   },
+   "name" : "(5) PowerShell shape, this session: its own record found (same-session), owner unverified, NOT-LOST"
+  }
+ ],
+ "tmp_base" : "repo",
+ "tz" : "Etc/GMT-3"
+}

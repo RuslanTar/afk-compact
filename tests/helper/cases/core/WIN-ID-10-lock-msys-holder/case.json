@@ -1,0 +1,64 @@
+{
+ "id": "WIN-ID-10 (Windows pids: a lock holder's record is an MSYS pid, never read as a Windows one)",
+ "note": "lock::with's owner record holds the holder's own $$, an MSYS pid under Git Bash's perl, so it is judged by MSYS rules only (identity::alive_own: kill 0 and its own /proc start), never through the winpid map or `ps -W` (identity::win_probe). A helper killed mid-lock leaves its record with a dead MSYS pid; when a live Windows process holds the same number in ps -W's WINPID column, or no listing can be read, that record must still be taken over: read as alive-unknown it was never taken over and every later save-copy (seq.lock), finish (reconcile.lock) and orphans pass died with lock-timeout until that Windows process exited. Seams STORE_TEST_OS, STORE_TEST_PROC_ROOT (a stand-in /proc), STORE_TEST_WINPIDS and STORE_TEST_PS_W: (1) a dead holder that ps -W lists is taken over (lock_stale dead); (2) the same with no ps -W listing; (3) a dead holder whose number maps, as a Windows pid, to a running MSYS pid is taken over too; (4) control: a live holder (the runner, with its stand-in /proc start) is never broken: lock-timeout; (5) the same live holder with another start is taken over (lock_stale start-time). The holder pids 999998 and 999999 are above macOS's pid range, as in AT-M5-04",
+ "now": "2026-10-21T09:30:00+00:00",
+ "tz": "UTC",
+ "steps": [
+  {"name": "(1) a dead MSYS holder whose number a live Windows process holds in ps -W: taken over",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"write": "$TMP/proc/stat", "text": "cpu 0\nbtime 1792573200\n"},
+    {"write": "$TMP/proc/self/stat", "text": "4242 (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/proc/$RUNNER_PID/stat", "text": "$RUNNER_PID (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/winpids", "text": "999998 $RUNNER_PID\n"},
+    {"write": "$TMP/psw", "text": "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n  5194303       0       0     999999  ?              0 08:00:00 C:\\Windows\\System32\\svchost.exe\n"},
+    {"dispatch": {"nonce": "c1000001", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 20, "midturn": false}},
+    {"write": "$TMP/s1.md", "text": "<summary>\n⟪$BRAND v1 n=c1000001 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=c1000001⟫\n</summary>"},
+    {"write": "$WATCH/$SID/seq.lock", "json": {"sid": "$SID", "actor": "main", "pid": 999999, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "ts": "2026-10-21T09:10:00+00:00"}}
+   ],
+   "env": {"STORE_TEST_OS": "msys", "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw"},
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "c1000001", "--from", "$TMP/s1.md", "--writer", "mod", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0, "stdout_re": "Saved copy: .*_c1-c10000\\.md",
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "lock_stale", "count": 1, "fields": {"lock": "seq.lock", "reason": "dead"}}]}},
+  {"name": "(2) the same dead holder with no ps -W listing (the seam names a missing file): taken over",
+   "setup": [
+    {"dispatch": {"nonce": "c2000002", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 20, "midturn": false}},
+    {"write": "$TMP/s2.md", "text": "<summary>\n⟪$BRAND v1 n=c2000002 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=c2000002⟫\n</summary>"},
+    {"write": "$WATCH/$SID/seq.lock", "json": {"sid": "$SID", "actor": "main", "pid": 999999, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "ts": "2026-10-21T09:10:00+00:00"}}
+   ],
+   "env": {"STORE_TEST_OS": "msys", "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/no-such-listing"},
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "c2000002", "--from", "$TMP/s2.md", "--writer", "mod", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0, "stdout_re": "Saved copy: .*_c2-c20000\\.md",
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "lock_stale", "count": 2}]}},
+  {"name": "(3) a dead holder whose number maps, as a Windows pid, to a running MSYS pid: taken over",
+   "setup": [
+    {"dispatch": {"nonce": "c3000003", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 20, "midturn": false}},
+    {"write": "$TMP/s3.md", "text": "<summary>\n⟪$BRAND v1 n=c3000003 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=c3000003⟫\n</summary>"},
+    {"write": "$WATCH/$SID/seq.lock", "json": {"sid": "$SID", "actor": "main", "pid": 999998, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "ts": "2026-10-21T09:10:00+00:00"}}
+   ],
+   "env": {"STORE_TEST_OS": "msys", "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw"},
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "c3000003", "--from", "$TMP/s3.md", "--writer", "mod", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0, "stdout_re": "Saved copy: .*_c3-c30000\\.md",
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "lock_stale", "count": 3}]}},
+  {"name": "(4) control: a live holder with its own /proc start is never broken: lock-timeout, no lock_stale",
+   "setup": [
+    {"dispatch": {"nonce": "c4000004", "actor": "main", "channel": "mod-hook", "trigger": "auto", "age_s": 20, "midturn": false}},
+    {"write": "$TMP/s4.md", "text": "<summary>\n⟪$BRAND v1 n=c4000004 s=main⟫\n# LAB-42 — retry window fix in review\n## Resume here\nStatus: active · State: fix in review (checkpoint: clean)\nStep 1: `git status` — for \"finish the review\"\n## User constraints: none stated\n## Next steps: 1. git status — done when clean\n⟪/$BRAND n=c4000004⟫\n</summary>"},
+    {"write": "$WATCH/$SID/seq.lock", "json": {"sid": "$SID", "actor": "main", "pid": "$RUNNER_PID", "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "ts": "2026-10-21T09:10:00+00:00"}}
+   ],
+   "env": {"STORE_TEST_OS": "msys", "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw"},
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "c4000004", "--from", "$TMP/s4.md", "--writer", "mod", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 3, "stdout_contains": ["REFUSED: lock-timeout"],
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "lock_stale", "count": 3}],
+    "absent": ["$ROOT/work/general/compact/*_c4-*.md"]}},
+  {"name": "(5) the live holder's pid with another start: taken over (start-time)",
+   "setup": [
+    {"write": "$WATCH/$SID/seq.lock", "json": {"sid": "$SID", "actor": "main", "pid": "$RUNNER_PID", "pid_lstart": "Wed Oct 21 08:00:00 2026", "host": "$HOST", "ts": "2026-10-21T09:10:00+00:00"}}
+   ],
+   "env": {"STORE_TEST_OS": "msys", "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw"},
+   "argv": ["save-copy", "--sid", "$SID", "--nonce", "c4000004", "--from", "$TMP/s4.md", "--writer", "mod", "--scope", "main", "--cwd", "$TMP/work"],
+   "expect": {"exit": 0, "stdout_re": "Saved copy: .*_c4-c40000\\.md",
+    "rows": [{"file": "$WATCH/$SID.classic.jsonl", "ev": "lock_stale", "count": 4},
+             {"file": "$WATCH/$SID.classic.jsonl", "ev": "lock_stale", "fields": {"reason": "start-time"}}]}}
+ ]
+}

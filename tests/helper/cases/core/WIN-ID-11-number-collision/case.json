@@ -1,0 +1,8 @@
+{
+ "id": "WIN-ID-11-number-collision",
+ "note": "Windows pids under MSYS and Cygwin perl, where one number may name two processes: an MSYS pid with a /proc entry and, read as a Windows pid, a claude whose MSYS stub holds the recorded start (Git Bash shape). identity::alive, sessions::_gone and skills::ctx::pid_state check a start that differs against the mapped one (identity::win_alt_start) before they read the record as ended, so a live claude is never read as ended (no cross-session finish, no permanent gone twin); start_epochs gives undef for such a number, so the prunes keep its records; with that number as CLAUDE_PID (a collision already there at SessionStart) identity::claude_pid records the mapped claude's start, never the MSYS process's. A lock holder's record (its own MSYS $$) is judged by MSYS rules only (identity::alive_own): a dead holder whose number a live Windows process holds in ps -W reads ended there. identity::alive_verified is 0 for an alive-unknown pid. A `ps -W` that times out (exit -1 with part of a listing) or fails gives no listing: unknown, never gone. With a stand-in /proc (STORE_TEST_PROC_ROOT) and no map or listing seam the host's real winpid map and `ps -W` are never read, so such a case reads the same on the PC as on macOS and Linux (run.pl builtin win_collision)",
+ "steps": [
+  {"name": "MSYS perl", "lib": "win_collision", "args": {"os": "msys", "dir": "$TMP/proc-msys"}},
+  {"name": "Cygwin perl", "lib": "win_collision", "args": {"os": "cygwin", "dir": "$TMP/proc-cyg"}}
+ ]
+}

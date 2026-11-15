@@ -1,0 +1,42 @@
+{
+ "id": "WIN-ID-03 (Windows pids: close_gone writes a gone twin only for a pid that surely ended)",
+ "note": "When a session starts again (SessionStart resume), sessions::close_gone gives each of its other live- records of this host whose process is gone (sessions::_gone) an ended- twin, reason gone, which every reader then takes as ended for good. Under Git Bash's perl the records name Windows pids (seams as WIN-ID-01): a pid only `ps -W` lists is alive-unknown and gets no twin, with or without a recorded start; a winpid that maps to a running MSYS pid with the recorded start gets none; one that maps to it with another start (the pid was reused) and one that neither maps nor is listed get the twin",
+ "now": "2026-10-21T10:00:00+00:00",
+ "tz": "UTC",
+ "steps": [
+  {"name": "stand-in /proc, winpid map, ps -W listing; the session's records of earlier processes",
+   "setup": [
+    {"mkdir": "$TMP/work"},
+    {"write": "$TMP/proc/stat", "text": "cpu 0\nbtime 1792573200\n"},
+    {"write": "$TMP/proc/self/stat", "text": "4242 (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/proc/$RUNNER_PID/stat", "text": "$RUNNER_PID (claude) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"},
+    {"write": "$TMP/winpids", "text": "12044 $RUNNER_PID\n12045 $RUNNER_PID\n12046 $RUNNER_PID\n"},
+    {"write": "$TMP/psw", "text": "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772      12044  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n  4216496       0       0      22192  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n  4216497       0       0      22193  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n"},
+    {"write": "$ROOT/.sessions/by-pid/22192-0.live-$SID8.json",
+     "json": {"pid": 22192, "pid_lstart": null, "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:01+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/22193-1792573200.live-$SID8.json",
+     "json": {"pid": 22193, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:02+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/33333-0.live-$SID8.json",
+     "json": {"pid": 33333, "pid_lstart": null, "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:03+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/12045-1792570000.live-$SID8.json",
+     "json": {"pid": 12045, "pid_lstart": "Wed Oct 21 08:06:40 2026", "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:04+00:00"}},
+    {"write": "$ROOT/.sessions/by-pid/12046-1792573200.live-$SID8.json",
+     "json": {"pid": 12046, "pid_lstart": "Wed Oct 21 09:00:00 2026", "host": "$HOST", "session_id": "$SID", "cwd": "/x", "worktree": null, "head": null, "source": "startup", "ts": "2026-10-21T09:00:05+00:00"}}
+   ]},
+  {"name": "SessionStart(resume) in the Git Bash shape",
+   "env": {"STORE_TEST_CLAUDE_PID": null, "STORE_TEST_PPID": "1", "CLAUDE_PID": "12044", "STORE_TEST_OS": "msys",
+           "STORE_TEST_PROC_ROOT": "$TMP/proc", "STORE_TEST_WINPIDS": "$TMP/winpids", "STORE_TEST_PS_W": "$TMP/psw"},
+   "argv": ["hook", "SessionStart"],
+   "stdin_json": {"session_id": "$SID", "transcript_path": "$TMP/proj/$SID.jsonl", "cwd": "$TMP/work", "hook_event_name": "SessionStart", "source": "resume"},
+   "expect": {"exit": 0,
+    "files": [
+     {"path": "$ROOT/.sessions/by-pid/22192-0.ended-$SID8.json", "exists": false},
+     {"path": "$ROOT/.sessions/by-pid/22193-1792573200.ended-$SID8.json", "exists": false},
+     {"path": "$ROOT/.sessions/by-pid/12046-1792573200.ended-$SID8.json", "exists": false},
+     {"path": "$ROOT/.sessions/by-pid/12044-1792573200.ended-$SID8.json", "exists": false},
+     {"path": "$ROOT/.sessions/by-pid/33333-0.ended-$SID8.json", "contains": ["\"reason\":\"gone\""]},
+     {"path": "$ROOT/.sessions/by-pid/12045-1792570000.ended-$SID8.json", "contains": ["\"reason\":\"gone\""]},
+     {"path": "$ROOT/.sessions/by-pid/12044-1792573200.live-$SID8.json", "count": 1}
+    ]}}
+ ]
+}

@@ -5,8 +5,9 @@ package lock;
 #   then the owner record inside it: a record left by another holder whose pid is
 #   dead, or whose start time differs, is stale -> taken over, one `lock_stale` row.
 #   A record of a live holder is never broken: we wait up to `wait_ms`, then give up. A
-#   start time this call cannot read is no difference (identity::alive): that
-#   holder counts as live.
+#   start time this call cannot read is no difference (identity::alive_own): that
+#   holder counts as live. A holder's pid is its own $$, an MSYS pid under MSYS and Cygwin perl,
+#   so its record is judged by MSYS rules only, never as a Windows pid.
 # owner = {sid, actor}; pid and start time are this helper process's, host from uname.
 use strict;
 use warnings;
@@ -48,14 +49,14 @@ sub with {
         util::sleep_ms(10);
     }
     my $me = { sid => $owner->{sid}, actor => $owner->{actor} // 'unknown', pid => $$,
-               pid_lstart => identity::start_time($$), host => identity::host(), ts => util::iso(util::now()) };
+               pid_lstart => identity::start_time_own($$), host => identity::host(), ts => util::iso(util::now()) };
     while (1) {
         my $rec = _read_record($fh);
         last unless $rec;
         my $stale;
         if ($rec->{corrupt}) { $stale = 1 }
         elsif (defined $rec->{host} && $rec->{host} ne $me->{host}) { $stale = 0 }    # cannot check another host
-        else { $stale = identity::alive($rec->{pid}, $rec->{pid_lstart}) ? 0 : 1 }
+        else { $stale = identity::alive_own($rec->{pid}, $rec->{pid_lstart}) ? 0 : 1 }    # a holder's own $$ (MSYS rules)
         if (!$stale && defined $rec->{pid} && $rec->{pid} == $$) { last }
         if ($stale) {
             my $why = $rec->{corrupt} ? 'corrupt' : (defined $rec->{pid} && (kill(0, $rec->{pid}) || $!{EPERM})) ? 'start-time' : 'dead';

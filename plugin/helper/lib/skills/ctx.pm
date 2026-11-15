@@ -140,8 +140,14 @@ sub record_live {
         next unless $o->{state} eq 'ended' && $o->{pid} eq $rec->{pid} && $o->{epoch} eq $rec->{epoch};
         return 0 if ($o->{data}{session_id} // '') eq $sid || $o->{sid8} eq $rec->{sid8};
     }
-    return pid_matches($rec->{pid}, $rec->{data}{pid_lstart});
+    my $st = pid_state($rec->{pid}, $rec->{data}{pid_lstart});
+    return 1 if $st eq 'match';
+    # MSYS and Cygwin: a Windows pid whose start time cannot be checked (alive-unknown, or a
+    # record written without one) may still be live, and is never read as ended
+    return ($st eq 'unverified' && _cyg()) ? 1 : 0;
 }
+
+sub _cyg { return defined &identity::cyg && identity::cyg() ? 1 : 0 }
 
 # 1 when the pid runs and its start time equals the recorded one.
 sub pid_matches { return pid_state(@_) eq 'match' ? 1 : 0 }
@@ -149,15 +155,21 @@ sub pid_matches { return pid_state(@_) eq 'match' ? 1 : 0 }
 # Start-time check: match (the pid runs with the recorded start time) | gone (no such pid, or its
 # start time differs) | unverified (the pid runs, but the recorded start time is missing
 # or `ps` could not read the current one). Only `gone` proves the recorded process ended.
+# MSYS and Cygwin: a Windows pid through identity::liveness; an alive-unknown one is unverified, and
+# a pid whose start differs matches when the same number, read as a Windows pid, maps to the
+# recorded start (identity::win_alt_start).
 sub pid_state {
     my ($pid, $recorded) = @_;
     return 'gone' unless defined $pid && $pid =~ /\A\d+\z/ && $pid > 0;
-    my $alive = kill(0, $pid) ? 1 : ($!{EPERM} ? 1 : 0);
-    return 'gone' unless $alive;
+    my $lv = defined &identity::liveness ? identity::liveness($pid) : ((kill(0, $pid) || $!{EPERM}) ? 'run' : 'gone');
+    return 'gone' if $lv eq 'gone';
+    return 'unverified' if $lv eq 'unknown';
     return 'unverified' unless defined $recorded && $recorded ne '';
     my $now = skills::core::lstart($pid);
     return 'unverified' unless defined $now;
-    return _norm_ls($now) eq _norm_ls($recorded) ? 'match' : 'gone';
+    return 'match' if _norm_ls($now) eq _norm_ls($recorded);
+    my $alt = _cyg() && defined &identity::win_alt_start ? identity::win_alt_start($pid) : undef;
+    return defined $alt && _norm_ls($alt) eq _norm_ls($recorded) ? 'match' : 'gone';
 }
 
 # The live record of the Claude Code process this helper runs under: a live-

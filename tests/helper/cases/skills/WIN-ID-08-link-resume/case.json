@@ -1,0 +1,409 @@
+{
+ "id" : "WIN-ID-08 (Windows pids: pin --resumed-from never links to a predecessor that may still run)",
+ "layer" : "H",
+ "note" : "pin --resumed-from writes the handoff-resume link (and claims the predecessor's approvals) only when the predecessor has ended (session_cmds::link_resume -> skills::core::session_ended -> sessions::ended -> record_live -> identity::alive). Under Git Bash's perl (seams as WIN-ID-07): a predecessor whose record names a pid only `ps -W` lists is alive-unknown, so a fresh session gets `not linked: predecessor not ended` and no claim, and so does one whose later record has a start time and a pid only `ps -W` lists, and one whose pid nothing maps when there is no `ps -W` listing (unknown, never gone); one whose pid neither maps nor is listed is gone, and the link is written",
+ "owner" : "skills",
+ "steps" : [
+  {
+   "setup" : [
+    {
+     "at" : "$TMP/repo",
+     "repo" : {
+      "branch" : "feat/x",
+      "commits" : [
+       {
+        "files" : {
+         "app/retry.rb" : "x = 1\n",
+         "src/a.rb" : "# TODO a\n"
+        },
+        "msg" : "seed"
+       }
+      ]
+     }
+    },
+    {
+     "text" : "cpu 0\nbtime 1792573200\n",
+     "write" : "$TMP/proc/stat"
+    },
+    {
+     "text" : "4242 (perl) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+     "write" : "$TMP/proc/self/stat"
+    },
+    {
+     "text" : "$RUNNER_PID (claude) S 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+     "write" : "$TMP/proc/$RUNNER_PID/stat"
+    },
+    {
+     "text" : "12044 $RUNNER_PID\n12045 $RUNNER_PID\n",
+     "write" : "$TMP/winpids"
+    },
+    {
+     "text" : "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n      772       1     772      12044  pty0      197609 09:00:00 /c/Users/u/.local/bin/claude\n  4216496       0       0      22192  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n  4216497       0       0      22193  ?         197609 09:00:00 C:\\Users\\u\\.local\\bin\\claude.exe\n",
+     "write" : "$TMP/psw"
+    },
+    {
+     "text" : "885 841 /usr/bin/bash\n841 1 /usr/bin/bash\n",
+     "write" : "$TMP/ptable"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":22192,\"pid_lstart\":null,\"session_id\":\"f1f1f1f1-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/22192-0.live-f1f1f1f1.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":33333,\"pid_lstart\":null,\"session_id\":\"f2f2f2f2-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:00:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/33333-0.live-f2f2f2f2.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":12044,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"f3f3f3f3-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T13:50:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/12044-1792573200.live-f3f3f3f3.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":12045,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"f4f4f4f4-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T13:51:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/12045-1792573200.live-f4f4f4f4.json"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "f1f1f1f1-1111-4222-8333-444444444444",
+    "--topic",
+    "win-unknown"
+   ],
+   "capture" : {
+    "STAGE_PUB_U" : "json:stage"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "begin as win-unknown",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "stamp",
+    "--stage",
+    "$STAGE_PUB_U"
+   ],
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "stamp win-unknown",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup" : [
+    {
+     "content" : "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+     "write" : "$STAGE_PUB_U/body.md"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "publish",
+    "--stage",
+    "$STAGE_PUB_U",
+    "--slug",
+    "win-unknown",
+    "--status",
+    "in-progress"
+   ],
+   "capture" : {
+    "PUB_U" : "re:^Wrote handoff to: (.+)$"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks" : [
+     "^LINT "
+    ]
+   },
+   "name" : "publish as win-unknown",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "begin",
+    "--sid",
+    "f2f2f2f2-1111-4222-8333-444444444444",
+    "--topic",
+    "win-gone"
+   ],
+   "capture" : {
+    "STAGE_PUB_G" : "json:stage"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "begin as win-gone",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "stamp",
+    "--stage",
+    "$STAGE_PUB_G"
+   ],
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0
+   },
+   "name" : "stamp win-gone",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "setup" : [
+    {
+     "content" : "# LAB-9 — background checks in flight\n## Resume here\nStatus: active · State: retry fix committed on feat/x (checkpoint: clean)\nStep 1: `bin/test retry` — for \"fix the retry window\"\nGate: none · Don't: change the window size\nLive: nothing running (checked 2026-10-21 14:05 +0300)\n## User constraints\n- U-1: \"keep the 45 s window\" — scope retry window; user, 11111111\n## Decisions and do-not-re-raise\n- D-1: keep 45 s — because upstream retries at 40 s (user)\n## In flight\nNothing in flight — checked 2026-10-21 14:05 +0300 via task list\n## Live state\n| claim | as of | re-check | tag |\n|---|---|---|---|\n| HEAD on feat/x, clean | 2026-10-21 14:05 +0300 | `git -C $TMP/repo status -sb` | measured |\n## Open questions\nnone\n## Location\nrepo repo · worktree $TMP/repo · branch feat/x · this handoff: @self@\n## Work done and findings\n- retry fix: implemented — `app/retry.rb#retry_window`\n## Next steps\n1. `bin/test retry` — done when the suite passes\n",
+     "write" : "$STAGE_PUB_G/body.md"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "publish",
+    "--stage",
+    "$STAGE_PUB_G",
+    "--slug",
+    "win-gone",
+    "--status",
+    "in-progress"
+   ],
+   "capture" : {
+    "PUB_G" : "re:^Wrote handoff to: (.+)$"
+   },
+   "cwd" : "$TMP/repo",
+   "expect" : {
+    "exit" : 0,
+    "stdout_has" : [
+     "^Wrote handoff to: "
+    ],
+    "stdout_lacks" : [
+     "^LINT "
+    ]
+   },
+   "name" : "publish as win-gone",
+   "now" : "2026-10-21T14:05:12+03:00"
+  },
+  {
+   "argv" : [
+    "pin",
+    "--sid",
+    "f3f3f3f3-1111-4222-8333-444444444444",
+    "--resumed-from",
+    "$PUB_U"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "files" : [
+     {
+      "exists" : false,
+      "path" : "$ROOT/.sessions/successors/f1f1f1f1-1111-4222-8333-444444444444.json"
+     },
+     {
+      "exists" : false,
+      "path" : "$ROOT/.sessions/f3f3f3f3-1111-4222-8333-444444444444.lineage.json"
+     }
+    ],
+    "stdout_has" : [
+     "^relation: other \\(not linked: predecessor not ended\\)$"
+    ],
+    "stdout_lacks" : [
+     "^relation: successor"
+    ]
+   },
+   "name" : "a fresh session resumes the alive-unknown predecessor: not linked, no claim"
+  },
+  {
+   "argv" : [
+    "pin",
+    "--sid",
+    "f4f4f4f4-1111-4222-8333-444444444444",
+    "--resumed-from",
+    "$PUB_G"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12045",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "files" : [
+     {
+      "contains" : [
+       "\"session_id\":\"f4f4f4f4-1111-4222-8333-444444444444\""
+      ],
+      "path" : "$ROOT/.sessions/successors/f2f2f2f2-1111-4222-8333-444444444444.json"
+     }
+    ],
+    "stdout_has" : [
+     "^relation: successor \\(handoff-resume\\)$"
+    ]
+   },
+   "name" : "control: another fresh session resumes the gone predecessor: linked"
+  },
+  {
+   "argv" : [
+    "pin",
+    "--sid",
+    "f3f3f3f3-1111-4222-8333-444444444444",
+    "--resumed-from",
+    "$PUB_U"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "files" : [
+     {
+      "exists" : false,
+      "path" : "$ROOT/.sessions/successors/f1f1f1f1-1111-4222-8333-444444444444.json"
+     },
+     {
+      "exists" : false,
+      "path" : "$ROOT/.sessions/f3f3f3f3-1111-4222-8333-444444444444.lineage.json"
+     }
+    ],
+    "stdout_has" : [
+     "^relation: other \\(not linked: predecessor not ended\\)$"
+    ],
+    "stdout_lacks" : [
+     "^relation: successor"
+    ]
+   },
+   "name" : "that process ended; a later one, its start recorded, its pid only ps -W lists (alive-unknown): still not linked, no claim",
+   "setup" : [
+    {
+     "content" : "{\"reason\": \"prompt_input_exit\", \"session_id\": \"f1f1f1f1-1111-4222-8333-444444444444\", \"ts\": \"2026-10-21T12:30:00+03:00\"}",
+     "write" : "$ROOT/.sessions/by-pid/22192-0.ended-f1f1f1f1.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":22193,\"pid_lstart\":\"Wed Oct 21 12:00:00 2026\",\"session_id\":\"f1f1f1f1-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:31:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/22193-1792573200.live-f1f1f1f1.json"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "pin",
+    "--sid",
+    "f3f3f3f3-1111-4222-8333-444444444444",
+    "--resumed-from",
+    "$PUB_U"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/no-such-listing",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "files" : [
+     {
+      "exists" : false,
+      "path" : "$ROOT/.sessions/successors/f1f1f1f1-1111-4222-8333-444444444444.json"
+     },
+     {
+      "exists" : false,
+      "path" : "$ROOT/.sessions/f3f3f3f3-1111-4222-8333-444444444444.lineage.json"
+     }
+    ],
+    "stdout_has" : [
+     "^relation: other \\(not linked: predecessor not ended\\)$"
+    ],
+    "stdout_lacks" : [
+     "^relation: successor"
+    ]
+   },
+   "name" : "that one ended too; a third one's pid is not mapped and there is no ps -W listing (a missing file): unknown, still not linked",
+   "setup" : [
+    {
+     "content" : "{\"reason\": \"prompt_input_exit\", \"session_id\": \"f1f1f1f1-1111-4222-8333-444444444444\", \"ts\": \"2026-10-21T12:40:00+03:00\"}",
+     "write" : "$ROOT/.sessions/by-pid/22193-1792573200.ended-f1f1f1f1.json"
+    },
+    {
+     "content" : "{\"cwd\":\"$TMP/repo\",\"host\":\"$HOST\",\"pid\":33336,\"pid_lstart\":null,\"session_id\":\"f1f1f1f1-1111-4222-8333-444444444444\",\"source\":\"startup\",\"ts\":\"2026-10-21T12:41:00+03:00\",\"worktree\":\"$TMP/repo\"}",
+     "write" : "$ROOT/.sessions/by-pid/33336-0.live-f1f1f1f1.json"
+    }
+   ]
+  },
+  {
+   "argv" : [
+    "pin",
+    "--sid",
+    "f3f3f3f3-1111-4222-8333-444444444444",
+    "--resumed-from",
+    "$PUB_U"
+   ],
+   "cwd" : "$TMP/repo",
+   "env" : {
+    "CLAUDE_PID" : "12044",
+    "STORE_TEST_CLAUDE_PID" : null,
+    "STORE_TEST_OS" : "msys",
+    "STORE_TEST_PPID" : "885",
+    "STORE_TEST_PROC" : "$TMP/ptable",
+    "STORE_TEST_PROC_ROOT" : "$TMP/proc",
+    "STORE_TEST_PS_W" : "$TMP/psw",
+    "STORE_TEST_WINPIDS" : "$TMP/winpids"
+   },
+   "expect" : {
+    "exit" : 0,
+    "files" : [
+     {
+      "contains" : [
+       "\"session_id\":\"f3f3f3f3-1111-4222-8333-444444444444\""
+      ],
+      "path" : "$ROOT/.sessions/successors/f1f1f1f1-1111-4222-8333-444444444444.json"
+     }
+    ],
+    "stdout_has" : [
+     "^relation: successor \\(handoff-resume\\)$"
+    ]
+   },
+   "name" : "control: with the listing that third pid is gone: the predecessor has ended and the link is written"
+  }
+ ],
+ "tmp_base" : "repo",
+ "tz" : "Etc/GMT-3"
+}

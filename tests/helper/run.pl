@@ -1647,7 +1647,13 @@ sub invoke {
 #   start_epochs      {}: identity::start_epochs and key_live of the staged copy with no seam (a
 #                     running pid, an ended one, a reused start); {os: msys|cygwin, dir}: under that
 #                     perl with a stand-in /proc at dir (a stat file, a folder with none, no folder)
-#   own_start         {root, sid, want}: sessions::own_start over a store's per-process records,
+#   win_collision     {os?: msys|cygwin, dir}: under that perl with a stand-in /proc at dir, one number
+#                     that is both a running MSYS pid and, read as a Windows pid, a claude's stub
+#                     (identity::win_alt_start, and claude_pid's start for it as CLAUDE_PID); a lock
+#                     holder's dead pid that ps -W lists (identity::alive_own); alive_verified of an
+#                     alive-unknown pid; no real winpid map or ps -W read for a stand-in /proc; a ps -W
+#                     that fails or times out gives no listing
+#   own_start        {root, sid, want}: sessions::own_start over a store's per-process records,
 #                     "<since> <until> <coarse>" (3 decimals) or "undef"
 my $LIBS_READY;
 sub _libs {
@@ -4351,30 +4357,151 @@ sub builtin {
         # 0.1.4 review F-2: start_epochs under MSYS or Cygwin perl (seams STORE_TEST_OS and
         # STORE_TEST_PROC_ROOT, args.dir the stand-in /proc), in a test-mode child perl: a pid with a
         # stat file (one that does not run) reads btime + ticks/HZ; the child's own pid, a /proc
-        # folder with no stat, reads undef; the runner's pid (it runs) with no /proc folder reads 0;
-        # no `ps -axo` listing is made; key_live keeps the first two and drops the third.
+        # folder with no stat, reads undef; the runner's pid (it runs) with no /proc folder and in no
+        # `ps -W` listing reads 0; no `ps -axo` listing is made; key_live keeps the first two and
+        # drops the third. A pid with no /proc folder is a Windows pid (identity::win_probe; seams
+        # STORE_TEST_WINPIDS and STORE_TEST_PS_W, files beside args.dir): one that maps to a running
+        # MSYS pid reads that pid's /proc start; one `ps -W` lists but nothing maps (a claude started
+        # from PowerShell) reads undef, alive-unknown, and key_live keeps it; one that maps to an
+        # MSYS pid that has ended reads 0.
         my $d = $a->{dir} // return ("start_epochs: os needs args.dir");
         my $code = 'require "util.pm"; require "jsonc.pm"; require "identity.pm"; '
                  . 'my ($d, $run) = @ARGV; my $k = fork; POSIX::_exit(0) if defined $k && !$k; waitpid($k, 0); '
-                 . 'util::mkdir_p("$d/$k"); util::mkdir_p("$d/$$"); util::mkdir_p("$d/self"); '
+                 . 'my $z = fork; if (defined $z && !$z) { sleep 30; POSIX::_exit(0) } '
+                 . 'util::mkdir_p("$d/$k"); util::mkdir_p("$d/$$"); util::mkdir_p("$d/self"); util::mkdir_p("$d/$z"); '
                  . 'my $st = "$k (perl) S 1 " . join(" ", (0) x 17) . " 123456 0 0\n"; '
-                 . 'util::write_atomic("$d/$_", $_ eq "stat" ? "cpu 0\nbtime 1761000000\n" : $st, 0600) for "stat", "self/stat", "$k/stat"; '
+                 . 'util::write_atomic("$d/$_", $_ eq "stat" ? "cpu 0\nbtime 1761000000\n" : $st, 0600) for "stat", "self/stat", "$k/stat", "$z/stat"; '
+                 . 'util::write_atomic("$d.winpids", "3999001 $z\n3999003 $k\n", 0600); '
+                 . 'util::write_atomic("$d.psw", "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n'
+                 . '  8193002       0       0    3999002  ?              0 09:00:00 C:\\\\Program Files\\\\claude.exe\n", 0600); '
                  . 'my $n = 0; { no warnings "redefine"; my $o = \&identity::_ps_starts; *identity::_ps_starts = sub { $n++; $o->() } } '
                  . 'my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100; my $want = 1761000000 + int(123456 / $hz); '
-                 . 'my $s = identity::start_epochs([$k, $$, $run]); '
+                 . 'my $s = identity::start_epochs([$k, $$, $run, 3999001, 3999002, 3999003]); kill 9, $z; waitpid($z, 0); '
                  . 'print join(" ", $want, map({ $s->{$_} // "undef" } $k, $$, $run), $n, '
-                 . 'identity::key_live("$k-$want", $s), identity::key_live("$$-1761000000", $s), identity::key_live("$run-1761000000", $s))';
+                 . 'identity::key_live("$k-$want", $s), identity::key_live("$$-1761000000", $s), identity::key_live("$run-1761000000", $s), '
+                 . 'map({ $s->{$_} // "undef" } 3999001, 3999002, 3999003), identity::key_live("3999001-$want", $s), '
+                 . 'identity::key_live("3999002-1761000000", $s), identity::key_live("3999003-$want", $s))';
         my $r = run_cmd([$^X, "-I$STAGE/helper/lib", '-MPOSIX', '-e', $code, $d, $$], timeout_ms => 20000,
-                        env => { STORE_TEST_MODE => '1', STORE_TEST_OS => $a->{os}, STORE_TEST_PROC_ROOT => $d, STORE_TEST_PROC_STARTS => undef });
-        my ($want, $stat, $nostat, $nodir, $lists, $l1, $l2, $l3) = split ' ', ($r->{out} // '');
-        return ("child exit $r->{exit}: " . ($r->{out} // '') . ($r->{err} // '')) unless $r->{exit} == 0 && defined $l3;
+                        env => { STORE_TEST_MODE => '1', STORE_TEST_OS => $a->{os}, STORE_TEST_PROC_ROOT => $d, STORE_TEST_PROC_STARTS => undef,
+                                 STORE_TEST_WINPIDS => "$d.winpids", STORE_TEST_PS_W => "$d.psw" });
+        my ($want, $stat, $nostat, $nodir, $lists, $l1, $l2, $l3, $wmap, $wlist, $wend, $l4, $l5, $l6) = split ' ', ($r->{out} // '');
+        return ("child exit $r->{exit}: " . ($r->{out} // '') . ($r->{err} // '')) unless $r->{exit} == 0 && defined $l6;
         push @e, "$a->{os}: a pid with a stat file: $stat, want $want (btime + ticks/HZ)" unless $stat eq $want;
         push @e, "$a->{os}: a running pid with a /proc folder, no stat: $nostat, want undef" unless $nostat eq 'undef';
-        push @e, "$a->{os}: a running pid with no /proc folder: $nodir, want 0" unless $nodir eq '0';
+        push @e, "$a->{os}: a running pid with no /proc folder, not in ps -W: $nodir, want 0" unless $nodir eq '0';
         push @e, "$a->{os}: $lists ps listings, want 0" unless $lists eq '0';
         push @e, "$a->{os}: key_live of the stat pid's key: $l1, want 1" unless $l1 eq '1';
         push @e, "$a->{os}: key_live of the no-stat pid: $l2, want 1" unless $l2 eq '1';
         push @e, "$a->{os}: key_live of the pid with no /proc folder: $l3, want 0" unless $l3 eq '0';
+        push @e, "$a->{os}: a Windows pid mapped to a running MSYS pid: $wmap, want $want (its /proc start)" unless $wmap eq $want;
+        push @e, "$a->{os}: a Windows pid only ps -W lists: $wlist, want undef (alive-unknown)" unless $wlist eq 'undef';
+        push @e, "$a->{os}: a Windows pid mapped to an ended MSYS pid: $wend, want 0" unless $wend eq '0';
+        push @e, "$a->{os}: key_live of the mapped Windows pid's key: $l4, want 1" unless $l4 eq '1';
+        push @e, "$a->{os}: key_live of the alive-unknown Windows pid: $l5, want 1" unless $l5 eq '1';
+        push @e, "$a->{os}: key_live of the Windows pid mapped to an ended pid: $l6, want 0" unless $l6 eq '0';
+        return @e;
+    }
+    if ($name eq 'win_collision') {
+        # Windows pids under MSYS or Cygwin perl (seams STORE_TEST_OS; STORE_TEST_PROC_ROOT = args.dir,
+        # a stand-in /proc; STORE_TEST_WINPIDS and STORE_TEST_PS_W, files beside it), in a test-mode
+        # child perl. One number, two processes: Z (a sleeping child) runs with a /proc entry and the
+        # start btime + 5000 s, and the same number read as a Windows pid maps to the child's own pid M
+        # (a claude started from Git Bash: its MSYS stub, start btime). A record of that number with
+        # M's start is a live claude: identity::alive 1, sessions::_gone 0, skills::ctx::pid_state
+        # match (identity::win_alt_start); start_epochs cannot tell which start a record holds: undef,
+        # and key_live keeps both keys. A record with Z's start is live too; one with a third start has
+        # ended. With CLAUDE_PID set to that number (a collision already there at SessionStart),
+        # identity::claude_pid reads M's start, the claude's, not Z's. A lock record (a holder's own
+        # MSYS $$) of a dead pid K that `ps -W` lists reads alive-unknown through identity::alive but
+        # ended through identity::alive_own (MSYS rules only); the live M reads by its own /proc start
+        # there, and start_time_own of K is undef. identity::alive_verified gives 0 for K
+        # (alive-unknown) and 1 for M with its start.
+        # Then, with $^O set to msys and spies on util::run and Cygwin::winpid_to_pid: with a stand-in
+        # /proc and no map or listing seam the host's real map and `ps -W` are never read (unknown);
+        # with no stand-in both are (the spies answer: a listing with its header only, so gone); a
+        # `ps -W` that times out (util::run's answer: exit -1 with part of a listing) or exits 1 gives
+        # no listing: unknown, never gone.
+        my $d = $a->{dir} // return ("win_collision: needs args.dir");
+        my $os = $a->{os} // 'msys';
+        my $code = <<'PL';
+my ($d) = @ARGV;
+require "util.pm"; require "jsonc.pm"; require "identity.pm"; require "sessions.pm"; require skills::ctx;
+my $k = fork; POSIX::_exit(0) if defined $k && !$k; waitpid($k, 0);
+my $z = fork; if (defined $z && !$z) { open(STDOUT, ">", "/dev/null"); open(STDERR, ">", "/dev/null"); sleep 30; POSIX::_exit(0) }
+my $hz = eval { POSIX::sysconf(POSIX::_SC_CLK_TCK()) } || 100;
+util::mkdir_p("$d/$_") for 'self', $$, $z;
+my $row = sub { "$_[0] ($_[1]) S 1 " . join(' ', (0) x 17) . " $_[2] 0 0\n" };
+util::write_atomic("$d/stat", "cpu 0\nbtime 1792573200\n", 0600);
+util::write_atomic("$d/self/stat", $row->(4242, 'perl', 0), 0600);
+util::write_atomic("$d/$$/stat", $row->($$, 'claude', 0), 0600);
+util::write_atomic("$d/$z/stat", $row->($z, 'bash', 5000 * $hz), 0600);
+util::write_atomic("$d.winpids", "$z $$\n", 0600);
+util::write_atomic("$d.psw", "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n  "
+    . (4194304 + $k) . "       0       0    $k  ?              0 08:00:00 C:\\Windows\\System32\\svchost.exe\n", 0600);
+my $ls = sub { my $s = POSIX::strftime('%a %b %e %H:%M:%S %Y', localtime $_[0]); $s =~ s/  / /g; $s };
+my ($lm, $lz, $lx) = map { $ls->($_) } 1792573200, 1792573200 + 5000, 1792573200 - 86400;
+my $e = identity::start_epochs([$z]);
+delete $ENV{STORE_TEST_CLAUDE_PID}; $ENV{STORE_TEST_PPID} = '1'; $ENV{CLAUDE_PID} = $z;
+my $cp = eval { identity::claude_pid() } || {};
+my @o = eval { ($cp->{lstart} // 'undef', identity::alive($z, $lm), sessions::_gone($z, $lm), skills::ctx::pid_state($z, $lm), $e->{$z} // 'undef',
+         identity::key_live("$z-" . identity::lstart_epoch($lm), $e), identity::key_live("$z-" . identity::lstart_epoch($lz), $e),
+         identity::alive($z, $lz), sessions::_gone($z, $lz), skills::ctx::pid_state($z, $lz),
+         identity::alive($z, $lx), sessions::_gone($z, $lx), skills::ctx::pid_state($z, $lx),
+         identity::alive($k, $lm), identity::alive_own($k, $lm), identity::alive_own($$, $lm), identity::alive_own($$, $lx),
+         identity::start_time_own($k) // 'undef', identity::alive_verified($k, $lm), identity::alive_verified($$, $lm)) };
+my $err = $@;
+kill 9, $z; waitpid($z, 0);
+if ($err) { print "error: $err"; exit 1 }
+print join('|', @o), "\n";
+PL
+        my $spy = <<'PL';
+require "util.pm"; require "jsonc.pm"; require "identity.pm";
+my @c;
+{ no warnings qw(redefine once);
+  # SPY_RUN: ok (a header only), timeout (util::run's timeout answer: exit -1, part of a listing), fail (exit 1)
+  my $h = "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n";
+  my %a = (ok => { exit => 0, out => $h, err => '' },
+           timeout => { exit => -1, timed_out => 1, out => "$h      772       1     772      12044  pty0      197609 09:00:00 /c/Users/u/.local/bin/cla" },
+           fail => { exit => 1, out => $h, err => "ps: cannot read the process table\n" });
+  *util::run = sub { push @c, 'run:' . util::basename($_[0][0]) . ' ' . join(' ', @{ $_[0] }[1 .. $#{ $_[0] }]);
+                     return $a{ $ENV{SPY_RUN} // 'ok' } };
+  *Cygwin::winpid_to_pid = sub { push @c, "map:$_[0]"; return undef } }
+$^O = 'msys';
+print join('|', identity::liveness(3999009), @c), "\n";
+PL
+        my %env = (STORE_TEST_MODE => '1', STORE_TEST_OS => $os, STORE_TEST_PROC_ROOT => $d, STORE_TEST_PROC_STARTS => undef,
+                   STORE_TEST_WINPIDS => "$d.winpids", STORE_TEST_PS_W => "$d.psw", STORE_TEST_NO_CYGWIN => undef, TZ => 'UTC');
+        my $r = run_cmd([$^X, "-I$STAGE/helper/lib", '-MPOSIX', '-e', $code, $d], timeout_ms => 20000, env => \%env);
+        my @g = split /\|/, (($r->{out} // '') =~ s/\s+\z//r);
+        return ("$os: child exit $r->{exit}: " . ($r->{out} // '') . ($r->{err} // '')) unless $r->{exit} == 0 && @g == 20;
+        my $lm = do { my $t = POSIX::strftime('%a %b %e %H:%M:%S %Y', gmtime 1792573200); $t =~ s/  / /g; $t };
+        my @want = ($lm, 1, 0, 'match', 'undef', 1, 1, 1, 0, 'match', 0, 1, 'gone', 1, 0, 1, 0, 'undef', 0, 1);
+        my @what = ("claude_pid start of a CLAUDE_PID that is also a running MSYS pid (the mapped claude's, not that process's)",
+'alive of the number with the mapped claude start', '_gone of it', 'pid_state of it',
+                    'start_epochs of the number', 'key_live of its key with the mapped start', 'key_live of its key with its own start',
+                    'alive with the MSYS process start', '_gone of it', 'pid_state of it',
+                    'alive with a third start', '_gone of it', 'pid_state of it',
+                    'alive of a dead lock holder ps -W lists (alive-unknown)', 'alive_own of that holder',
+                    'alive_own of a live holder with its start', 'alive_own of it with another start', 'start_time_own of the dead holder',
+                    'alive_verified of a pid only ps -W lists (alive-unknown)', 'alive_verified of a live MSYS pid with its start');
+        for my $i (0 .. $#want) { push @e, "$os: $what[$i]: $g[$i], want $want[$i]" unless $g[$i] eq $want[$i] }
+        my %spy_env = (%env, STORE_TEST_WINPIDS => undef, STORE_TEST_PS_W => undef);
+        my $s1 = run_cmd([$^X, "-I$STAGE/helper/lib", '-e', $spy], timeout_ms => 20000, env => \%spy_env);
+        my $o1 = ($s1->{out} // '') =~ s/\s+\z//r;
+        push @e, "$os: a stand-in /proc with no map or listing seam: '$o1', want 'unknown' and no real map or ps -W read" unless $s1->{exit} == 0 && $o1 eq 'unknown';
+        my $s2 = run_cmd([$^X, "-I$STAGE/helper/lib", '-e', $spy], timeout_ms => 20000, env => { %spy_env, STORE_TEST_PROC_ROOT => undef });
+        my $o2 = ($s2->{out} // '') =~ s/\s+\z//r;
+        my $ps = grep { -x "$_/ps" } split /:/, ($ENV{PATH} // '');
+        my $w2 = $ps ? 'gone|map:3999009|run:ps -W' : 'unknown|map:3999009';
+        push @e, "$os: no stand-in /proc: '$o2', want '$w2' (the real map and ps -W are read)" unless $s2->{exit} == 0 && $o2 eq $w2;
+        # a ps -W that times out (exit -1 with part of a listing) or fails gives no listing: unknown, never gone
+        for my $how (qw(timeout fail)) {
+            my $s3 = run_cmd([$^X, "-I$STAGE/helper/lib", '-e', $spy], timeout_ms => 20000,
+                             env => { %spy_env, STORE_TEST_PROC_ROOT => undef, SPY_RUN => $how });
+            my $o3 = ($s3->{out} // '') =~ s/\s+\z//r;
+            my $w3 = $ps ? 'unknown|map:3999009|run:ps -W' : 'unknown|map:3999009';
+            push @e, "$os: a ps -W that ends by $how: '$o3', want '$w3' (no listing: unknown, never gone)" unless $s3->{exit} == 0 && $o3 eq $w3;
+        }
         return @e;
     }
     if ($name eq 'start_epochs') {

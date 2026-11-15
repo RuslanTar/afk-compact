@@ -59,14 +59,22 @@ sub write_ended {
 our $CLOSE_GONE_MS = 300;
 
 # _gone(pid, lstart) -> 1 only when the process surely ended: no such pid, or a start time
-# read now that differs from the recorded one. An unreadable start time is not proof.
+# read now that differs from the recorded one. An unreadable start time is not proof, nor is an
+# alive-unknown Windows pid under MSYS or Cygwin (identity::liveness), nor there a start that
+# differs while the same number, read as a Windows pid, maps to the recorded start
+# (identity::win_alt_start).
 sub _gone {
     my ($pid, $lstart) = @_;
     return 0 unless defined $pid && !ref $pid && $pid =~ /^\d+$/ && $pid > 0;
-    return 1 unless kill(0, $pid) || $!{EPERM};
+    my $lv = identity::liveness($pid);
+    return 1 if $lv eq 'gone';
+    return 0 if $lv eq 'unknown';
     return 0 unless defined $lstart && !ref $lstart && $lstart ne '';
     my $now = identity::start_time($pid);
-    return defined $now && $now ne $lstart ? 1 : 0;
+    return 0 unless defined $now && $now ne $lstart;
+    return 1 unless identity::cyg();
+    my $alt = identity::win_alt_start($pid);
+    return defined $alt && $alt eq $lstart ? 0 : 1;
 }
 
 # close_gone(sid, budget_ms => N) -> the number of ended- records written. A process that
@@ -364,7 +372,8 @@ sub ended {
 }
 
 # live_peers() -> [{session_id, pid, pid_lstart, cwd, worktree}] : a session is
-# live when its pid runs with the same start time and it has no ended- record.
+# live when its pid runs with the same start time and it has no ended- record (identity::alive: a
+# start that cannot be read, or an alive-unknown Windows pid under MSYS or Cygwin, counts as live).
 sub live_peers { return _live(_pid_files()) }
 
 # live_in(by-pid folder) -> the same as live_peers, from one folder's records only
