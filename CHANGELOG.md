@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-11-15
+
+afk-compact 0.1.16 keeps your standing approvals working across the plugin's own handoffs, compactions and resumes, counts an approval as standing only when your words say so, and asks again for denied approvals and pushes that reach every branch. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.
+
 ### Changed
 
 - A standing approval now stays valid after a handoff the plugin asked for itself (idle, before a compaction, at a stop). The plugin puts back each standing approval your previous handoff held as checked. One-time approvals in such a handoff are still asked again.
@@ -415,7 +419,8 @@ The first release of afk-compact, a Claude Code plugin for long unattended sessi
 - The plugin needs Perl 5.28 or newer with only the modules that ship with it, already present on macOS, Debian and Ubuntu (on Alpine, run `apk add perl`). The git measurements need `git`.
 - Supported on macOS 13 or newer and Linux with glibc. Alpine/musl and WSL 2 are expected to work but not yet tested in a session, and native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.15...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.16...HEAD
+[0.1.16]: https://github.com/RuslanTar/afk-compact/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/RuslanTar/afk-compact/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/RuslanTar/afk-compact/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/RuslanTar/afk-compact/compare/v0.1.12...v0.1.13
