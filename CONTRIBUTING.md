@@ -20,7 +20,7 @@ By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). To
 | `git` | Used by the plugin and by the test fixtures. |
 | `perl` 5.28 or newer | The plugin's helper is Perl, using only modules that ship with Perl. The helper test suite is Perl too. |
 | `python3` at `/usr/bin/python3` | The scripts in `tools/` start with `#!/usr/bin/python3` and use only the standard library. |
-| `node` and `npm` | Only for `tools/typecheck` (TypeScript 5.6.3, a dev dependency), which the maintainer can run for you. Nothing under `plugin/` uses npm. |
+| `node` and `npm` | Only for `tools/typecheck` (TypeScript, a dev dependency pinned in `package.json`), which the maintainer can run for you. Nothing under `plugin/` uses npm. |
 | Claude Code on your `PATH` | `claude plugin test` and `claude plugin validate` run the plugin's tests and manifest checks. Neither needs you to be logged in. |
 | Docker (optional) | Only for the Linux launcher cases in `tests/launcher/docker.sh`. |
 
