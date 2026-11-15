@@ -36,10 +36,11 @@ our $PENDING_S = 150;
 # A ping counts after a main request whose start only prompt_cache's expires_at bounds: its end
 # within this many seconds of that bound (the fork's own touch moves it).
 our $TOUCH_SLACK_S = 5;
-# 0.1.15: a main request in flight (its api-request line written, Claude Code's prompt_cache not yet
-# updated by its response) reads as pending this long after its start at most: a request that
-# failed or was stopped may leave prompt_cache as it was, and the reading then falls back to it.
-our $INFLIGHT_S = 600;
+# 0.1.15: a main request Claude Code has not recorded yet (its api-request line written, prompt_cache
+# not yet updated by its response) reads optimistically as warm from its start for this long at
+# most: a request that failed or was stopped leaves prompt_cache as it was, and the reading then
+# falls back to it.
+our $UNRECORDED_S = 600;
 our $MAX_BYTES = 65536;
 # the transcript tail read for the last main api-request line, growing once
 our @TAIL = (256 * 1024, 2 * 1024 * 1024);
@@ -475,47 +476,48 @@ sub report {
         elsif (($ttl // '') eq '1h') { $exp = _max($exp, $wp->[0] + $TTL_S{'1h'}) }
     }
     my $cat = $st ? _num($st->{compacted_at}) : undef;
-    # 0.1.15: a main request in flight: the transcript's last main request started after the one
-    # prompt_cache has the response of, for $INFLIGHT_S at most (and not in the future: a skewed
-    # clock reads as before), after any compaction, while the reading would otherwise be cold
-    # (expired) or the compaction (one after the request it has). It reads as pending, not as that cold or compacted flash: its response writes the
-    # cache within seconds. While prompt_cache still reads warm, the request reads that warm cache
-    # and the reading stays warm.
-    my $flight = !defined $why && defined $main_at && defined $pc_start && defined $exp
-                 && $main_at > $pc_start + $TOUCH_SLACK_S && $now - $main_at <= $INFLIGHT_S
-                 && $main_at <= $now + $TOUCH_SLACK_S
-                 && (!defined $cat || $main_at > $cat)
-                 && ($exp <= $now || (defined $cat && $cat > $pc_start)) ? 1 : 0;
-    # a compaction after the last request: the next one writes the cache anew. 0.1.15: only while
-    # the cache it leaves is still alive (expires_at ahead); once that passes, the reading is cold,
-    # expired, as without the compaction, so an idle session never reads compacted for hours.
+    # 0.1.15: the transcript's last main request started after the one prompt_cache has the
+    # response of (past the margin), so Claude Code has not recorded it yet. For $UNRECORDED_S at
+    # most, and when it is not in the future (a skewed clock) and came after any compaction, the
+    # reading is optimistic: warm from its start, as its response will record it within seconds,
+    # not the cold or compacted reading prompt_cache still gives. Past that bound it stops counting.
+    my $unrec = !defined $why && $last && $last->{kind} eq 'main' && defined $pc_start
+                && $main_at > $pc_start + $TOUCH_SLACK_S ? 1 : 0;
+    my $opt = $unrec && $now - $main_at <= $UNRECORDED_S && $main_at <= $now + $TOUCH_SLACK_S
+              && (!defined $cat || $main_at > $cat) ? 1 : 0;
+    if ($opt) {
+        $ttl = $main->{ttl} // $ttl;
+        $exp = $main_at + $TTL_S{$ttl};
+    }
+    # a compaction after the last request: the next one writes the cache anew. It reads compacted
+    # until a main request starts (0.1.15: one Claude Code recorded, or an optimistic one), a
+    # keep-warm ping reads the cache, or prompt_cache moves past it; it has no time limit, as the
+    # context after a compaction is a fresh start, not a cold cache.
     my $ref = $last ? $last->{at} : $anchor;
-    $why //= 'compacted' if !$flight && defined $src && defined $cat && (!defined $ref || $cat > $ref)
-                            && (!defined $exp || $exp > $now);
+    $ref = $pc_start if $unrec && !$opt;
+    $why //= 'compacted' if !$opt && defined $src && defined $cat && (!defined $ref || $cat > $ref);
     $r{source} = $src;
     $r{ttl} = $ttl;
     if ($last) {
         $r{last} = { kind => $last->{kind}, at => int($last->{at}), source => ($last->{kind} eq 'keep_warm' ? 'plugin' : $src) };
         $r{age_s} = _int($now - $last->{at});
     }
-    if ($flight) { @r{qw(state why)} = ('unknown', 'in-flight') }
-    elsif (defined $why) { @r{qw(state why)} = ('cold', $why) }
+    if (defined $why) { @r{qw(state why)} = ('cold', $why) }
     elsif (!defined $src || !defined $exp) { @r{qw(state why)} = ('unknown', 'no-data') }
     else {
         $r{expires_at} = int($exp);
         $r{seconds_left} = $exp > $now ? int($exp - $now) : 0;
         @r{qw(state why)} = $exp > $now ? ('warm', undef) : ('cold', 'expired');
+        $r{optimistic} = jsonc::true() if $opt;
     }
     return _with_kw(\%r, $kw, $st, $now, $main_at, defined $pc, $anchor);
 }
 
 # 0.1.11: the state in one word for a status bar: `state`, except right after a compaction, when
 # the context is nearly empty and the next request writes the cache anew: `compacted`, not cold.
-# 0.1.15: and while a main request is in flight (`unknown`, `in-flight`): `pending`.
 sub _label {
     my ($r) = @_;
     return 'compacted' if ($r->{state} // '') eq 'cold' && ($r->{why} // '') eq 'compacted';
-    return 'pending' if ($r->{state} // '') eq 'unknown' && ($r->{why} // '') eq 'in-flight';
     return $r->{state} // 'unknown';
 }
 
@@ -601,24 +603,18 @@ sub _dur {
 #   is the age (`left` => 1: the time left), `~` before it when the TTL was read from the
 #   transcript. Keep-warm warming: cyan, n/max filled, `↻n/max`, `…` while a ping is out; ` off`
 #   when keep-warm refused the gap near a usage limit. Cold: magenta, full, `cold <age>` or
-#   `cold miss`. Compacted: empty cells, `compacted`. A main request in flight (0.1.15, label
-#   `pending`): empty cells, no colour, `…`, though the state is unknown. ascii => 1: `#`/`-`, `kw`, `...`;
-#   short => 1: `c <suffix>` (`c cold`, `c cmp`, `c …`) without cells; color => 1: one SGR colour, reset
+#   `cold miss`. Compacted: empty cells, `compacted`. ascii => 1: `#`/`-`, `kw`, `...`;
+#   short => 1: `c <suffix>` (`c cold`, `c cmp`) without cells; color => 1: one SGR colour, reset
 #   after the segment.
 sub bar {
     my ($r, %o) = @_;
     return '' unless ref $r eq 'HASH';
     return _plain($r) if $o{plain};
     my $state = $r->{state} // 'unknown';
-    my $u = $o{ascii} ? 0 : 1;
-    # 0.1.15: a main request in flight: empty cells, no colour, `…` (as a keep-warm ping out)
-    if (_label($r) eq 'pending') {
-        my $dots = $u ? '…' : '...';
-        return $o{short} ? "c $dots" : ($u ? '░' : '-') x $CELLS . " $dots";
-    }
     return '' if $state eq 'unknown';
     my $ttl_s = defined $r->{ttl} && !ref $r->{ttl} ? $TTL_S{ $r->{ttl} } : undef;
     return '' unless $ttl_s;
+    my $u = $o{ascii} ? 0 : 1;
     my $kw = ref $r->{keep_warm} eq 'HASH' ? $r->{keep_warm} : undef;
     my $tilde = ($r->{source} // '') eq 'transcript' ? '~' : '';
     my $now = _num($r->{now}) // return '';
@@ -656,8 +652,7 @@ sub bar {
 }
 
 # line(report) -> the one plain line (no newline), or '' when the state is unknown:
-# `cache 1h warm 42m left ↻3/7`, `cache 1h cold (expired 12m ago)`, `cache compacted`, `cache request
-# pending` (0.1.15: a main request in flight); then
+# `cache 1h warm 42m left ↻3/7`, `cache 1h cold (expired 12m ago)`, `cache compacted`; then
 # (0.1.11) ` · ping pending` while a keep-warm ping is out and ` · keep-warm off (<why>)` when
 # keep-warm refused the current idle gap, for every reason but no-jobs: no background job is the
 # normal idle case, not a refusal to notice (the JSON's keep_warm.off, the log row and /status
@@ -666,7 +661,6 @@ sub line { return bar($_[0], plain => 1) }
 
 sub _plain {
     my ($r) = @_;
-    return 'cache request pending' if _label($r) eq 'pending';
     return '' if $r->{state} eq 'unknown';
     my $t = defined $r->{ttl} ? " $r->{ttl}" : '';
     my $kw = $r->{keep_warm};

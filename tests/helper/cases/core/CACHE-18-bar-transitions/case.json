@@ -1,11 +1,11 @@
 {
  "id": "CACHE-18-bar-transitions",
- "note": "0.1.15: the meter across a compaction and a prompt sent. `compacted` shows from the compaction until the next main request starts, warm evidence after it (a keep-warm ping that read the cache, prompt_cache moved past it), or the expiry of the cache it leaves, whichever comes first; after that expiry the reading is cold, expired, so an idle session never reads compacted for hours. A main request in flight (the transcript's last main request after the one prompt_cache has the response of, at most 10 minutes old) reads pending (`…`, label `pending`, state unknown, why in-flight) where prompt_cache alone would read cold or the compaction: no cold flash at a prompt. The steps that read the same on 0.1.14 (compacted while alive, warm after the response, warm in flight, the 10-minute bound, the 5-minute tier, a compaction after a request with no response, warm evidence after a compaction, no prompt_cache) pin the edges of both rules.",
+ "note": "0.1.15: the meter across a compaction and a prompt sent. `compacted` shows from the compaction until the next main request starts (one Claude Code recorded, or an optimistic one), a keep-warm ping that read the cache, or prompt_cache moved past it; it has no time limit, as the context after a compaction is a fresh start. A main request Claude Code has not recorded yet (the transcript's last main request more than 5 s after the start prompt_cache has, at most 10 minutes old, not in the future, after any compaction) reads optimistically warm from its start (`0m`, `optimistic` true): no cold or compacted flash at a prompt, and on a warm cache the age starts again. Past 10 minutes such a request stops counting and the reading returns to prompt_cache's, or to compacted.",
  "now": "2026-11-09T12:00:00Z",
  "tz": "UTC",
  "steps": [
   {
-   "name": "compacted while the cache it leaves is alive (expires_at ahead): `compacted`",
+   "name": "compacted while the cache it leaves is alive: `compacted`",
    "argv": [
     "cache",
     "--stdin",
@@ -153,7 +153,7 @@
    }
   },
   {
-   "name": "compacted, then idle past the expiry: cold with its age, no longer `compacted`",
+   "name": "compacted, then idle past the old cache's expiry: still `compacted`, not cold (a fresh start)",
    "argv": [
     "cache",
     "--stdin",
@@ -222,11 +222,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "████████████ cold 1h02m\n"
+    "stdout": "░░░░░░░░░░░░ compacted\n"
    }
   },
   {
-   "name": "the same: --json cold, expired, label cold",
+   "name": "the same: --json cold, compacted, label compacted",
    "argv": [
     "cache",
     "--stdin",
@@ -295,15 +295,13 @@
     "exit": 0,
     "json": {
      "state": "cold",
-     "why": "expired",
-     "label": "cold",
-     "seconds_left": 0,
-     "expires_at": 1794225480
+     "why": "compacted",
+     "label": "compacted"
     }
    }
   },
   {
-   "name": "the same: the plain line reads expired",
+   "name": "the same: the plain line `cache compacted`",
    "argv": [
     "cache",
     "--stdin"
@@ -369,11 +367,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "cache 1h cold (expired 2m ago)\n"
+    "stdout": "cache compacted\n"
    }
   },
   {
-   "name": "compacted 3 hours ago, idle since: cold 3h02m, not `compacted` for hours",
+   "name": "compacted 3 hours ago, idle since: still `compacted`",
    "argv": [
     "cache",
     "--stdin",
@@ -442,155 +440,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "████████████ cold 3h02m\n"
+    "stdout": "░░░░░░░░░░░░ compacted\n"
    }
   },
   {
-   "name": "the same: --json label cold",
-   "argv": [
-    "cache",
-    "--stdin",
-    "--json"
-   ],
-   "setup": [
-    {
-     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
-     "json": {
-      "schema": "$BRAND-cache-state/v1",
-      "sid": "$SID",
-      "compacted_at": 1794214800
-     }
-    },
-    {
-     "write": "$TMP/proj/$SID.jsonl",
-     "jsonl": [
-      {
-       "type": "api-request",
-       "sessionId": "$SID",
-       "id": "req-1794214680",
-       "timestamp": "2026-11-09T08:58:00.000Z",
-       "version": "2.1.325",
-       "querySource": "repl_main_thread",
-       "params": {
-        "model": "claude-sonnet-5-5"
-       },
-       "cacheControl": [
-        {
-         "path": [
-          "system",
-          1
-         ],
-         "value": {
-          "type": "ephemeral",
-          "ttl": "1h",
-          "scope": "global"
-         }
-        },
-        {
-         "path": [
-          "messages",
-          20,
-          "content",
-          0
-         ],
-         "value": {
-          "type": "ephemeral",
-          "ttl": "1h"
-         }
-        }
-       ]
-      }
-     ]
-    }
-   ],
-   "stdin_json": {
-    "session_id": "$SID",
-    "transcript_path": "$TMP/proj/$SID.jsonl",
-    "prompt_cache": {
-     "expires_at": 1794218280,
-     "ttl": "1h"
-    }
-   },
-   "expect": {
-    "exit": 0,
-    "json": {
-     "state": "cold",
-     "why": "expired",
-     "label": "cold"
-    }
-   }
-  },
-  {
-   "name": "compacted, transcript only (no prompt_cache), past the expiry: cold ~1h10m",
-   "argv": [
-    "cache",
-    "--stdin",
-    "--bar",
-    "--color",
-    "never"
-   ],
-   "setup": [
-    {
-     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
-     "json": {
-      "schema": "$BRAND-cache-state/v1",
-      "sid": "$SID",
-      "compacted_at": 1794222000
-     }
-    },
-    {
-     "write": "$TMP/proj/$SID.jsonl",
-     "jsonl": [
-      {
-       "type": "api-request",
-       "sessionId": "$SID",
-       "id": "req-1794221400",
-       "timestamp": "2026-11-09T10:50:00.000Z",
-       "version": "2.1.325",
-       "querySource": "repl_main_thread",
-       "params": {
-        "model": "claude-sonnet-5-5"
-       },
-       "cacheControl": [
-        {
-         "path": [
-          "system",
-          1
-         ],
-         "value": {
-          "type": "ephemeral",
-          "ttl": "1h",
-          "scope": "global"
-         }
-        },
-        {
-         "path": [
-          "messages",
-          20,
-          "content",
-          0
-         ],
-         "value": {
-          "type": "ephemeral",
-          "ttl": "1h"
-         }
-        }
-       ]
-      }
-     ]
-    }
-   ],
-   "stdin_json": {
-    "session_id": "$SID",
-    "transcript_path": "$TMP/proj/$SID.jsonl"
-   },
-   "expect": {
-    "exit": 0,
-    "stdout": "████████████ cold ~1h10m\n"
-   }
-  },
-  {
-   "name": "the same: --json cold, expired, source transcript",
+   "name": "compacted, transcript only (no prompt_cache), past the expiry: still `compacted`",
    "argv": [
     "cache",
     "--stdin",
@@ -655,14 +509,14 @@
     "exit": 0,
     "json": {
      "state": "cold",
-     "why": "expired",
-     "label": "cold",
+     "why": "compacted",
+     "label": "compacted",
      "source": "transcript"
     }
    }
   },
   {
-   "name": "a prompt sent after the expiry, its request in flight (prompt_cache not yet updated): `…`, not cold",
+   "name": "a prompt sent after the expiry, prompt_cache not yet updated: `0m` at once, not cold",
    "argv": [
     "cache",
     "--stdin",
@@ -731,11 +585,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "░░░░░░░░░░░░ …\n"
+    "stdout": "░░░░░░░░░░░░ 0m\n"
    }
   },
   {
-   "name": "the same: --json unknown, in-flight, label pending, no expiry; last is the request in flight",
+   "name": "the same: --json warm, optimistic, expiry from the request's start",
    "argv": [
     "cache",
     "--stdin",
@@ -803,11 +657,12 @@
    "expect": {
     "exit": 0,
     "json": {
-     "state": "unknown",
-     "why": "in-flight",
-     "label": "pending",
-     "expires_at": null,
-     "seconds_left": null,
+     "state": "warm",
+     "why": null,
+     "label": "warm",
+     "optimistic": true,
+     "expires_at": 1794229198,
+     "seconds_left": 3598,
      "ttl": "1h",
      "source": "claude-code",
      "last": {
@@ -820,7 +675,7 @@
    }
   },
   {
-   "name": "the same: the plain line `cache request pending`",
+   "name": "the same: the plain line reads warm",
    "argv": [
     "cache",
     "--stdin"
@@ -886,11 +741,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "cache request pending\n"
+    "stdout": "cache 1h warm 60m left\n"
    }
   },
   {
-   "name": "the same, --short: `c …`",
+   "name": "the same, --short: `c 0m`",
    "argv": [
     "cache",
     "--stdin",
@@ -960,11 +815,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "c …\n"
+    "stdout": "c 0m\n"
    }
   },
   {
-   "name": "the same, --ascii: `------------ ...`",
+   "name": "the same, --ascii: `------------ 0m`",
    "argv": [
     "cache",
     "--stdin",
@@ -1034,11 +889,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "------------ ...\n"
+    "stdout": "------------ 0m\n"
    }
   },
   {
-   "name": "the same, --color always: no colour",
+   "name": "the same, --color always: the normal warm colour, no `…`",
    "argv": [
     "cache",
     "--stdin",
@@ -1107,11 +962,14 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "░░░░░░░░░░░░ …\n"
+    "stdout": "\u001b[34m░░░░░░░░░░░░ 0m\u001b[0m\n",
+    "stdout_absent": [
+     "…"
+    ]
    }
   },
   {
-   "name": "after a compaction, a prompt sent while the old expiry is ahead: `…`, not the old cache's age",
+   "name": "after a compaction, a prompt sent while the old expiry is ahead: `0m`, not the old cache's age",
    "argv": [
     "cache",
     "--stdin",
@@ -1180,11 +1038,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "░░░░░░░░░░░░ …\n"
+    "stdout": "░░░░░░░░░░░░ 0m\n"
    }
   },
   {
-   "name": "the same: --json label pending",
+   "name": "the same: --json warm, optimistic",
    "argv": [
     "cache",
     "--stdin",
@@ -1252,14 +1110,14 @@
    "expect": {
     "exit": 0,
     "json": {
-     "state": "unknown",
-     "why": "in-flight",
-     "label": "pending"
+     "state": "warm",
+     "label": "warm",
+     "optimistic": true
     }
    }
   },
   {
-   "name": "after a compaction, a prompt sent after the old expiry: `…`, not cold",
+   "name": "after a compaction, a prompt sent after the old expiry: `0m`, not cold",
    "argv": [
     "cache",
     "--stdin",
@@ -1328,11 +1186,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "░░░░░░░░░░░░ …\n"
+    "stdout": "░░░░░░░░░░░░ 0m\n"
    }
   },
   {
-   "name": "the request's response in (prompt_cache from it): warm, 0m",
+   "name": "the request's response recorded (prompt_cache from it): warm, 0m",
    "argv": [
     "cache",
     "--stdin",
@@ -1405,7 +1263,7 @@
    }
   },
   {
-   "name": "the same: --json warm",
+   "name": "the same: --json warm, no optimistic key",
    "argv": [
     "cache",
     "--stdin",
@@ -1475,12 +1333,15 @@
     "json": {
      "state": "warm",
      "label": "warm",
-     "why": null
+     "why": null,
+     "optimistic": {
+      "null": 1
+     }
     }
    }
   },
   {
-   "name": "a prompt sent while prompt_cache reads warm: the request reads that cache, still warm 30m",
+   "name": "a prompt sent while prompt_cache reads warm 30m: `0m` from the request's start, not the stale age",
    "argv": [
     "cache",
     "--stdin",
@@ -1549,11 +1410,85 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "██████░░░░░░ 30m\n"
+    "stdout": "░░░░░░░░░░░░ 0m\n"
    }
   },
   {
-   "name": "a request started 11 minutes ago with no response recorded (failed or stopped): back to cold",
+   "name": "the same: --json optimistic, expiry an hour from the request",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "schema_only": 1
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225598",
+       "timestamp": "2026-11-09T11:59:58.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794227400,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "optimistic": true,
+     "expires_at": 1794229198
+    }
+   }
+  },
+  {
+   "name": "a request started 11 minutes ago, never recorded (failed or stopped): back to cold",
    "argv": [
     "cache",
     "--stdin",
@@ -1626,7 +1561,7 @@
    }
   },
   {
-   "name": "the same: --json cold, expired",
+   "name": "the same: --json cold, expired, not optimistic",
    "argv": [
     "cache",
     "--stdin",
@@ -1696,12 +1631,15 @@
     "json": {
      "state": "cold",
      "why": "expired",
-     "label": "cold"
+     "label": "cold",
+     "optimistic": {
+      "null": 1
+     }
     }
    }
   },
   {
-   "name": "a request started exactly 10 minutes ago: still pending",
+   "name": "a request started exactly 10 minutes ago: still optimistic, warm 10m",
    "argv": [
     "cache",
     "--stdin",
@@ -1770,11 +1708,84 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "░░░░░░░░░░░░ …\n"
+    "stdout": "██░░░░░░░░░░ 10m\n"
    }
   },
   {
-   "name": "the 5-minute tier, its last request done and expired 100 s ago: cold, not pending",
+   "name": "after a compaction, a request never recorded within 10 minutes: back to `compacted`",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "compacted_at": 1794222000
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794224940",
+       "timestamp": "2026-11-09T11:49:00.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794225500,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "░░░░░░░░░░░░ compacted\n"
+   }
+  },
+  {
+   "name": "the 5-minute tier, its last request recorded and expired 100 s ago: cold",
    "argv": [
     "cache",
     "--stdin",
@@ -1847,7 +1858,7 @@
    }
   },
   {
-   "name": "a compaction after the transcript's last request (whose response never came): `compacted`",
+   "name": "a compaction after the transcript's last request (never recorded): `compacted`",
    "argv": [
     "cache",
     "--stdin",
@@ -2011,7 +2022,7 @@
    }
   },
   {
-   "name": "the same: --json warm, last a keep-warm ping",
+   "name": "the same: --json warm, last a keep-warm ping, not optimistic",
    "argv": [
     "cache",
     "--stdin",
@@ -2099,6 +2110,9 @@
     "json": {
      "state": "warm",
      "label": "warm",
+     "optimistic": {
+      "null": 1
+     },
      "last": {
       "kind": "keep_warm",
       "at": 1794223800,
@@ -2139,13 +2153,11 @@
    }
   },
   {
-   "name": "no prompt_cache (after a resume), the transcript's request after the compaction: warm ~0m, not pending",
+   "name": "no prompt_cache (after a resume), the transcript's request after the compaction: warm ~0m, not optimistic",
    "argv": [
     "cache",
     "--stdin",
-    "--bar",
-    "--color",
-    "never"
+    "--json"
    ],
    "setup": [
     {
@@ -2204,11 +2216,195 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "░░░░░░░░░░░░ ~0m\n"
+    "json": {
+     "state": "warm",
+     "source": "transcript",
+     "optimistic": {
+      "null": 1
+     }
+    }
    }
   },
   {
-   "name": "a compaction before the request prompt_cache has the response of, a later request sent: warm, not pending",
+   "name": "a keep-warm ping that read the cache after a request never recorded: warm from the ping, not optimistic",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--bar",
+    "--color",
+    "never"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": 1794225200,
+       "gap_start": 1794225100,
+       "hours": 6,
+       "n": 1,
+       "warm_at": 1794225300,
+       "last_at": 1794225310,
+       "result": "warm",
+       "warm_ping": [
+        1794225300,
+        1794225310
+       ]
+      }
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225100",
+       "timestamp": "2026-11-09T11:51:40.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794224400,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "stdout": "█░░░░░░░░░░░ ↻1/7\n"
+   }
+  },
+  {
+   "name": "the same: --json last a keep-warm ping, not optimistic",
+   "argv": [
+    "cache",
+    "--stdin",
+    "--json"
+   ],
+   "setup": [
+    {
+     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
+     "json": {
+      "schema": "$BRAND-cache-state/v1",
+      "sid": "$SID",
+      "keep_warm": {
+       "started_at": 1794225200,
+       "gap_start": 1794225100,
+       "hours": 6,
+       "n": 1,
+       "warm_at": 1794225300,
+       "last_at": 1794225310,
+       "result": "warm",
+       "warm_ping": [
+        1794225300,
+        1794225310
+       ]
+      }
+     }
+    },
+    {
+     "write": "$TMP/proj/$SID.jsonl",
+     "jsonl": [
+      {
+       "type": "api-request",
+       "sessionId": "$SID",
+       "id": "req-1794225100",
+       "timestamp": "2026-11-09T11:51:40.000Z",
+       "version": "2.1.325",
+       "querySource": "repl_main_thread",
+       "params": {
+        "model": "claude-sonnet-5-5"
+       },
+       "cacheControl": [
+        {
+         "path": [
+          "system",
+          1
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h",
+          "scope": "global"
+         }
+        },
+        {
+         "path": [
+          "messages",
+          20,
+          "content",
+          0
+         ],
+         "value": {
+          "type": "ephemeral",
+          "ttl": "1h"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stdin_json": {
+    "session_id": "$SID",
+    "transcript_path": "$TMP/proj/$SID.jsonl",
+    "prompt_cache": {
+     "expires_at": 1794224400,
+     "ttl": "1h"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "state": "warm",
+     "optimistic": {
+      "null": 1
+     },
+     "last": {
+      "kind": "keep_warm",
+      "at": 1794225300,
+      "source": "plugin"
+     }
+    }
+   }
+  },
+  {
+   "name": "a compaction before prompt_cache's request, a later request sent: `0m`",
    "argv": [
     "cache",
     "--stdin",
@@ -2277,86 +2473,11 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "██████░░░░░░ 33m\n"
+    "stdout": "░░░░░░░░░░░░ 0m\n"
    }
   },
   {
-   "name": "the same: --json warm",
-   "argv": [
-    "cache",
-    "--stdin",
-    "--json"
-   ],
-   "setup": [
-    {
-     "write": "$HOME/.local/state/$BRAND/cache/$SID.v1.json",
-     "json": {
-      "schema": "$BRAND-cache-state/v1",
-      "sid": "$SID",
-      "compacted_at": 1794223100
-     }
-    },
-    {
-     "write": "$TMP/proj/$SID.jsonl",
-     "jsonl": [
-      {
-       "type": "api-request",
-       "sessionId": "$SID",
-       "id": "req-1794225590",
-       "timestamp": "2026-11-09T11:59:50.000Z",
-       "version": "2.1.325",
-       "querySource": "repl_main_thread",
-       "params": {
-        "model": "claude-sonnet-5-5"
-       },
-       "cacheControl": [
-        {
-         "path": [
-          "system",
-          1
-         ],
-         "value": {
-          "type": "ephemeral",
-          "ttl": "1h",
-          "scope": "global"
-         }
-        },
-        {
-         "path": [
-          "messages",
-          20,
-          "content",
-          0
-         ],
-         "value": {
-          "type": "ephemeral",
-          "ttl": "1h"
-         }
-        }
-       ]
-      }
-     ]
-    }
-   ],
-   "stdin_json": {
-    "session_id": "$SID",
-    "transcript_path": "$TMP/proj/$SID.jsonl",
-    "prompt_cache": {
-     "expires_at": 1794227200,
-     "ttl": "1h"
-    }
-   },
-   "expect": {
-    "exit": 0,
-    "json": {
-     "state": "warm",
-     "why": null,
-     "label": "warm"
-    }
-   }
-  },
-  {
-   "name": "the transcript's request 3 s after prompt_cache's start (inside the 5 s margin): the same request, cold",
+   "name": "the transcript's request 3 s after prompt_cache's start (inside the 5 s margin): the recorded request, cold",
    "argv": [
     "cache",
     "--stdin",
@@ -2429,13 +2550,11 @@
    }
   },
   {
-   "name": "the transcript's request 6 s after prompt_cache's start (past the 5 s margin): a later request, pending",
+   "name": "the transcript's request 6 s after prompt_cache's start (past the margin): a later request, optimistic",
    "argv": [
     "cache",
     "--stdin",
-    "--bar",
-    "--color",
-    "never"
+    "--json"
    ],
    "setup": [
     {
@@ -2498,11 +2617,14 @@
    },
    "expect": {
     "exit": 0,
-    "stdout": "░░░░░░░░░░░░ …\n"
+    "json": {
+     "state": "warm",
+     "optimistic": true
+    }
    }
   },
   {
-   "name": "a transcript request an hour in the future (a skewed clock): not pending, cold",
+   "name": "a transcript request an hour in the future (a skewed clock): not optimistic, cold",
    "argv": [
     "cache",
     "--stdin",
@@ -2572,7 +2694,10 @@
     "json": {
      "state": "cold",
      "why": "expired",
-     "label": "cold"
+     "label": "cold",
+     "optimistic": {
+      "null": 1
+     }
     }
    }
   }

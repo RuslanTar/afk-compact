@@ -23,7 +23,6 @@ It exits 0 whatever it reads (a usage error says so on stderr), writes nothing b
 | warm | `cache 1h warm 42m left`, then ` ↻3/7` while keep-warm runs (ping 3 of at most 7) |
 | cold, expired | `cache 1h cold (expired 12m ago)` |
 | compacted (the context is nearly empty; the next request writes the cache anew) | `cache compacted` |
-| a main request in flight (a prompt just sent while the last reading was cold or compacted; its response not yet in) | `cache request pending` |
 | cold, a keep-warm ping that did not read the conversation | `cache cold (keep-warm ping missed)` |
 | unknown | nothing at all (no line) |
 
@@ -43,10 +42,9 @@ The text may change between versions; read `--json` in anything that parses it.
 | cold, expired | `████████████ cold 1h02m`: magenta, the age |
 | cold, a keep-warm ping that did not read the conversation | `████████████ cold miss` |
 | compacted | `░░░░░░░░░░░░ compacted` |
-| a main request in flight | `░░░░░░░░░░░░ …`: no colour |
 | unknown, or the TTL unknown | nothing at all |
 
-A `~` before the age marks a TTL read from the transcript rather than from Claude Code's `prompt_cache`. `--left` shows the time left instead of the age (`50m left`). `--short` drops the cells: `c 10m`, `c ↻3/7`, `c cold`, `c cmp`, `c …`; a `COLUMNS` below 60 does the same. `--ascii` draws `#` and `-`, `kw` for `↻` and `...` for `…`; a locale whose `LC_ALL`, `LC_CTYPE` or `LANG` names another charset than UTF-8 does the same. `--color` picks the 16 standard terminal colours: `auto` (the default) is on unless `NO_COLOR` is set and not empty or `TERM` is `dumb`; `always` is on, `never` off. A coloured segment ends with a colour reset.
+A `~` before the age marks a TTL read from the transcript rather than from Claude Code's `prompt_cache`. `--left` shows the time left instead of the age (`50m left`). `--short` drops the cells: `c 10m`, `c ↻3/7`, `c cold`, `c cmp`; a `COLUMNS` below 60 does the same. `--ascii` draws `#` and `-`, `kw` for `↻` and `...` for `…`; a locale whose `LC_ALL`, `LC_CTYPE` or `LANG` names another charset than UTF-8 does the same. `--color` picks the 16 standard terminal colours: `auto` (the default) is on unless `NO_COLOR` is set and not empty or `TERM` is `dumb`; `always` is on, `never` off. A coloured segment ends with a colour reset.
 
 The flags are a stable promise: a later version keeps them. The meter's text, its glyphs, colours and thresholds may change between versions; read `--json` in anything that parses it.
 
@@ -60,8 +58,8 @@ One line, `"schema": "{{plugin}}-cache/v1"`. Times are whole epoch seconds.
 | `sid` | the session id read, or `null` |
 | `now` | the time of the reading |
 | `state` | `warm`, `cold` or `unknown` |
-| `label` | the state in one word for a status bar: `warm`, `compacted`, `cold`, `pending` or `unknown`. It is `state`, except right after a compaction (`state` `cold`, `why` `compacted`), where it is `compacted`: the context is nearly empty then, and the next request writes the cache anew; and while a main request is in flight (`state` `unknown`, `why` `in-flight`, 0.1.15), where it is `pending` |
-| `why` | `null` while warm; `expired`, `compacted` or `fork-miss` when cold; `no-data`, `caching-off`, `bad-sid` or `in-flight` (0.1.15) when unknown |
+| `label` | the state in one word for a status bar: `warm`, `compacted`, `cold` or `unknown`. It is `state`, except right after a compaction (`state` `cold`, `why` `compacted`), where it is `compacted`: the context is nearly empty then, and the next request writes the cache anew |
+| `why` | `null` while warm; `expired`, `compacted` or `fork-miss` when cold; `no-data`, `caching-off` or `bad-sid` when unknown |
 | `ttl` | the cache tier the last request wrote, `"1h"` or `"5m"`, or `null` |
 | `source` | where the reading came from: `claude-code` (`prompt_cache` on stdin), `transcript` (its last main `api-request` line), `plugin` (a keep-warm ping alone), or `null` |
 | `last` | the last request that read or wrote the cache: `{"kind": "main" \| "keep_warm", "at", "source"}` (a `keep_warm` one's source is `plugin`), or `null` |
@@ -77,9 +75,8 @@ A later version may add keys to `v1`; ignore the ones you do not know. A change 
 
 1. **The main session's last request.** With `--stdin`, Claude Code's own `prompt_cache` (Claude Code 2.1.312 and later; absent until a session's first response, also after a resume): its `ttl` and `expires_at`. Otherwise the last main `api-request` line of the transcript (its time and the TTL of its last cache breakpoint), read from the end: 256 KiB, then 2 MiB.
 2. **The plugin's keep-warm ping** counts only when it started after that request. A ping that read the cache makes `last` a `keep_warm` one and, on the one-hour tier, moves `expires_at` to its start plus one hour. Claude Code 2.1.319 already does the same in `prompt_cache` (a fork of the main conversation that reads the cache moves `expires_at` to its start plus the TTL, and is not counted as a request); the plugin takes the later of the two, so a version that does not still reads warm. On the five-minute tier it changes `last` but not `expires_at`. A later ping of the same idle gap that failed (an API error, an abort) changes neither. An idle gap that keep-warm refused sends no ping, so it changes neither: the previous gap's pings still count until the next main request. A ping that did not read the conversation (`fork-miss`) reads as cold: in such cases the next main request missed the cache too (17 of 17 measured).
-3. **A compaction** after the last request (the plugin's `compacted` row of the main session, written once the compaction ran; a skipped one does not count, nor the `idle_compact` row written before plugin idle compaction is tried) reads as `compacted` until the next request starts (its `api-request` line in the transcript), without the transcript, a later request or fork read in `prompt_cache`, or a keep-warm ping that read the cache: `label` `compacted`, with `state` `cold` and `why` `compacted` as before. Only while the cache it leaves is alive (0.1.15): once `expires_at` passes, it reads cold, `expired`, as it would without the compaction, so an idle session does not read `compacted` for hours.
-4. **A main request in flight** (0.1.15): the transcript's last main request started more than 5 seconds after the request `prompt_cache` has the response of (`expires_at − ttl`), at most 10 minutes ago (and not later than now) and after any compaction, while the reading would otherwise be cold, `expired`, or the compaction. It reads as `unknown`, `in-flight`, `label` `pending`, with no `expires_at`, until its response updates `prompt_cache` (seconds): a prompt sent to a cold cache does not flash `cold`. While `prompt_cache` still reads warm, the request reads that cache, and the reading stays warm. A request whose response never comes (an error, an interrupt) reads as before once 10 minutes pass. Without `prompt_cache` (after a resume) or without the transcript, nothing reads as in flight.
-5. Otherwise the cache is warm until `expires_at`, then cold, `expired`. `caching_observed: false` in `prompt_cache` reads as unknown, `caching-off`.
+3. **A compaction** after the last request (the plugin's `compacted` row of the main session, written once the compaction ran; a skipped one does not count, nor the `idle_compact` row written before plugin idle compaction is tried) reads as `compacted` until the next request: `label` `compacted`, with `state` `cold` and `why` `compacted` as before.
+4. Otherwise the cache is warm until `expires_at`, then cold, `expired`. `caching_observed: false` in `prompt_cache` reads as unknown, `caching-off`.
 
 ## The usage record
 
