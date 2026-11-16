@@ -2505,7 +2505,8 @@ test('KW-PING-S (0.1.9): the start row names the gap\'s ping interval (ping_s, 3
 
 test('KW-PING-S (0.1.9): under STORE_TEST_IDLE_CACHE_S=600 the first ping comes 500 s into the gap, and the start row says ping_s 500', { options: ON }, async ($, on) => {
   const w = world(on)
-  w.env = { STORE_TEST_IDLE_CACHE_S: '600' }
+  w.env = { STORE_TEST_MODE: '1', STORE_TEST_IDLE_CACHE_S: '600' }
+  w.stage = 'file'
   const f = forks(on, w)
   await w.start($)
   await humanTurn($, w)
@@ -2652,7 +2653,8 @@ test('KW-LATE-03 (0.1.11): a 90-s fork well inside the bound stays warm', { opti
 
 test('KW-LATE-04 (0.1.11): the 2-min bound is real time, not test-seam-scaled: under STORE_TEST_IDLE_CACHE_S=600 a 30-s fork stays warm', { options: ON }, async ($, on) => {
   const w = world(on)
-  w.env = { STORE_TEST_IDLE_CACHE_S: '600' }
+  w.env = { STORE_TEST_MODE: '1', STORE_TEST_IDLE_CACHE_S: '600' }
+  w.stage = 'file'
   on('model.fork', async () => {
     await w.clock.sleep(30000)
     return { value: { isAnswered: true, text: 'OK', usage: WARM } } as never

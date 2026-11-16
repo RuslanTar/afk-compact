@@ -163,6 +163,9 @@ export class World {
   usageNotes: { at: number; windows: { kind: string; pct: number; resets_at: number | null }[] }[] = []
   /** Environment variables the plugin reads beside HOME (`$.env.get`), read when asked. */
   env: Record<string, string> = {}
+  /** The plugin root's test-stage marker (`$.fs.stat` of `<root>/.store-test-stage`, deps.ts testStage):
+   * `file` a regular file, `link` a symbolic link to one, `none` absent (the default, as installed). */
+  stage: 'file' | 'link' | 'none' = 'none'
   /** `$.session.model()`; undefined: the call rejects. */
   model: string | undefined = 'claude-test-model'
   /** Spy: the argument keys of every `session.compact` and `prompt.submit` reaching the bottom. */
@@ -280,6 +283,18 @@ export class World {
       return t === undefined ? { deny: 'missing' } : { value: t }
     })
     on('fs.exists', (_$, e) => ({ value: this.files.has(e.path) }))
+    // `$.fs.stat` of the test-stage marker and of the plugin root it sits in (deps.ts testStage);
+    // any other path goes on beneath, as before this hook.
+    on('fs.stat', (_$, e, next) => {
+      if (e.path.endsWith('/.store-test-stage')) {
+        if (this.stage === 'none') return { deny: 'missing' }
+        return { value: { kind: 'file' as const, size: 0, mtimeMs: 0, isLink: this.stage === 'link' } }
+      }
+      if (this.root !== '' && e.path === this.root) {
+        return { value: { kind: 'dir' as const, size: 0, mtimeMs: 0, isLink: false, ...(e.resolve ? { realPath: e.path } : {}) } }
+      }
+      return next(e)
+    })
     on('process.run', async (_$, e) => {
       if (this.atHelper) await this.atHelper(e.argv[1] ?? '', e.argv.slice(2))
       const r = this.helper([...e.argv], { ...(e.init?.env ?? {}) }, e.init?.stdin)

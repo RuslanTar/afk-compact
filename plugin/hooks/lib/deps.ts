@@ -44,7 +44,8 @@ export type NativeIdle = 'on' | 'vetoed' | 'compaction-off' | 'unknown'
 /**
  * The environment the idle timers read once per load: Claude Code's own
  * `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` (`compactMin`, as native parses it), the test seam
- * `STORE_TEST_IDLE_CACHE_S` (`cacheS`, 120–3600, else undefined), the `DISABLE_PROMPT_CACHING*`
+ * `STORE_TEST_IDLE_CACHE_S` (`cacheS`, 120–3600, else undefined; honoured on a test stage only,
+ * testStage), the `DISABLE_PROMPT_CACHING*`
  * names native's cache check reads (`cacheOff`) and Claude Code's prompt-cache TTL switches for
  * the main conversation (`ttl`, TtlEnv).
  */
@@ -110,6 +111,28 @@ export function compactMinOf(v: string | undefined): number {
   if (!/^[0-9]+$/.test(t)) return IDLE_COMPACT_MIN_DEFAULT
   const n = Number(t)
   return Number.isSafeInteger(n) && n > 0 ? Math.max(IDLE_COMPACT_MIN_FLOOR, n) : IDLE_COMPACT_MIN_DEFAULT
+}
+
+/** The marker of a test stage (helper/lib/testgate.pm `$MARK`): only the test stagers write it. */
+export const TEST_STAGE_MARK = '.store-test-stage'
+
+/**
+ * The helper's test-mode rule (helper/lib/testgate.pm) for the mod's own test seam: `STORE_TEST_MODE`
+ * is `1` and the plugin root (`$.plugin.root`, the folder the engine loaded this module from, never
+ * an environment value, with its links resolved) holds `TEST_STAGE_MARK` as a regular file that is
+ * not a link. The engine's stat carries no owner, so the helper's same-owner check has no twin here.
+ * Without it `STORE_TEST_IDLE_CACHE_S` is ignored, as `status` (cmd/status.pl `_cache_s`) ignores it.
+ */
+export async function testStage(mode: string | undefined, root: string,
+  stat: (path: string, resolve: boolean) => Promise<{ kind: string; isLink: boolean; realPath?: string }>): Promise<boolean> {
+  if (mode !== '1' || root === '') return false
+  try {
+    const real = (await stat(root, true)).realPath ?? root
+    const s = await stat(`${real.replace(/[\\/]+$/, '')}/${TEST_STAGE_MARK}`, false)
+    return s.kind === 'file' && !s.isLink
+  } catch {
+    return false
+  }
 }
 
 /** `STORE_TEST_IDLE_CACHE_S`: an integer from 120 to 3600, else undefined (ignored). */
@@ -1008,7 +1031,9 @@ export function realDeps($: EngineInterface, options: PluginOptions, state: Load
           ])
           return {
             compactMin: compactMinOf(await get(() => $.env.get('CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS'))),
-            cacheS: cacheSOf(await get(() => $.env.get('STORE_TEST_IDLE_CACHE_S'))),
+            cacheS: (await testStage(await get(() => $.env.get('STORE_TEST_MODE')), $.plugin.root,
+              (path, resolve) => $.fs.stat(path, { resolve })))
+              ? cacheSOf(await get(() => $.env.get('STORE_TEST_IDLE_CACHE_S'))) : undefined,
             cacheOff: caching.some(envTruthy),
             // Claude Code 2.1.311's TTL switches for the main conversation (TtlEnv).
             ttl: ttlEnvOf({

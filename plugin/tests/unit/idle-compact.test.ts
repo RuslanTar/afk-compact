@@ -1415,7 +1415,8 @@ test('AT-IC-C34 (turn): the computer sleeps through the 49-min due past minute 5
 
 test('AT-IC-C36: STORE_TEST_IDLE_CACHE_S=600: the compaction at 540 s; idle_mode cache_s 600', { options: ON }, async ($, on) => {
   const w = world(on)
-  w.env = { STORE_TEST_IDLE_CACHE_S: '600' }
+  w.env = { STORE_TEST_MODE: '1', STORE_TEST_IDLE_CACHE_S: '600' }
+  w.stage = 'file'
   await w.start($)
   await humanTurn($, w)
   await w.advance(539 * 1000)
@@ -1428,7 +1429,8 @@ test('AT-IC-C36: STORE_TEST_IDLE_CACHE_S=600: the compaction at 540 s; idle_mode
 
 test('AT-IC-C36: STORE_TEST_IDLE_CACHE_S=600 with idle_compact off: the 49-min turn path at 490 s', { options: { ...ON, idle_compact: 'false' } }, async ($, on) => {
   const w = world(on)
-  w.env = { STORE_TEST_IDLE_CACHE_S: '600' }
+  w.env = { STORE_TEST_MODE: '1', STORE_TEST_IDLE_CACHE_S: '600' }
+  w.stage = 'file'
   await w.start($)
   await humanTurn($, w)
   await w.advance(489 * 1000)
@@ -1436,6 +1438,28 @@ test('AT-IC-C36: STORE_TEST_IDLE_CACHE_S=600 with idle_compact off: the 49-min t
   await w.advance(1000)
   expect(w.submits.length + skips(w).length).toBe(1)
 })
+
+// Review of 0.1.17: the seam counts on a test stage only (helper/lib/testgate.pm's rule, deps.ts
+// testStage), as status shows it: STORE_TEST_MODE=1 and the marker, a regular file, at the plugin root.
+const OFF_STAGE: { name: string; env: Record<string, string>; stage: 'file' | 'link' | 'none' }[] = [
+  { name: 'no marker at the plugin root', env: { STORE_TEST_MODE: '1', STORE_TEST_IDLE_CACHE_S: '600' }, stage: 'none' },
+  { name: 'the marker is a symbolic link', env: { STORE_TEST_MODE: '1', STORE_TEST_IDLE_CACHE_S: '600' }, stage: 'link' },
+  { name: 'the marker without STORE_TEST_MODE=1', env: { STORE_TEST_IDLE_CACHE_S: '600' }, stage: 'file' },
+]
+for (const c of OFF_STAGE) {
+  test(`AT-IC-C37: STORE_TEST_IDLE_CACHE_S=600 is ignored outside a test stage (${c.name}): due at 54 min, no cache_s`, { options: ON }, async ($, on) => {
+    const w = world(on)
+    w.env = c.env
+    w.stage = c.stage
+    await w.start($)
+    await humanTurn($, w)
+    await w.advance(54 * MIN - 1)
+    expect(ic(w).length).toBe(0)
+    await w.advance(1)
+    expect(ic(w).length).toBe(1)
+    expect(w.rowsOf('idle_mode')[0]?.cache_s).toBeUndefined()
+  })
+}
 
 for (const v of ['60', 'abc']) {
   test(`AT-IC-C36: STORE_TEST_IDLE_CACHE_S=${v} is ignored: due at 54 min, no cache_s`, { options: ON }, async ($, on) => {
