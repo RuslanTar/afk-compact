@@ -109,7 +109,8 @@ one FORMER_NAMES line, the docs (a no-run phrase in docs/usage.md and in the lan
 in src/docs a link to a missing anchor and to no page, a heading another shipped page has, a
 relative image in a shipped page and a page in neither ORDER list, all refused by tools/build;
 a renamed pinned heading in docs/ and plugin/README.md, installation.md without cc_min and a
-landing badge with another version, readme-pins), the changelog gate (each
+landing badge with another version, readme-pins; installation.md and a ci.yml pin comment naming a
+tested-against version other than the newest release summary's, readme-tested), the changelog gate (each
 tests/changelog/bad/<rule>.md planted as a CHANGELOG.md, reported under its rule; the clean copy
 also runs tests/changelog/run.py). The copies never hold `.planning/`.
 
@@ -1389,6 +1390,26 @@ def probes(name):
         edit(d, "docs/installation.md", cc, "9.9.9", count=-1)
         append(d, "README.md", "\n[![Claude Code](https://img.shields.io/badge/Claude_Code-2.1.200%2B-blue)](docs/installation.md)\n")
 
+    def readme_tested(d):
+        """installation.md tested against another version than the newest release summary in
+        CHANGELOG.md, and a ci.yml comment that calls a pin of another version the tested-against one."""
+        p = os.path.join(d, "docs", "installation.md")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        t2 = re.sub(r"tested against \*\*[0-9]+\.[0-9]+\.[0-9]+\*\*", "tested against **9.9.8**", t, count=1)
+        if t2 == t:
+            raise Fail("X-tools: probe text 'tested against **N.N.N**' not in docs/installation.md")
+        write_text(p, t2)
+        p = os.path.join(d, ".github", "workflows", "ci.yml")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        t2 = re.sub(r'(?m)^(\s*)CLAUDE_CODE_VERSION:.*$',
+                    lambda m: m.group(1) + "# The Claude Code version this release was tested against.\n"
+                    + m.group(1) + 'CLAUDE_CODE_VERSION: "9.9.7"', t, count=1)
+        if t2 == t:
+            raise Fail("X-tools: probe text 'CLAUDE_CODE_VERSION:' not in .github/workflows/ci.yml")
+        write_text(p, t2)
+
     # The changelog gate: tests/changelog/run.py (its good files pass, each bad/<rule>.md fires
     # only its rule) and tools/gates --only changelog over the good fixture; the plant puts each
     # bad file in a folder of its own as a CHANGELOG.md, which the gate must report by rule.
@@ -1549,6 +1570,13 @@ def probes(name):
           r"^GATE readme-pins plugin/README\.md: readme-pins: no heading 'Near a usage limit'",
           r"^GATE readme-pins docs/installation\.md: readme-pins: installation\.md does not name Claude Code ",
           r"^GATE readme-pins README\.md:\d+: readme-pins: the Claude Code badge says 2\.1\.200, "], None),
+        ("readme-tested", "tested-against versions", ["tools/gates", "plugin", "docs", "README.md", "--names", os.devnull,
+                                                      "--brand", name, "--no-git-log", "--only", "readme-pins"],
+         readme_tested,
+         [r"^GATE readme-pins docs/installation\.md:\d+: readme-pins: installation\.md says tested against 9\.9\.8, "
+          r"the newest release in CHANGELOG\.md says [0-9]+\.[0-9]+\.[0-9]+$",
+          r"^GATE readme-pins \.github/workflows/ci\.yml:\d+: readme-pins: ci\.yml's comment calls CLAUDE_CODE_VERSION "
+          r"9\.9\.7 the tested-against version, the newest release in CHANGELOG\.md says [0-9]+\.[0-9]+\.[0-9]+$"], None),
         ("changelog", "Keep a Changelog shape", changelog_gate, changelog_plant,
          [r"^GATE changelog tests/changelog/planted/{0}/CHANGELOG\.md(?::\d+)?: {0}: ".format(re.escape(r))
           for r in clog_rules], None),

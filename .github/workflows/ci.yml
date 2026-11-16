@@ -21,7 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The Claude Code version the README says this release was tested against.
+  # The Claude Code version the plugin job installs to validate the plugin and run its unit
+  # tests. It may be older than the version the newest release summary in CHANGELOG.md names.
   CLAUDE_CODE_VERSION: "2.1.319"
   DISABLE_AUTOUPDATER: "1"
 

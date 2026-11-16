@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Claude Code **2.1.287** or newer (mods). The one-line install below needs **2.1.292** or newer. This version was tested against **2.1.319**; the `PermissionDenied` and `StopFailure` hooks are not yet checked on older versions.
+- Claude Code **2.1.287** or newer (mods). The one-line install below needs **2.1.292** or newer. This version was tested against **2.1.325**; the `PermissionDenied` and `StopFailure` hooks are not yet checked on older versions.
 - **Perl 5.28** or newer, using only modules that ship with every perl. It is already on macOS and on Debian and Ubuntu (slim images too). On Alpine, run `apk add perl` first; on a minimal Fedora image, `dnf install perl-interpreter`.
 - `git` for the git measurements. On a Mac without the Command Line Tools, the plugin skips git rather than open the install dialog.
 - Claude Code in a terminal, or a local session of the desktop app (the desktop app runs Claude Code headless, where the plugin compacts by running `/compact`; not yet checked live there, see [Limits](limitations.md#limits)). claude.ai and Cowork are not tested yet: whether they install the plugin and run its hooks, mod and helper has not been checked.

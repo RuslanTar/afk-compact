@@ -164,7 +164,10 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                cache state in your status line" and "Connect your own question queue", verbatim,
                in a plugin folder's README.md and among the pages of a docs/ target; a docs/
                target also names the Edit(~/.local/state/…) allow rule and its installation.md
-               the brand.json cc_min; a Claude Code badge in any Markdown target carries cc_min
+               the brand.json cc_min; a Claude Code badge in any Markdown target carries cc_min;
+               a docs/ target's installation.md, and a .github/workflows/ci.yml beside it whose
+               comment calls its CLAUDE_CODE_VERSION pin the tested-against version, name the
+               version the newest release summary in CHANGELOG.md is `tested against`
   planning     private notes: no path with a `.planning` component in the git
                index of the repository the tool sits in, and (unless --no-git-log) none added by a
                commit reachable from HEAD; skipped when the tree is not the top of its own work tree
@@ -2491,6 +2494,62 @@ README_PINS = ("Near a usage limit", "The cache state in your status line", "Con
 STATE_RULE = re.compile(r"Edit\(~/\.local/state/")
 DOC_HEADING = re.compile(r"^#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$")
 CC_BADGE = re.compile(r"img\.shields\.io/badge/Claude_Code-([^-/)?\s]+)")
+# "tested against" statements: the newest release's summary in CHANGELOG.md names the Claude Code
+# version the release was measured on; installation.md (and its renders) and a ci.yml comment that
+# calls its CLAUDE_CODE_VERSION pin the tested-against version must agree with it.
+TESTED_IN_TEXT = re.compile(r"tested against \**([0-9]+\.[0-9]+\.[0-9]+)", re.I)
+CLOG_RELEASE = re.compile(r"^## \[[0-9]+\.[0-9]+\.[0-9]+\]")
+CI_PIN = re.compile(r"""^\s*CLAUDE_CODE_VERSION:\s*["']?([^"'\s]+)""")
+
+
+def newest_tested(changelog):
+    """The version in the newest release summary's `tested against D.E.F`, or None."""
+    if not os.path.isfile(changelog):
+        return None
+    lines = _read(changelog).split("\n")
+    for i, ln in enumerate(lines):
+        if CLOG_RELEASE.match(ln):
+            for nxt in lines[i + 1:]:
+                if nxt.startswith("#"):
+                    return None
+                m = TESTED_IN_TEXT.search(nxt)
+                if m:
+                    return m.group(1)
+            return None
+    return None
+
+
+def tested_hits(docs_dir):
+    """installation.md's tested-against version, and a ci.yml pin whose comment calls it the
+    tested-against version, against the newest release summary in CHANGELOG.md beside docs/."""
+    out = []
+    base = os.path.dirname(os.path.abspath(docs_dir))
+    want = newest_tested(os.path.join(base, CHANGELOG_NAME))
+    if want is None:
+        return out
+    inst = os.path.join(docs_dir, "installation.md")
+    if os.path.isfile(inst):
+        for no, ln in enumerate(_read(inst).split("\n"), 1):
+            for m in TESTED_IN_TEXT.finditer(ln):
+                if m.group(1) != want:
+                    out.append((inst, no, "tested", "readme-pins: installation.md says tested against {}, the newest "
+                                "release in CHANGELOG.md says {}".format(m.group(1), want), ln))
+    ci = os.path.join(base, ".github", "workflows", "ci.yml")
+    if os.path.isfile(ci):
+        lines = _read(ci).split("\n")
+        for no, ln in enumerate(lines, 1):
+            m = CI_PIN.match(ln)
+            if not m:
+                continue
+            j = no - 2
+            comment = []
+            while j >= 0 and lines[j].lstrip().startswith("#"):
+                comment.insert(0, lines[j])
+                j -= 1
+            if re.search(r"tested against", " ".join(comment), re.I) and m.group(1) != want:
+                out.append((ci, no, "tested", "readme-pins: ci.yml's comment calls CLAUDE_CODE_VERSION {} the "
+                            "tested-against version, the newest release in CHANGELOG.md says {}".format(m.group(1), want), ln))
+    return out
 
 
 def is_docs_target(target):
@@ -2587,6 +2646,7 @@ def readme_pins_hits(target, brand):
         inst = os.path.join(target, "installation.md")
         if cc_min and os.path.isfile(inst) and not re.search(r"(?<![\d.])" + re.escape(cc_min) + r"(?![\d.])", _read(inst)):
             out.append((inst, None, "cc-min", "readme-pins: installation.md does not name Claude Code {} (brand.json cc_min)".format(cc_min), ""))
+        out += tested_hits(target)
     for p in files:
         for no, ln in enumerate(_read(p).split("\n"), 1):
             for m in CC_BADGE.finditer(ln):
