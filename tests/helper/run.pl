@@ -3329,7 +3329,7 @@ sub builtin {
             Socket Exporter Carp parent integer bytes overload lib utf8 feature);
         # optional: loaded only inside an eval on the same line (DEFLATE is allowed for the
         # report zip only when present)
-        my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes IO::Compress::RawDeflate IO::Uncompress::RawInflate);
+        my %optional = map { $_ => 1 } qw(Digest::SHA Time::HiRes IO::Compress::RawDeflate IO::Uncompress::RawInflate Unicode::Normalize);
         my $root = defined $a->{root} ? $a->{root} : "$REPO/plugin/helper";
         # The floor value has one source in the helper: main.pl's guard (`$] < 5.028`).
         my ($floor_v) = (util::read_file("$REPO/plugin/helper/main.pl") // '') =~ /\$\]\s*<\s*(5\.\d+)/;
