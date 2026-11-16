@@ -6,9 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-11-17
+
+afk-compact 0.1.18 fixes the smoke check's C8 step, which failed on Claude Code 2.1.321 to 2.1.323 and 2.1.325, so `/afk-compact:status` kept asking you to run smoke. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.
+
 ### Fixed
 
-- The smoke check no longer fails on Claude Code 2.1.321 to 2.1.323 and 2.1.325, whose compaction experiment takes a whole prompt in place of a named arm. It now compares the counts of 2.1.325, so it fails on 2.1.314, which holds the experiment's flag and its variable fewer times.
+- On Claude Code 2.1.321 to 2.1.323 and 2.1.325 smoke failed with `SMOKE FAIL c8`, so `/afk-compact:status` kept asking you to run it. That is fixed: C8 now compares with the strings of 2.1.325 and passes there; the request goes away once smoke passes. On 2.1.314 C8 now fails.
 
 ## [0.1.17] - 2026-11-16
 
@@ -448,7 +452,8 @@ The first release of afk-compact, a Claude Code plugin for long unattended sessi
 - The plugin needs Perl 5.28 or newer with only the modules that ship with it, already present on macOS, Debian and Ubuntu (on Alpine, run `apk add perl`). The git measurements need `git`.
 - Supported on macOS 13 or newer and Linux with glibc. Alpine/musl and WSL 2 are expected to work but not yet tested in a session, and native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.17...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.18...HEAD
+[0.1.18]: https://github.com/RuslanTar/afk-compact/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/RuslanTar/afk-compact/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/RuslanTar/afk-compact/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/RuslanTar/afk-compact/compare/v0.1.14...v0.1.15
