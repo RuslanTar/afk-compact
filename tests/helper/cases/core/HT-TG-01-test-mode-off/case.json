@@ -1,0 +1,55 @@
+{
+ "id": "HT-TG-01 (test mode needs the test-stage marker: with STORE_TEST_MODE=1 in the environment and no marker in the plugin copy, every STORE_TEST_* switch is ignored and named once on stderr)",
+ "layer": "H",
+ "owner": "core",
+ "note": "Review of 0.1.17 (pre-existing): STORE_TEST_MODE=1 alone turned every test switch on in a normal run; STORE_TEST_NOW let prune list and delete young evidence and stopped handoff citations protecting files, STORE_TEST_OS and STORE_TEST_CYGDRIVE changed path reading. helper/lib/testgate.pm now needs STORE_TEST_MODE=1 and the marker .store-test-stage at the root of the plugin copy the helper runs from (only the test stagers write it; tools/gates test-stage fails a plugin that holds one). This case runs a staged copy without the marker (\"test_stage\": false), with the same STORE_TEST_* environment the runner gives every case.",
+ "now": "2027-06-01T12:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "test_stage": false,
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$DISP/2026-11-15/young-evidence/a.log",
+     "content": "young\n"
+    }
+   ]
+  },
+  {
+   "name": "STORE_TEST_NOW does not move prune's age cut-off without the marker: the unit written today is not listed",
+   "argv": [
+    "prune"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root ~/\\.local/state/$BRAND/disposable: 0 folders, ",
+     "^nothing to prune$"
+    ],
+    "stderr_has": [
+     "^prune: test switches ignored \\(not a test stage\\): .*STORE_TEST_MODE, .*STORE_TEST_NOW"
+    ]
+   }
+  },
+  {
+   "name": "STORE_TEST_OS=msys with STORE_TEST_CYGDRIVE does not change path reading without the marker: a drive-form entry is not an absolute path",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "C:\\x"
+   },
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_CYGDRIVE": "$TMP/cyg"
+   },
+   "expect": {
+    "exit": 3,
+    "stdout_has": [
+     "\\AREFUSED: protected-root$",
+     "^prune_protected_roots entry C:\\\\x: not an absolute path "
+    ]
+   }
+  }
+ ]
+}

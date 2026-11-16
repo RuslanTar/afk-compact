@@ -14,6 +14,7 @@ use warnings;
 use utf8;
 use Cwd ();
 use POSIX ();
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 use Fcntl qw(O_WRONLY O_CREAT O_EXCL O_RDONLY);
 use watch::ctx;
 use watch::io;
@@ -1259,7 +1260,7 @@ sub cli {
     my ($salt, $iid) = keys_for($ctx->{watch}, $o{dry});
     my $rr = defined &settings::repo_roots ? eval { settings::repo_roots(settings::resolve({})) } : undef;
     $ctx->{settings}{repo_roots_list} = ref $rr eq 'HASH' ? $rr->{roots} : [];
-    my $no_git = (($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_NO_GIT} // '') eq '1');
+    my $no_git = (testgate::on() && ($ENV{STORE_TEST_NO_GIT} // '') eq '1');
     my $ids = identity_list($ctx, no_git => $no_git, extra => $seed->{identity_extra});
     my %avail = (summaries => summary_files($ctx->{root}, $since), handoffs => handoff_files($ctx->{root}, $since));
     my @kinds = grep { $o{$_} } @watch::export_schema::CONTENT_KINDS;

@@ -12,7 +12,7 @@ Usage: tools/gates TARGET... --names FILE [--brand NAME] [--no-git-log] [--only 
                 no-args-inline, readback, no-run-text, stalled-def, prod-reads, call-form, ic-desc,
                 clear-life, nudge-folder, export-classes, settings-sections, no-network, export-schema,
                 report-skill, no-age-rule, perl-utf8, approvals, model-pin, queue-text, risk-corpus,
-                store-flags, readme-pins, planning, changelog)
+                store-flags, readme-pins, test-stage, planning, changelog)
   --no-pending  count the PENDING hits below as failures (to see what text work is left)
 
 Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
@@ -34,6 +34,10 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                pre-rename name on the `our @FORMER_NAMES = (…);` line of a folder target's
                helper/lib/settings.pm is not a hit (/status warns about options saved under
                it); anywhere else it is
+  test-stage   no helper test-stage marker (`.store-test-stage`, the helper's test-mode gate in
+               helper/lib/testgate.pm, or `.test-consent-home`) anywhere inside a folder target: only
+               the test stagers write them into temporary copies; a built or released plugin holding
+               one would let an environment prefix turn the helper's test switches on
   npm          BT-06: no `package.json`, `package-lock.json`, `npm-shrinkwrap.json`,
                `yarn.lock`, `pnpm-lock.yaml` or `node_modules/` anywhere inside a folder target
                (an npm manifest in a plugin makes Claude Code run npm install on users' machines)
@@ -2527,6 +2531,21 @@ def brand_field(key):
     return v if isinstance(v, str) else None
 
 
+TEST_STAGE_MARKS = (".store-test-stage", ".test-consent-home")
+
+
+def test_stage_hits(target, brand):
+    """No test-stage marker inside a folder target (helper/lib/testgate.pm, settings.pm consent seam)."""
+    out = []
+    for d, dirs, files in os.walk(target):
+        dirs[:] = sorted(x for x in dirs if x not in (".git", "node_modules"))
+        for f in sorted(files):
+            if f in TEST_STAGE_MARKS:
+                out.append((os.path.join(d, f), 0, "marker", "test-stage marker: only test stagers write this; "
+                            "remove it from the plugin", ""))
+    return out
+
+
 def readme_pins_hits(target, brand):
     """readme-pins: the README_PINS headings, verbatim, in a plugin folder's README.md and in a
     `docs` folder; a docs folder also holds an Edit(~/.local/state/…) allow rule, and its
@@ -2635,7 +2654,8 @@ TEXT_GATES = [("wait-text", wait_text_hits), ("asset-bytes", asset_bytes_hits), 
               ("queue-text", queue_text_hits),
               ("risk-corpus", risk_corpus_hits),
               ("store-flags", store_flags_hits),
-              ("readme-pins", readme_pins_hits)]
+              ("readme-pins", readme_pins_hits),
+              ("test-stage", test_stage_hits)]
 
 
 def pending_row(gate, rule, rel, line):

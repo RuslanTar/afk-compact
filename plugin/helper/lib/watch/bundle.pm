@@ -13,6 +13,7 @@ use strict;
 use warnings;
 use utf8;
 use POSIX ();
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 
 my @CRC;
 for my $n (0 .. 255) {
@@ -36,7 +37,7 @@ our $DEFLATE_RATIO_MAX = 50;
 
 sub _deflate {
     my ($data) = @_;
-    $DEFLATE = 0 if !defined $DEFLATE && ($ENV{STORE_TEST_MODE} // q()) eq q(1) && ($ENV{STORE_TEST_ZIP_STORE} // q()) eq q(1);
+    $DEFLATE = 0 if !defined $DEFLATE && testgate::on() && ($ENV{STORE_TEST_ZIP_STORE} // q()) eq q(1);
     $DEFLATE = (eval { require IO::Compress::RawDeflate; 1 } ? 1 : 0) unless defined $DEFLATE;
     return undef unless $DEFLATE && length $data;
     my $out;

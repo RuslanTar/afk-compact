@@ -15,6 +15,7 @@ use strict;
 use warnings;
 use utf8;
 use watch::alerts;
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 use watch::cache;
 use watch::ctx;
 use watch::io;
@@ -189,7 +190,7 @@ sub deny_counts {
 
 sub rows_of {
     my ($S, $ev) = @_;
-    $MISSED{$ev}++ if !$KIND{$ev} && ($ENV{STORE_TEST_MODE} || '') eq '1';
+    $MISSED{$ev}++ if !$KIND{$ev} && testgate::on();
     return @{ $S->{by}{$ev} || [] };
 }
 

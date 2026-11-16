@@ -44,6 +44,7 @@ use warnings;
 use utf8;
 use Cwd ();
 use File::Basename ();
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 use watch::io;
 use watch::json;
 
@@ -263,7 +264,7 @@ sub _identity {
         $ctx->{pid_lstart} = $id->{lstart} unless defined $ctx->{pid_lstart};
         return;
     }
-    if (($ENV{STORE_TEST_MODE} || '') eq '1' && ($ENV{STORE_TEST_CLAUDE_PID} || '') =~ /\A([0-9]+):(.*)\z/) {
+    if (testgate::on() && ($ENV{STORE_TEST_CLAUDE_PID} || '') =~ /\A([0-9]+):(.*)\z/) {
         $ctx->{pid} = 0 + $1;
         $ctx->{pid_lstart} = $2 unless defined $ctx->{pid_lstart};
     }

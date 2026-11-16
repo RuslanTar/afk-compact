@@ -1,5 +1,6 @@
 # AT-P-11 for the watcher's files (R-1).
-# L1 modules: every `use` or `require` is a floor module, a watcher module, or sits inside
+# L1 modules: every `use` or `require` is a floor module, a watcher module, the helper's own
+# dependency-free test gate (lib/testgate.pm, perl 5.8-safe), or sits inside
 # an `eval` with a fallback. L2 implicit loads: `%+`, `%-`, `$+{`, `$-{`
 # (Tie::Hash::NamedCapture, missing in Debian 10 perl-base), `\N{NAME}` (charnames),
 # `\p{..}`/`\P{..}` (Unicode tables perl-base trims), `use open`, `Encode::`. L3 version:
@@ -32,7 +33,7 @@ sub lint {
         next if $l =~ /^\s*#/;
         if ($l =~ /^\s*(?:use|require)\s+([A-Za-z_][\w:]*)/ || $l =~ /\brequire\s+([A-Z][\w:]*)/) {
             my $m = $1;
-            unless ($m =~ /\Av[0-9]/ || $floor{$m} || $m =~ /\Awatch(?:::|\z)/ || $m eq 'utf8' || $m eq 'feature' || $m eq 'open'
+            unless ($m =~ /\Av[0-9]/ || $floor{$m} || $m =~ /\Awatch(?:::|\z)/ || $m eq 'testgate' || $m eq 'utf8' || $m eq 'feature' || $m eq 'open'
                     || $l =~ /\beval\s*\{[^}]*\brequire\s+\Q$m\E/) {
                 push @out, "$name:$ln: $m is not a floor module and not inside eval. Fix: a floor module, or require it inside eval with a fallback.";
             }

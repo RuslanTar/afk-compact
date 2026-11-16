@@ -5,7 +5,8 @@ Usage:
   tools/helper-replies-gen            write plugin/tests/unit/_gen/helper-replies.gen.ts
   tools/helper-replies-gen --check    exit 1 when the committed module differs from a fresh run
 
-Runs the built launcher plugin/scripts/<name>-store (run tools/build first) through the calls the
+Runs a test-stage copy of the built launcher plugin/scripts/<name>-store (run tools/build first; the copy
+holds the test-mode marker of helper/lib/testgate.pm, which plugin/ never holds) through the calls the
 mod makes (hooks/lib/helper.ts and log.ts), in one fresh temporary HOME with
 STORE_TEST_MODE=1, a fixed clock and a fixed Claude pid, and records each call's argv, exit
 code and stdout. The U test (plugin/tests/unit/replies.test.ts, WP-mod) replays the same argv
@@ -164,10 +165,11 @@ def calls(tmp):
     ]
 
 
-def portable(s, tmp, home, name):
+def portable(s, tmp, home, name, stage):
     # The plugin folder first: the helper writes its own launcher path into the commands it
-    # prints (ctx::store_cmd), and the repo path is a user path.
-    for p in (os.path.realpath(PLUGIN), PLUGIN):
+    # prints (ctx::store_cmd), and the repo path is a user path. The calls run a staged copy
+    # (stage_plugin), which reads as $PLUGIN too.
+    for p in (os.path.realpath(stage), stage, os.path.realpath(PLUGIN), PLUGIN):
         s = s.replace(p, "$PLUGIN")
     s = s.replace(home, "~").replace(tmp, "$TMP")
     real = os.path.realpath(tmp)
@@ -176,13 +178,24 @@ def portable(s, tmp, home, name):
     return s.split(name)
 
 
+def stage_plugin(tmp):
+    """A test-stage copy of plugin/ in the run's temp dir: the copy holds the marker the helper's test
+    mode needs (helper/lib/testgate.pm), which plugin/ itself never holds."""
+    stage = os.path.join(tmp, "plugin")
+    shutil.copytree(PLUGIN, stage, symlinks=True, ignore=shutil.ignore_patterns("node_modules"))
+    with open(os.path.join(stage, ".store-test-stage"), "w", encoding="utf-8") as f:
+        f.write("helper-replies-gen test stage\n")
+    return stage
+
+
 def record():
     name = brand()
-    launcher = os.path.join(PLUGIN, LAUNCHER_DIR, name + "-store")
-    if not os.access(launcher, os.X_OK):
+    if not os.access(os.path.join(PLUGIN, LAUNCHER_DIR, name + "-store"), os.X_OK):
         sys.exit("helper-replies-gen: no launcher at plugin/{}/{}-store (run tools/build)".format(LAUNCHER_DIR, name))
     tmp = tempfile.mkdtemp(prefix="replies-")
     try:
+        stage = stage_plugin(tmp)
+        launcher = os.path.join(stage, LAUNCHER_DIR, name + "-store")
         home = os.path.join(tmp, "home")
         work = os.path.join(tmp, "work")
         os.makedirs(home)
@@ -215,8 +228,8 @@ def record():
             if want is not None and (r.returncode != 0 or not out.startswith(want)):
                 sys.exit("helper-replies-gen: {} answered {!r} (exit {}), expected {!r}...".format(
                     label, out, r.returncode, want))
-            rows.append({"name": label, "argv": [portable(a, tmp, home, name) for a in argv],
-                         "exitCode": r.returncode, "stdout": portable(out, tmp, home, name)})
+            rows.append({"name": label, "argv": [portable(a, tmp, home, name, stage) for a in argv],
+                         "exitCode": r.returncode, "stdout": portable(out, tmp, home, name, stage)})
         inputs = {"$TMP/summary.txt": text.split(name), "$TMP/summary-trailer.txt": trailer.split(name)}
         stdins = {lab: s[0].split(name) for lab, _a, *s in calls(tmp) if s and lab}
     finally:

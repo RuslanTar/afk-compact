@@ -16,6 +16,7 @@ use warnings;
 use utf8;
 use watch::ctx;
 use watch::io;
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 use watch::json;
 
 # StopFailure and PermissionDenied have one writer, core's `hook`:
@@ -109,7 +110,7 @@ sub on_stop {
     my $hard = !defined $deadline ? $start + 3 : $deadline < 1e9 ? $start + $deadline : $deadline;
     # test seam (STORE_TEST_MODE only): STORE_TEST_WATCH_MIN_MS gives the run at least that window, so
     # a case whose Stop starts late still sees its rules run whatever the machine's load (AT-AN-14)
-    if (($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_WATCH_MIN_MS} // '') =~ /\A[0-9]{1,5}\z/) {
+    if (testgate::on() && ($ENV{STORE_TEST_WATCH_MIN_MS} // '') =~ /\A[0-9]{1,5}\z/) {
         my $min = $start + $ENV{STORE_TEST_WATCH_MIN_MS} / 1000;
         $hard = $min if $hard < $min;
     }

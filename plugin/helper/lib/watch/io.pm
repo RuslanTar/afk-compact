@@ -8,6 +8,7 @@ use warnings;
 use utf8;
 use Fcntl qw(O_WRONLY O_APPEND O_CREAT O_EXCL O_RDONLY O_RDWR LOCK_EX LOCK_NB LOCK_UN SEEK_SET);
 use POSIX ();
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 use watch::json;
 
 our $MAX_ROW = 4096;
@@ -20,7 +21,7 @@ BEGIN { $HIRES = eval { require Time::HiRes; 1 } ? 1 : 0 }
 # Epoch seconds (fractional when Time::HiRes loads). STORE_TEST_NOW is honoured
 # only with STORE_TEST_MODE=1 (test mode).
 sub now {
-    if (($ENV{STORE_TEST_MODE} || '') eq '1' && defined $ENV{STORE_TEST_NOW} && $ENV{STORE_TEST_NOW} ne '') {
+    if (testgate::on() && defined $ENV{STORE_TEST_NOW} && $ENV{STORE_TEST_NOW} ne '') {
         my $t = parse_iso($ENV{STORE_TEST_NOW});
         return $t if defined $t;
     }

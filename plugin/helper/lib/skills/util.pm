@@ -270,7 +270,8 @@ sub _sha256_pp {
 
 # ---------------------------------------------------------------- clock
 
-sub test_mode { return (($ENV{STORE_TEST_MODE} // '') eq '1') ? 1 : 0 }
+# test mode: the helper's one gate (lib/testgate.pm: STORE_TEST_MODE=1 and a test-stage marker)
+sub test_mode { require testgate; return testgate::on() }
 
 sub now {
     if (test_mode() && defined $ENV{STORE_TEST_NOW} && $ENV{STORE_TEST_NOW} ne '') {

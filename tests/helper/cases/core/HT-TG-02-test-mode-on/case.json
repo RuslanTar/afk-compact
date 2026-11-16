@@ -1,0 +1,54 @@
+{
+ "id": "HT-TG-02 (test mode on a test stage: STORE_TEST_MODE=1 and the runner's marker turn the STORE_TEST_* switches on, as every helper case relies on)",
+ "layer": "H",
+ "owner": "core",
+ "note": "Review of 0.1.17 (pre-existing): STORE_TEST_MODE=1 alone turned every test switch on in a normal run; STORE_TEST_NOW let prune list and delete young evidence and stopped handoff citations protecting files, STORE_TEST_OS and STORE_TEST_CYGDRIVE changed path reading. helper/lib/testgate.pm now needs STORE_TEST_MODE=1 and the marker .store-test-stage at the root of the plugin copy the helper runs from (only the test stagers write it; tools/gates test-stage fails a plugin that holds one). This case is the control: the same steps on a staged copy with the marker.",
+ "now": "2027-06-01T12:00:00+03:00",
+ "tz": "Etc/GMT-3",
+ "steps": [
+  {
+   "setup": [
+    {
+     "write": "$DISP/2026-11-15/young-evidence/a.log",
+     "content": "young\n"
+    }
+   ]
+  },
+  {
+   "name": "STORE_TEST_NOW (the case clock, 2027-06-01) moves prune's age cut-off on a test stage: the young unit is listed",
+   "argv": [
+    "prune"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^disposable_root ~/\\.local/state/$BRAND/disposable: 1 folder, ",
+     "^plan: [0-9a-f]{12} "
+    ],
+    "stderr_lacks": [
+     "ignored"
+    ]
+   }
+  },
+  {
+   "name": "STORE_TEST_OS=msys with STORE_TEST_CYGDRIVE reads a drive-form entry as a folder on a test stage",
+   "argv": [
+    "prune"
+   ],
+   "options": {
+    "prune_protected_roots": "C:\\x"
+   },
+   "env": {
+    "STORE_TEST_OS": "msys",
+    "STORE_TEST_CYGDRIVE": "$TMP/cyg"
+   },
+   "expect": {
+    "exit": 0,
+    "stdout_lacks": [
+     "not an absolute path",
+     "REFUSED"
+    ]
+   }
+  }
+ ]
+}

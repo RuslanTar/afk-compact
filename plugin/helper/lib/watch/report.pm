@@ -13,6 +13,7 @@ use warnings;
 use utf8;
 use POSIX ();
 use watch::ctx;
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 use watch::io;
 use watch::json;
 use watch::export;
@@ -621,7 +622,7 @@ sub report_cli {
     my $md = render($L, stats($L), since_label => $label, export => $o->{export});
     utf8::encode($md) if utf8::is_utf8($md);
     if ($o->{export}) {
-        my $ids = watch::export::identity_list($ctx, no_git => (($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_NO_GIT} // '') eq '1'));
+        my $ids = watch::export::identity_list($ctx, no_git => (testgate::on() && ($ENV{STORE_TEST_NO_GIT} // '') eq '1'));
         if (watch::export::identity_hits($md, $ids)) { print "REFUSED: identity in the export\n"; return 3 }
     }
     my $path = $o->{out};

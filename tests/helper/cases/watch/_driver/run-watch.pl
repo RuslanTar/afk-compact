@@ -54,6 +54,9 @@ use T;
 # core's util and sha, loaded as the helper (main.pl) always loads them: without Digest::SHA
 # (Fedora's perl-interpreter) the watcher's sha256 falls back to sha::hex256
 BEGIN { require "util.pm"; require "sha.pm" }
+# the helper libraries run in this process (no staged root): the driver stands in for the test-stage marker
+# (lib/testgate.pm); its `cli` steps run a staged copy that holds the marker
+BEGIN { no warnings "once"; $testgate::IN_PROCESS = 1 }
 use watch;
 use watch::json;
 use watch::io;
@@ -210,6 +213,7 @@ sub cli_launcher {
         copy_tree("$REPO/plugin", "$base/plugin");
         require settings;
         write_file("$base/plugin/$settings::TEST_CONSENT_MARK", "watch driver test stage\n", 0644);
+        write_file("$base/plugin/.store-test-stage", "watch driver test stage\n", 0644);
         # the watcher's `report` command until core lists it in main.pl's %KNOWN
         # writes the staged copy only, never the repo's main.pl.
         my $mp = "$base/plugin/helper/main.pl";

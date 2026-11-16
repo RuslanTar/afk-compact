@@ -90,7 +90,7 @@
       "path": "$TMP/inc.txt",
       "lines": 1,
       "has": [
-       "^args cachestate ctx jsonc usagerec util$"
+       "^args cachestate ctx jsonc testgate usagerec util$"
       ]
      }
     ],

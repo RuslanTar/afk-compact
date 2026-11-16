@@ -38,6 +38,8 @@
 #                            ephemeral paths (T-8)
 #   case "tmp_base": "short" the case's temp dir sits under /tmp whatever TMPDIR is (R6: a
 #                            case whose helper output depends on its path lengths)
+#   case "test_stage": false  the case runs a staged copy without the test-stage marker (helper/lib/testgate.pm):
+#                            the helper ignores STORE_TEST_MODE and every STORE_TEST_* switch, as in a normal run
 #   case "teardown"        [setup action...]: run after the steps, also after a failed one (a mode
 #                            restored, so the work dir can be removed)
 #   case "tmp_norm": false   stdout_max_bytes measures stdout as it is, also outside the
@@ -156,6 +158,9 @@ BEGIN { $HERE = File::Basename::dirname(Cwd::abs_path(__FILE__)) }
 my $REPO = Cwd::abs_path("$HERE/../..");
 use lib Cwd::abs_path(File::Basename::dirname(Cwd::abs_path(__FILE__)) . '/../../plugin/helper/lib');
 require "util.pm";
+# the helper libraries this process loads (builtins) have no staged root: this runner stands in for the
+# test-stage marker in its own process (lib/testgate.pm); its helper calls run a staged copy that holds it
+{ no warnings "once"; $testgate::IN_PROCESS = 1 }
 require "jsonc.pm";
 require "sha.pm";
 
@@ -478,6 +483,8 @@ sub stage_plugin {
     # CR-F34: in this staged copy (and with STORE_TEST_MODE=1) the consent keys come from the
     # case's $HOME/.claude/settings.json; without the file, from the account's home.
     util::write_atomic("$dst/.test-consent-home", "helper test stage\n", 0644);
+    # the test-stage marker (lib/testgate.pm): only here do STORE_TEST_MODE=1 and the STORE_TEST_* switches count
+    util::write_atomic("$dst/.store-test-stage", "helper test stage\n", 0644);
     if (!-f "$dst/assets/handoff-spec.json") {
         my $tmpl = util::read_file("$HERE/cases/core/_support/handoff-spec.json");
         die "run.pl: no assets/handoff-spec.json and no interim spec\n" unless defined $tmpl;
@@ -792,6 +799,14 @@ sub run_case {
         copy_tree($V{PLUGIN}, "$V{TMP}/plugin-account");
         unlink "$V{TMP}/plugin-account/.test-consent-home";
         $V{PLUGIN} = "$V{TMP}/plugin-account";
+    }
+    # "test_stage": false: this case runs against a staged copy without the test-stage marker
+    # (helper/lib/testgate.pm), as a normal run sees an installed plugin: STORE_TEST_MODE=1 and every
+    # STORE_TEST_* variable the runner passes are then ignored by the helper.
+    if (exists $case->{test_stage} && !$case->{test_stage}) {
+        copy_tree($V{PLUGIN}, "$V{TMP}/plugin-nostage");
+        unlink "$V{TMP}/plugin-nostage/.store-test-stage";
+        $V{PLUGIN} = "$V{TMP}/plugin-nostage";
     }
     # "stage_overlay": {"<path under plugin/>": "<file, placeholders filled>"}: this case runs
     # against a staged copy with those files replaced (AT-WF-01: a ctx-recording watcher seam).

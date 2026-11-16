@@ -9,12 +9,17 @@
 # <Event>), which reads stdin, writes its one content-free row and exits 0;
 # stdin is left unread here for it. The launcher's hook wrapper hands over its
 # own path in $main::STORE_LAUNCHER. Without a launcher to run, a hook drains
-# stdin and exits 0. Anything else refuses, exit 3. Test seam (STORE_TEST_MODE
-# only): STORE_TEST_PERL_V=5.NNN stands in for $] (a perl older than this host's).
+# stdin and exits 0. Anything else refuses, exit 3. Test seam (test mode only, lib/testgate.pm:
+# STORE_TEST_MODE=1 on a test stage): STORE_TEST_PERL_V=5.NNN stands in for $] (a perl older than
+# this host's). testgate is loaded first, from this file's own folder, and is perl 5.8-safe.
 BEGIN {
+    require Cwd;
+    require File::Basename;
+    unshift @INC, File::Basename::dirname(Cwd::abs_path(__FILE__)) . '/lib';
+    require testgate;
     my $v = $];
     $v = $ENV{STORE_TEST_PERL_V}
-        if ($ENV{STORE_TEST_MODE} || '') eq '1' && ($ENV{STORE_TEST_PERL_V} || '') =~ /\A5\.[0-9]{1,6}\z/;
+        if testgate::on() && ($ENV{STORE_TEST_PERL_V} || '') =~ /\A5\.[0-9]{1,6}\z/;
     if ($v < 5.028) {
         if (@ARGV && $ARGV[0] eq 'hook') {
             my $launcher = defined $main::STORE_LAUNCHER ? $main::STORE_LAUNCHER : '';
@@ -82,6 +87,8 @@ if ($IS_HOOK || $QUIET) {
     $SIG{__WARN__} = sub { };
     $SIG{PIPE} = 'IGNORE';
 }
+# STORE_TEST_MODE=1 outside a test stage: every test switch is ignored; say so once (lib/testgate.pm)
+testgate::note_ignored($sub) unless $IS_HOOK || $QUIET;
 
 # Core libraries every subcommand may use, in load order.
 our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock nonce
@@ -129,7 +136,7 @@ our %HOOK_EVENT = (
 # which the mod calls as a usage reading changes, the same. CACHE-04 and USAGE-01 hold the sets
 # (STORE_TEST_INC_OUT).
 our %SUB_LIBS = (cache => [qw(util jsonc ctx args cachestate usagerec)], usage => [qw(util jsonc ctx args cachestate usagerec)]);
-my $TEST = ($ENV{STORE_TEST_MODE} || '') eq '1';
+my $TEST = testgate::on();
 my %load = map { ($_ => 1) } @CORE;
 if ($IS_HOOK && defined $ARGV[0] && $HOOK_EVENT{ $ARGV[0] } && !($TEST && ($ENV{STORE_TEST_LAZY} || '') eq 'full')) {
     %load = map { ($_ => 1) } @HOOK_BASE, @{ $HOOK_EVENT{ $ARGV[0] } };

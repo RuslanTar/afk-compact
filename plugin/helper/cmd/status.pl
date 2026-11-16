@@ -794,6 +794,7 @@ sub _compact_min {
 }
 # STORE_TEST_IDLE_CACHE_S as the mod reads it (deps.ts cacheSOf): an integer from 120 to 3600, else none.
 sub _cache_s {
+    return undef unless util::test_mode();    # a test switch: honoured on a test stage only (lib/testgate.pm)
     my $v = $ENV{STORE_TEST_IDLE_CACHE_S} // '';
     $v =~ s/\A\s+|\s+\z//g;
     return undef unless $v =~ /\A[0-9]{1,6}\z/;

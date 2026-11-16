@@ -23,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 - Under Git Bash or Cygwin on Windows, the plugin's skills, which run through the Bash tool, now find the session they run in, instead of working as if outside any session.
 - Under Git Bash or Cygwin on Windows, the resume skill's check of background work no longer reports a running Claude Code session started from PowerShell or Git Bash as not running. A session started from PowerShell now reads as unverified, as its start time cannot be read.
 
+### Security
+
+- The plugin's internal test switches no longer take effect when they are only set in the environment of a normal run; before, they could change its clock and path reading, so `/afk-compact:prune` could list and delete evidence younger than its age limit.
+
 ## [0.1.16] - 2026-11-15
 
 afk-compact 0.1.16 keeps your standing approvals working across the plugin's own handoffs, compactions and resumes, counts an approval as standing only when your words say so, and asks again for denied approvals and pushes that reach every branch. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.

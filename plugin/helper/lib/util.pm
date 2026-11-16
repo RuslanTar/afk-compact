@@ -8,6 +8,7 @@ use utf8;
 use Fcntl qw(O_WRONLY O_RDONLY O_RDWR O_CREAT O_EXCL O_APPEND O_TRUNC LOCK_EX LOCK_NB LOCK_UN SEEK_SET);
 use POSIX ();
 use Errno ();
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 
 my $HIRES;
 sub _hires {
@@ -16,7 +17,7 @@ sub _hires {
     return $HIRES;
 }
 
-sub test_mode { return (($ENV{STORE_TEST_MODE} // '') eq '1') ? 1 : 0 }
+sub test_mode { return testgate::on() }
 
 # os() -> $^O; in test mode STORE_TEST_OS (msys, cygwin, linux, ...) stands in for it, so the
 # MSYS and Cygwin branches (Git Bash's perl: root_form, identity's /proc start time) run on

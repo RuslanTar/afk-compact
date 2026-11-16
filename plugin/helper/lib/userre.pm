@@ -54,6 +54,7 @@ package userre;
 use strict;
 use warnings;
 use utf8;
+use testgate;    # the one gate for STORE_TEST_* (lib/testgate.pm)
 use POSIX ();
 
 our $LIMIT_S = 1;      # one pattern on one call
@@ -89,7 +90,7 @@ our $MEMO_VALUES_MAX = 4096; # an answer with more numbers than this is not kept
 my ($HAVE_HIRES, $MONO);
 sub _hires {
     $HAVE_HIRES //= eval { require Time::HiRes; 1 } ? 1 : 0;
-    return 0 if ($ENV{STORE_TEST_MODE} // '') eq '1' && ($ENV{STORE_TEST_NO_HIRES} // '') eq '1';
+    return 0 if testgate::on() && ($ENV{STORE_TEST_NO_HIRES} // '') eq '1';
     return $HAVE_HIRES;
 }
 sub _now {
