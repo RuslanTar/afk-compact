@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-11-16
+
+afk-compact 0.1.17 fixes how the plugin recognises running sessions and reads GSD progress under Git Bash and Cygwin on Windows, lets you name folders `/afk-compact:prune` never works in, and ignores its internal test switches in normal runs. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.
+
 ### Added
 
 - A `prune_protected_roots` setting, and `prune --protect DIR`, name folders `/afk-compact:prune` never works in. When a folder it would read or delete in is one (also through a link or another spelling), lies inside one or holds one, prune refuses and deletes nothing.
@@ -440,7 +444,8 @@ The first release of afk-compact, a Claude Code plugin for long unattended sessi
 - The plugin needs Perl 5.28 or newer with only the modules that ship with it, already present on macOS, Debian and Ubuntu (on Alpine, run `apk add perl`). The git measurements need `git`.
 - Supported on macOS 13 or newer and Linux with glibc. Alpine/musl and WSL 2 are expected to work but not yet tested in a session, and native Windows is not supported yet.
 
-[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.16...HEAD
+[Unreleased]: https://github.com/RuslanTar/afk-compact/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/RuslanTar/afk-compact/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/RuslanTar/afk-compact/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/RuslanTar/afk-compact/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/RuslanTar/afk-compact/compare/v0.1.13...v0.1.14
