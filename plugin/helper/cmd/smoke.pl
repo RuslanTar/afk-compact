@@ -14,10 +14,11 @@
 # with every release: a change prints an `info c8` line and does not fail (AT-M3-14c).
 # A baseline without a whole-number rare_max takes every count of 1 or more as rare. A
 # count of 0 is never rare: the baseline tool never writes one (it would let C8 pass on the
-# string's absence), so a baseline that holds one was edited or is broken. A baseline with
-# no c8 counts, a count of 0, or no rare string (rare_max 0, or below every count) fails C8
-# even with --skip-cli (c8_unusable): C8 is never left out, or passed with nothing
-# compared, without a FAIL line.
+# string's absence), so a baseline that holds one was edited or is broken; so was one with a
+# count for the empty string (count_strings would search for it without end). A baseline with
+# no c8 counts, a count for the empty string, a count of 0, or no rare string (rare_max 0, or
+# below every count) fails C8 even with --skip-cli (c8_unusable): C8 is never left out, or
+# passed with nothing compared, without a FAIL line.
 # C8 compares the Claude Code smoke runs against with the one the baseline was recorded
 # on (its cc_version), so a version whose counts differ fails C8: 2.1.314 holds the flag
 # and env variable less often than 2.1.321 to 2.1.323 and 2.1.325 (the versions measured
@@ -91,7 +92,9 @@ sub bundled_types {
 }
 
 # Count non-overlapping occurrences of each string in a big file, 8 MB chunks; a
-# match is counted in the round where it ends (tools/canary-baseline counts the same).
+# match is counted in the round where it ends (tools/canary-baseline counts the same). The
+# empty string is never searched (it would match at every place without end): c8_unusable
+# refuses a baseline that counts it, so its count stays 0 here.
 sub count_strings {
     my ($path, $strings) = @_;
     my %n = map { $_ => 0 } @$strings;
@@ -105,6 +108,7 @@ sub count_strings {
         my $data = $carry . $buf;
         my $cl = length $carry;
         for my $s (@$strings) {
+            next unless length $s;
             my $pos = 0;
             while (($pos = index($data, $s, $pos)) >= 0) {
                 $n{$s}++ if $pos + length($s) > $cl;
@@ -135,14 +139,16 @@ sub _rare {
 }
 
 # Why a baseline's c8 part cannot be compared (a text for the FAIL line), or undef: it must be
-# an object whose counts hold at least one string, each counted a whole number of times, none
-# 0, and at least one of them rare (C8 fails on rare strings only, so with none it compares
+# an object whose counts hold at least one string, none of them empty, each counted a whole
+# number of times, none 0, and at least one of them rare (C8 fails on rare strings only, so with none it compares
 # nothing): rare_max 0, or a rare_max below every count, leaves no rare string.
 sub c8_unusable {
     my ($c8) = @_;
     return 'no c8 part' unless ref $c8 eq 'HASH';
     my $want = $c8->{counts};
     return 'no c8 counts' unless ref $want eq 'HASH' && %$want;
+    return 'a c8 count for an empty string (""), which tools/canary-baseline never writes: an edited or broken baseline'
+        if exists $want->{''};
     my @bad = grep { my $n = $want->{$_}; !defined $n || ref $n || $n !~ /^[0-9]+\z/ } sort keys %$want;
     return 'a c8 count that is not a whole number (' . join(', ', map { "\"$_\"" } @bad) . ')' if @bad;
     my @zero = grep { $want->{$_} == 0 } sort keys %$want;

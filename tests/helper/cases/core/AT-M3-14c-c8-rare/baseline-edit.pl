@@ -1,11 +1,12 @@
 # AT-M3-14c-c8-rare setup: edit the case's own staged baseline, as
-# `perl baseline-edit.pl BASELINE N|-N|text:S|min|below-top|top|none|zero-one|zero-all|text-count|no-counts|no-c8|shape|count`:
+# `perl baseline-edit.pl BASELINE N|-N|text:S|min|below-top|top|none|zero-one|zero-all|empty-key|text-count|no-counts|no-c8|shape|count`:
 # N or -N set c8.rare_max to that number, text:S to the string S (a malformed limit), min to the
 # lowest count (so the strings at the limit itself are rare), below-top to one less than the
 # highest count (so the most frequent string is a common word and the rest stay rare), top to
 # the highest count (every count of 1 or more rare), none removes the key (an older baseline's
 # shape); zero-one sets the least frequent string's count to 0, zero-all every count (a count the
-# tool never writes); text-count sets the first string's count to a text, no-counts removes
+# tool never writes); empty-key adds a count of 1 for the empty string (a key the tool never
+# writes); text-count sets the first string's count to a text, no-counts removes
 # c8.counts, no-c8 removes the c8 part (a baseline C8 cannot compare: smoke must fail it). shape
 # edits nothing and prints `arm_list absent` or `arm_list present`. count edits nothing and
 # prints `rare R common C`, then ` zero Z` when Z counts are 0: how many strings the baseline
@@ -16,8 +17,8 @@ use strict;
 use warnings;
 
 my ($file, $max) = @ARGV;
-die "usage: BASELINE N|-N|text:S|min|below-top|top|none|zero-one|zero-all|text-count|no-counts|no-c8|shape|count\n"
-    unless defined $max && $max =~ /^(?:-?[0-9]+|text:.*|min|below-top|top|none|zero-one|zero-all|text-count|no-counts|no-c8|shape|count)\z/s;
+die "usage: BASELINE N|-N|text:S|min|below-top|top|none|zero-one|zero-all|empty-key|text-count|no-counts|no-c8|shape|count\n"
+    unless defined $max && $max =~ /^(?:-?[0-9]+|text:.*|min|below-top|top|none|zero-one|zero-all|empty-key|text-count|no-counts|no-c8|shape|count)\z/s;
 open(my $in, '<:raw', $file) or die "read $file: $!\n";
 my $raw = do { local $/; <$in> };
 close $in;
@@ -46,6 +47,7 @@ elsif ($max eq 'no-counts') { delete $c8->{counts} }
 elsif ($max eq 'no-c8') { delete $doc->{c8} }
 elsif ($max eq 'zero-one') { my ($low) = sort { $c8->{counts}{$a} <=> $c8->{counts}{$b} || $a cmp $b } keys %{ $c8->{counts} }; $c8->{counts}{$low} = 0 }
 elsif ($max eq 'zero-all') { $_ = 0 for values %{ $c8->{counts} } }
+elsif ($max eq 'empty-key') { $c8->{counts}{''} = 1 }
 elsif ($max eq 'min') { ($c8->{rare_max}) = sort { $a <=> $b } @counted }
 elsif ($max eq 'below-top') { my ($top) = sort { $b <=> $a } @counted; $c8->{rare_max} = $top - 1 }
 elsif ($max eq 'top') { ($c8->{rare_max}) = sort { $b <=> $a } @counted }
