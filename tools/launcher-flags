@@ -89,7 +89,7 @@ def read_table():
 
 def newest_claude():
     vdir = os.path.expanduser("~/.local/share/claude/versions")
-    vers = [v for v in os.listdir(vdir) if re.match(r"^\d+\.\d+\.\d+$", v)] if os.path.isdir(vdir) else []
+    vers = [v for v in os.listdir(vdir) if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", v)] if os.path.isdir(vdir) else []
     vers.sort(key=lambda v: [int(x) for x in v.split(".")])
     if vers:
         return os.path.join(vdir, vers[-1])
@@ -189,7 +189,7 @@ def main(argv):
             findings.append("missing command " + cmd)
     for f in findings:
         print("LAUNCHER-FLAGS " + f)
-    ver = os.path.basename(source) if re.match(r"^\d+\.\d+\.\d+$", os.path.basename(source)) else source
+    ver = os.path.basename(source) if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", os.path.basename(source)) else source
     if findings:
         print("LAUNCHER-FLAGS: FAIL ({} findings; claude {})".format(len(findings), ver))
         return 1

@@ -9,7 +9,10 @@
 #                                            cc-version, repo-skipped): one skip record per moment
 #   {"state":"on","skip":null,"m3","native_tail","facts":{…},"old":{…},"native":{…}}
 # `old.status` is `ok` (with the filled skill and template) or `no-old-skill`; `native.status` is
-# `ok` (with the head and tail for this version, arm and transcript flag) or `no-native-prompt`.
+# `ok` (with the head and tail for this version and transcript flag; arm `control`, the source
+# default prompt) or `no-native-prompt` (why `cc-version-before-payload` for a Claude Code older
+# than 2.1.321, with no prompt_arm; `payload-prompt` when Claude Code is served a prompt text:
+# prompt_arm `payload` with its prompt_sha256, never the text; trial.pm native).
 use strict;
 use warnings;
 use utf8;

@@ -86,7 +86,7 @@ sub version {
         next unless index($line, '"version"') >= 0;
         my $j = eval { jsonc::decode($line) };
         next unless ref $j eq 'HASH' && defined $j->{version} && !ref $j->{version};
-        return $j->{version} if $j->{version} =~ /^\d+\.\d+\.\d+([.+-][0-9A-Za-z.+-]*)?$/;
+        return $j->{version} if $j->{version} =~ /^[0-9]+\.[0-9]+\.[0-9]+([.+-][0-9A-Za-z.+-]*)?\z/;
     }
     return undef;
 }

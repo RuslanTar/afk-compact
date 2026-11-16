@@ -54,7 +54,9 @@ export type Measure = {
   old?: { status: string; why?: string; skill?: string; template?: string; sums?: Record<string, string>; filled_sha256?: string }
   native?: {
     status: string; why?: string; head?: string; tail?: string; head_sha256?: string; tail_sha256?: string; cc_version?: string | null
-    prompt_arm?: string; arm_source?: string; cache_prefix_flag?: boolean; transcript_flag?: number; precompact_hooks?: boolean
+    /** `control` (the source default prompt) or `payload` (a served prompt text, known only by its sha256). */
+    prompt_arm?: string; arm_source?: string; prompt_sha256?: string
+    cache_prefix_flag?: boolean; transcript_flag?: number; precompact_hooks?: boolean
   }
 }
 
@@ -516,6 +518,7 @@ function saveInput(d: Deps, mo: Moment, zone: string | undefined): Record<string
       cc_version: n?.cc_version ?? p.ccVersion,
       ...(n?.head_sha256 ? { head_sha256: n.head_sha256, tail_sha256: n.tail_sha256 } : {}),
       ...(n?.prompt_arm ? { prompt_arm: n.prompt_arm, arm_source: n.arm_source } : {}),
+      ...(n?.prompt_sha256 ? { prompt_sha256: n.prompt_sha256 } : {}),
       cache_prefix_flag: n?.cache_prefix_flag ?? null,
       ...(n?.transcript_flag !== undefined ? { transcript_flag: n.transcript_flag } : {}),
       precompact_hooks: n?.precompact_hooks ?? null,

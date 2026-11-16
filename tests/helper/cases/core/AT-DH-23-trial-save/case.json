@@ -359,6 +359,109 @@
    }
   },
   {
+   "name": "a native arm refused on a served prompt: the record keeps prompt_arm payload, its source and its sha256",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-9a8b7c6d",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "9a8b7c6d",
+     "position": 1,
+     "plugin_side": "n/a"
+    },
+    "old": {
+     "status": "no-old-skill"
+    },
+    "native": {
+     "status": "no-native-prompt",
+     "prompt_arm": "payload",
+     "arm_source": "env",
+     "prompt_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+     "cache_prefix_flag": false
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "written": true
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-9a8b7c6d.json",
+      "json": {
+       "native": {
+        "status": "no-native-prompt",
+        "prompt_arm": "payload",
+        "arm_source": "env",
+        "prompt_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "an arm word other than control or payload (the arm model of Claude Code 2.1.314) is dropped, as is a prompt_sha256 that is not 64 hex",
+   "argv": [
+    "trial-save",
+    "--sid",
+    "$SID"
+   ],
+   "stdin_json": {
+    "kind": "moment",
+    "moment_id": "$SID8-9a8b7c6e",
+    "repo": "work",
+    "ticket": "LAB-42",
+    "moment": {
+     "kind": "m3-auto",
+     "trigger": "auto",
+     "nonce": "9a8b7c6d",
+     "position": 1,
+     "plugin_side": "n/a"
+    },
+    "old": {
+     "status": "no-old-skill"
+    },
+    "native": {
+     "status": "no-native-prompt",
+     "prompt_arm": "lean",
+     "arm_source": "env",
+     "prompt_sha256": "Summarise <summary>"
+    }
+   },
+   "expect": {
+    "exit": 0,
+    "json": {
+     "written": true
+    },
+    "files": [
+     {
+      "path": "$HOME/.cache/$BRAND-trial/moments/2026-10/$SID8-9a8b7c6e.json",
+      "json": {
+       "native": {
+        "status": "no-native-prompt",
+        "arm_source": "env"
+       }
+      },
+      "lacks": [
+       "\"prompt_arm\"",
+       "\"prompt_sha256\"",
+       "lean",
+       "Summarise"
+      ]
+     }
+    ]
+   }
+  },
+  {
    "name": "an unknown arm status reads rejected; a moment id of another session is refused",
    "argv": [
     "trial-save",

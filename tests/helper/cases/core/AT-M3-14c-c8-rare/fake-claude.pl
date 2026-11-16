@@ -2,25 +2,26 @@
 # baseline's, as `perl fake-claude.pl BASELINE OUT [MUTATION]`: a shell script that exits 0
 # (smoke runs `plugin validate` and `plugin test` with it), then each counted string on comment
 # lines as often as the baseline counts it. Longest strings first: a string that holds a shorter
-# one (the arm list holds every arm, short_v2 holds short) adds to that one's count, so each
-# string is written only as often as its count still needs. MUTATION, applied after:
-#   common     one more line holding the most frequent string (a common word)
-#   drop-rare  every occurrence of the least frequent string other than the arm list (rare)
-#               replaced by x's of the same length
-#   drop-arm   the arm the baseline counts most often (a common word, so only the arm list
-#               is a rare change) taken out of every copy of the arm list
+# one adds to that one's count, so each string is written only as often as its count still
+# needs. MUTATION, applied after:
+#   common     one more line holding the most frequent string (a common word once rare_max is
+#              below its count)
+#   drop-rare  every occurrence of the least frequent string replaced by x's of the same length
+#   add-rare   one more line holding the least frequent string (a count that rises, as the
+#              experiment's flag did, from 2 in Claude Code 2.1.314 to 4 in 2.1.321)
+#   old-arms   the compaction experiment's arm list and arm names as Claude Code 2.1.314 held
+#              them, appended (the baseline recorded on 2.1.325 counts none of them)
 use strict;
 use warnings;
 
 my ($base_file, $out, $mut) = @ARGV;
-die "usage: BASELINE OUT [common|drop-rare|drop-arm]\n" unless defined $out;
+die "usage: BASELINE OUT [common|drop-rare|add-rare|old-arms]\n" unless defined $out;
 open(my $bf, '<:raw', $base_file) or die "read $base_file: $!\n";
 my $braw = do { local $/; <$bf> };
 close $bf;
 require JSON::PP;
 my $c8 = JSON::PP->new->decode($braw)->{c8};
 my %want = %{ $c8->{counts} };
-my $arm_list = $c8->{arm_list};
 
 sub count_in {
     my ($data, $s) = @_;
@@ -39,21 +40,21 @@ for my $s (keys %want) {
     die "$s: counted " . count_in($body, $s) . ", baseline $want{$s}\n" unless count_in($body, $s) == $want{$s};
 }
 $mut //= '';
+my ($low) = sort { $want{$a} <=> $want{$b} || $a cmp $b } keys %want;
 if ($mut eq 'common') {
     my ($top) = sort { $want{$b} <=> $want{$a} || $a cmp $b } keys %want;
     $body .= "# $top\n";
 }
 elsif ($mut eq 'drop-rare') {
-    my ($low) = sort { $want{$a} <=> $want{$b} || $a cmp $b } grep { !defined $arm_list || $_ ne $arm_list } keys %want;
     my $x = 'x' x length $low;
     $body =~ s/\Q$low\E/$x/g;
 }
-elsif ($mut eq 'drop-arm') {
-    die "the baseline has no arm list\n" unless defined $arm_list;
-    my ($arm) = sort { ($want{$b} // 0) <=> ($want{$a} // 0) || $a cmp $b } $arm_list =~ /"([^"]+)"/g;
-    (my $short = $arm_list) =~ s/"\Q$arm\E",?//;
-    $short =~ s/,]\z/]/;
-    $body =~ s/\Q$arm_list\E/$short/g;
+elsif ($mut eq 'add-rare') {
+    $body .= "# $low\n";
+}
+elsif ($mut eq 'old-arms') {
+    my @arms = qw(control no_scratchpad no_scratchpad_capped no_scratchpad_keep_asks lean short short_v2 capped);
+    $body .= '# [' . join(',', map { "\"$_\"" } @arms) . "]\n" . join('', map { "# $_\n" } @arms);
 }
 elsif ($mut ne '') { die "unknown mutation $mut\n" }
 (my $od = $out) =~ s{/[^/]+\z}{};

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The smoke check no longer fails on Claude Code 2.1.321 to 2.1.323 and 2.1.325, whose compaction experiment takes a whole prompt in place of a named arm. It now compares the counts of 2.1.325, so it fails on 2.1.314, which holds the experiment's flag and its variable fewer times.
+
 ## [0.1.17] - 2026-11-16
 
 afk-compact 0.1.17 fixes how the plugin recognises running sessions and reads GSD progress under Git Bash and Cygwin on Windows, lets you name folders `/afk-compact:prune` never works in, and ignores its internal test switches in normal runs. Requires Claude Code 2.1.287 or newer; tested against 2.1.325.

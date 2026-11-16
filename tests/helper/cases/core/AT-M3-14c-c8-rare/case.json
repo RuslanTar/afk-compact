@@ -3,7 +3,7 @@
  "needs": [
   "types"
  ],
- "note": "AT-M3-14 (F), C8: smoke fails C8 only when the count of a rare string (a baseline count of at most c8.rare_max) or of the arm list (c8.arm_list) changes; a common word's changed count is an `info c8` line and smoke stays green. fake-claude.pl writes a stand-in binary (2.1.999: smoke takes a version-named binary's name; it exits 0 for validate and test) holding every baseline string as often as the baseline counts it, then shifts a common word, drops a rare string, or leaves an arm out of the arm list; no string is named here, each is picked from the staged baseline. The case runs on its own staged copy (stage_overlay with the baseline as staged) so steps (e) to (g) can edit the baseline (baseline-edit.pl): with 0 only the arm list fails, a string whose count equals it is rare, and without the key every string is rare, as with a malformed one (j: -1, k: not a number); (i) a baseline that does not count its arm list fails. A pass line names the rare and common counts baseline-edit.pl count reads from the staged baseline",
+ "note": "AT-M3-14 (F), C8: smoke fails C8 only when the count of a rare string (a baseline count that is a whole number from 1 to c8.rare_max) changes, up or down; a common word's changed count is an `info c8` line and smoke stays green. The baseline as recorded (on Claude Code 2.1.325, where the compaction experiment's flag and env variable carry a whole prompt, not an arm name) has no arm list and no common word: (a) checks that shape (0 common words) and that the pass line names no arm list, and (c) to (e) run on it as recorded. fake-claude.pl writes a stand-in binary (2.1.999: smoke takes a version-named binary's name; it exits 0 for validate and test) holding every baseline string as often as the baseline counts it, then shifts the most frequent string, drops or adds one of the least frequent, or appends the old arm list and arm names; no string is named here, each is picked from the staged baseline. The case runs on its own staged copy (stage_overlay with the baseline as staged) so steps (b) and (f) to (n) can edit the baseline (baseline-edit.pl), (b) only after (e): one below the highest count makes the most frequent string common, a string whose count equals it is rare, and without the key every count of 1 or more is rare, as with a malformed one (i: -1, j: not a number); (f) rare_max 0 and (f2) a rare_max below every count leave no rare string, so C8 fails with a line that says so (it would compare nothing); (o) to (q2) a count of 0, which is never rare and which the tool never writes (one among rare counts, one beside counts above rare_max, every count, and every count under --skip-cli), fails C8 and names it, though the stand-in matches every count; (l) to (n) a baseline with a count that is not a whole number, no counts (under --skip-cli too) or no c8 part fails C8 with a line that says so. A pass line names the rare and common counts baseline-edit.pl count reads from the staged baseline",
  "now": "2026-10-21T14:05:12+03:00",
  "tz": "Etc/GMT-3",
  "env": {
@@ -14,7 +14,7 @@
  },
  "steps": [
   {
-   "name": "(a) every count as recorded: C8 passes with no info line, smokeDue cleared",
+   "name": "(a) a baseline with no arm list and no common word (the shape recorded on Claude Code 2.1.325), every count as recorded: C8 passes, its pass line names no arm list, no info line, smokeDue cleared",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -39,12 +39,26 @@
     "/usr/bin/perl",
     "$CASE/baseline-edit.pl",
     "$PLUGIN/assets/canary-baseline.json",
+    "shape"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^arm_list absent\\n\\z"
+    ]
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
     "count"
    ],
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^rare \\d+ common \\d+$"
+     "^rare [1-9]\\d* common 0$"
     ]
    },
    "capture": {
@@ -67,13 +81,14 @@
     "stdout_has": [
      "^ok validate \\(exit 0\\)$",
      "^ok test \\(exit 0\\)$",
-     "^ok c8 \\($C8_RARE rare strings and the arm list as recorded; $C8_COMMON common words not compared\\)$",
+     "^ok c8 \\($C8_RARE rare strings? as recorded; $C8_COMMON common words? not compared\\)$",
      "^ok c9 \\(6 declarations",
      "^SMOKE PASS 2\\.1\\.999\\n\\z"
     ],
     "stdout_lacks": [
      "^info c8",
-     "^FAIL"
+     "^FAIL",
+     "arm list"
     ],
     "files": [
      {
@@ -91,68 +106,6 @@
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "smoke_pass",
       "count": 1
-     }
-    ]
-   }
-  },
-  {
-   "name": "(b) a common word's count shifts: one info line, C8 still passes, smokeDue cleared",
-   "setup": [
-    {
-     "write": "$WATCH/version.json",
-     "json": {
-      "lastVersion": "2.1.999",
-      "smokeDue": "2.1.999"
-     }
-    }
-   ],
-   "exec": [
-    "/usr/bin/perl",
-    "$CASE/fake-claude.pl",
-    "$PLUGIN/assets/canary-baseline.json",
-    "$TMP/v/2.1.999",
-    "common"
-   ],
-   "expect": {
-    "exit": 0
-   }
-  },
-  {
-   "argv": [
-    "smoke",
-    "--sid",
-    "$SID",
-    "--claude",
-    "$TMP/v/2.1.999",
-    "--types",
-    "$TYPES"
-   ],
-   "expect": {
-    "exit": 0,
-    "stdout_has": [
-     "^ok c8 \\($C8_RARE rare strings and the arm list as recorded; $C8_COMMON common words not compared\\)$",
-     "^info c8 \\\"\\w+\\\" (\\d+) -> (?!\\1\\b)\\d+ \\(a common word: information only\\)$",
-     "^SMOKE PASS 2\\.1\\.999\\n\\z"
-    ],
-    "stdout_lacks": [
-     "^FAIL"
-    ],
-    "files": [
-     {
-      "path": "$WATCH/version.json",
-      "keys_absent": [
-       "smokeDue"
-      ],
-      "json": {
-       "lastSmokePass": "2.1.999"
-      }
-     }
-    ],
-    "rows": [
-     {
-      "file": "$WATCH/$SID.classic.jsonl",
-      "ev": "smoke_pass",
-      "count": 2
      }
     ]
    }
@@ -217,7 +170,7 @@
    }
   },
   {
-   "name": "(d) an arm left out of the arm list: C8 fails on the arm list alone (that arm's own count, a common word, is an info line), smokeDue kept",
+   "name": "(d) a rare string's count rises (as the experiment's flag did, from 2 in Claude Code 2.1.314 to 4 in 2.1.321): C8 fails and names it, smokeDue kept",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -232,7 +185,7 @@
     "$CASE/fake-claude.pl",
     "$PLUGIN/assets/canary-baseline.json",
     "$TMP/v/2.1.999",
-    "drop-arm"
+    "add-rare"
    ],
    "expect": {
     "exit": 0
@@ -251,9 +204,11 @@
    "expect": {
     "exit": 1,
     "stdout_has": [
-     "^FAIL c8 \\(changed: the arm list [1-9]\\d* -> 0\\)$",
-     "^info c8 \\\"\\w+\\\" \\d+ -> \\d+ \\(a common word: information only\\)$",
+     "^FAIL c8 \\(changed: \\\"[^\\\"]+\\\" (\\d+) -> (?!\\1\\b)\\d+\\)$",
      "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^info c8"
     ],
     "files": [
      {
@@ -276,7 +231,161 @@
    }
   },
   {
-   "name": "(e) rare_max 0 in this case's own baseline: every string is a common word but the arm list, so a dropped string is an info line and smoke passes",
+   "name": "(e) the binary also holds the experiment's old arm list and arm names (as 2.1.314 held them): none is counted, so C8 passes with no info line",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/fake-claude.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "$TMP/v/2.1.999",
+    "old-arms"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ok c8 \\($C8_RARE rare strings? as recorded; $C8_COMMON common words? not compared\\)$",
+     "^SMOKE PASS 2\\.1\\.999\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^info c8",
+     "^FAIL",
+     "arm list"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "keys_absent": [
+       "smokeDue"
+      ],
+      "json": {
+       "lastSmokePass": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_pass",
+      "count": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "(b) rare_max one below the highest count, so the most frequent string is a common word: its shifted count is one info line, C8 still passes, smokeDue cleared",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "below-top"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "count"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^rare \\d+ common [1-9]\\d*$"
+    ]
+   },
+   "capture": {
+    "C8_RARE": "re:^rare (\\d+) common \\d+$",
+    "C8_COMMON": "re:^rare \\d+ common (\\d+)$"
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/fake-claude.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "$TMP/v/2.1.999",
+    "common"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^ok c8 \\($C8_RARE rare strings? as recorded; $C8_COMMON common words? not compared\\)$",
+     "^info c8 \\\"[^\\\"]+\\\" (\\d+) -> (?!\\1\\b)\\d+ \\(a common word: information only\\)$",
+     "^SMOKE PASS 2\\.1\\.999\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^FAIL"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "keys_absent": [
+       "smokeDue"
+      ],
+      "json": {
+       "lastSmokePass": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_pass",
+      "count": 3
+     }
+    ]
+   }
+  },
+  {
+   "name": "(f) rare_max 0 in this case's own baseline: no string is rare, so C8 would compare nothing; it fails and says so (never SMOKE PASS with nothing compared), smokeDue kept, though a string was dropped",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -306,12 +415,8 @@
    "expect": {
     "exit": 0,
     "stdout_has": [
-     "^rare \\d+ common \\d+$"
+     "^rare 0 common [1-9]\\d*$"
     ]
-   },
-   "capture": {
-    "C8_RARE": "re:^rare (\\d+) common \\d+$",
-    "C8_COMMON": "re:^rare \\d+ common (\\d+)$"
    }
   },
   {
@@ -337,72 +442,17 @@
     "$TYPES"
    ],
    "expect": {
-    "exit": 0,
-    "stdout_has": [
-     "^ok c8 \\($C8_RARE rare strings and the arm list as recorded; $C8_COMMON common words not compared\\)$",
-     "^info c8 \\\"[^\\\"]+\\\" [1-9]\\d* -> 0 \\(a common word: information only\\)$",
-     "^SMOKE PASS 2\\.1\\.999\\n\\z"
-    ],
-    "stdout_lacks": [
-     "^FAIL"
-    ],
-    "files": [
-     {
-      "path": "$WATCH/version.json",
-      "keys_absent": [
-       "smokeDue"
-      ],
-      "json": {
-       "lastSmokePass": "2.1.999"
-      }
-     }
-    ],
-    "rows": [
-     {
-      "file": "$WATCH/$SID.classic.jsonl",
-      "ev": "smoke_pass",
-      "count": 3
-     }
-    ]
-   }
-  },
-  {
-   "name": "(f) rare_max 0: the arm list still fails",
-   "setup": [
-    {
-     "write": "$WATCH/version.json",
-     "json": {
-      "lastVersion": "2.1.999",
-      "smokeDue": "2.1.999"
-     }
-    }
-   ],
-   "exec": [
-    "/usr/bin/perl",
-    "$CASE/fake-claude.pl",
-    "$PLUGIN/assets/canary-baseline.json",
-    "$TMP/v/2.1.999",
-    "drop-arm"
-   ],
-   "expect": {
-    "exit": 0
-   }
-  },
-  {
-   "argv": [
-    "smoke",
-    "--sid",
-    "$SID",
-    "--claude",
-    "$TMP/v/2.1.999",
-    "--types",
-    "$TYPES"
-   ],
-   "expect": {
     "exit": 1,
     "stdout_has": [
-     "^FAIL c8 \\(changed: the arm list [1-9]\\d* -> 0\\)$",
+     "^FAIL c8 \\(the baseline has no rare string: c8\\.rare_max is 0, so C8 cannot compare\\)$",
+     "^ok c9 ",
      "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8",
+     "^info c8",
+     "^SMOKE PASS"
     ],
     "files": [
      {
@@ -425,7 +475,96 @@
    }
   },
   {
-   "name": "(h) rare_max equal to the lowest count: a string at the limit is rare, so dropping it fails",
+   "name": "(f2) rare_max 1, below every count in this case's own baseline: no string is rare, so C8 fails and says so, smokeDue kept",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "1"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "count"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^rare 0 common [1-9]\\d*$"
+    ]
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/fake-claude.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "$TMP/v/2.1.999"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c8 \\(the baseline has no rare string: every c8 count is above c8\\.rare_max 1, so C8 cannot compare\\)$",
+     "^ok c9 ",
+     "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8",
+     "^info c8",
+     "^SMOKE PASS"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 4,
+      "fields": {
+       "check": "c8"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(g) rare_max equal to the lowest count: a string at the limit is rare, so dropping it fails",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -485,7 +624,7 @@
      {
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "smoke_fail",
-      "count": 4,
+      "count": 5,
       "fields": {
        "check": "c8"
       }
@@ -494,7 +633,7 @@
    }
   },
   {
-   "name": "(g) a baseline without rare_max (an older shape): every string is rare, so a shifted common word fails",
+   "name": "(h) a baseline without rare_max (an older shape): every string is rare, so a shifted most frequent string fails",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -539,7 +678,7 @@
    "expect": {
     "exit": 1,
     "stdout_has": [
-     "^FAIL c8 \\(changed: \\\"\\w+\\\" (\\d+) -> (?!\\1\\b)\\d+\\)$",
+     "^FAIL c8 \\(changed: \\\"[^\\\"]+\\\" (\\d+) -> (?!\\1\\b)\\d+\\)$",
      "^SMOKE FAIL c8\\n\\z"
     ],
     "stdout_lacks": [
@@ -557,7 +696,7 @@
      {
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "smoke_fail",
-      "count": 5,
+      "count": 6,
       "fields": {
        "check": "c8"
       }
@@ -566,7 +705,7 @@
    }
   },
   {
-   "name": "(j) rare_max -1 (malformed): every string is rare, so a shifted common word fails with no info line",
+   "name": "(i) rare_max -1 (malformed): every string is rare, so a shifted most frequent string fails with no info line",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -611,7 +750,7 @@
    "expect": {
     "exit": 1,
     "stdout_has": [
-     "^FAIL c8 \\(changed: \\\"\\w+\\\" (\\d+) -> (?!\\1\\b)\\d+\\)$",
+     "^FAIL c8 \\(changed: \\\"[^\\\"]+\\\" (\\d+) -> (?!\\1\\b)\\d+\\)$",
      "^SMOKE FAIL c8\\n\\z"
     ],
     "stdout_lacks": [
@@ -630,7 +769,7 @@
      {
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "smoke_fail",
-      "count": 6,
+      "count": 7,
       "fields": {
        "check": "c8"
       }
@@ -639,7 +778,7 @@
    }
   },
   {
-   "name": "(k) rare_max not a number (malformed): every string is rare, so a shifted common word fails with no info line",
+   "name": "(j) rare_max not a number (malformed): every string is rare, so a shifted most frequent string fails with no info line",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -684,7 +823,7 @@
    "expect": {
     "exit": 1,
     "stdout_has": [
-     "^FAIL c8 \\(changed: \\\"\\w+\\\" (\\d+) -> (?!\\1\\b)\\d+\\)$",
+     "^FAIL c8 \\(changed: \\\"[^\\\"]+\\\" (\\d+) -> (?!\\1\\b)\\d+\\)$",
      "^SMOKE FAIL c8\\n\\z"
     ],
     "stdout_lacks": [
@@ -703,7 +842,7 @@
      {
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "smoke_fail",
-      "count": 7,
+      "count": 8,
       "fields": {
        "check": "c8"
       }
@@ -712,7 +851,7 @@
    }
   },
   {
-   "name": "(i) a baseline whose counts lack its arm list: C8 fails, never a pass that left the arm list out",
+   "name": "(o) one count 0 among rare counts (rare_max the highest count, the least frequent string's count 0; the stand-in holds that string 0 times, so its count matches): a count of 0 is never rare, and the tool never writes one, so C8 fails and names it, smokeDue kept",
    "setup": [
     {
      "write": "$WATCH/version.json",
@@ -726,10 +865,35 @@
     "/usr/bin/perl",
     "$CASE/baseline-edit.pl",
     "$PLUGIN/assets/canary-baseline.json",
-    "uncount-arm"
+    "top"
    ],
    "expect": {
     "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "zero-one"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "count"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^rare [1-9]\\d* common 0 zero 1$"
+    ]
    }
   },
   {
@@ -756,8 +920,15 @@
    "expect": {
     "exit": 1,
     "stdout_has": [
-     "^FAIL c8 \\(the arm list is not counted in the baseline\\)$",
+     "^FAIL c8 \\(the baseline has a c8 count of 0 \\(\\\"[^\\\"]+\\\"\\), which tools/canary-baseline never writes: an edited or broken baseline, so C8 cannot compare\\)$",
+     "^ok c9 ",
      "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8",
+     "^info c8",
+     "^SMOKE PASS"
     ],
     "files": [
      {
@@ -771,7 +942,422 @@
      {
       "file": "$WATCH/$SID.classic.jsonl",
       "ev": "smoke_fail",
-      "count": 8,
+      "count": 9,
+      "fields": {
+       "check": "c8"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(p) one count 0 and the rest above rare_max 1: no count is rare; C8 fails on the 0 count, smokeDue kept",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "1"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "count"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^rare 0 common [1-9]\\d* zero 1$"
+    ]
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/fake-claude.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "$TMP/v/2.1.999"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c8 \\(the baseline has a c8 count of 0 \\(\\\"[^\\\"]+\\\"\\), which tools/canary-baseline never writes: an edited or broken baseline, so C8 cannot compare\\)$",
+     "^ok c9 ",
+     "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8",
+     "^info c8",
+     "^SMOKE PASS"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 10,
+      "fields": {
+       "check": "c8"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(q) every count 0 (the stand-in holds none of the strings, so every count matches): C8 fails and names every 0 count, never SMOKE PASS with nothing compared, smokeDue kept",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "zero-all"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "count"
+   ],
+   "expect": {
+    "exit": 0,
+    "stdout_has": [
+     "^rare 0 common 0 zero [1-9]\\d*$"
+    ]
+   }
+  },
+  {
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/fake-claude.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "$TMP/v/2.1.999"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c8 \\(the baseline has c8 counts of 0 \\(\\\"[^\\\"]+\\\"(?:, \\\"[^\\\"]+\\\")+\\), which tools/canary-baseline never writes: an edited or broken baseline, so C8 cannot compare\\)$",
+     "^ok c9 ",
+     "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8",
+     "^info c8",
+     "^SMOKE PASS"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 11,
+      "fields": {
+       "check": "c8"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(q2) every count 0 under --skip-cli: C8 fails the same way, smokeDue kept",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c8 \\(the baseline has c8 counts of 0 \\(\\\"[^\\\"]+\\\"(?:, \\\"[^\\\"]+\\\")+\\), which tools/canary-baseline never writes: an edited or broken baseline, so C8 cannot compare\\)$",
+     "^ok c9 ",
+     "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8",
+     "^info c8",
+     "^SMOKE PASS"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 12,
+      "fields": {
+       "check": "c8"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(l) a c8 count that is not a whole number: C8 fails and names the string, smokeDue kept",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "text-count"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c8 \\(the baseline has a c8 count that is not a whole number \\(\\\"[^\\\"]+\\\"\\), so C8 cannot compare\\)$",
+     "^ok c9 ",
+     "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 13,
+      "fields": {
+       "check": "c8"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(m) a c8 part with no counts, under --skip-cli too: C8 fails and says so, smokeDue kept",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "no-counts"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--skip-cli",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c8 \\(the baseline has no c8 counts, so C8 cannot compare\\)$",
+     "^ok c9 ",
+     "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 14,
+      "fields": {
+       "check": "c8"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "(n) a baseline with no c8 part: C8 fails and says so (never a pass that skipped C8), smokeDue kept",
+   "setup": [
+    {
+     "write": "$WATCH/version.json",
+     "json": {
+      "lastVersion": "2.1.999",
+      "smokeDue": "2.1.999"
+     }
+    }
+   ],
+   "exec": [
+    "/usr/bin/perl",
+    "$CASE/baseline-edit.pl",
+    "$PLUGIN/assets/canary-baseline.json",
+    "no-c8"
+   ],
+   "expect": {
+    "exit": 0
+   }
+  },
+  {
+   "argv": [
+    "smoke",
+    "--sid",
+    "$SID",
+    "--claude",
+    "$TMP/v/2.1.999",
+    "--types",
+    "$TYPES"
+   ],
+   "expect": {
+    "exit": 1,
+    "stdout_has": [
+     "^FAIL c8 \\(the baseline has no c8 part, so C8 cannot compare\\)$",
+     "^ok c9 ",
+     "^SMOKE FAIL c8\\n\\z"
+    ],
+    "stdout_lacks": [
+     "^ok c8",
+     "^skip c8"
+    ],
+    "files": [
+     {
+      "path": "$WATCH/version.json",
+      "json": {
+       "smokeDue": "2.1.999"
+      }
+     }
+    ],
+    "rows": [
+     {
+      "file": "$WATCH/$SID.classic.jsonl",
+      "ev": "smoke_fail",
+      "count": 15,
       "fields": {
        "check": "c8"
       }

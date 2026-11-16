@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """tools/check: run one phase's exit checks in order; stop at the first failure.
 
-Usage: tools/check PHASE [--names FILE] [--no-drill]
+Usage: tools/check PHASE [--names FILE] [--no-drill] | tools/check xgen [--no-c8]
   PHASE    phase0       X-validate (Claude Code's `claude plugin validate plugin --strict`, which
                         compiles the hooks module under the installed Claude Code's module
                         rules, then the skeleton), X-test, X-types, X-gen, X-launcher,
@@ -12,9 +12,13 @@ Usage: tools/check PHASE [--names FILE] [--no-drill]
                         only the KNOWN_RED cases may fail, each for its stated reason); its
                         X-launcher also runs the launcher cases on Linux in Docker
            selftest     X-tools alone
-           xgen         X-gen alone (used by the X-tools probe of the canary baseline)
+           xgen         X-gen alone (used by the X-tools probes of the canary baseline)
   --names  the competitor-name list; default $GATE_NAMES_FILE. Missing = X-gates fails.
   --no-drill  skip X-tools and BT-02 (used for the drill's own run inside its renamed copy)
+  --no-c8  xgen only, the caller's opt-in to the weaker canary check when the Claude Code
+           binary the baseline records is not installed (see X-gen); its PASS line says the C8
+           counts were not compared. Every other phase refuses it (exit 2): the release path,
+           phase0 and integration, always compares the C8 counts.
 
 Time: integration runs every helper case twice (X-H here, and again in the BT-02 copy, whose own
 `tools/check integration --no-drill` repeats every check), plus the X-tools probes. Give a full
@@ -33,10 +37,14 @@ stale-name over plugin, README.md and docs.
 
 X-gen: tools/build --check, tools/fixtures-gen --check, tools/helper-replies-gen --check,
 tools/canary-baseline --check (pinned to the Claude Code binary the baseline records, so an
-update does not make it flaky; when that binary is gone, every part but the C8 counts is
-compared with a render from the newest binary) and tools/assemble --check (goldens, the
-goldens index goldens.gen.ts and its data modules goldens.<asset>[.<n>].gen.ts, stray
-_gen/goldens*.gen.ts files), each byte for byte.
+update does not make it flaky; a baseline with no c8.counts, or whose c8.binary_version is not
+a version string equal to its cc_version, fails; so does a baseline whose binary is not
+installed, unless the caller gave `xgen --no-c8`: then the baseline's bytes are compared with
+a render that reads no binary, tools/canary-baseline --no-c8, given the baseline's own c8 part
+and cc_version, and every C8 part but the counts' values with the tool's constants: the count
+keys, each count rare (1 to rare_max; never 0), rare_max and idle_prefixes) and
+tools/assemble --check (goldens, the goldens index goldens.gen.ts and its data modules
+goldens.<asset>[.<n>].gen.ts, stray _gen/goldens*.gen.ts files), each byte for byte.
 
 X-launcher: tools/launcher-flags (the restart launcher's flag
 table against `claude --help` of the newest installed Claude Code), tools/respawn-keepset (the
@@ -55,8 +63,18 @@ only GEN tools write (a stray _gen/goldens*.gen.ts, which tools/build accepts, b
 goldens modules under a 64 KiB test cap (overflow modules that the same cap's checks and the
 test kit pass; goldens-split), a golden larger than the module cap, other candidate names inside
 longer words, npm manifests or node_modules under
-plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a SKILL.md description over the BT-09
-rule, the text gates (AT-W-01 wait text, AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03
+plugin/ (BT-06), a hand edit of the canary baseline (X-gen), a canary baseline that would pick
+the fallback (no c8, a c8.binary_version that is not cc_version, one with a trailing newline,
+both versions renamed to one not installed with changed counts while the recorded one is
+installed), the release path (phase0 and integration refuse --no-c8 and call the canary
+check strict), the fallback under --no-c8 (its PASS line says the C8 counts were not compared;
+its check of each C8 part that is a tool constant: count keys, count range, rare_max one below
+the tool's and 0, idle_prefixes, on that renamed baseline; its text compare: a CRLF baseline,
+an extra blank line), versions in fullwidth or Arabic-Indic digits (a baseline holding them,
+and file names that canary-baseline, launcher-flags, respawn-keepset and pinned_claude would
+pick), tools/canary-baseline --no-c8 (its
+render equals the baseline but c8; each call that is not a render to another file exits 2), a
+SKILL.md description over the BT-09 rule, the text gates (AT-W-01 wait text, AT-W-02 asset bytes, AT-SK-01 budget line and caps, AT-SK-03
 write-first line, AT-J-13 self-heal table and resume SKILL size), a resume protocol over its
 hard cap (assemble), AT-WD-02 manifest defaults and VD-01 title defaults and
 pick lists, the content gates
@@ -322,14 +340,22 @@ def git_repo(d):
     git_in(d, "commit", "-q", "-m", "selftest base")
 
 
+# Matched with fullmatch only: `$` would also match before a trailing newline ("2.1.325\n").
+# ASCII digits only: Python's \d also takes fullwidth, Arabic-Indic and other Unicode digits.
+VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
+
+
 def pinned_claude(root=REPO):
-    """The Claude Code binary the canary baseline's C8 counts were taken from, if installed."""
+    """The Claude Code binary the canary baseline's C8 counts were taken from, if installed
+    (None when c8.binary_version is missing or not a version string)."""
     try:
         with open(os.path.join(root, "plugin", "assets", "canary-baseline.json"), encoding="utf-8") as f:
             v = json.load(f)["c8"]["binary_version"]
     except (OSError, ValueError, KeyError, TypeError):
         return None, None
-    b = os.path.join(os.path.expanduser("~"), ".local", "share", "claude", "versions", str(v))
+    if not isinstance(v, str) or not VERSION_RE.fullmatch(v):
+        return v, None
+    b = os.path.join(os.path.expanduser("~"), ".local", "share", "claude", "versions", v)
     return v, (b if os.path.isfile(b) else None)
 
 
@@ -469,6 +495,327 @@ def probes(name):
         k = sorted(counts)[0]
         counts[k] = counts[k] + 9
         write_text(p, json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+
+    # The canary gate's fallback (canary_check) and tools/canary-baseline --no-c8. A baseline edit
+    # is fn(doc, c8) on the copy's baseline; no_claude_home is a HOME with no Claude Code
+    # installed (and no CLAUDE_CODE_EXECPATH), so tools/check xgen takes the fallback on any machine.
+    def baseline_edit(fn):
+        def plant(d):
+            p = os.path.join(d, "plugin", "assets", "canary-baseline.json")
+            with open(p, encoding="utf-8", newline="") as f:
+                doc = json.load(f)
+            fn(doc, doc.get("c8"))
+            write_text(p, json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+        return plant
+
+    def no_claude_home(d):
+        h = os.path.join(d, "tmp", "no-claude-home")
+        os.makedirs(h, exist_ok=True)
+        env = dict(os.environ, HOME=h)
+        env.pop("CLAUDE_CODE_EXECPATH", None)
+        return env
+
+    def pinned_home(d):
+        """A HOME that holds only the Claude Code the baseline records (a link to the installed
+        binary, read by canary-baseline, never run) when it is installed, else no Claude Code;
+        no CLAUDE_CODE_EXECPATH."""
+        h = os.path.join(d, "tmp", "pinned-home")
+        vd = os.path.join(h, ".local", "share", "claude", "versions")
+        os.makedirs(vd, exist_ok=True)
+        if pinned and not os.path.lexists(os.path.join(vd, v)):
+            os.symlink(pinned, os.path.join(vd, v))
+        env = dict(os.environ, HOME=h)
+        env.pop("CLAUDE_CODE_EXECPATH", None)
+        return env
+
+    def xgen_in(flags):
+        """tools/check xgen [flags] under pinned_home."""
+        def go(d):
+            r = subprocess.run([os.path.join(d, "tools", "check"), "xgen"] + flags, cwd=d, capture_output=True,
+                               text=True, env=pinned_home(d))
+            return r.returncode, r.stdout + r.stderr
+        go.__name__ = " ".join(["tools/check", "xgen"] + flags) + " (HOME with only the recorded Claude Code)"
+        return go
+
+    xgen_strict, xgen_noc8 = xgen_in([]), xgen_in(["--no-c8"])
+    unpinned = "2.1.999"
+
+    def v1_edit(doc, c8):
+        """Both versions renamed to one not installed, and the experiment's flag and env variable
+        counted as 2.1.314 holds them (2 and 3), while the recorded version stays installed."""
+        c8["binary_version"] = doc["cc_version"] = unpinned
+        for s, n in (("tengu_curried_trinket", 2), ("CLAUDE_CODE_CURRIED_TRINKET", 3)):
+            c8["counts"][s] = n if c8["counts"].get(s) != n else n + 1
+
+    def v1b_edit(doc, c8):
+        """Both versions as recorded but with a trailing newline (a `$` anchor matches it)."""
+        c8["binary_version"] = doc["cc_version"] = c8["binary_version"] + "\n"
+
+    def v1_and(fn):
+        def edit(doc, c8):
+            v1_edit(doc, c8)
+            fn(doc, c8)
+        return edit
+
+    def v1_then(raw_edit):
+        """The canary-c8-v1 baseline, then raw_edit(bytes) -> bytes on its text (a format the
+        tool never writes: the fallback compares text, as the strict path does)."""
+        def plant(d):
+            baseline_edit(v1_edit)(d)
+            p = os.path.join(d, "plugin", "assets", "canary-baseline.json")
+            with open(p, "rb") as f:
+                data = f.read()
+            with open(p, "wb") as f:
+                f.write(raw_edit(data))
+        return plant
+
+    tool_rare_max = canary_tool_consts(REPO)[2]
+
+    # Versions are ASCII digits only: a file name or a baseline holding fullwidth or
+    # Arabic-Indic digits is not a version at any entry point that takes one from a file.
+    fullwidth = lambda v: "".join(chr(0xFF10 + int(c)) if "0" <= c <= "9" else c for c in v)
+    arabic_indic = lambda v: "".join(chr(0x0660 + int(c)) if "0" <= c <= "9" else c for c in v)
+    odd_versions = (("fullwidth", fullwidth("2.1.325")), ("Arabic-Indic", arabic_indic("2.1.325")))
+
+    def odd_version_edit(odd):
+        def edit(doc, c8):
+            c8["binary_version"] = doc["cc_version"] = odd
+        return edit
+
+    def version_ascii(d):
+        """The copy's tools/canary-baseline (the newest binary it picks, and cc_version from a
+        --claude file name), tools/launcher-flags (newest_claude), tools/respawn-keepset
+        (binaries, picked and given) and tools/check (pinned_claude), under a HOME whose
+        versions folder holds 2.1.300 and odd-digit names that would sort newer. No binary is
+        run: each file is a one-line stand-in, and canary-baseline renders with --no-c8."""
+        h = os.path.join(d, "tmp", "ascii-home")
+        vd = os.path.join(h, ".local", "share", "claude", "versions")
+        os.makedirs(vd, exist_ok=True)
+        odd_names = [fullwidth("9.9.9"), arabic_indic("9.9.9")] + [o for _, o in odd_versions]
+        for n in ["2.1.300"] + odd_names:
+            write_text(os.path.join(vd, n), "#!/bin/sh\nexit 0\n")
+            os.chmod(os.path.join(vd, n), 0o755)
+        env = dict(os.environ, HOME=h)
+        env.pop("CLAUDE_CODE_EXECPATH", None)
+        out, bad = [], 0
+
+        def note(what, got, want):
+            nonlocal bad
+            if got == want:
+                out.append("ASCII ok: {}: {}".format(what, ascii(got)))
+            else:
+                bad += 1
+                out.append("ASCII lax: {}: {} (want {})".format(what, ascii(got), ascii(want)))
+
+        render = os.path.join("tmp", "ascii-render.json")
+
+        def cc_version(extra):
+            r = subprocess.run([os.path.join(d, "tools", "canary-baseline"), "--no-c8", "--out", render] + extra,
+                               cwd=d, capture_output=True, text=True, env=env)
+            if r.returncode != 0:
+                return "exit {}: {}".format(r.returncode, (r.stdout + r.stderr).strip()[-200:])
+            with open(os.path.join(d, render), encoding="utf-8") as f:
+                return json.load(f).get("cc_version")
+        note("canary-baseline cc_version (newest in the versions folder)", cc_version([]), "2.1.300")
+        for what, o in odd_versions:
+            note("canary-baseline cc_version (--claude named in {} digits)".format(what),
+                 cc_version(["--claude", os.path.join(vd, o)]), "unknown")
+
+        def load(rel, tag):
+            loader = importlib.machinery.SourceFileLoader(tag, os.path.join(d, *rel.split("/")))
+            mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(tag, loader))
+            loader.exec_module(mod)
+            return mod
+        keep = {k: os.environ.get(k) for k in ("HOME", "CLAUDE_CODE_EXECPATH")}
+        os.environ["HOME"] = h
+        os.environ.pop("CLAUDE_CODE_EXECPATH", None)
+        try:
+            lf = load("tools/launcher-flags", "tools_launcher_flags_ascii")
+            note("launcher-flags newest_claude", os.path.basename(lf.newest_claude() or ""), "2.1.300")
+            rk = load("tools/respawn-keepset", "tools_respawn_keepset_ascii")
+            note("respawn-keepset binaries (picked)", [x for x, _ in rk.binaries([])], ["2.1.300"])
+            ck = load("tools/check", "tools_check_ascii")
+            for what, o in odd_versions:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    try:
+                        got = "accepted " + rk.binaries([os.path.join(vd, o)])[0][0]
+                    except SystemExit:
+                        got = "refused"
+                note("respawn-keepset --claude named in {} digits".format(what), got, "refused")
+                root = os.path.join(d, "tmp", "ascii-root")
+                write_text(os.path.join(root, "plugin", "assets", "canary-baseline.json"),
+                           json.dumps({"cc_version": o, "c8": {"binary_version": o, "counts": {"x": 1}}}) + "\n")
+                note("check pinned_claude on a baseline in {} digits".format(what),
+                     "binary used" if ck.pinned_claude(root)[1] else "no binary", "no binary")
+        finally:
+            for k, x in keep.items():
+                if x is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = x
+            # the clean copy is copied for every later probe: leave no odd-named file in it
+            for x in (h, os.path.join(d, "tmp", "ascii-root"), os.path.join(d, render)):
+                if os.path.isdir(x):
+                    shutil.rmtree(x)
+                elif os.path.lexists(x):
+                    os.unlink(x)
+        return (1 if bad else 0), "\n".join(out) + "\n"
+
+    def version_ascii_lax(d):
+        """Each version check of those tools taking any Unicode digit (Python's \\d)."""
+        for rel in ("tools/canary-baseline", "tools/launcher-flags", "tools/respawn-keepset", "tools/check"):
+            p = os.path.join(d, *rel.split("/"))
+            with open(p, encoding="utf-8", newline="") as f:
+                t = f.read()
+            if "[0-9]+\\.[0-9]+\\.[0-9]+" not in t:
+                raise Fail("X-tools version-ascii: {} has no [0-9] version pattern".format(rel))
+            write_text(p, t.replace("[0-9]+\\.[0-9]+\\.[0-9]+", "\\d+\\.\\d+\\.\\d+"))
+
+    def c8_counts_edit(doc, c8):
+        ks = sorted(c8["counts"])
+        c8["counts"][ks[0] + " (renamed)"] = c8["counts"].pop(ks[0])
+        c8["arm_list"] = '["control","lean"]'
+
+    def c8_range_edit(doc, c8):
+        ks = sorted(c8["counts"])
+        c8["counts"][ks[0]] = 0
+        c8["counts"][ks[1]] = 999
+
+    noc8_pass = (r"^CHECK xgen: PASS \(X-gen; C8 counts were not compared: --no-c8, Claude Code "
+                 + re.escape(unpinned) + r" not installed\)$")
+
+    def noc8_pass_line(d):
+        """With --no-c8 on a baseline whose binary is not installed, xgen passes only with a PASS
+        line that says the C8 counts were not compared."""
+        code, out = xgen_noc8(d)
+        if code == 0 and any(re.search(noc8_pass, ln) for ln in out.splitlines()):
+            return 0, out + "NOC8 PASS line says the C8 counts were not compared\n"
+        return 1, out + "NOC8 PASS line does not say the C8 counts were not compared (exit {})\n".format(code)
+
+    def noc8_pass_line_off(d):
+        p = os.path.join(d, "tools", "check")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        if t.count("        if skipped:\n") != 1:
+            raise Fail("X-tools canary-noc8-pass-line: no `if skipped:` line in tools/check")
+        write_text(p, t.replace("        if skipped:\n", "        if False:\n"))
+
+    def release_strict(d):
+        """The release path compares the C8 counts: phase0 and integration refuse --no-c8 (exit 2,
+        before any check) and call the canary check strict (no_c8 false); only xgen passes the
+        opt-in through. The copy's tools/check runs in process with every step stubbed out and
+        the canary check replaced by a recorder that stops the run there, so nothing heavy runs
+        and no Claude Code is started."""
+        loader = importlib.machinery.SourceFileLoader("tools_check_release", os.path.join(d, "tools", "check"))
+        mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("tools_check_release", loader))
+        loader.exec_module(mod)
+        seen = []
+
+        def canary_stub(root=None, no_c8=False):
+            seen.append(no_c8)
+            raise mod.Fail("release probe: stopped at the canary check")
+
+        def stop(step):
+            def f(*a, **k):
+                raise mod.Fail("release probe: {} reached before the canary check".format(step))
+            return f
+        mod.canary_check = canary_stub
+        mod.run = lambda *a, **k: None
+        mod.x_validate = lambda *a, **k: None
+        for step in ("x_launcher", "x_assemble", "gates", "x_variants", "x_h", "x_tools", "bt02"):
+            setattr(mod, step, stop(step))
+        out, bad = [], 0
+        for argv, want_code, want_calls in ((["phase0"], 1, [False]), (["integration"], 1, [False]),
+                                            (["phase0", "--no-c8"], 2, []), (["integration", "--no-c8"], 2, []),
+                                            (["xgen"], 1, [False]), (["xgen", "--no-c8"], 1, [True])):
+            del seen[:]
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = mod.main(argv)
+            shown = " ".join(argv)
+            calls = ", ".join("canary check no_c8={}".format(x) for x in seen) or "no canary check"
+            if code == want_code and seen == want_calls:
+                out.append("RELEASE ok: {}: exit {}, {}".format(shown, code, calls))
+                continue
+            bad += 1
+            out.append("RELEASE lax: {}: exit {}, {} (want exit {}, {})".format(
+                shown, code, calls, want_code,
+                ", ".join("canary check no_c8={}".format(x) for x in want_calls) or "refused before any check"))
+        return (1 if bad else 0), "\n".join(out) + "\n"
+
+    def release_lax(d):
+        """The release path given the opt-in: the refusal off and phase0/integration's X-gen
+        called with no_c8 true."""
+        p = os.path.join(d, "tools", "check")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        for old, new in (('    if no_c8 and phase != "xgen":\n', "    if False:\n"),
+                         ("        x_gen(phase)\n", "        x_gen(phase, no_c8=True)\n")):
+            if t.count(old) != 1:
+                raise Fail("X-tools canary-release-strict: tools/check has no single " + old.strip())
+            t = t.replace(old, new)
+        write_text(p, t)
+
+    noc8_out = os.path.join("tmp", "canary-noc8.json")
+    base_rel = os.path.join("plugin", "assets", "canary-baseline.json")
+
+    def noc8_render(d):
+        """--no-c8 renders the baseline as it is but C8: no c8 part, cc_version `unknown` (no
+        Claude Code under this HOME), every other part equal."""
+        r = subprocess.run([os.path.join(d, "tools", "canary-baseline"), "--no-c8", "--out", noc8_out], cwd=d,
+                           capture_output=True, text=True, env=no_claude_home(d))
+        if r.returncode != 0:
+            return r.returncode, r.stdout + r.stderr
+        with open(os.path.join(d, base_rel), encoding="utf-8") as f:
+            cur = json.load(f)
+        with open(os.path.join(d, noc8_out), encoding="utf-8") as f:
+            fresh = json.load(f)
+        bad = ["NOC8 render has a c8 part"] if "c8" in fresh else []
+        if fresh.get("cc_version") != "unknown":
+            bad.append("NOC8 render cc_version {} (want unknown)".format(json.dumps(fresh.get("cc_version"))))
+        for k in sorted((set(cur) | set(fresh)) - {"c8", "cc_version"}):
+            if cur.get(k) != fresh.get(k):
+                bad.append("NOC8 render differs from the baseline in {}".format(k))
+        return (1 if bad else 0), "\n".join(bad or ["NOC8 render equals the baseline but c8"]) + "\n"
+
+    def noc8_refusals(d):
+        """Every --no-c8 call that is not a render to another file exits 2 and leaves the baseline
+        as it was."""
+        # fresh each run: the planted copy is copied from the clean one after its run
+        link, gone = os.path.join("tmp", "baseline-link.json"), os.path.join("tmp", "canary-noc8-check.json")
+        os.makedirs(os.path.join(d, "tmp"), exist_ok=True)
+        for x in (link, gone):
+            if os.path.lexists(os.path.join(d, x)):
+                os.unlink(os.path.join(d, x))
+        os.symlink(os.path.join("..", base_rel), os.path.join(d, link))
+        calls = [[], ["--check"], ["--check", "--out", gone], ["--out", base_rel],
+                 ["--out", os.path.join("plugin", "assets", "..", "assets", "canary-baseline.json")], ["--out", link]]
+        with open(os.path.join(d, base_rel), "rb") as f:
+            keep = f.read()
+        out, bad = [], 0
+        for c in calls:
+            r = subprocess.run([os.path.join(d, "tools", "canary-baseline"), "--no-c8"] + c, cwd=d,
+                               capture_output=True, text=True, env=no_claude_home(d))
+            with open(os.path.join(d, base_rel), "rb") as f:
+                same = f.read() == keep
+            shown = " ".join(["--no-c8"] + c)
+            if r.returncode == 2 and same:
+                out.append("NOC8 refused: " + shown)
+                continue
+            bad += 1
+            out.append("NOC8 not refused: {} (exit {}{})".format(shown, r.returncode, "" if same else ", baseline changed"))
+            with open(os.path.join(d, base_rel), "wb") as f:
+                f.write(keep)
+        return (1 if bad else 0), "\n".join(out) + "\n"
+
+    def noc8_guard_off(d):
+        p = os.path.join(d, "tools", "canary-baseline")
+        with open(p, encoding="utf-8", newline="") as f:
+            t = f.read()
+        guard = "if no_c8 and (check or not out_given or os.path.realpath(out) == baseline):"
+        if guard not in t:
+            raise Fail("X-tools canary-noc8-refusals: the --no-c8 guard line is not in tools/canary-baseline")
+        write_text(p, t.replace(guard, "if False:"))
 
     def long_desc(d):
         p = os.path.join(d, "plugin", "skills", "handoff", "SKILL.md")
@@ -1355,10 +1702,103 @@ def probes(name):
              [r"differs from a fresh render"], None),
             ("canary-edit", "canary hand edit", ["tools/check", "xgen"], canary_edit,
              [r"differs from a fresh render", r"^CHECK xgen: FAIL at X-gen"], None),
+            # The file under check never picks the weaker path: both versions renamed to one not
+            # installed, with changed counts, while the recorded one is installed, fails without
+            # the caller's --no-c8 and names that version and the flag.
+            ("canary-c8-v1", "canary versions renamed to one not installed", xgen_strict, baseline_edit(v1_edit),
+             [r"Claude Code " + re.escape(unpinned) + r" \(the baseline's c8\.binary_version\) is not installed at ",
+              r"run `tools/check xgen --no-c8` to check every part but the C8 counts", r"^CHECK xgen: FAIL at X-gen"],
+             None),
         ]
     else:
-        print("X-tools: the canary probes are skipped: Claude Code {} (the baseline's C8 binary) is not "
-              "installed".format(v))
+        print("X-tools: the canary probes of the strict path are skipped: Claude Code {} (the baseline's C8 "
+              "binary) is not installed".format(v))
+    # The baseline under check never picks the fallback, even with --no-c8 (any machine: the C8
+    # binary installed or not; with it installed the clean copy takes the strict path).
+    xgen_fail = r"^CHECK xgen: FAIL at X-gen"
+    out += [
+        ("canary-c8-gone", "canary baseline without c8", xgen_noc8,
+         baseline_edit(lambda doc, c8: doc.pop("c8")),
+         [r"canary-baseline\.json: no c8 part, so C8 cannot be checked", xgen_fail], None),
+        ("canary-c8-unpinned", "canary c8 binary not cc_version", xgen_noc8,
+         baseline_edit(lambda doc, c8: c8.update(binary_version=unpinned)),
+         [r'c8\.binary_version "2\.1\.999" is not cc_version "\d+\.\d+\.\d+", so C8 cannot be checked', xgen_fail], None),
+        ("canary-c8-v1b", "canary versions with a trailing newline", xgen_noc8, baseline_edit(v1b_edit),
+         [r'c8\.binary_version "\d+\.\d+\.\d+\\n" is not a version, so C8 cannot be checked', xgen_fail], None),
+        # The release path never takes the opt-in.
+        ("canary-release-strict", "release path strict on C8", release_strict, release_lax,
+         [r"^RELEASE lax: phase0: exit 1, canary check no_c8=True ",
+          r"^RELEASE lax: integration: exit 1, canary check no_c8=True ",
+          r"^RELEASE lax: phase0 --no-c8: exit 1, canary check no_c8=True \(want exit 2, refused before any check\)$",
+          r"^RELEASE lax: integration --no-c8: exit 1, canary check no_c8=True \(want exit 2, refused before any check\)$"],
+         None),
+        # The fallback (--no-c8, the renamed baseline of canary-c8-v1, so its binary is not
+        # installed on any machine): its PASS line says so, and every C8 part that is a tool
+        # constant is still checked.
+        ("canary-noc8-pass-line", "canary --no-c8 PASS line", noc8_pass_line, noc8_pass_line_off,
+         [r"^CHECK xgen: PASS \(X-gen\)$", r"^NOC8 PASS line does not say the C8 counts were not compared \(exit 0\)$"],
+         baseline_edit(v1_edit)),
+        ("canary-fallback-keys", "canary fallback count keys", xgen_noc8, baseline_edit(v1_and(c8_counts_edit)),
+         [r'^canary-baseline: c8\.counts key ".+ \(renamed\)" is not one of the tool\'s strings$',
+          r'^canary-baseline: c8\.counts lacks the tool\'s string ".+"$',
+          r"^canary-baseline: c8 keys the tool does not write: arm_list$",
+          r"C8 parts differ from the tool \(counts not compared: Claude Code 2\.1\.999 is not installed\)", xgen_fail],
+         None),
+        ("canary-fallback-range", "canary fallback count range", xgen_noc8, baseline_edit(v1_and(c8_range_edit)),
+         [r'^canary-baseline: c8\.counts ".+" is 0 \(want 1 to \d+\)$',
+          r'^canary-baseline: c8\.counts ".+" is 999 \(want 1 to \d+\)$', xgen_fail], None),
+        ("canary-fallback-rare-max", "canary fallback rare_max one below the tool's", xgen_noc8,
+         baseline_edit(v1_and(lambda doc, c8: c8.update(rare_max=c8["rare_max"] - 1))),
+         [r"^canary-baseline: c8\.rare_max is {} \(the tool's is {}\)$".format(tool_rare_max - 1, tool_rare_max),
+          r"C8 part differs from the tool \(counts not compared: Claude Code 2\.1\.999 is not installed\)", xgen_fail],
+         None),
+        ("canary-fallback-rare-max-zero", "canary fallback rare_max 0", xgen_noc8,
+         baseline_edit(v1_and(lambda doc, c8: c8.update(rare_max=0))),
+         [r"^canary-baseline: c8\.rare_max is 0 \(the tool's is {}\)$".format(tool_rare_max),
+          r"C8 part differs from the tool \(counts not compared: Claude Code 2\.1\.999 is not installed\)", xgen_fail],
+         None),
+        # The fallback compares text, as the strict path does: a CRLF baseline and one with an
+        # extra blank line fail under --no-c8 too.
+        ("canary-fallback-crlf", "canary fallback CRLF baseline", xgen_noc8,
+         v1_then(lambda b: b.replace(b"\n", b"\r\n")),
+         [r"^CHECK xgen: FAIL at X-gen \(X-gen: canary-baseline\.json differs from a fresh render \(C8 counts "
+          r"not compared: Claude Code 2\.1\.999 is not installed\)\)$"], None),
+        ("canary-fallback-blank-line", "canary fallback extra blank line", xgen_noc8,
+         v1_then(lambda b: b + b"\n"),
+         [r"^CHECK xgen: FAIL at X-gen \(X-gen: canary-baseline\.json differs from a fresh render \(C8 counts "
+          r"not compared: Claude Code 2\.1\.999 is not installed\)\)$"], None),
+        # A version in fullwidth or Arabic-Indic digits is not a version: the baseline (both
+        # versions so) fails even with --no-c8, and so do the tools' picks from file names.
+        ] + [
+        ("canary-c8-{}".format(what.lower()), "canary versions in {} digits".format(what), xgen_noc8,
+         baseline_edit(odd_version_edit(o)),
+         [r"c8\.binary_version {} is not a version, so C8 cannot be checked".format(re.escape(json.dumps(o))), xgen_fail],
+         None) for what, o in odd_versions
+        ] + [
+        ("version-ascii", "versions in non-ASCII digits from file names", version_ascii, version_ascii_lax,
+         [r"^ASCII lax: canary-baseline cc_version \(newest in the versions folder\): ",
+          r"^ASCII lax: canary-baseline cc_version \(--claude named in fullwidth digits\): ",
+          r"^ASCII lax: canary-baseline cc_version \(--claude named in Arabic-Indic digits\): ",
+          r"^ASCII lax: launcher-flags newest_claude: ",
+          r"^ASCII lax: respawn-keepset binaries \(picked\): ",
+          r"^ASCII lax: respawn-keepset --claude named in fullwidth digits: ",
+          r"^ASCII lax: respawn-keepset --claude named in Arabic-Indic digits: ",
+          r"^ASCII lax: check pinned_claude on a baseline in fullwidth digits: ",
+          r"^ASCII lax: check pinned_claude on a baseline in Arabic-Indic digits: "], None),
+        ("canary-fallback-idle", "canary fallback idle_prefixes", xgen_noc8,
+         baseline_edit(v1_and(lambda doc, c8: c8["idle_prefixes"].update(notice="Compacted (planted)"))),
+         [r"^canary-baseline: c8\.idle_prefixes differ from the tool's$", xgen_fail], None),
+        ("canary-noc8-render", "canary-baseline --no-c8 render", noc8_render,
+         baseline_edit(lambda doc, c8: doc["keysets"]["session.compact"]["required"].append("planted_key")),
+         [r"^NOC8 render differs from the baseline in keysets$"], None),
+        ("canary-noc8-refusals", "canary-baseline --no-c8 refusals", noc8_refusals, noc8_guard_off,
+         [r"^NOC8 not refused: --no-c8 \(exit 0, baseline changed\)$",
+          r"^NOC8 not refused: --no-c8 --check \(exit 1\)$",
+          r"^NOC8 not refused: --no-c8 --check --out tmp/canary-noc8-check\.json \(exit 1\)$",
+          r"^NOC8 not refused: --no-c8 --out plugin/assets/canary-baseline\.json \(exit 0, baseline changed\)$",
+          r"^NOC8 not refused: --no-c8 --out plugin/assets/\.\./assets/canary-baseline\.json \(exit 0, baseline changed\)$",
+          r"^NOC8 not refused: --no-c8 --out tmp/baseline-link\.json \(exit 0, baseline changed\)$"], None),
+    ]
     return out
 
 
@@ -1411,32 +1851,122 @@ def x_tools():
 
 # ---------------------------------------------------------------- X-gen
 
-def canary_check(root=REPO):
-    """canary-baseline --check pinned to the binary the file records. When that binary is
-    gone, render with the newest one to a temp file and compare all but the C8 part."""
+def canary_tool_consts(root=REPO):
+    """C8_STRINGS, COMMON_WORDS, RARE_MAX, IDLE_PREFIXES, is_rare (the one rule for a rare count)
+    and render (the baseline's text) from this tree's tools/canary-baseline."""
+    loader = importlib.machinery.SourceFileLoader("tools_canary_baseline",
+                                                  os.path.join(root, "tools", "canary-baseline"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("tools_canary_baseline", loader))
+    loader.exec_module(mod)
+    return mod.C8_STRINGS, mod.COMMON_WORDS, mod.RARE_MAX, mod.IDLE_PREFIXES, mod.is_rare, mod.render
+
+
+def c8_shape(cur):
+    """Why the baseline's C8 part cannot be checked at all (no fallback then), or None: c8 must hold
+    counts, and c8.binary_version must be a version string equal to the top-level cc_version."""
+    c8 = cur.get("c8") if isinstance(cur, dict) else None
+    if not isinstance(c8, dict):
+        return "no c8 part"
+    if not isinstance(c8.get("counts"), dict) or not c8["counts"]:
+        return "no c8.counts"
+    v = c8.get("binary_version")
+    if not isinstance(v, str) or not VERSION_RE.fullmatch(v):
+        return "c8.binary_version {} is not a version".format(json.dumps(v))
+    if v != cur.get("cc_version"):
+        return "c8.binary_version {} is not cc_version {}".format(json.dumps(v), json.dumps(cur.get("cc_version")))
+    return None
+
+
+def c8_fixed_parts(c8, root=REPO):
+    """The C8 problems a render without the binary can still see: the parts that are the tool's
+    constants (the count keys, the count range, rare_max, idle_prefixes, no other key)."""
+    strings, common, rare_max, idle, is_rare, _ = canary_tool_consts(root)
+    bad = []
+    extra = sorted(set(c8) - {"binary_version", "counts", "idle_prefixes", "rare_max"})
+    if extra:
+        bad.append("c8 keys the tool does not write: {}".format(", ".join(extra)))
+    counts = c8["counts"]
+    for s in sorted(set(counts) - set(strings)):
+        bad.append("c8.counts key {} is not one of the tool's strings".format(json.dumps(s)))
+    for s in sorted(set(strings) - set(counts)):
+        bad.append("c8.counts lacks the tool's string {}".format(json.dumps(s)))
+    for s in sorted(set(counts) & set(strings)):
+        n = counts[s]
+        if s not in common and not is_rare(n, rare_max):
+            bad.append("c8.counts {} is {} (want 1 to {})".format(json.dumps(s), json.dumps(n), rare_max))
+    if not (type(c8.get("rare_max")) is int and c8["rare_max"] == rare_max):
+        bad.append("c8.rare_max is {} (the tool's is {})".format(json.dumps(c8.get("rare_max")), rare_max))
+    if c8.get("idle_prefixes") != idle:
+        bad.append("c8.idle_prefixes differ from the tool's")
+    return bad
+
+
+def canary_check(root=REPO, no_c8=False):
+    """canary-baseline --check pinned to the binary the file records (the strict path: every
+    part, C8 counts included). Returns the version whose C8 counts were not compared, or None
+    when every part was compared.
+
+    Which path runs is never chosen by the file under check. A baseline whose C8 part names no
+    such binary (no c8 or no c8.counts, a binary_version that is not a version string or not
+    cc_version) fails, and so does a pinned binary that is not installed, naming its version
+    and the opt-in. Only the caller's opt-in, `tools/check xgen --no-c8` (no_c8 here; the
+    release path, phase0 and integration, never passes it), allows the weaker path when that
+    binary is really not installed: render every part but C8 (canary-baseline --no-c8, which
+    reads no binary) to a temp file, put the baseline's own c8 part and cc_version in it and
+    compare its text (the tool's render) with the baseline's bytes, as the strict path does,
+    then every C8 part that does not come from the binary (c8_fixed_parts). With the opt-in
+    and the binary installed, the strict path runs as without it."""
     tool = os.path.join(root, "tools", "canary-baseline")
     if not os.path.exists(tool):
-        return
-    v, pinned = pinned_claude(root)
-    if pinned:
+        return None
+    path = os.path.join(root, "plugin", "assets", "canary-baseline.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            cur = json.load(f)
+    except (OSError, ValueError) as e:
+        raise Fail("X-gen: canary-baseline.json cannot be read: {}".format(e))
+    why = c8_shape(cur)
+    if why:
+        raise Fail("X-gen: canary-baseline.json: {}, so C8 cannot be checked".format(why))
+    v = cur["c8"]["binary_version"]
+    pinned = os.path.join(os.path.expanduser("~"), ".local", "share", "claude", "versions", v)
+    if os.path.isfile(pinned):
         run([tool, "--check", "--claude", pinned], "X-gen canary-baseline", cwd=root)
-        return
+        return None
+    if os.path.lexists(pinned):
+        raise Fail("X-gen: {} is not a file, so C8 cannot be checked".format(pinned))
+    if not no_c8:
+        raise Fail("X-gen: Claude Code {} (the baseline's c8.binary_version) is not installed at {}, so the C8 "
+                   "counts cannot be compared; install that version, or run `tools/check xgen --no-c8` to check "
+                   "every part but the C8 counts".format(v, pinned))
     tmp = os.path.join(root, "tmp", "canary-render.json")
     os.makedirs(os.path.dirname(tmp), exist_ok=True)
-    run([tool, "--out", tmp], "X-gen canary-baseline render", cwd=root, capture=True)
-    with open(os.path.join(root, "plugin", "assets", "canary-baseline.json"), encoding="utf-8") as f:
-        cur = json.load(f)
+    run([tool, "--no-c8", "--out", tmp], "X-gen canary-baseline render", cwd=root, capture=True)
     with open(tmp, encoding="utf-8") as f:
         fresh = json.load(f)
     os.unlink(tmp)
-    strip = lambda doc: {k: x for k, x in doc.items() if k not in ("c8", "cc_version")}
-    if strip(cur) != strip(fresh):
-        raise Fail("X-gen: canary-baseline.json differs from a fresh render (C8 not compared: Claude Code {} "
+    # The text, as the strict path compares it: the render with the baseline's own c8 part and
+    # cc_version, in the tool's own format, against the baseline's bytes (CRLF, a BOM, another
+    # indent or key order, a blank line: each a difference).
+    fresh["c8"], fresh["cc_version"] = cur["c8"], cur["cc_version"]
+    with open(path, "rb") as f:
+        raw = f.read()
+    if raw != canary_tool_consts(root)[5](fresh).encode("utf-8"):
+        raise Fail("X-gen: canary-baseline.json differs from a fresh render (C8 counts not compared: Claude Code {} "
                    "is not installed)".format(v))
-    print("canary-baseline: current except C8 (Claude Code {} not installed)".format(v))
+    bad = c8_fixed_parts(cur["c8"], root)
+    for b in bad:
+        print("canary-baseline: " + b)
+    if bad:
+        raise Fail("X-gen: canary-baseline.json: {} C8 {} from the tool (counts not compared: "
+                   "Claude Code {} is not installed)".format(len(bad), "part differs" if len(bad) == 1 else "parts differ", v))
+    print("canary-baseline: current except the C8 counts, which were not compared (--no-c8; Claude Code {} "
+          "not installed)".format(v))
+    return v
 
 
-def x_gen(phase, root=REPO):
+def x_gen(phase, root=REPO, no_c8=False):
+    """Returns the version whose C8 counts were not compared (only with no_c8), else None."""
     tools = os.path.join(root, "tools")
     run([os.path.join(tools, "build"), "--check"], "X-gen build", cwd=root)
     if os.path.exists(os.path.join(tools, "fixtures-gen")):
@@ -1447,8 +1977,9 @@ def x_gen(phase, root=REPO):
         print("X-gen: tools/fixtures-gen not present yet (WP-fix); build part only")
     if os.path.exists(os.path.join(tools, "helper-replies-gen")):
         run([os.path.join(tools, "helper-replies-gen"), "--check"], "X-gen helper replies", cwd=root)
-    canary_check(root)
+    skipped = canary_check(root, no_c8=no_c8)
     run([os.path.join(tools, "assemble"), "--check"], "X-gen goldens", cwd=root, capture=True)
+    return skipped
 
 
 # ---------------------------------------------------------------- X-launcher
@@ -1634,6 +2165,12 @@ def main(argv):
     if "--names" in argv:
         names = argv[argv.index("--names") + 1]
     drill = "--no-drill" not in argv
+    # The C8 fallback's opt-in: `tools/check xgen --no-c8` only. The release path (phase0,
+    # integration) and selftest refuse it, so they always compare the C8 counts.
+    no_c8 = "--no-c8" in argv[1:]
+    if no_c8 and phase != "xgen":
+        print("tools/check: --no-c8 is for `tools/check xgen` only; {} always compares the C8 counts".format(phase))
+        return 2
     steps = []
     if phase == "selftest":
         try:
@@ -1647,11 +2184,15 @@ def main(argv):
     if phase == "xgen":
         try:
             steps.append("X-gen")
-            x_gen("integration")
+            skipped = x_gen("integration", no_c8=no_c8)
         except Fail as e:
             print("CHECK xgen: FAIL at X-gen ({})".format(e))
             return 1
-        print("CHECK xgen: PASS (X-gen)")
+        if skipped:
+            print("CHECK xgen: PASS (X-gen; C8 counts were not compared: --no-c8, Claude Code {} not installed)".format(
+                skipped))
+        else:
+            print("CHECK xgen: PASS (X-gen)")
         return 0
     b = brand()
     name = b["name"]

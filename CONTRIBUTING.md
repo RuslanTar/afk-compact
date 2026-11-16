@@ -112,6 +112,8 @@ The gates reject things such as absolute paths into a home folder, your account 
 
 **Everything at once** is `tools/check phase0` or `tools/check integration` (they need `--names <file>` or `GATE_NAMES_FILE`, as above, and `CC_TYPES_DIR`). `integration` repeats every helper case twice, builds renamed copies and, on a loaded machine, can take an hour or more. Maintainers run it before a release; you do not need to.
 
+`phase0` and `integration` need the Claude Code version the canary baseline was recorded on (`c8.binary_version` in `plugin/assets/canary-baseline.json`) installed, because they compare its C8 string counts; on a machine without it, run `tools/check xgen --no-c8`, which checks every part of the baseline but those counts.
+
 After a Claude Code update, `tools/launcher-flags` compares the restart launcher's flag table with `claude --help`, and the plugin's own `smoke` command (`/afk-compact:status` prints the exact call) compares the Claude Code binary with the version this release was tested on.
 
 ## Coding notes

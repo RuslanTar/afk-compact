@@ -273,7 +273,7 @@ sub find_claude_bin {
     my ($vdir) = grep { -d } map { "$_/.local/share/claude/versions" } grep { defined && $_ ne '' } ($REAL_HOME, $ACCOUNT_HOME);
     return '' unless defined $vdir;
     my @v = sort { my @x = split /\./, $a; my @y = split /\./, $b; $x[0] <=> $y[0] || $x[1] <=> $y[1] || $x[2] <=> $y[2] }
-            grep { /^\d+\.\d+\.\d+$/ } util::list_dir($vdir);
+            grep { /^[0-9]+\.[0-9]+\.[0-9]+\z/ } util::list_dir($vdir);
     return @v ? "$vdir/$v[-1]" : '';
 }
 

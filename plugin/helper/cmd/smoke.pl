@@ -6,13 +6,24 @@
 # in <watch>/version.json) or `SMOKE FAIL <check>` (exit 1). Never starts a session.
 # A check whose input is missing (no claude binary for C8, no type declarations for
 # C9) fails: a smoke that could not compare cannot clear smokeDue (AT-M3-14).
-# C8 fails only on rare strings and the arm list (c8_compare): a string the baseline
-# counted at most c8.rare_max times is rare (plugin-specific: the flag, its env
-# variable, the notice texts, the experiment's own arm names), and c8.arm_list is the
-# experiment's arm list as the binary writes it; any change of their counts fails. Any
-# other string is a common word whose count moves with every release: a change prints
-# an `info c8` line and does not fail (AT-M3-14c). A baseline without rare_max treats
-# every string as rare.
+# C8 fails only on rare strings (c8_compare): a string the baseline counted a whole number
+# of times from 1 to c8.rare_max is rare (_rare, the rule tools/canary-baseline and
+# tools/check apply too; plugin-specific: the compaction experiment's flag and env
+# variable, CLAUDE_CODE_EXECPATH, the PreCompact stdout notice, the two idle notices),
+# and any change of its count fails. Any other string is a common word whose count moves
+# with every release: a change prints an `info c8` line and does not fail (AT-M3-14c).
+# A baseline without a whole-number rare_max takes every count of 1 or more as rare. A
+# count of 0 is never rare: the baseline tool never writes one (it would let C8 pass on the
+# string's absence), so a baseline that holds one was edited or is broken. A baseline with
+# no c8 counts, a count of 0, or no rare string (rare_max 0, or below every count) fails C8
+# even with --skip-cli (c8_unusable): C8 is never left out, or passed with nothing
+# compared, without a FAIL line.
+# C8 compares the Claude Code smoke runs against with the one the baseline was recorded
+# on (its cc_version), so a version whose counts differ fails C8: 2.1.314 holds the flag
+# and env variable less often than 2.1.321 to 2.1.323 and 2.1.325 (the versions measured
+# since). The baseline ships in this plugin beside this file (assets/), so smoke only ever
+# reads the baseline its own release recorded, the one tools/canary-baseline writes: no
+# arm list (the baseline recorded on 2.1.314 had one, read by that release's own smoke).
 # C9 reads --types FILE, else the file the running Claude Code wrote when its built-in
 # plugin-authoring skill loaded (bundled_types): no version writes declarations into an
 # installed plugin, so <plugin>/.claude-plugin/types is not read. That folder is swept a
@@ -39,10 +50,10 @@ sub _claude_bin {
 sub _version {
     my ($bin) = @_;
     my $base = util::basename($bin // '');
-    return $base if $base =~ /^\d+\.\d+\.\d+/;
+    return $base if $base =~ /^[0-9]+\.[0-9]+\.[0-9]+/;
     return undef unless $bin;
     my $r = util::run([$bin, '--version'], timeout_ms => 20000);
-    return ($r->{out} =~ /(\d+\.\d+\.\d+\S*)/)[0];
+    return ($r->{out} =~ /([0-9]+\.[0-9]+\.[0-9]+\S*)/)[0];
 }
 
 # The type declarations Claude Code <ver> wrote when its plugin-authoring skill loaded:
@@ -54,7 +65,7 @@ sub _version {
 # interface: when it changes this finds nothing and C9 fails closed.
 sub bundled_types {
     my ($ver) = @_;
-    return undef unless defined $ver && $ver =~ /^\d+\.\d+\.\d+/ && $ver !~ m{/};
+    return undef unless defined $ver && $ver =~ /^[0-9]+\.[0-9]+\.[0-9]+/ && $ver !~ m{/};
     my $tmp = $ENV{CLAUDE_CODE_TMPDIR};
     $tmp = '/tmp' unless defined $tmp && $tmp ne '';
     my $base = util::real_path("$tmp/claude-$<") // "$tmp/claude-$<";
@@ -106,34 +117,65 @@ sub count_strings {
     return \%n;
 }
 
+# c8.rare_max as a whole number, or undef when it is missing or malformed (then every count
+# of 1 or more is rare).
+sub _rare_max {
+    my ($c8) = @_;
+    my $max = $c8->{rare_max};
+    return defined $max && !ref $max && $max =~ /^[0-9]+\z/ ? 0 + $max : undef;
+}
+
+# The one definition of a rare count (tools/canary-baseline is_rare, which tools/check uses
+# too): a whole number from 1 to rare_max (any whole number from 1 when rare_max is undef).
+# A count of 0 is never rare.
+sub _rare {
+    my ($n, $max) = @_;
+    return 0 unless defined $n && !ref $n && $n =~ /^[0-9]+\z/ && $n >= 1;
+    return !defined $max || $n <= $max ? 1 : 0;
+}
+
+# Why a baseline's c8 part cannot be compared (a text for the FAIL line), or undef: it must be
+# an object whose counts hold at least one string, each counted a whole number of times, none
+# 0, and at least one of them rare (C8 fails on rare strings only, so with none it compares
+# nothing): rare_max 0, or a rare_max below every count, leaves no rare string.
+sub c8_unusable {
+    my ($c8) = @_;
+    return 'no c8 part' unless ref $c8 eq 'HASH';
+    my $want = $c8->{counts};
+    return 'no c8 counts' unless ref $want eq 'HASH' && %$want;
+    my @bad = grep { my $n = $want->{$_}; !defined $n || ref $n || $n !~ /^[0-9]+\z/ } sort keys %$want;
+    return 'a c8 count that is not a whole number (' . join(', ', map { "\"$_\"" } @bad) . ')' if @bad;
+    my @zero = grep { $want->{$_} == 0 } sort keys %$want;
+    return (@zero == 1 ? 'a c8 count' : 'c8 counts') . ' of 0 (' . join(', ', map { "\"$_\"" } @zero)
+        . '), which tools/canary-baseline never writes: an edited or broken baseline' if @zero;
+    my $max = _rare_max($c8);
+    return 'no rare string: c8.rare_max is 0' if defined $max && $max == 0;
+    return "no rare string: every c8 count is above c8.rare_max $max"
+        unless grep { _rare($want->{$_}, $max) } keys %$want;
+    return undef;
+}
+
 # C8 against the baseline's c8 part (see the header): {ok => 1|0, note, info => [lines]}.
-# Rare: the arm list, and every string whose baseline count is at most rare_max (all of
-# them when rare_max is not a whole number); their changes fail, a common word's change
-# is one info line.
+# Rare: every string whose baseline count is rare (_rare); their changes fail, a common
+# word's change is one info line.
 sub c8_compare {
     my ($c8, $bin) = @_;
     my $want = $c8->{counts};
     my @s = sort keys %$want;
-    my $arm = $c8->{arm_list};
-    my $max = $c8->{rare_max};
-    $max = undef unless defined $max && $max =~ /^\d+\z/;
-    return { ok => 0, note => 'the arm list is not counted in the baseline', info => [] }
-        if defined $arm && !exists $want->{$arm};
+    my $max = _rare_max($c8);
     my $n = count_strings($bin, \@s);
     return { ok => 0, note => "cannot read $bin", info => [] } unless defined $n;
-    my $label = sub { defined $arm && $_[0] eq $arm ? 'the arm list' : "\"$_[0]\"" };
     my (@fail, @info);
     my ($rare, $common) = (0, 0);
     for my $k (@s) {
-        my $is_arm = defined $arm && $k eq $arm;
-        my $hard = $is_arm || !defined $max || $want->{$k} <= $max;
-        if (!$is_arm) { $hard ? $rare++ : $common++ }
+        my $hard = _rare($want->{$k}, $max);
+        $hard ? $rare++ : $common++;
         next if $n->{$k} == $want->{$k};
-        my $d = $label->($k) . " $want->{$k} -> $n->{$k}";
+        my $d = "\"$k\" $want->{$k} -> $n->{$k}";
         if ($hard) { push @fail, $d }
         else { push @info, "info c8 $d (a common word: information only)" }
     }
-    my $what = "$rare rare string" . ($rare == 1 ? '' : 's') . (defined $arm ? ' and the arm list' : '');
+    my $what = "$rare rare string" . ($rare == 1 ? '' : 's');
     return { ok => 0, note => 'changed: ' . join(', ', @fail), info => \@info } if @fail;
     return { ok => 1, info => \@info,
              note => "$what as recorded; $common common word" . ($common == 1 ? '' : 's') . ' not compared' };
@@ -193,8 +235,10 @@ sub run {
         my $t = util::run([$bin, 'plugin', 'test', $root], timeout_ms => 300000);
         $check->('test', $t->{exit} == 0 ? 1 : 0, "exit $t->{exit}");
     }
-    if (ref $base eq 'HASH' && ref $base->{c8} eq 'HASH' && ref $base->{c8}{counts} eq 'HASH') {
-        if ($opt->{'skip-cli'}) { $check->('c8', undef, 'skipped by flag') }
+    if (ref $base eq 'HASH') {
+        my $unusable = c8_unusable($base->{c8});
+        if (defined $unusable) { $check->('c8', 0, "the baseline has $unusable, so C8 cannot compare") }
+        elsif ($opt->{'skip-cli'}) { $check->('c8', undef, 'skipped by flag') }
         elsif (!$bin) { $check->('c8', 0, 'claude binary not found') }
         else {
             my $c = c8_compare($base->{c8}, $bin);
@@ -203,7 +247,7 @@ sub run {
         }
     }
     if (ref $base eq 'HASH' && ref $base->{c9} eq 'HASH') {
-        my $known = $ver =~ /^\d+\.\d+\.\d+/;
+        my $known = $ver =~ /^[0-9]+\.[0-9]+\.[0-9]+/;
         my $tf = $opt->{types} // bundled_types($known ? $ver : undef);
         my $traw = defined $tf && -f $tf ? util::read_file($tf) : undef;
         if (!defined $traw) {

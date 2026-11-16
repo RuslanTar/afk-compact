@@ -129,6 +129,23 @@ test('AT-DH-03: M3 auto: one old and one native fork, both started before the co
   expect(w.compacts[0]?.instructions).toContain(w.name)
 })
 
+test('AT-DH-03b: a served prompt text (native refused, payload-prompt): no native fork; the record keeps prompt_arm payload, its source and its sha256, never the text', async ($, on) => {
+  const w = new World().install(on)
+  const sha = 'e'.repeat(64)
+  const forks = trialOn(on, w, measureOn({
+    native: { status: 'no-native-prompt', why: 'payload-prompt', cc_version: '2.1.325', prompt_arm: 'payload', arm_source: 'env', prompt_sha256: sha, cache_prefix_flag: false, transcript_flag: 1, precompact_hooks: false },
+  }))
+  await started($, w)
+  await turn($, w)
+  await raiseCompact($, { trigger: 'auto' })
+  await w.settle()
+  expect(forks.length).toBe(OLD ? 1 : 0)
+  const s = saves(w)
+  expect(s.length).toBe(1)
+  expect([s[0]?.native?.status, s[0]?.native?.prompt_arm, s[0]?.native?.arm_source, s[0]?.native?.prompt_sha256]).toEqual(['no-native-prompt', 'payload', 'env', sha])
+  expect(s[0]?.native?.reply).toBe(undefined)
+})
+
 test('AT-DH-04: the moment record is content-free: replies only inside the arms, no prompt, fact or tail text anywhere else', async ($, on) => {
   const w = new World().install(on)
   trialOn(on, w)

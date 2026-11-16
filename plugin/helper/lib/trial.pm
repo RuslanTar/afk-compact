@@ -80,7 +80,7 @@ sub parse {
     return { state => 'bad', why => 'installed' } if exists $j->{installed} && !_date($j->{installed});
     for my $k (qw(handoff_root log_dir)) { return { state => 'bad', why => $k } unless _abs($j->{$k}) }
     return { state => 'bad', why => 'cc_versions' }
-        unless ref $j->{cc_versions} eq 'ARRAY' && !grep { !defined $_ || ref $_ || $_ !~ /^\d+\.\d+\.\d+([.+-][0-9A-Za-z.+-]*)?$/ } @{ $j->{cc_versions} };
+        unless ref $j->{cc_versions} eq 'ARRAY' && !grep { !defined $_ || ref $_ || $_ !~ /^[0-9]+\.[0-9]+\.[0-9]+([.+-][0-9A-Za-z.+-]*)?\z/ } @{ $j->{cc_versions} };
     if (exists $j->{skip_repos}) {
         return { state => 'bad', why => 'skip_repos' }
             unless ref $j->{skip_repos} eq 'ARRAY' && !grep { !defined $_ || ref $_ || $_ eq '' } @{ $j->{skip_repos} };
@@ -198,10 +198,46 @@ sub old_skill {
     return { status => 'ok', skill => $skill, template => $tpl, sums => \%sums, filled_sha256 => sha::hex256($skill . "\0" . $tpl) };
 }
 
-# served(config_dir) -> {arm, arm_source, cache_prefix_flag}: the compaction prompt arm from the
-# env, else Claude Code's cached feature value, else `control`; the cached prefix flag as read
-# (null when absent). Only the two values are matched in the cache file; nothing else is read.
+# The characters JavaScript's String.prototype.trim removes (Claude Code trims a served prompt).
+my $JS_SPACE = qr/[\t\n\x{0B}\f\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]/;
+
+# _prompt(value) -> the sha256 of the prompt Claude Code takes from a served value (a string
+# holding "<summary>", trimmed), else undef (it uses its source default prompt).
+sub _prompt {
+    my ($v) = @_;
+    return undef unless defined $v && !ref $v && index($v, '<summary>') >= 0;
+    (my $t = $v) =~ s/\A$JS_SPACE+|$JS_SPACE+\z//g;
+    return sha::hex256($t);
+}
+
+# The first Claude Code version measured with the payload rule served() reads (2.1.321 to
+# 2.1.323 and 2.1.325 were measured; the only older one measured, 2.1.314, named one of eight
+# arms).
+our @PAYLOAD_FROM = (2, 1, 321);
+
+# payload_rule(cc_version) -> 1 when served() can read that version's served prompt (2.1.321
+# or newer), 0 for an older version, undef when the version is not a version number.
+sub payload_rule {
+    my ($ver) = @_;
+    return undef unless defined $ver && !ref $ver && $ver =~ /^([0-9]{1,6})\.([0-9]{1,6})\.([0-9]{1,6})(?:[.+-]|\z)/;
+    my @v = ($1, $2, $3);
+    for my $i (0 .. 2) { return $v[$i] > $PAYLOAD_FROM[$i] ? 1 : 0 if $v[$i] != $PAYLOAD_FROM[$i] }
+    return 1;
+}
+
+# served(cc_version) -> {arm, arm_source, prompt_sha256, cache_prefix_flag}: the compaction
+# prompt by the rule measured in Claude Code 2.1.321 to 2.1.323 and 2.1.325. The env variable,
+# when set, decides alone; else Claude Code's cached feature value; else nothing (arm_source
+# `default`).
+# A value that is a string holding "<summary>" is a served prompt: arm `payload`, with the
+# sha256 of its trimmed text (the text itself is never kept or returned). Any other value, or
+# none, means the source default prompt: arm `control`. For a version this rule is not known to
+# hold for (payload_rule not 1: 2.1.314 named one of eight arms with the same two values) no arm
+# and no sha256 are returned, never a word read as `control`. Not modelled: the conditions
+# under which Claude Code ignores either value. The cached prefix flag as read (null when
+# absent). Only the two values are matched in the cache file; nothing else is read.
 sub served {
+    my ($ver) = @_;
     my $env = $ENV{CLAUDE_CODE_CURRIED_TRINKET};
     my %r = (arm => 'control', arm_source => 'default', cache_prefix_flag => undef);
     # Claude Code's own cache file: <CLAUDE_CONFIG_DIR>/.claude.json, else <home>/.claude.json
@@ -209,8 +245,24 @@ sub served {
     my $cd = $ENV{CLAUDE_CONFIG_DIR};
     my $base = defined $cd && $cd ne '' ? util::expand_tilde($cd) : util::home();
     my $raw = util::read_file("$base/.claude.json", 8000000);
-    if (defined $env && $env =~ /^[a-z0-9_]{1,40}$/) { @r{qw(arm arm_source)} = ($env, 'env') }
-    elsif (defined $raw && $raw =~ /"tengu_curried_trinket"\s*:\s*"([a-z0-9_]{1,40})"/) { @r{qw(arm arm_source)} = ($1, 'cached') }
+    my ($value, $src);
+    if (defined $env) { ($value, $src) = (util::text($env), 'env') }
+    elsif (defined $raw && $raw =~ /"tengu_curried_trinket"\s*:\s*/g) {
+        # the value as JSON: a string literal is decoded (scanned piece by piece, as a prompt
+        # can be long); any other value is no prompt
+        my $at = pos($raw);
+        if ($raw =~ /\G"/gc) {
+            1 while $raw =~ /\G(?:[^"\\]++|\\.)/gcs;
+            $value = eval { jsonc::decode('[' . substr($raw, $at, pos($raw) - $at) . ']')->[0] } if $raw =~ /\G"/gc;
+        }
+        $src = 'cached';
+    }
+    $r{arm_source} = $src if defined $src;
+    if (!payload_rule($ver)) { delete $r{arm} }
+    elsif (defined $src) {
+        my $h = _prompt($value);
+        @r{qw(arm prompt_sha256)} = ('payload', $h) if defined $h;
+    }
     if (defined $raw && $raw =~ /"tengu_compact_cache_prefix"\s*:\s*(true|false)/) { $r{cache_prefix_flag} = $1 eq 'true' ? 1 : 0 }
     return \%r;
 }
@@ -246,16 +298,28 @@ sub transcript_flag {
 
 # native(cfg, cc_version, sid) -> {status => ok, head, tail, sums, ...} or {status => no-native-prompt, why, ...}.
 # The head ends where the engine inserts its additional instructions; the tail is the part
-# after them (written per Claude Code version, arm and transcript flag by the lab's extractor).
+# after them (written per Claude Code version, arm and transcript flag by the lab's extractor;
+# the arm is `control`, the source default prompt). Refused before any lab file is read: a
+# version that is not a version number (why `no-version`) and one older than 2.1.321 (why
+# `cc-version-before-payload`: the prompt it served is not read, see served(), so no record of
+# it is comparable), then a served prompt (arm `payload`, why `payload-prompt`): the lab's files
+# hold the source default only, so a native fork run from them would not be the compaction
+# Claude Code runs; the record keeps the served state (prompt_arm, arm_source, prompt_sha256)
+# and the moment is not comparable on its native side.
 sub native {
     my ($cfg, $ver, $sid) = @_;
-    my $sv = served();
+    my $sv = served($ver);
     my $t = transcript_flag($sid);
-    my %r = (cc_version => $ver, prompt_arm => $sv->{arm}, arm_source => $sv->{arm_source},
+    my %r = (cc_version => $ver, arm_source => $sv->{arm_source},
              cache_prefix_flag => $sv->{cache_prefix_flag}, transcript_flag => $t, precompact_hooks => precompact_hooks());
+    $r{prompt_arm} = $sv->{arm} if defined $sv->{arm};
+    $r{prompt_sha256} = $sv->{prompt_sha256} if defined $sv->{prompt_sha256};
+    my $rule = payload_rule($ver);
+    return { %r, status => 'no-native-prompt', why => 'no-version' } unless defined $rule && $ver =~ /^[0-9A-Za-z.+-]{1,40}\z/;
+    return { %r, status => 'no-native-prompt', why => 'cc-version-before-payload' } unless $rule;
+    return { %r, status => 'no-native-prompt', why => 'payload-prompt' } if $sv->{arm} eq 'payload';
     my $n = $cfg->{native_prompt};
     return { %r, status => 'no-native-prompt', why => 'not-configured' } unless ref $n eq 'HASH';
-    return { %r, status => 'no-native-prompt', why => 'no-version' } unless defined $ver && $ver =~ /^[0-9A-Za-z.+-]{1,40}$/;
     my %got;
     for my $part (qw(head tail)) {
         my $rel = "$ver/$sv->{arm}.t$t.$part.txt";
@@ -553,7 +617,8 @@ our %ARM_FIELD = (
 );
 our %OLD_FIELD = (filled_sha256 => qr/^[0-9a-f]{64}$/, adapter_sha256 => qr/^[0-9a-f]{64}$/);
 our %NATIVE_FIELD = (
-    cc_version => $ID, head_sha256 => qr/^[0-9a-f]{64}$/, tail_sha256 => qr/^[0-9a-f]{64}$/, prompt_arm => qr/^[a-z0-9_]{1,40}$/,
+    cc_version => $ID, head_sha256 => qr/^[0-9a-f]{64}$/, tail_sha256 => qr/^[0-9a-f]{64}$/, prompt_arm => qr/^(?:control|payload)$/,
+    prompt_sha256 => qr/^[0-9a-f]{64}$/,
     arm_source => qr/^(env|cached|default)$/, cache_prefix_flag => 'bool', transcript_flag => 'int', precompact_hooks => 'bool',
     tail_supplied => 'bool', compact_text_added => 'bool', tail_line_sha256 => qr/^[0-9a-f]{64}$/,
 );

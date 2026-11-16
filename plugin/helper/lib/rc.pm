@@ -131,7 +131,7 @@ sub _cc {
     $R{cc_version_src} = defined $v ? $src : undef;
 }
 
-sub _ver_ok { my ($v) = @_; return defined $v && !ref $v && $v =~ /^\d+\.\d+\.\d+([.+-][0-9A-Za-z.+-]*)?$/ ? 1 : 0 }
+sub _ver_ok { my ($v) = @_; return defined $v && !ref $v && $v =~ /^[0-9]+\.[0-9]+\.[0-9]+([.+-][0-9A-Za-z.+-]*)?\z/ ? 1 : 0 }
 
 # The dispatch record this call matched (a mod record is source 1) and the payload's
 # transcript path (source 3); each resets the cached value.
@@ -150,7 +150,7 @@ sub exec_version {
     my $e = $ENV{CLAUDE_CODE_EXECPATH};
     return undef unless defined $e && $e ne '';
     my $b = util::basename($e);
-    return $b =~ /^\d+\.\d+\.\d+([.+-][0-9A-Za-z.+-]*)?$/ ? $b : undef;
+    return $b =~ /^[0-9]+\.[0-9]+\.[0-9]+([.+-][0-9A-Za-z.+-]*)?\z/ ? $b : undef;
 }
 
 sub stream_path {

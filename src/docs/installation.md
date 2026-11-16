@@ -66,9 +66,8 @@ When an update or an uninstall replaces the copy a session runs, Claude Code mar
 
 After a Claude Code update, `/{{plugin}}:status` may say a check is due and offer a user-run `! "<plugin folder>/scripts/{{plugin}}-store" smoke`, printed with the real folder. It validates the plugin, runs its offline tests, and compares the Claude Code binary and its type declarations with the version this release was tested on.
 
-- In the binary it counts the strings the plugin relies on. It fails only when the count of a rare string changes, or when the compaction experiment's list of arms changes.
-- A rare string is one the tested binary holds at most a few times (the recorded limit is `rare_max` in `assets/canary-baseline.json`), such as the experiment flag, its environment variable and the idle-compaction notices.
-- Common words such as `control` and `short` appear thousands of times in unrelated code, and their counts move with every release. A changed count of a common word prints an `info c8` line and does not fail smoke.
+- In the binary it counts the strings the plugin relies on, and fails when the count of a rare string changes. A rare string is one the tested binary holds at least once and at most a few times (the recorded limit is `rare_max` in `assets/canary-baseline.json`). All of them are: the compaction experiment's flag and its environment variable, `CLAUDE_CODE_EXECPATH`, the PreCompact hook's stdout notice and the two idle-compaction notices.
+- Smoke checks the Claude Code you run against the counts of the version this release was tested on. Claude Code 2.1.321 to 2.1.323 and 2.1.325 hold each of these strings as often, so C8 passes there; 2.1.314 holds the experiment flag and its environment variable fewer times, so on 2.1.314 smoke fails C8.
 - The type declarations come from Claude Code's built-in plugin-authoring skill, which writes them to a temporary folder when it loads; Claude Code clears that folder after a few days. If smoke says none were found, type `/plugin-authoring` once in any session (it costs one model turn), then run smoke again while that session is open (or pass `--types FILE`).
 
 ## Uninstall

@@ -1,12 +1,15 @@
 #!/usr/bin/python3
 """tools/canary-baseline: write plugin/assets/canary-baseline.json.
 
-Usage: tools/canary-baseline [--types FILE] [--claude BIN] [--out FILE] [--check]
+Usage: tools/canary-baseline [--types FILE] [--claude BIN] [--out FILE] [--check] [--no-c8]
   --types   claude-code.d.ts to read (default: $CC_TYPES_DIR/claude-code.d.ts, else .types/)
   --claude  the Claude Code binary for the C8 string counts (default: the newest installed
             version in ~/.local/share/claude/versions/, else $CLAUDE_CODE_EXECPATH)
   --out     output file (default plugin/assets/canary-baseline.json)
   --check   compare with the existing file instead of writing (exit 1 on drift)
+  --no-c8   for tools/check's fallback only (the baseline's own binary is not installed):
+            render every part but c8, reading no binary, to an --out other than the
+            baseline; never with --check
 
 Contents (no timestamps, so a re-run gives the same bytes):
   keysets   C5: per classic event and for the session.compact input, the required and
@@ -15,10 +18,12 @@ Contents (no timestamps, so a re-run gives the same bytes):
   c8        binary string counts (the C8_STRINGS list) for the tested binary, plus
             idle_prefixes: the two native idle-compaction notice prefixes that
             reconcile matches after a main boundary row (both are counted in `counts` too);
-            arm_list: the experiment's arm list as the binary writes it (counted too); rare_max:
-            smoke fails on a changed count of the arm list or of a string whose count here is
-            at most rare_max, and prints any other change as information (see RARE_MAX); a
-            binary where a string outside COMMON_WORDS is not rare is refused (exit 2)
+            rare_max: smoke fails on a changed count of a string whose count here is rare, 1 to
+            rare_max (is_rare), and prints any other change as information (see RARE_MAX); a
+            binary where a string outside COMMON_WORDS is not rare is refused (exit 2). No arm list: in
+            Claude Code 2.1.321 to 2.1.323 and 2.1.325 (the versions measured) the
+            experiment's flag and env variable carry a whole compaction prompt, so its arm
+            names (2.1.314's) are not counted
   c9        sha256/16 of the declarations C9 names; `specs` holds the start regexes so the
             helper's `smoke` extracts with the same rule (helper/cmd/smoke.pl decl_hash)
   copy_trailers  installed-message trailers the normalizer cuts (none known)
@@ -31,25 +36,27 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 
 EVENTS = ["PreCompact", "PostCompact", "SessionStart", "SessionEnd", "Stop", "SubagentStop",
           "StopFailure", "PermissionDenied"]
-# The arms of the compaction-prompt experiment, in the order the binary lists them; ARM_LIST is
-# that list as the bundle writes it (a JS array literal), so an arm added, dropped or renamed
-# changes its count.
-ARMS = ["control", "no_scratchpad", "no_scratchpad_capped", "no_scratchpad_keep_asks", "lean", "short",
-        "short_v2", "capped"]
-ARM_LIST = "[" + ",".join('"{}"'.format(a) for a in ARMS) + "]"
+# The compaction-prompt experiment: its flag and env variable (in 2.1.314 they picked one of
+# eight named arms; in 2.1.321 to 2.1.323 and 2.1.325, the versions measured, they carry a whole
+# compaction prompt, used only when it holds "<summary>", so no arm name or arm list is left to
+# count), the env variable the helper
+# reads the binary path from, and the PreCompact hook's stdout notice.
 C8_STRINGS = ["Exit code 0 - stdout appended as custom compact instructions", "tengu_curried_trinket",
-              "CLAUDE_CODE_CURRIED_TRINKET", "CLAUDE_CODE_EXECPATH"] + ARMS + [ARM_LIST]
+              "CLAUDE_CODE_CURRIED_TRINKET", "CLAUDE_CODE_EXECPATH"]
 # The C8 rule smoke applies: a string the recorded binary holds at most RARE_MAX times is rare
-# (the flag, its env variable, the notice texts, the experiment's own arm names: 2 to 12 in
-# 2.1.311 to 2.1.314), and smoke fails when its count changes; the arm list fails the same way.
-# Any other string is a common word (control, lean, short, capped: 244 to 4,735), used by
-# unrelated code, whose count moves with every release: smoke prints it as information only.
+# (every C8 string: 2 to 5 in 2.1.321 to 2.1.323 and 2.1.325), and smoke fails when its count changes. A
+# string above RARE_MAX would be a common word, used by unrelated code, whose count moves with
+# every release: smoke prints its change as information only.
 RARE_MAX = 16
-# The strings meant to be common words. Every other C8 string must stay rare in the binary
-# recorded (count 1 to RARE_MAX; the arm list at least 1), or the tool refuses to write
-# (rare_guard): one that rose above RARE_MAX would silently become information only, and one
-# missing (count 0) would let smoke pass on its absence.
-COMMON_WORDS = ["control", "lean", "short", "capped"]
+# The strings meant to be common words: none. The four it held (control, lean, short, capped,
+# 244 to 5,380 times in 2.1.314 and in 2.1.321 to 2.1.323 and 2.1.325) were arm names, counted on their own
+# as information only, beside the arm list that 2.1.321 to 2.1.323 and 2.1.325 no longer hold; as plain
+# words they say nothing about compaction. The list stays as
+# the place for a string that turns common. Every other C8 string must stay rare in the
+# binary recorded (count 1 to RARE_MAX), or the tool refuses to write (rare_guard): one that
+# rose above RARE_MAX would silently become information only, and one missing (count 0) would
+# let smoke pass on its absence.
+COMMON_WORDS = []
 # The native informational rows after an idle compaction (2.1.306 had only the first;
 # 2.1.314 has both)
 IDLE_PREFIXES = {"notice": "Compacted while idle",
@@ -121,6 +128,13 @@ def members(kept):
     return out
 
 
+def is_rare(n, rare_max):
+    """The one definition of a rare count, used here, by tools/check (c8_fixed_parts) and by
+    smoke (helper/cmd/smoke.pl _rare): a whole number from 1 to rare_max. A count of 0 is never
+    rare."""
+    return type(n) is int and 1 <= n <= rare_max
+
+
 def rare_guard(counts, binary):
     """The C8 strings outside COMMON_WORDS that the binary does not hold as rare strings."""
     bad = []
@@ -128,13 +142,17 @@ def rare_guard(counts, binary):
         if s in COMMON_WORDS:
             continue
         n = counts[s]
-        top = None if s == ARM_LIST else RARE_MAX
-        if n < 1 or (top is not None and n > top):
-            want = "at least 1" if top is None else "1 to {}".format(top)
-            bad.append("{} {} (want {})".format("the arm list" if s == ARM_LIST else json.dumps(s), n, want))
+        if not is_rare(n, RARE_MAX):
+            bad.append("{} {} (want 1 to {})".format(json.dumps(s), n, RARE_MAX))
     if bad:
         die("{}: not rare as C8 needs, so no baseline is written: {}. Check the strings, or move a "
             "now-common one to COMMON_WORDS".format(binary, "; ".join(bad)))
+
+
+def render(doc):
+    """The baseline's text: what this tool writes and --check compares (tools/check's fallback
+    compares the same text, with the baseline's own c8 part and cc_version)."""
+    return json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
 def keyset(req, opt):
@@ -155,6 +173,8 @@ def main(argv):
     binary = None
     out = os.path.join(REPO, "plugin", "assets", "canary-baseline.json")
     check = False
+    no_c8 = False
+    out_given = False
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -165,13 +185,22 @@ def main(argv):
                 binary = argv[i + 1]
             else:
                 out = argv[i + 1]
+                out_given = True
             i += 2
             continue
         if a == "--check":
             check = True
             i += 1
             continue
+        if a == "--no-c8":
+            no_c8 = True
+            i += 1
+            continue
         die("unknown argument {}\n{}".format(a, __doc__))
+    baseline = os.path.realpath(os.path.join(REPO, "plugin", "assets", "canary-baseline.json"))
+    if no_c8 and (check or not out_given or os.path.realpath(out) == baseline):
+        die("--no-c8 renders for tools/check's fallback only: give an --out other than the "
+            "baseline, and no --check")
     if not types:
         d = os.environ.get("CC_TYPES_DIR")
         types = os.path.join(d, "claude-code.d.ts") if d else os.path.join(REPO, ".types", "claude-code.d.ts")
@@ -179,17 +208,20 @@ def main(argv):
         die("no type declarations at {} (set CC_TYPES_DIR or --types)".format(types))
     if not binary:
         vdir = os.path.expanduser("~/.local/share/claude/versions")
-        vers = [v for v in os.listdir(vdir) if re.match(r"^\d+\.\d+\.\d+$", v)] if os.path.isdir(vdir) else []
+        vers = [v for v in os.listdir(vdir) if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", v)] if os.path.isdir(vdir) else []
         vers.sort(key=lambda v: [int(x) for x in v.split(".")])
         binary = os.path.join(vdir, vers[-1]) if vers else os.environ.get("CLAUDE_CODE_EXECPATH")
     if not binary or not os.path.isfile(binary):
-        die("no Claude Code binary (set CLAUDE_CODE_EXECPATH or --claude)")
+        if not no_c8:
+            die("no Claude Code binary (set CLAUDE_CODE_EXECPATH or --claude)")
+        binary = None
     with open(types, encoding="utf-8") as f:
         text = f.read()
     lines = text.split("\n")
     m = re.match(r"^// Written by Claude Code (\S+?)\.?$", lines[0])
     types_version = m.group(1) if m else "unknown"
-    cc_version = os.path.basename(binary) if re.match(r"^\d+\.\d+\.\d+", os.path.basename(binary)) else "unknown"
+    name = os.path.basename(binary) if binary else ""
+    cc_version = name if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", name) else "unknown"
 
     base = members(type_members(lines, "BaseHookInput"))
     keysets = {}
@@ -206,11 +238,13 @@ def main(argv):
     sc = members(type_members(lines, "SessionCompactInput"))
     keysets["session.compact"] = keyset([n for n, o in sc if not o], [n for n, o in sc if o])
 
-    with open(binary, "rb") as f:
-        data = f.read()
-    counts = {s: data.count(s.encode()) for s in C8_STRINGS}
-    del data
-    rare_guard(counts, binary)
+    counts = None
+    if not no_c8:
+        with open(binary, "rb") as f:
+            data = f.read()
+        counts = {s: data.count(s.encode()) for s in C8_STRINGS}
+        del data
+        rare_guard(counts, binary)
 
     hashes = {}
     for spec in C9_SPECS:
@@ -220,11 +254,12 @@ def main(argv):
         hashes[spec["name"]] = hashlib.sha256("\n".join(kept).encode()).hexdigest()[:16]
 
     doc = {"v": 1, "cc_version": cc_version, "types_version": types_version, "keysets": keysets,
-           "c8": {"arm_list": ARM_LIST, "binary_version": cc_version, "counts": counts,
-                  "idle_prefixes": IDLE_PREFIXES, "rare_max": RARE_MAX},
            "c9": {"types_version": types_version, "specs": C9_SPECS, "hashes": hashes},
            "copy_trailers": []}
-    text_out = json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    if not no_c8:
+        doc["c8"] = {"binary_version": cc_version, "counts": counts, "idle_prefixes": IDLE_PREFIXES,
+                     "rare_max": RARE_MAX}
+    text_out = render(doc)
     if check:
         # bytes as written (newline=""): CRLF drift is a difference too
         cur = open(out, encoding="utf-8", newline="").read() if os.path.isfile(out) else ""
@@ -236,7 +271,8 @@ def main(argv):
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(text_out)
-    print("canary-baseline: wrote {} (Claude Code {}, types {})".format(out, cc_version, types_version))
+    print("canary-baseline: wrote {} ({}, types {})".format(
+        out, "no C8" if no_c8 else "Claude Code " + cc_version, types_version))
     return 0
 
 

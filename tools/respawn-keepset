@@ -30,7 +30,7 @@ sys.dont_write_bytecode = True
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 TABLE = "plugin/helper/lib/restart.pm"
 WARNING = b"stripped respawnFlags token(s) that a restart does not re-apply: ${"
-VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")  # fullmatch only
 IDENT = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
 KEYWORDS = {"let", "const", "var", "for", "if", "else", "continue", "break", "while", "return", "function",
             "void", "new", "typeof", "of", "in", "true", "false", "null", "undefined"}
@@ -79,7 +79,7 @@ def binaries(given):
         out = []
         for b in given:
             base = os.path.basename(os.path.realpath(b))
-            if not VERSION.match(base):
+            if not VERSION.fullmatch(base):
                 die("--claude {}: the file name is not a version (x.y.z)".format(b))
             out.append((base, b))
         return out
@@ -88,11 +88,11 @@ def binaries(given):
     if os.path.isdir(d):
         for v in os.listdir(d):
             p = os.path.join(d, v)
-            if VERSION.match(v) and os.path.isfile(p):
+            if VERSION.fullmatch(v) and os.path.isfile(p):
                 out.append((v, p))
     if not out:
         c = shutil.which("claude")
-        if c and VERSION.match(os.path.basename(os.path.realpath(c))):
+        if c and VERSION.fullmatch(os.path.basename(os.path.realpath(c))):
             out.append((os.path.basename(os.path.realpath(c)), os.path.realpath(c)))
     if not out:
         die("no Claude Code binary (~/.local/share/claude/versions/ is empty and `claude` is not a versioned file)")
