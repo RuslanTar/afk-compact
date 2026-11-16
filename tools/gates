@@ -35,7 +35,8 @@ Gates (each hit is printed as `GATE <gate> <file>:<line>: <text>`):
                helper/lib/settings.pm is not a hit (/status warns about options saved under
                it); anywhere else it is
   test-stage   no helper test-stage marker (`.store-test-stage`, the helper's test-mode gate in
-               helper/lib/testgate.pm, or `.test-consent-home`) anywhere inside a folder target: only
+               helper/lib/testgate.pm, or `.test-consent-home`) anywhere inside a folder target, on disk
+               or in git's index (what a tag ships): only
                the test stagers write them into temporary copies; a built or released plugin holding
                one would let an environment prefix turn the helper's test switches on
   npm          BT-06: no `package.json`, `package-lock.json`, `npm-shrinkwrap.json`,
@@ -2535,14 +2536,27 @@ TEST_STAGE_MARKS = (".store-test-stage", ".test-consent-home")
 
 
 def test_stage_hits(target, brand):
-    """No test-stage marker inside a folder target (helper/lib/testgate.pm, settings.pm consent seam)."""
+    """No test-stage marker inside a folder target (helper/lib/testgate.pm, settings.pm consent seam):
+    on disk, and in git's index for that folder, which is what a tag ships (the marketplace installs
+    the repository's plugin/ as committed), also when the file is gone from the working tree."""
     out = []
+    seen = set()
     for d, dirs, files in os.walk(target):
         dirs[:] = sorted(x for x in dirs if x not in (".git", "node_modules"))
         for f in sorted(files):
             if f in TEST_STAGE_MARKS:
-                out.append((os.path.join(d, f), 0, "marker", "test-stage marker: only test stagers write this; "
+                path = os.path.join(d, f)
+                seen.add(os.path.realpath(path))
+                out.append((path, 0, "marker", "test-stage marker: only test stagers write this; "
                             "remove it from the plugin", ""))
+    r = subprocess.run(["git", "-C", target, "ls-files", "-z", "--cached", "--", "."], capture_output=True)
+    if r.returncode == 0:
+        for rel in sorted(r.stdout.decode("utf-8", "replace").split("\0")):
+            if rel and os.path.basename(rel) in TEST_STAGE_MARKS:
+                path = os.path.join(target, rel)
+                if os.path.realpath(path) not in seen:
+                    out.append((path, 0, "marker", "test-stage marker tracked by git (a tag would ship it): "
+                                "take it out of the index", ""))
     return out
 
 

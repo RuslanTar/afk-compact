@@ -205,7 +205,7 @@ If the report might hold something you cannot share, do not attach it: open the 
 4. Write its summary, ending with the `Requires Claude Code A.B.C or newer; tested against D.E.F.` sentence. If one of those versions changed, update `src/docs/compatibility.md` too (a new minimum also goes in `cc_min` in `brand.json`) and run `tools/build`.
 5. Update the link references at the end of `CHANGELOG.md`: `[Unreleased]` becomes `…/compare/vX.Y.Z...HEAD`, and the new `[X.Y.Z]` is `…/compare/v<previous version>...vX.Y.Z`.
 6. Run `tools/check integration` on a quiet machine and keep the log.
-7. Merge to `main` and create the tag `vX.Y.Z` on the merge commit. Check first that `plugin.json` and the marketplace entry agree on the version.
+7. Merge to `main` and create the tag `vX.Y.Z` on the merge commit. Check first that `plugin.json` and the marketplace entry agree on the version. What ships is `plugin/` as committed at that tag (the marketplace entry's source is `./plugin`), so also check that the CI run on the merge commit passed its text gates: their `test-stage` gate fails when a test-stage marker (`.store-test-stage` or `.test-consent-home`) sits in `plugin/` on disk or in git's index.
 8. Create the GitHub release from that tag, titled `afk-compact X.Y.Z`. Its text is the version's section from the summary to the last entry, unchanged; anything extra goes only below a `---` line.
 
 To withdraw a release, keep its section in `CHANGELOG.md` and append ` [YANKED]` to its heading.
