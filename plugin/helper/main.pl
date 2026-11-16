@@ -12,10 +12,13 @@
 # stdin and exits 0. Anything else refuses, exit 3. Test seam (test mode only, lib/testgate.pm:
 # STORE_TEST_MODE=1 on a test stage): STORE_TEST_PERL_V=5.NNN stands in for $] (a perl older than
 # this host's). testgate is loaded first, from this file's own folder, and is perl 5.8-safe.
+our %ABS_LOADS;
 BEGIN {
     require Cwd;
     require File::Basename;
+    my %pre = %INC;
     unshift @INC, File::Basename::dirname(Cwd::abs_path(__FILE__)) . '/lib';
+    %main::ABS_LOADS = map { ($_ => 1) } grep { !exists $pre{$_} } keys %INC;
     require testgate;
     my $v = $];
     $v = $ENV{STORE_TEST_PERL_V}
@@ -46,12 +49,14 @@ use utf8;
 use File::Basename ();
 use Cwd ();
 my $HELPER_DIR;
-# The modules this abs_path call loads itself, for STORE_TEST_PERL_INC_OUT's seam (below) only
-my %ABS_LOADS;
+# %ABS_LOADS: the modules main.pl's two Cwd::abs_path calls (the first BEGIN's and this one) load
+# themselves, for STORE_TEST_PERL_INC_OUT's seam (below) only. The first BEGIN's call, which runs
+# before testgate is loaded, is where they load under MSYS and Cygwin perl; this one adds them only
+# where that one did not.
 BEGIN {
-    my %pre = ($ENV{STORE_TEST_MODE} || '') eq '1' && $ENV{STORE_TEST_PERL_INC_OUT} ? %INC : ();
+    my %pre = %INC;
     $HELPER_DIR = File::Basename::dirname(Cwd::abs_path(__FILE__));
-    %ABS_LOADS = map { ($_ => 1) } grep { !exists $pre{$_} } keys %INC if %pre;
+    $ABS_LOADS{$_} = 1 for grep { !exists $pre{$_} } keys %INC;
 }
 use lib "$HELPER_DIR/lib";
 
@@ -111,8 +116,8 @@ our @CORE = qw(util jsonc sha ctx spec settings paths roots log rc identity lock
 # subfolder; perl's own modules are left out), sorted (HOOK-LAZY-01, CACHE-04);
 # STORE_TEST_PERL_INC_OUT=<file> gets one line, the other half: every module loaded by the end
 # that is not the helper's own (not from helper/: perl's modules, as %INC names them, such as
-# File/Spec.pm), sorted, less those the Cwd::abs_path call above loaded itself (HOOK-LAZY-02).
-# That call loads none where Cwd's abs_path is XS (macOS, Linux); under MSYS and Cygwin perl it is
+# File/Spec.pm), sorted, less those main.pl's two Cwd::abs_path calls loaded themselves (HOOK-LAZY-02).
+# Those calls load none where Cwd's abs_path is XS (macOS, Linux); under MSYS and Cygwin perl it is
 # the pure-Perl fast_abs_path, which requires File::Spec (and File::Spec::Unix or ::Cygwin,
 # constant) in every process, a load no later line of the helper can avoid or add to.
 our @HOOK_BASE = qw(util jsonc sha ctx spec settings paths roots log rc identity git detect secrets transcript args repomode userre);
