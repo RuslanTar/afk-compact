@@ -69,7 +69,7 @@ both versions renamed to one not installed with changed counts while the recorde
 installed), the release path (phase0 and integration refuse --no-c8 and call the canary
 check strict), the fallback under --no-c8 (its PASS line says the C8 counts were not compared;
 its check of each C8 part that is a tool constant: count keys, count range, rare_max one below
-the tool's and 0, idle_prefixes, on that renamed baseline; its text compare: a CRLF baseline,
+the tool's, one above it and 0, idle_prefixes, on that renamed baseline; its text compare: a CRLF baseline,
 an extra blank line), versions in fullwidth or Arabic-Indic digits (a baseline holding them,
 and file names that canary-baseline, launcher-flags, respawn-keepset and pinned_claude would
 pick), tools/canary-baseline --no-c8 (its
@@ -1778,6 +1778,12 @@ def probes(name):
         ("canary-fallback-rare-max", "canary fallback rare_max one below the tool's", xgen_noc8,
          baseline_edit(v1_and(lambda doc, c8: c8.update(rare_max=c8["rare_max"] - 1))),
          [r"^canary-baseline: c8\.rare_max is {} \(the tool's is {}\)$".format(tool_rare_max - 1, tool_rare_max),
+          r"C8 part differs from the tool \(counts not compared: Claude Code 2\.1\.999 is not installed\)", xgen_fail],
+         None),
+        # One above the tool's too: a check that only refused a lower rare_max would pass it.
+        ("canary-fallback-rare-max-above", "canary fallback rare_max one above the tool's", xgen_noc8,
+         baseline_edit(v1_and(lambda doc, c8: c8.update(rare_max=c8["rare_max"] + 1))),
+         [r"^canary-baseline: c8\.rare_max is {} \(the tool's is {}\)$".format(tool_rare_max + 1, tool_rare_max),
           r"C8 part differs from the tool \(counts not compared: Claude Code 2\.1\.999 is not installed\)", xgen_fail],
          None),
         ("canary-fallback-rare-max-zero", "canary fallback rare_max 0", xgen_noc8,
