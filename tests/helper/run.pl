@@ -201,6 +201,7 @@ binmode(STDERR, ':encoding(UTF-8)');
 # passing case's c<N> is removed when it passes; at the end a failing run keeps only the
 # failed cases' c<N> and stage/ (`# kept:`); a run that dies or is killed (INT, TERM,
 # HUP) cleans up the same way in END. Only this process cleans: forked children never do.
+# A kept work dir keeps no test-stage marker (strip_stage_marks): its staged copies are for a look only.
 my $OWNER_PID = $$;
 my ($RUN_TMP, $REPO_TMP, $SHORT_TMP, $CLEANED, @FAILED_DIRS, %KIDS);
 # R6: a stdout byte cap (stdout_max_bytes) of a case outside the repo's
@@ -637,6 +638,7 @@ sub cleanup {
     my @work = grep { defined && -d } ($RUN_TMP, $REPO_TMP, $SHORT_TMP);
     if ($KEEP) {
         print "# work dirs kept: @work\n" if @work;
+        strip_stage_marks(@work);
     } elsif (@FAILED_DIRS) {
         my %keep = map { ($_ => 1) } @FAILED_DIRS, (defined $RUN_TMP ? "$RUN_TMP/stage" : ());
         for my $w (@work) {
@@ -644,12 +646,49 @@ sub cleanup {
             rmdir $w;
         }
         print '# kept: ' . join(' ', sort grep { -d } keys %keep) . "\n";
+        strip_stage_marks(grep { -d } keys %keep);
     } else {
         remove_tree($_) for @work;
         print "# work dirs removed\n" if $VERBOSE;
     }
     # R4: the repo's tmp/ goes too when nothing else is in it (rmdir fails otherwise).
     rmdir $REPO_TMP_BASE if defined $REPO_TMP && -d $REPO_TMP_BASE;
+}
+
+# The test-stage markers: helper/lib/testgate.pm's (test mode) and settings.pm's consent seam. A kept
+# work dir keeps its staged plugin copies for a look, never as a test stage: the markers go, and a
+# note says how to bring one back. Self-check: none may be left (BH-6-runner-cleanup checks it too).
+our (@STAGE_MARKS, $STAGE_NOTE);
+BEGIN { @STAGE_MARKS = ('.store-test-stage', '.test-consent-home'); $STAGE_NOTE = 'STAGE-MARKERS-REMOVED.txt' }
+sub strip_stage_marks {
+    my (@dirs) = @_;
+    my ($n, @left) = (0);
+    my $walk;
+    $walk = sub {
+        my ($d, $strip) = @_;
+        opendir(my $dh, $d) or return;
+        my @e = grep { $_ ne '.' && $_ ne '..' } readdir $dh;
+        closedir $dh;
+        my $here = 0;
+        for my $x (@e) {
+            my $p = "$d/$x";
+            if (grep { $_ eq $x } @STAGE_MARKS) {
+                if (!$strip) { push @left, $p; next }
+                if (unlink $p) { $n++; $here++ } else { push @left, $p }
+                next;
+            }
+            $walk->($p, $strip) if -d $p && !-l $p;
+        }
+        if ($here) {
+            util::write_atomic("$d/$STAGE_NOTE", "The test runner removed this copy's test-stage markers (@STAGE_MARKS) when it kept it\n"
+                . "(helper/lib/testgate.pm). Write .store-test-stage here again to run this copy in test mode.\n", 0644);
+        }
+    };
+    $walk->($_, 1) for @dirs;
+    $walk->($_, 0) for @dirs;
+    print "# kept work dirs: $n test-stage markers removed\n" if $n;
+    print "# WARNING: a kept work dir still holds a test-stage marker: $_\n" for @left;
+    return scalar @left;
 }
 
 # R5: a work dir this runner made (store-h-<pid>-<6 hex>) directly under the system temp
@@ -3558,6 +3597,19 @@ sub builtin {
             if ($t->[1]) {
                 push @e, "failing run: no work dir kept under its TMPDIR" unless @new_tmp;
                 push @e, "failing run: no work dir kept under the repo tmp/" unless @new_repo;
+                # the kept stage holds no test-stage marker, and a note says they were removed
+                my ($marks, $notes) = (0, 0);
+                my @q = (@new_tmp, @new_repo);
+                while (defined(my $d = shift @q)) {
+                    for my $x (util::list_dir($d)) {
+                        my $p = "$d/$x";
+                        $marks++, push(@e, "failing run: kept $p, a test-stage marker") if grep { $_ eq $x } @STAGE_MARKS;
+                        $notes++ if $x eq $STAGE_NOTE;
+                        push @q, $p if -d $p && !-l $p;
+                    }
+                }
+                push @e, "failing run: no $STAGE_NOTE in the kept stage" unless $notes;
+                push @e, "failing run: output lacks the markers-removed line" unless ($r->{out} // '') =~ /^# kept work dirs: \d+ test-stage markers removed$/m;
                 remove_tree($_, $td, $base) for @new_tmp, @new_repo;
             } else {
                 push @e, "passing run: left $_" for @new_tmp, @new_repo;
